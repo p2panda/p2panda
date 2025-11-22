@@ -5,8 +5,8 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 
 use assert_matches::assert_matches;
-use p2panda_core::Body;
 use p2panda_core::cbor::encode_cbor;
+use p2panda_core::{Body, Operation};
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
 use p2panda_sync::log_sync::{LogSyncEvent, StatusEvent};
@@ -33,26 +33,18 @@ use crate::test_utils::{
 
 struct TestNode<M>
 where
-    M: SyncManager<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     args: ApplicationArguments,
     address_book_ref: ActorRef<ToAddressBook>,
-    stream_ref: ActorRef<ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>>,
+    stream_ref: ActorRef<ToEventuallyConsistentStreams<M>>,
     #[allow(unused)]
     thread_pool: ThreadLocalActorSpawner,
 }
 
 impl<M> TestNode<M>
 where
-    M: SyncManager<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>, sync_config: M::Config) -> Self {
         let (args, store, _) = test_args_from_seed(seed);
@@ -85,7 +77,7 @@ where
         let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
         // Spawn the gossip actor.
-        let (gossip_actor, _) = Gossip::<<M::Protocol as Protocol>::Event>::spawn(
+        let (gossip_actor, _) = Gossip::<M>::spawn(
             Some(with_namespace(GOSSIP, &actor_namespace)),
             (args.clone(), endpoint),
             args.root_thread_pool.clone(),
@@ -382,11 +374,16 @@ async fn e2e_topic_log_sync() {
     );
 
     // Alice publishes a live mode message.
-    let (header, body) = alice_app
-        .create_operation(&Body::new(b"live message from alice"), LOG_ID)
-        .await;
-    let bytes = encode_cbor(&(header.clone(), Some(body.clone()))).unwrap();
-    alice_stream.publish(bytes).await.unwrap();
+    let body = Body::new(b"live message from alice");
+    let (header, _) = alice_app.create_operation(&body, LOG_ID).await;
+    alice_stream
+        .publish(Operation {
+            hash: header.hash(),
+            header,
+            body: Some(body),
+        })
+        .await
+        .unwrap();
 
     // Bob receives this message.
     let event = bob_subscription.recv().await.unwrap();

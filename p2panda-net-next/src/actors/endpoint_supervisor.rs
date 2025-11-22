@@ -131,11 +131,7 @@ impl<S, M> ThreadLocalActor for EndpointSupervisor<S, M>
 where
     S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    M: SyncManager<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     type State = EndpointSupervisorState<S, M::Config>;
 

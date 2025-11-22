@@ -154,7 +154,7 @@ impl Peer {
 /// Run a pair of topic sync sessions.
 pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), P::Error>
 where
-    P: Protocol + 'static,
+    P: Protocol + Send + Sync + 'static,
 {
     let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);

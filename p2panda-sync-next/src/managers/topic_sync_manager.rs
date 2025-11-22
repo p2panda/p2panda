@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
@@ -11,8 +12,7 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::{Map, SelectAll};
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::cbor::decode_cbor;
-use p2panda_core::{Body, Extensions, Header};
+use p2panda_core::{Extensions, Operation};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,7 +24,7 @@ use crate::session_topic_map::SessionTopicMap;
 use crate::topic_log_sync::{
     LiveModeMessage, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
 };
-use crate::traits::{NetworkRequirements, Protocol, SyncManager};
+use crate::traits::SyncManager;
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<M> =
@@ -85,14 +85,19 @@ where
 
 impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    M: TopicLogMap<T, L> + NetworkRequirements,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + 'static,
-    E: Extensions + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + NetworkRequirements,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
+    <S as LogStore<L, E>>::Error: StdError + Send + Sync + 'static,
+    <S as OperationStore<L, E>>::Error: StdError + Send + Sync + 'static,
+    M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
+    <M as TopicLogMap<T, L>>::Error: StdError + Send + Sync + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
     type Config = TopicSyncManagerConfig<S, M>;
+    type Event = TopicLogSyncEvent<E>;
+    type Message = Operation<E>;
     type Error = TopicSyncManagerError<T, S, M, L, E>;
 
     fn from_config(config: Self::Config) -> Self {
@@ -136,24 +141,12 @@ where
     async fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
-        let map_fn = |to_sync: ToSync| {
+    ) -> Option<Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>> {
+        let map_fn = |to_sync: ToSync<Operation<E>>| {
             ready({
                 match to_sync {
-                    ToSync::Payload(bytes) => {
-                        // @TODO(sam): not sure what will be happening at this interface
-                        // yet, this code assumes that bytes are sent from p2panda-net and
-                        // we decode them here as the topic sync protocol expects messages
-                        // to contain decoded types. We could change that so that we send
-                        // bytes to the remote and they decode it. Maybe this is
-                        // preferable to avoid an extra decoding/encoding round.
-                        let (header, body): (Header<E>, Option<Body>) =
-                            decode_cbor(&bytes[..]).unwrap();
-
-                        Ok::<_, Self::Error>(LiveModeMessage::Operation {
-                            header: Box::new(header),
-                            body,
-                        })
+                    ToSync::Payload(operation) => {
+                        Ok::<_, Self::Error>(LiveModeMessage::Operation(operation))
                     }
                     ToSync::Close => Ok::<_, Self::Error>(LiveModeMessage::Close),
                 }
@@ -162,14 +155,12 @@ where
 
         let inner = self.inner.lock().await;
         inner.session_topic_map.sender(session_id).map(|tx| {
-            Box::pin(tx.clone().with(map_fn)) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>
+            Box::pin(tx.clone().with(map_fn))
+                as Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>
         })
     }
 
-    fn subscribe(
-        &self,
-    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static
-    {
+    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let stream = ManagerEventStream {
             state: self.inner.clone(),
             pending: Default::default(),
@@ -248,10 +239,11 @@ where
                 };
 
                 let result = tx
-                    .send(LiveModeMessage::Operation {
-                        header: Box::new(header.clone()),
+                    .send(LiveModeMessage::Operation(Operation {
+                        hash: header.hash(),
+                        header: header.clone(),
                         body: body.clone(),
-                    })
+                    }))
                     .await;
 
                 if result.is_err() {
@@ -331,8 +323,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use futures::{SinkExt, StreamExt};
-    use p2panda_core::Header;
-    use p2panda_core::{Body, cbor::encode_cbor};
+    use p2panda_core::{Body, Header, Operation};
 
     use crate::TopicSyncManager;
     use crate::log_sync::{LogSyncEvent, StatusEvent};
@@ -395,8 +386,14 @@ mod tests {
 
         // Create and send a new live-mode message.
         let (header_1, _) = peer_a.create_operation_no_insert(&body, LOG_ID).await;
-        let bytes = encode_cbor(&(header_1.clone(), Some(body.clone()))).unwrap();
-        peer_a_handle.send(ToSync::Payload(bytes)).await.unwrap();
+        peer_a_handle
+            .send(ToSync::Payload(Operation {
+                hash: header_1.hash(),
+                header: header_1.clone(),
+                body: Some(body.clone()),
+            }))
+            .await
+            .unwrap();
         peer_a_handle.send(ToSync::Close).await.unwrap();
 
         // Actually run the protocol.
@@ -598,9 +595,21 @@ mod tests {
         let (peer_b_header_1, _) = peer_b.create_operation(&body_b, LOG_ID).await;
         let (peer_c_header_1, _) = peer_c.create_operation(&body_c, LOG_ID).await;
 
-        let operation_a = encode_cbor(&(peer_a_header_1.clone(), Some(body_a))).unwrap();
-        let operation_b = encode_cbor(&(peer_b_header_1.clone(), Some(body_b))).unwrap();
-        let operation_c = encode_cbor(&(peer_c_header_1.clone(), Some(body_c))).unwrap();
+        let operation_a = Operation {
+            hash: peer_a_header_1.hash(),
+            header: peer_a_header_1.clone(),
+            body: Some(body_a.clone()),
+        };
+        let operation_b = Operation {
+            hash: peer_b_header_1.hash(),
+            header: peer_b_header_1.clone(),
+            body: Some(body_b.clone()),
+        };
+        let operation_c = Operation {
+            hash: peer_c_header_1.hash(),
+            header: peer_c_header_1.clone(),
+            body: Some(body_c.clone()),
+        };
 
         handle_ab
             .send(ToSync::Payload(operation_a.clone()))
@@ -722,8 +731,14 @@ mod tests {
 
         // Create and send a new live-mode message.
         let (header_1, _) = peer_a.create_operation_no_insert(&body, LOG_ID).await;
-        let bytes = encode_cbor(&(header_1.clone(), Some(body.clone()))).unwrap();
-        peer_a_handle.send(ToSync::Payload(bytes)).await.unwrap();
+        peer_a_handle
+            .send(ToSync::Payload(Operation {
+                hash: header_1.hash(),
+                header: header_1.clone(),
+                body: Some(body.clone()),
+            }))
+            .await
+            .unwrap();
         peer_a_handle.send(ToSync::Close).await.unwrap();
 
         // Actually run the protocol.

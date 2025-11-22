@@ -19,6 +19,7 @@ use iroh::EndpointId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use p2panda_core::PublicKey;
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
@@ -136,11 +137,11 @@ impl GossipState {
     }
 }
 
-pub struct Gossip<E> {
-    _phantom: PhantomData<E>,
+pub struct Gossip<M> {
+    _phantom: PhantomData<M>,
 }
 
-impl<E> Default for Gossip<E> {
+impl<M> Default for Gossip<M> {
     fn default() -> Self {
         Self {
             _phantom: Default::default(),
@@ -148,9 +149,9 @@ impl<E> Default for Gossip<E> {
     }
 }
 
-impl<E> ThreadLocalActor for Gossip<E>
+impl<M> ThreadLocalActor for Gossip<M>
 where
-    E: Clone + Debug + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     type State = GossipState;
     type Msg = ToGossip;
@@ -377,7 +378,7 @@ where
                     if let Some(eventually_consistent_streams_actor) = registry::where_is(
                         with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
                     ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
+                        let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
                             eventually_consistent_streams_actor.into();
 
                         // Ask the eventually consistent streams actor to initiate a sync session
@@ -403,7 +404,7 @@ where
                     if let Some(eventually_consistent_streams_actor) = registry::where_is(
                         with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
                     ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
+                        let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
                             eventually_consistent_streams_actor.into();
 
                         // Ask the eventually consistent streams actor to end any sync sessions

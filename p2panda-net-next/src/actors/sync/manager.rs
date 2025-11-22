@@ -22,10 +22,11 @@ use crate::actors::sync::poller::SyncPoller;
 use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
 
-type SessionSink<M> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<TopicId>>::Error>>>;
+type SessionSink<M: SyncManagerTrait<TopicId>> =
+    Pin<Box<dyn Sink<ToSync<M::Message>, Error = M::Error>>>;
 
 #[derive(Debug)]
-pub enum ToSyncManager {
+pub enum ToSyncManager<T> {
     /// Initiate a sync session with this peer over the given topic.
     Initiate {
         node_id: NodeId,
@@ -42,7 +43,7 @@ pub enum ToSyncManager {
     },
 
     /// Send newly published data to all sync sessions running over the given topic.
-    Publish { topic: TopicId, data: Vec<u8> },
+    Publish { topic: TopicId, data: T },
 
     /// Close all active sync sessions running over the given topic.
     CloseAll { topic: TopicId },
@@ -80,21 +81,17 @@ impl<M> Default for SyncManager<M> {
 
 impl<M> ThreadLocalActor for SyncManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
     type State = SyncManagerState<M>;
 
-    type Msg = ToSyncManager;
+    type Msg = ToSyncManager<M::Message>;
 
     type Arguments = (
         ActorNamespace,
         TopicId,
         M::Config,
-        broadcast::Sender<FromSync<<M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<FromSync<M::Event>>,
     );
 
     async fn pre_start(

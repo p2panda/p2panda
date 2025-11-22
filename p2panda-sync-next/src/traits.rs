@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{fmt::Debug, pin::Pin};
+use std::{error::Error as StdError, fmt::Debug, pin::Pin};
 
 use futures::Sink;
 use futures_util::Stream;
@@ -8,18 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
-// @TODO: remove or clarify purpose and use when p2panda-net API is more stable.
-//
-/// Trait for satisfying requirements coming from the p2panda-net network api.
-pub trait NetworkRequirements: Clone + Debug + Send + Sync + 'static {}
-
-impl<T> NetworkRequirements for T where T: Clone + Debug + Send + Sync + 'static {}
-
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
     type Output;
-    type Error;
-    type Event;
+    type Error: StdError + Send + Sync + 'static;
     type Message: Serialize + for<'a> Deserialize<'a>;
 
     fn run(
@@ -32,9 +24,11 @@ pub trait Protocol {
 /// Interface for managing sync sessions and consuming events they emit.
 #[allow(clippy::type_complexity)]
 pub trait SyncManager<T> {
-    type Protocol: Protocol;
-    type Config: NetworkRequirements;
-    type Error: Debug;
+    type Protocol: Protocol + Send + Sync + 'static;
+    type Config: Clone + Debug + Send + Sync + 'static;
+    type Message: Clone + Debug + Send + Sync + 'static;
+    type Event: Clone + Debug + Send + Sync + 'static;
+    type Error: StdError + Send + Sync + 'static;
 
     fn from_config(config: Self::Config) -> Self;
 
@@ -49,10 +43,8 @@ pub trait SyncManager<T> {
     fn session_handle(
         &self,
         session_id: u64,
-    ) -> impl Future<Output = Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>>>;
+    ) -> impl Future<Output = Option<Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>>>;
 
     /// Subscribe to the manager event stream.
-    fn subscribe(
-        &self,
-    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static;
+    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static;
 }

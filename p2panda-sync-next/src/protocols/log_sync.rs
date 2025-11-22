@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
+use std::error::Error as StdError;
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
@@ -89,14 +90,15 @@ impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
 
 impl<L, E, S, Evt> Protocol for LogSyncProtocol<L, E, S, Evt>
 where
-    L: LogId + for<'de> Deserialize<'de> + Serialize,
-    E: Extensions,
-    S: LogStore<L, E> + OperationStore<L, E>,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
+    <S as LogStore<L, E>>::Error: StdError + Send + Sync + 'static,
+    <S as OperationStore<L, E>>::Error: StdError + Send + Sync + 'static,
     Evt: From<LogSyncEvent<E>>,
 {
     type Error = LogSyncError<L, E, S>;
     type Output = Dedup<Hash>;
-    type Event = LogSyncEvent<E>;
     type Message = LogSyncMessage<L>;
 
     async fn run(

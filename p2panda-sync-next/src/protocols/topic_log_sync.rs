@@ -4,10 +4,11 @@ use std::fmt::Debug;
 use std::future::ready;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
+use std::error::Error as StdError;
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Header};
+use p2panda_core::{Body, Extensions, Header, Operation};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -37,8 +38,8 @@ pub struct TopicLogSync<T, S, M, L, E> {
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone,
-    M: TopicLogMap<T, L> + Clone,
+    S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug,
+    M: TopicLogMap<T, L> + Clone + Debug,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
 {
@@ -83,14 +84,16 @@ where
 
 impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone,
-    M: TopicLogMap<T, L> + Clone,
-    L: LogId + for<'de> Deserialize<'de> + Serialize,
-    E: Extensions,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
+    <S as LogStore<L, E>>::Error: StdError + Send + Sync + 'static,
+    <S as OperationStore<L, E>>::Error: StdError + Send + Sync + 'static,
+    M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
+    <M as TopicLogMap<T, L>>::Error: StdError + Send + Sync + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
 {
     type Error = TopicLogSyncError<T, S, M, L, E>;
-    type Event = TopicLogSyncEvent<E>;
     type Message = TopicLogSyncMessage<L, E>;
     type Output = ();
 
@@ -158,14 +161,14 @@ where
                     }
                     Some(message) = live_mode_rx.next() => {
                         match message {
-                            LiveModeMessage::Operation { header, body } => {
-                                if !dedup.insert(header.hash()) {
+                            LiveModeMessage::Operation(operation) => {
+                                if !dedup.insert(operation.hash) {
                                     continue;
                                 }
 
-                                metrics.bytes_sent += header.to_bytes().len()  as u64 + header.payload_size;
+                                metrics.bytes_sent += operation.header.to_bytes().len()  as u64 + operation.header.payload_size;
                                 metrics.operations_sent += 1;
-                                sink.send(TopicLogSyncMessage::Live { header: *header.clone(), body: body.clone() })
+                                sink.send(TopicLogSyncMessage::Live { header: operation.header.clone(), body: operation.body.clone() })
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
                             }
@@ -258,10 +261,8 @@ pub struct LiveModeMetrics {
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
     /// Operation received from a subscription or a concurrent sync session (via the manager).
-    Operation {
-        header: Box<Header<E>>,
-        body: Option<Body>,
-    },
+    Operation(Operation<E>),
+
     /// Gracefully close the session.
     Close,
 }
@@ -701,10 +702,11 @@ pub mod tests {
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(LiveModeMessage::Operation {
-                header: Box::new(header_2.clone()),
+            .send(LiveModeMessage::Operation(Operation {
+                hash: header_2.hash(),
+                header: header_2.clone(),
                 body: Some(body.clone()),
-            })
+            }))
             .await
             .unwrap();
 
@@ -842,19 +844,21 @@ pub mod tests {
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(LiveModeMessage::Operation {
-                header: Box::new(header_2.clone()),
+            .send(LiveModeMessage::Operation(Operation {
+                hash: header_2.hash(),
+                header: header_2.clone(),
                 body: Some(body.clone()),
-            })
+            }))
             .await
             .unwrap();
 
         // Sending subscription message twice.
         live_mode_tx
-            .send(LiveModeMessage::Operation {
-                header: Box::new(header_2.clone()),
+            .send(LiveModeMessage::Operation(Operation {
+                hash: header_2.hash(),
+                header: header_2.clone(),
                 body: Some(body.clone()),
-            })
+            }))
             .await
             .unwrap();
 
