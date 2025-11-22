@@ -25,7 +25,7 @@ use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::utils::to_public_key;
+use crate::utils::{ShortFormat, to_public_key};
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
@@ -200,6 +200,12 @@ impl ThreadLocalActor for GossipSession {
                 }
             },
             ToGossipSession::JoinPeers(peers) => {
+                debug!(
+                    topic = %state.topic.fmt_short(),
+                    peers = %peers.fmt_short(),
+                    "(re-) join gossip overlay"
+                );
+
                 let _ = state
                     .gossip_joiner_actor
                     .cast(ToGossipJoiner::JoinPeers(peers));
@@ -219,9 +225,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorStarted(actor) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    trace!(?actor_id, "received ready from gossip sender",)
+                    trace!(%actor_id, "received ready from gossip sender",)
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    trace!(?actor_id, "received ready from gossip receiver",)
+                    trace!(%actor_id, "received ready from gossip receiver",)
                 }
             }
             // We're not interested in respawning a terminated actor in the context of a gossip
@@ -231,9 +237,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    debug!(?actor_id, "gossip sender actor terminated: {reason:#?}",);
+                    debug!(%actor_id, "gossip sender actor terminated: {reason:?}",);
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    debug!(?actor_id, "gossip receiver actor terminated: {reason:#?}",);
+                    debug!(%actor_id, "gossip receiver actor terminated: {reason:?}",);
                 }
 
                 // Process any remaining messages in the queue of the gossip sender and receiver
@@ -246,9 +252,9 @@ impl ThreadLocalActor for GossipSession {
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 let actor_id = actor.get_id();
                 if actor_id == state.gossip_sender_actor.get_id() {
-                    warn!(?actor_id, "gossip sender actor failed: {panic_msg:#?}",);
+                    warn!(%actor_id, "gossip sender actor failed: {panic_msg:#?}",);
                 } else if actor_id == state.gossip_receiver_actor.get_id() {
-                    warn!(?actor_id, "gossip receiver actor failed: {panic_msg:#?}",);
+                    warn!(%actor_id, "gossip receiver actor failed: {panic_msg:#?}",);
                 }
 
                 myself
