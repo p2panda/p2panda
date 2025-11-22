@@ -144,9 +144,19 @@ pub trait NodeTransportInfo {
     fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError>;
 }
 
+/// Transport protocols information we can use to connect to a node.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransportInfo {
+    /// Unauthenticated transport info we "trust" to be correct since it came to us via an verified
+    /// side-channel (scanning QR code, sharing in a trusted chat group etc.).
+    ///
+    /// This info is never shared across the network services and is only used _locally_ by our own
+    /// node. See `AuthenticatedTransportInfo` for an alternative which can be automatically
+    /// distributed.
     Trusted(TrustedTransportInfo),
+
+    /// Signed transport info which can be automatically shared across the network by discovery
+    /// services and "untrusted" intermediaries since the original author is verifiable.
     Authenticated(AuthenticatedTransportInfo),
 }
 
@@ -203,7 +213,7 @@ impl Display for TransportInfo {
 }
 
 /// Signed transport info which can be automatically shared across the network by discovery
-/// services and "untrusted" intermediaries since the original author can be verified.
+/// services and "untrusted" intermediaries since the original author is verifiable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticatedTransportInfo {
     /// UNIX timestamp from when this transport information was published.
