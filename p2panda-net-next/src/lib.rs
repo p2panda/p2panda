@@ -13,7 +13,8 @@ mod test_utils;
 mod utils;
 
 pub use addrs::{
-    NodeId, NodeInfo, NodeInfoError, TransportAddress, TransportInfo, UnsignedTransportInfo,
+    AuthenticatedTransportInfo, NodeId, NodeInfo, NodeInfoError, NodeTransportInfo,
+    TransportAddress, TransportInfo, TrustedTransportInfo, UnsignedTransportInfo,
 };
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;

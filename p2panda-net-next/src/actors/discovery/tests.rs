@@ -6,16 +6,15 @@ use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore as _;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
-use rand::Rng;
 use tokio::time::sleep;
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
+use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::test_utils::{setup_logging, test_args_from_seed};
+use crate::test_utils::{generate_node_info, setup_logging, test_args_from_seed};
 
 use super::DiscoveryActorName;
 
@@ -89,25 +88,6 @@ impl TestNode {
         self.args.public_key
     }
 
-    pub fn node_info(&mut self) -> NodeInfo {
-        let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
-            self.args.public_key,
-            None,
-            [(
-                self.args.iroh_config.bind_ip_v4,
-                self.args.iroh_config.bind_port_v4,
-            )
-                .into()],
-        )]);
-        transport_info.timestamp = self.args.rng.random::<u32>() as u64;
-        let transport_info = transport_info.sign(&self.args.private_key).unwrap();
-        NodeInfo {
-            node_id: self.args.public_key,
-            bootstrap: false,
-            transports: Some(transport_info),
-        }
-    }
-
     pub fn shutdown(&self) {
         self.address_book_ref.stop(None);
         self.discovery_manager_ref.stop(None);
@@ -122,7 +102,7 @@ async fn smoke_test() {
     let mut bob = TestNode::spawn([17; 32], vec![]).await;
 
     // Alice inserts Bob's info in address book.
-    let alice = TestNode::spawn([18; 32], vec![bob.node_info()]).await;
+    let alice = TestNode::spawn([18; 32], vec![generate_node_info(&mut bob.args)]).await;
 
     sleep(Duration::from_millis(100)).await;
 

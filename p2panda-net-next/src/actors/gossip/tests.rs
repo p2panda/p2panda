@@ -11,19 +11,17 @@ use p2panda_core::PublicKey;
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
-use rand::Rng;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
 
+use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook};
 use crate::actors::gossip::session::ToGossipSession;
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
-use crate::test_utils::{setup_logging, test_args, test_args_from_seed};
+use crate::test_utils::{generate_node_info, setup_logging, test_args, test_args_from_seed};
 use crate::utils::from_private_key;
-use crate::{NodeInfo, TopicId, TransportAddress, UnsignedTransportInfo};
 
 use super::{Gossip, GossipState, ToGossip};
 
@@ -798,21 +796,6 @@ async fn three_peer_gossip_with_rejoin() {
     // Shutdown routers.
     bat_router.shutdown().await.unwrap();
     cat_router.shutdown().await.unwrap();
-}
-
-pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
-    let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
-        args.public_key,
-        None,
-        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
-    )]);
-    transport_info.timestamp = args.rng.random::<u32>() as u64;
-    let transport_info = transport_info.sign(&args.private_key).unwrap();
-    NodeInfo {
-        node_id: args.public_key,
-        bootstrap: false,
-        transports: Some(transport_info),
-    }
 }
 
 #[tokio::test]
