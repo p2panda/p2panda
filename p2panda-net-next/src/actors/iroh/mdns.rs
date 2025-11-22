@@ -11,10 +11,11 @@ use tracing::{debug, trace, warn};
 use crate::actors::address_book::{update_address_book, watch_node_info};
 use crate::actors::iroh::user_data::UserDataTransportInfo;
 use crate::actors::{ActorNamespace, generate_actor_namespace};
+use crate::addrs::NodeTransportInfo;
 use crate::args::ApplicationArguments;
 use crate::config::MdnsDiscoveryMode;
 use crate::utils::{from_public_key, to_public_key};
-use crate::{NodeInfo, TransportInfo};
+use crate::{AuthenticatedTransportInfo, NodeInfo, TransportInfo};
 
 pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
 
@@ -187,7 +188,7 @@ impl ThreadLocalActor for Mdns {
                     Ok(txt) => {
                         // Assemble a transport info manually by combining the extra user data
                         // (timestamp, signature) with actual addressing information from iroh.
-                        let transport_info = TransportInfo {
+                        let transport_info = AuthenticatedTransportInfo {
                             timestamp: txt.timestamp,
                             signature: txt.signature,
                             addresses: endpoint_addr
@@ -209,7 +210,7 @@ impl ThreadLocalActor for Mdns {
                         if let Err(err) = update_address_book(
                             state.actor_namespace.clone(),
                             to_public_key(endpoint_id),
-                            transport_info,
+                            transport_info.into(),
                         )
                         .await
                         {
@@ -240,6 +241,11 @@ impl ThreadLocalActor for Mdns {
                 let transport_info = node_info
                     .transports
                     .expect("if there's an endpoint address then there's transport info");
+
+                let TransportInfo::Authenticated(transport_info) = transport_info else {
+                    // Only publish authenticated transport info.
+                    return Ok(());
+                };
 
                 // Inform mDNS service about our updated transport info.
                 if let Ok(user_data) = UserData::try_from(transport_info) {

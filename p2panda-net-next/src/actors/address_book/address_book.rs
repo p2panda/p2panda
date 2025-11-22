@@ -16,6 +16,7 @@ use tracing::{debug, warn};
 use crate::actors::address_book::watchers::{
     UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
 };
+use crate::addrs::NodeTransportInfo;
 use crate::args::ApplicationArguments;
 use crate::utils::ShortFormat;
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
@@ -485,7 +486,7 @@ mod tests {
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::addrs::{NodeInfo, TransportAddress, UnsignedTransportInfo};
+    use crate::addrs::{NodeInfo, NodeTransportInfo, TransportAddress, UnsignedTransportInfo};
     use crate::test_utils::test_args;
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -539,7 +540,7 @@ mod tests {
                     ));
                     let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
                     transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
-                    transport_info
+                    transport_info.into()
                 }),
             }
         };
@@ -566,7 +567,7 @@ mod tests {
             actor,
             ToAddressBook::InsertTransportInfo,
             args.public_key.clone(),
-            transport_info
+            transport_info.into()
         )
         .unwrap();
         assert!(result.is_ok());
@@ -597,7 +598,7 @@ mod tests {
             actor,
             ToAddressBook::InsertTransportInfo,
             args.public_key.clone(),
-            transport_info
+            transport_info.into()
         )
         .unwrap();
         assert!(result.is_err());
@@ -618,7 +619,7 @@ mod tests {
             actor,
             ToAddressBook::InsertTransportInfo,
             public_key,
-            transport_info
+            transport_info.into()
         )
         .unwrap();
         assert!(result.is_ok());

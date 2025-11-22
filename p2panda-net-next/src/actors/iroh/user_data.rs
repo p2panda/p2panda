@@ -9,7 +9,7 @@ use p2panda_core::{IdentityError, Signature};
 use thiserror::Error;
 use tracing::error;
 
-use crate::TransportInfo;
+use crate::AuthenticatedTransportInfo;
 
 /// Helper to bring additional transport info (signature and timestamp) into iroh's user data
 /// struct.
@@ -22,7 +22,7 @@ pub struct UserDataTransportInfo {
 }
 
 impl UserDataTransportInfo {
-    pub fn from_transport_info(info: TransportInfo) -> Self {
+    pub fn from_transport_info(info: AuthenticatedTransportInfo) -> Self {
         Self {
             signature: info.signature,
             timestamp: info.timestamp,
@@ -30,10 +30,10 @@ impl UserDataTransportInfo {
     }
 }
 
-impl TryFrom<TransportInfo> for UserData {
+impl TryFrom<AuthenticatedTransportInfo> for UserData {
     type Error = MaxLengthExceededError;
 
-    fn try_from(info: TransportInfo) -> Result<Self, Self::Error> {
+    fn try_from(info: AuthenticatedTransportInfo) -> Result<Self, Self::Error> {
         UserData::try_from(UserDataTransportInfo::from_transport_info(info))
     }
 }
@@ -101,13 +101,15 @@ mod tests {
     use iroh::discovery::UserData;
     use p2panda_core::PrivateKey;
 
-    use super::{TransportInfo, UserDataTransportInfo};
+    use super::{AuthenticatedTransportInfo, UserDataTransportInfo};
 
     #[test]
     fn transport_info_to_user_data() {
         // Create simple transport info object without any addresses attached.
         let private_key = PrivateKey::new();
-        let transport_info = TransportInfo::new_unsigned().sign(&private_key).unwrap();
+        let transport_info = AuthenticatedTransportInfo::new_unsigned()
+            .sign(&private_key)
+            .unwrap();
 
         // Extract information we want for our TXT record.
         let txt_info = UserDataTransportInfo::from_transport_info(transport_info);
