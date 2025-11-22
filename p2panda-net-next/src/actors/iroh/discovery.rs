@@ -69,7 +69,8 @@ impl Discovery for AddressBookDiscovery {
             // Update entry about ourselves in address book to allow this information to propagate
             // in other discovery mechanisms or side-channels outside of iroh.
             if let Err(err) =
-                update_address_book(actor_namespace, public_key, transport_info.clone()).await
+                update_address_book(actor_namespace, public_key, transport_info.clone().into())
+                    .await
             {
                 warn!("could not update address book with own transport info: {err:#?}");
             } else {

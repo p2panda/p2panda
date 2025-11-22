@@ -445,7 +445,7 @@ impl<S> DiscoveryManager<S> {
                 address_book_ref,
                 ToAddressBook::InsertTransportInfo,
                 *node_id,
-                transport_info.clone()
+                transport_info.clone().into()
             ) else {
                 return 0;
             };
