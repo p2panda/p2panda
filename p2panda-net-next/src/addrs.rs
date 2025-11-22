@@ -182,7 +182,7 @@ pub enum TransportInfo {
 }
 
 impl TransportInfo {
-    pub fn new() -> TrustedTransportInfo {
+    pub fn new_trusted() -> TrustedTransportInfo {
         TrustedTransportInfo::new()
     }
 
