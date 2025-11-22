@@ -52,6 +52,12 @@ impl NodeInfo {
         }
     }
 
+    /// Use this node as a "bootstrap".
+    pub fn bootstrap(mut self) -> Self {
+        self.bootstrap = true;
+        self
+    }
+
     /// Updates transport info for a node if it is newer ("last-write wins" principle).
     ///
     /// Returns true if given transport info is newer than the current one.
