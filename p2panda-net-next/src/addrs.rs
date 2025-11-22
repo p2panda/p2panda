@@ -3,16 +3,18 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
+#[cfg(test)]
 use std::net::SocketAddr;
 
-use iroh::{EndpointAddr, RelayUrl, TransportAddr};
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
 use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::utils::{current_timestamp, from_public_key, to_public_key};
+#[cfg(test)]
+use crate::utils::from_public_key;
+use crate::utils::{current_timestamp, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
@@ -50,19 +52,17 @@ impl NodeInfo {
         }
     }
 
+    /// Use this node as a "bootstrap".
+    pub fn bootstrap(mut self) -> Self {
+        self.bootstrap = true;
+        self
+    }
+
     /// Updates transport info for a node if it is newer ("last-write wins" principle).
     ///
     /// Returns true if given transport info is newer than the current one.
     pub fn update_transports(&mut self, other: TransportInfo) -> Result<bool, NodeInfoError> {
-        // Make sure the given info matches the node id.
-        for address in &other.addresses {
-            #[allow(irrefutable_let_patterns)]
-            if let TransportAddress::Iroh(endpoint_addr) = address
-                && to_public_key(endpoint_addr.id) != self.node_id
-            {
-                return Err(NodeInfoError::NodeIdMismatch);
-            }
-        }
+        other.verify(&self.node_id)?;
 
         // Choose "latest" info by checking timestamp if given.
         let mut is_newer = false;
@@ -72,7 +72,7 @@ impl NodeInfo {
                 self.transports = Some(other)
             }
             Some(current) => {
-                if other.timestamp > current.timestamp {
+                if other.timestamp() > current.timestamp() {
                     self.transports = Some(other);
                     is_newer = true;
                 }
@@ -90,7 +90,7 @@ impl NodeInfo {
     }
 }
 
-impl TryFrom<NodeInfo> for EndpointAddr {
+impl TryFrom<NodeInfo> for iroh::EndpointAddr {
     type Error = NodeInfoError;
 
     fn try_from(node_info: NodeInfo) -> Result<Self, Self::Error> {
@@ -99,19 +99,33 @@ impl TryFrom<NodeInfo> for EndpointAddr {
         };
 
         transports
-            .addresses
-            .into_iter()
+            .addresses()
+            .iter()
             .find_map(|address| match address {
                 TransportAddress::Iroh(endpoint_addr) => Some(endpoint_addr),
                 #[allow(unreachable_patterns)]
                 _ => None,
             })
+            .cloned()
             .ok_or(NodeInfoError::MissingTransportAddresses)
     }
 }
 
+impl From<iroh::EndpointAddr> for NodeInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        let node_id = to_public_key(addr.id);
+        let transports = TransportInfo::from(TrustedTransportInfo::from(addr));
+
+        Self {
+            node_id,
+            bootstrap: false,
+            transports: Some(transports),
+        }
+    }
+}
+
 impl address_book::NodeInfo<NodeId> for NodeInfo {
-    type Transports = TransportInfo;
+    type Transports = AuthenticatedTransportInfo;
 
     fn id(&self) -> NodeId {
         self.node_id
@@ -122,7 +136,201 @@ impl address_book::NodeInfo<NodeId> for NodeInfo {
     }
 
     fn transports(&self) -> Option<Self::Transports> {
-        self.transports.clone()
+        match &self.transports {
+            Some(TransportInfo::Authenticated(info)) => Some(info.clone()),
+            Some(TransportInfo::Trusted(_)) => {
+                // "Trusted" information is _not_ authenticated and can not be used for discovery
+                // services as the origin of the data can't be verified by other parties.
+                None
+            }
+            None => None,
+        }
+    }
+}
+
+pub trait NodeTransportInfo {
+    /// Returns UNIX timestamp from when this information was created.
+    fn timestamp(&self) -> u64;
+
+    /// Returns all associated transport addresses.
+    fn addresses(&self) -> Vec<TransportAddress>;
+
+    /// Returns number of associated transports for this node.
+    fn len(&self) -> usize;
+
+    /// Returns `false` if no transports are given.
+    fn is_empty(&self) -> bool;
+
+    /// Check authenticity integrity of this information when possible.
+    fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError>;
+}
+
+/// Transport protocols information we can use to connect to a node.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransportInfo {
+    /// Unauthenticated transport info we "trust" to be correct since it came to us via an verified
+    /// side-channel (scanning QR code, sharing in a trusted chat group etc.).
+    ///
+    /// This info is never shared across the network services and is only used _locally_ by our own
+    /// node. See `AuthenticatedTransportInfo` for an alternative which can be automatically
+    /// distributed.
+    Trusted(TrustedTransportInfo),
+
+    /// Signed transport info which can be automatically shared across the network by discovery
+    /// services and "untrusted" intermediaries since the original author is verifiable.
+    Authenticated(AuthenticatedTransportInfo),
+}
+
+impl TransportInfo {
+    pub fn new_trusted() -> TrustedTransportInfo {
+        TrustedTransportInfo::new()
+    }
+
+    pub fn new_unsigned() -> UnsignedTransportInfo {
+        UnsignedTransportInfo::new()
+    }
+}
+
+impl NodeTransportInfo for TransportInfo {
+    fn timestamp(&self) -> u64 {
+        match self {
+            TransportInfo::Trusted(info) => info.timestamp(),
+            TransportInfo::Authenticated(info) => info.timestamp(),
+        }
+    }
+
+    fn addresses(&self) -> Vec<TransportAddress> {
+        match self {
+            TransportInfo::Trusted(info) => info.addresses(),
+            TransportInfo::Authenticated(info) => info.addresses(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            TransportInfo::Trusted(info) => info.addresses.len(),
+            TransportInfo::Authenticated(info) => info.addresses.len(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            TransportInfo::Trusted(info) => info.addresses.is_empty(),
+            TransportInfo::Authenticated(info) => info.addresses.is_empty(),
+        }
+    }
+
+    fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
+        match self {
+            TransportInfo::Trusted(info) => info.verify(node_id),
+            TransportInfo::Authenticated(info) => info.verify(node_id),
+        }
+    }
+}
+
+impl Display for TransportInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransportInfo::Trusted(info) => write!(f, "{info}"),
+            TransportInfo::Authenticated(info) => write!(f, "{info}"),
+        }
+    }
+}
+
+impl From<iroh::EndpointAddr> for TransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        Self::from(TrustedTransportInfo::from(addr))
+    }
+}
+
+impl From<AuthenticatedTransportInfo> for TransportInfo {
+    fn from(value: AuthenticatedTransportInfo) -> Self {
+        Self::Authenticated(value)
+    }
+}
+
+impl From<TrustedTransportInfo> for TransportInfo {
+    fn from(value: TrustedTransportInfo) -> Self {
+        Self::Trusted(value)
+    }
+}
+
+/// Signed transport info which can be automatically shared across the network by discovery
+/// services and "untrusted" intermediaries since the original author is verifiable.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuthenticatedTransportInfo {
+    /// UNIX timestamp from when this transport information was published.
+    ///
+    /// This can be used to find out which information is the "latest".
+    pub timestamp: u64,
+
+    /// Signature to prove authenticity of this transport information.
+    ///
+    /// Other nodes can validate the authenticity by checking this signature against the associated
+    /// node id and info.
+    ///
+    /// This protects against attacks where nodes maliciously publish wrong information about other
+    /// nodes, for example to make them unreachable due to invalid addresses.
+    pub signature: Signature,
+
+    /// Associated transport addresses to aid establishing a connection to this node.
+    pub addresses: Vec<TransportAddress>,
+}
+
+impl AuthenticatedTransportInfo {
+    pub fn new_unsigned() -> UnsignedTransportInfo {
+        UnsignedTransportInfo::new()
+    }
+
+    fn to_unsigned(&self) -> UnsignedTransportInfo {
+        UnsignedTransportInfo {
+            timestamp: self.timestamp,
+            addresses: self.addresses.clone(),
+        }
+    }
+}
+
+impl NodeTransportInfo for AuthenticatedTransportInfo {
+    fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    fn addresses(&self) -> Vec<TransportAddress> {
+        self.addresses.clone()
+    }
+
+    fn len(&self) -> usize {
+        self.addresses.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.addresses.is_empty()
+    }
+
+    fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
+        let bytes = self.to_unsigned().to_bytes()?;
+
+        if !node_id.verify(&bytes, &self.signature) {
+            Err(NodeInfoError::InvalidSignature)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Display for AuthenticatedTransportInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let addresses = if self.addresses.is_empty() {
+            "[]".to_string()
+        } else {
+            self.addresses.iter().map(|addr| addr.to_string()).collect()
+        };
+
+        write!(
+            f,
+            "[authenticated] timestamp={}, addresses={}",
+            self.timestamp, addresses
+        )
     }
 }
 
@@ -135,6 +343,12 @@ pub struct UnsignedTransportInfo {
 
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
+}
+
+impl Default for UnsignedTransportInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UnsignedTransportInfo {
@@ -192,8 +406,11 @@ impl UnsignedTransportInfo {
     }
 
     /// Authenticate transport info by signining it with our secret key.
-    pub fn sign(self, signing_key: &PrivateKey) -> Result<TransportInfo, NodeInfoError> {
-        Ok(TransportInfo {
+    pub fn sign(
+        self,
+        signing_key: &PrivateKey,
+    ) -> Result<AuthenticatedTransportInfo, NodeInfoError> {
+        Ok(AuthenticatedTransportInfo {
             timestamp: self.timestamp,
             signature: {
                 let bytes = self.to_bytes()?;
@@ -204,70 +421,109 @@ impl UnsignedTransportInfo {
     }
 }
 
-impl Default for UnsignedTransportInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl From<EndpointAddr> for UnsignedTransportInfo {
-    fn from(addr: EndpointAddr) -> Self {
+impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TransportInfo {
+/// Unauthenticated transport info we "trust" to be correct since it came to us via an verified
+/// side-channel (scanning QR code, sharing in a trusted chat group etc.).
+///
+/// This info is never shared across the network services and is only used _locally_ by our own
+/// node. See `AuthenticatedTransportInfo` for an alternative which can be automatically
+/// distributed.
+#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
+pub struct TrustedTransportInfo {
     /// UNIX timestamp from when this transport information was published.
     ///
     /// This can be used to find out which information is the "latest".
     pub timestamp: u64,
 
-    /// Signature to prove authenticity of this transport information.
-    ///
-    /// Other nodes can validate the authenticity by checking this signature against the associated
-    /// node id and info.
-    ///
-    /// This protects against attacks where nodes maliciously publish wrong information about other
-    /// nodes, for example to make them unreachable due to invalid addresses.
-    pub signature: Signature,
-
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
 }
 
-impl TransportInfo {
-    pub fn new_unsigned() -> UnsignedTransportInfo {
-        UnsignedTransportInfo::new()
-    }
-
-    fn to_unsigned(&self) -> UnsignedTransportInfo {
-        UnsignedTransportInfo {
-            timestamp: self.timestamp,
-            addresses: self.addresses.clone(),
-        }
-    }
-
-    /// Returns number of associated transports for this node.
-    pub fn len(&self) -> usize {
-        self.addresses.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.addresses.is_empty()
-    }
-
-    pub fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
-        let bytes = self.to_unsigned().to_bytes()?;
-        if !node_id.verify(&bytes, &self.signature) {
-            Err(NodeInfoError::InvalidSignature)
-        } else {
-            Ok(())
-        }
+impl Default for TrustedTransportInfo {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl Display for TransportInfo {
+impl TrustedTransportInfo {
+    pub fn new() -> Self {
+        Self {
+            timestamp: current_timestamp(),
+            addresses: vec![],
+        }
+    }
+
+    pub fn from_addrs(addrs: impl IntoIterator<Item = TransportAddress>) -> Self {
+        let mut info = Self::new();
+        for addr in addrs {
+            info.add_addr(addr);
+        }
+        info
+    }
+
+    /// Add transport address for this node.
+    ///
+    /// This method automatically de-duplicates transports per type and chooses the last-inserted
+    /// one.
+    pub fn add_addr(&mut self, addr: TransportAddress) {
+        let existing_transport_index =
+            self.addresses
+                .iter()
+                .enumerate()
+                .find_map(|(index, existing_addr)| {
+                    if mem::discriminant(&addr) == mem::discriminant(existing_addr) {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                });
+
+        if let Some(index) = existing_transport_index {
+            self.addresses.remove(index);
+        }
+
+        self.addresses.push(addr);
+    }
+}
+
+impl NodeTransportInfo for TrustedTransportInfo {
+    fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    fn addresses(&self) -> Vec<TransportAddress> {
+        self.addresses.clone()
+    }
+
+    fn len(&self) -> usize {
+        self.addresses.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.addresses.is_empty()
+    }
+
+    fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
+        for address in &self.addresses {
+            address.verify(node_id)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl From<iroh::EndpointAddr> for TrustedTransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        Self::from_addrs([addr.into()])
+    }
+}
+
+impl Display for TrustedTransportInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let addresses = if self.addresses.is_empty() {
             "[]".to_string()
@@ -275,7 +531,11 @@ impl Display for TransportInfo {
             self.addresses.iter().map(|addr| addr.to_string()).collect()
         };
 
-        write!(f, "timestamp={}, addresses={}", self.timestamp, addresses)
+        write!(
+            f,
+            "[trusted] timestamp={}, addresses={}",
+            self.timestamp, addresses
+        )
     }
 }
 
@@ -290,19 +550,20 @@ pub enum TransportAddress {
     /// To connect to another node either their "home relay" URL needs to be known (to coordinate
     /// holepunching or relayed connection fallback) or at least one reachable "direct address"
     /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
-    Iroh(EndpointAddr),
+    Iroh(iroh::EndpointAddr),
 }
 
 impl TransportAddress {
+    #[cfg(test)]
     pub fn from_iroh(
         node_id: NodeId,
-        relay_url: Option<RelayUrl>,
+        relay_url: Option<iroh::RelayUrl>,
         direct_addresses: impl IntoIterator<Item = SocketAddr>,
     ) -> Self {
-        let transport_addrs = direct_addresses.into_iter().map(TransportAddr::Ip);
+        let transport_addrs = direct_addresses.into_iter().map(iroh::TransportAddr::Ip);
 
         let mut endpoint_addr =
-            EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
+            iroh::EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
 
         if let Some(url) = relay_url {
             endpoint_addr = endpoint_addr.with_relay_url(url);
@@ -310,10 +571,22 @@ impl TransportAddress {
 
         Self::Iroh(endpoint_addr)
     }
+
+    pub fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
+        // Make sure the given address matches the node id.
+        #[allow(irrefutable_let_patterns)]
+        if let TransportAddress::Iroh(endpoint_addr) = self
+            && &to_public_key(endpoint_addr.id) != node_id
+        {
+            return Err(NodeInfoError::NodeIdMismatch);
+        }
+
+        Ok(())
+    }
 }
 
-impl From<EndpointAddr> for TransportAddress {
-    fn from(addr: EndpointAddr) -> Self {
+impl From<iroh::EndpointAddr> for TransportAddress {
+    fn from(addr: iroh::EndpointAddr) -> Self {
         Self::Iroh(addr)
     }
 }
@@ -322,7 +595,7 @@ impl Display for TransportAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TransportAddress::Iroh(endpoint_addr) => {
-                write!(f, "iroh({:?})", endpoint_addr.addrs)
+                write!(f, "[iroh] {:?}", endpoint_addr.addrs)
             }
         }
     }
@@ -347,7 +620,9 @@ pub enum NodeInfoError {
 mod tests {
     use p2panda_core::PrivateKey;
 
-    use super::{NodeInfo, TransportAddress, TransportInfo, UnsignedTransportInfo};
+    use crate::addrs::NodeTransportInfo;
+
+    use super::{AuthenticatedTransportInfo, NodeInfo, TransportAddress, UnsignedTransportInfo};
 
     #[test]
     fn deduplicate_transport_address() {
@@ -355,7 +630,7 @@ mod tests {
         let node_id_1 = signing_key_1.public_key();
 
         // De-duplicate addresses when transport is the same.
-        let mut info = TransportInfo::new_unsigned();
+        let mut info = AuthenticatedTransportInfo::new_unsigned();
         info.add_addr(TransportAddress::from_iroh(node_id_1, None, []));
         info.add_addr(TransportAddress::from_iroh(
             node_id_1,
@@ -416,7 +691,7 @@ mod tests {
             transports: None,
         };
         assert!(node_info.verify().is_ok());
-        assert!(node_info.update_transports(transport_info).is_err());
+        assert!(node_info.update_transports(transport_info.into()).is_err());
     }
 
     #[test]
@@ -455,11 +730,11 @@ mod tests {
             transports: None,
         };
         assert!(node_info.verify().is_ok());
-        assert!(node_info.update_transports(transport_info_1).is_ok());
-        assert!(node_info.update_transports(transport_info_2).is_ok());
+        assert!(node_info.update_transports(transport_info_1.into()).is_ok());
+        assert!(node_info.update_transports(transport_info_2.into()).is_ok());
 
         // The "newer" transport info is the only one registered.
         assert_eq!(node_info.transports.as_ref().unwrap().len(), 1);
-        assert_eq!(node_info.transports.unwrap().timestamp, 2);
+        assert_eq!(node_info.transports.unwrap().timestamp(), 2);
     }
 }

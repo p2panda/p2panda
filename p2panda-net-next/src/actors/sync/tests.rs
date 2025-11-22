@@ -8,7 +8,6 @@ use p2panda_sync::FromSync;
 use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
-use rand::Rng;
 
 use crate::TopicId;
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -18,10 +17,11 @@ use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, EventuallyConsistentStreams, ToEventuallyConsistentStreams,
 };
 use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::addrs::{NodeId, NodeInfo, TransportAddress, UnsignedTransportInfo};
+use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 use crate::test_utils::{
-    NoSyncConfig, NoSyncEvent, NoSyncManager, NoSyncMessage, setup_logging, test_args_from_seed,
+    NoSyncConfig, NoSyncEvent, NoSyncManager, NoSyncMessage, generate_node_info, setup_logging,
+    test_args_from_seed,
 };
 
 struct TestNode<M>
@@ -110,25 +110,6 @@ where
         self.args.public_key
     }
 
-    pub fn node_info(&mut self) -> NodeInfo {
-        let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
-            self.args.public_key,
-            None,
-            [(
-                self.args.iroh_config.bind_ip_v4,
-                self.args.iroh_config.bind_port_v4,
-            )
-                .into()],
-        )]);
-        transport_info.timestamp = self.args.rng.random::<u32>() as u64;
-        let transport_info = transport_info.sign(&self.args.private_key).unwrap();
-        NodeInfo {
-            node_id: self.args.public_key,
-            bootstrap: false,
-            transports: Some(transport_info),
-        }
-    }
-
     pub fn shutdown(&self) {
         self.stream_ref.stop(None);
         self.address_book_ref.stop(None);
@@ -145,8 +126,12 @@ async fn e2e_sync() {
     let mut bob: TestNode<NoSyncManager> = TestNode::spawn([11; 32], vec![], bob_sync_config).await;
 
     let (alice_sync_config, _alice_rx) = NoSyncConfig::new();
-    let alice: TestNode<NoSyncManager> =
-        TestNode::spawn([10; 32], vec![bob.node_info()], alice_sync_config).await;
+    let alice: TestNode<NoSyncManager> = TestNode::spawn(
+        [10; 32],
+        vec![generate_node_info(&mut bob.args)],
+        alice_sync_config,
+    )
+    .await;
 
     let alice_stream = call!(
         alice.stream_ref,
