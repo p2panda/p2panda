@@ -3,16 +3,18 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
+#[cfg(test)]
 use std::net::SocketAddr;
 
-use iroh::{EndpointAddr, RelayUrl, TransportAddr};
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
 use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::utils::{current_timestamp, from_public_key, to_public_key};
+#[cfg(test)]
+use crate::utils::from_public_key;
+use crate::utils::{current_timestamp, to_public_key};
 
 pub type NodeId = p2panda_core::PublicKey;
 
@@ -82,7 +84,7 @@ impl NodeInfo {
     }
 }
 
-impl TryFrom<NodeInfo> for EndpointAddr {
+impl TryFrom<NodeInfo> for iroh::EndpointAddr {
     type Error = NodeInfoError;
 
     fn try_from(node_info: NodeInfo) -> Result<Self, Self::Error> {
@@ -100,6 +102,19 @@ impl TryFrom<NodeInfo> for EndpointAddr {
             })
             .cloned()
             .ok_or(NodeInfoError::MissingTransportAddresses)
+    }
+}
+
+impl From<iroh::EndpointAddr> for NodeInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        let node_id = to_public_key(addr.id);
+        let transports = TransportInfo::from(TrustedTransportInfo::from(addr));
+
+        Self {
+            node_id,
+            bootstrap: false,
+            transports: Some(transports),
+        }
     }
 }
 
@@ -161,6 +176,10 @@ pub enum TransportInfo {
 }
 
 impl TransportInfo {
+    pub fn new() -> TrustedTransportInfo {
+        TrustedTransportInfo::new()
+    }
+
     pub fn new_unsigned() -> UnsignedTransportInfo {
         UnsignedTransportInfo::new()
     }
@@ -209,6 +228,24 @@ impl Display for TransportInfo {
             TransportInfo::Trusted(info) => write!(f, "{info}"),
             TransportInfo::Authenticated(info) => write!(f, "{info}"),
         }
+    }
+}
+
+impl From<iroh::EndpointAddr> for TransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        Self::from(TrustedTransportInfo::from(addr))
+    }
+}
+
+impl From<AuthenticatedTransportInfo> for TransportInfo {
+    fn from(value: AuthenticatedTransportInfo) -> Self {
+        Self::Authenticated(value)
+    }
+}
+
+impl From<TrustedTransportInfo> for TransportInfo {
+    fn from(value: TrustedTransportInfo) -> Self {
+        Self::Trusted(value)
     }
 }
 
@@ -288,12 +325,6 @@ impl Display for AuthenticatedTransportInfo {
             "[authenticated] timestamp={}, addresses={}",
             self.timestamp, addresses
         )
-    }
-}
-
-impl From<AuthenticatedTransportInfo> for TransportInfo {
-    fn from(value: AuthenticatedTransportInfo) -> Self {
-        Self::Authenticated(value)
     }
 }
 
@@ -384,8 +415,8 @@ impl Default for UnsignedTransportInfo {
     }
 }
 
-impl From<EndpointAddr> for UnsignedTransportInfo {
-    fn from(addr: EndpointAddr) -> Self {
+impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
     }
 }
@@ -405,6 +436,47 @@ pub struct TrustedTransportInfo {
 
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
+}
+
+impl TrustedTransportInfo {
+    pub fn new() -> Self {
+        Self {
+            timestamp: current_timestamp(),
+            addresses: vec![],
+        }
+    }
+
+    pub fn from_addrs(addrs: impl IntoIterator<Item = TransportAddress>) -> Self {
+        let mut info = Self::new();
+        for addr in addrs {
+            info.add_addr(addr);
+        }
+        info
+    }
+
+    /// Add transport address for this node.
+    ///
+    /// This method automatically de-duplicates transports per type and chooses the last-inserted
+    /// one.
+    pub fn add_addr(&mut self, addr: TransportAddress) {
+        let existing_transport_index =
+            self.addresses
+                .iter()
+                .enumerate()
+                .find_map(|(index, existing_addr)| {
+                    if mem::discriminant(&addr) == mem::discriminant(existing_addr) {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                });
+
+        if let Some(index) = existing_transport_index {
+            self.addresses.remove(index);
+        }
+
+        self.addresses.push(addr);
+    }
 }
 
 impl NodeTransportInfo for TrustedTransportInfo {
@@ -433,9 +505,9 @@ impl NodeTransportInfo for TrustedTransportInfo {
     }
 }
 
-impl From<TrustedTransportInfo> for TransportInfo {
-    fn from(value: TrustedTransportInfo) -> Self {
-        Self::Trusted(value)
+impl From<iroh::EndpointAddr> for TrustedTransportInfo {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        Self::from_addrs([addr.into()])
     }
 }
 
@@ -466,19 +538,20 @@ pub enum TransportAddress {
     /// To connect to another node either their "home relay" URL needs to be known (to coordinate
     /// holepunching or relayed connection fallback) or at least one reachable "direct address"
     /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
-    Iroh(EndpointAddr),
+    Iroh(iroh::EndpointAddr),
 }
 
 impl TransportAddress {
+    #[cfg(test)]
     pub fn from_iroh(
         node_id: NodeId,
-        relay_url: Option<RelayUrl>,
+        relay_url: Option<iroh::RelayUrl>,
         direct_addresses: impl IntoIterator<Item = SocketAddr>,
     ) -> Self {
-        let transport_addrs = direct_addresses.into_iter().map(TransportAddr::Ip);
+        let transport_addrs = direct_addresses.into_iter().map(iroh::TransportAddr::Ip);
 
         let mut endpoint_addr =
-            EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
+            iroh::EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
 
         if let Some(url) = relay_url {
             endpoint_addr = endpoint_addr.with_relay_url(url);
@@ -495,12 +568,13 @@ impl TransportAddress {
         {
             return Err(NodeInfoError::NodeIdMismatch);
         }
+
         Ok(())
     }
 }
 
-impl From<EndpointAddr> for TransportAddress {
-    fn from(addr: EndpointAddr) -> Self {
+impl From<iroh::EndpointAddr> for TransportAddress {
+    fn from(addr: iroh::EndpointAddr) -> Self {
         Self::Iroh(addr)
     }
 }
@@ -509,7 +583,7 @@ impl Display for TransportAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TransportAddress::Iroh(endpoint_addr) => {
-                write!(f, "iroh({:?})", endpoint_addr.addrs)
+                write!(f, "[iroh] {:?}", endpoint_addr.addrs)
             }
         }
     }
