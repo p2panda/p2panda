@@ -345,6 +345,12 @@ pub struct UnsignedTransportInfo {
     pub addresses: Vec<TransportAddress>,
 }
 
+impl Default for UnsignedTransportInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UnsignedTransportInfo {
     pub fn new() -> Self {
         Self {
@@ -415,12 +421,6 @@ impl UnsignedTransportInfo {
     }
 }
 
-impl Default for UnsignedTransportInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
     fn from(addr: iroh::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
@@ -442,6 +442,12 @@ pub struct TrustedTransportInfo {
 
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
+}
+
+impl Default for TrustedTransportInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TrustedTransportInfo {
