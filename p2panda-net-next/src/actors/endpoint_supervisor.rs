@@ -24,7 +24,7 @@ use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::ActorCell;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 use crate::TopicId;
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
@@ -225,7 +225,7 @@ where
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{ENDPOINT_SUPERVISOR} actor: received ready from {} actor",
                         without_namespace(&name)
                     );
@@ -331,7 +331,7 @@ where
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{ENDPOINT_SUPERVISOR} actor: {} actor terminated",
                         without_namespace(&name)
                     );

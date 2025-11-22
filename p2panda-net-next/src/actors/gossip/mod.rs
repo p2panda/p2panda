@@ -349,7 +349,7 @@ where
                 peers,
                 session_id,
             } => {
-                debug!("joined topic {:?} with peers: {:?}", topic, peers);
+                debug!(topic = %topic.fmt_short(), peers = %peers.fmt_short(), "joined topic");
 
                 // Inform the gossip sender actor that the overlay has been joined.
                 if let Some(gossip_joined_tx) =
@@ -437,7 +437,7 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.get(&actor_id) {
                     debug!(
-                        ?actor_id,
+                        %actor_id,
                         topic = topic.fmt_short(),
                         "received ready from gossip session",
                     );
@@ -447,9 +447,9 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     debug!(
-                        ?actor_id,
+                        %actor_id,
                         topic = topic.fmt_short(),
-                        "gossip session terminated: {reason:#?}",
+                        "gossip session terminated: {reason:?}",
                     );
 
                     // Drop all state associated with the terminated gossip session.
@@ -471,7 +471,7 @@ where
                 let actor_id = actor.get_id();
                 if let Some(topic) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
                     warn!(
-                        ?actor_id,
+                        %actor_id,
                         topic = topic.fmt_short(),
                         "gossip session failed: {panic_msg:#?}",
                     );

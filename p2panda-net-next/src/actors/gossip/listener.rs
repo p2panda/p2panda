@@ -4,7 +4,7 @@
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::mpsc::Receiver;
-use tracing::warn;
+use tracing::trace;
 
 use crate::actors::gossip::sender::ToGossipSender;
 
@@ -67,7 +67,7 @@ impl ThreadLocalActor for GossipListener {
                     let _ = myself.cast(ToGossipListener::WaitForMessage);
                 }
                 None => {
-                    warn!("gossip listener actor: user dropped sender - channel closed");
+                    trace!("gossip listener actor: user dropped sender - channel closed");
                     myself.stop(Some("receiver channel closed".to_string()));
                 }
             }

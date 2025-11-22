@@ -5,13 +5,13 @@
 use std::collections::HashSet;
 
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, call, registry};
-use tracing::debug;
+use ractor::{ActorProcessingErr, ActorRef};
+use tracing::trace;
 
+use crate::actors::ActorNamespace;
+use crate::actors::address_book::watch_topic;
 use crate::actors::address_book::watchers::WatcherReceiver;
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::session::ToGossipSession;
-use crate::actors::{ActorNamespace, with_namespace};
 use crate::utils::from_public_key;
 use crate::{NodeId, TopicId};
 
@@ -71,20 +71,11 @@ impl ThreadLocalActor for GossipHealer {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToGossipHealer::SubscribeToAddressBook(topic) => {
-                if let Some(address_book_actor) =
-                    registry::where_is(with_namespace(ADDRESS_BOOK, &state.actor_namespace))
-                {
-                    let actor: ActorRef<ToAddressBook> = address_book_actor.into();
+                let receiver = watch_topic(state.actor_namespace.clone(), topic, true).await?;
+                state.receiver = Some(receiver);
 
-                    let receiver = call!(actor, ToAddressBook::WatchTopic, topic, true)
-                        .expect("address book actor should handle call");
-                    state.receiver = Some(receiver);
-
-                    // Invoke the handler to wait for the first event on the receiver.
-                    let _ = myself.cast(ToGossipHealer::WaitForEvent);
-                } else {
-                    panic!("address book actor unavailable")
-                };
+                // Invoke the handler to wait for the first event on the receiver.
+                let _ = myself.cast(ToGossipHealer::WaitForEvent);
             }
             ToGossipHealer::WaitForEvent => {
                 if let Some(receiver) = &mut state.receiver {
@@ -102,7 +93,7 @@ impl ThreadLocalActor for GossipHealer {
                             let _ = myself.cast(ToGossipHealer::WaitForEvent);
                         }
                         None => {
-                            debug!(
+                            trace!(
                                 "gossip healer actor: address book dropped broadcast tx - channel closed"
                             );
                             myself.stop(Some("receiver channel closed".to_string()));

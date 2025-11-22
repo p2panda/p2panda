@@ -4,12 +4,14 @@
 mod address_book;
 pub mod watchers;
 
+use std::collections::HashSet;
+
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 
 use crate::actors::address_book::watchers::{UpdatesOnly, WatcherReceiver};
 use crate::actors::{ActorNamespace, with_namespace};
-use crate::{NodeId, NodeInfo, TransportInfo};
+use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 pub use address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
@@ -51,6 +53,26 @@ pub async fn watch_node_info(
         address_book_ref,
         ToAddressBook::WatchNodeInfo,
         node_id,
+        updates_only
+    )
+    .map_err(|_| AddressBookUtilsError::ActorFailed)?;
+
+    Ok(rx)
+}
+
+pub async fn watch_topic(
+    actor_namespace: ActorNamespace,
+    topic: TopicId,
+    updates_only: UpdatesOnly,
+) -> Result<WatcherReceiver<HashSet<NodeId>>, AddressBookUtilsError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookUtilsError::ActorNotAvailable);
+    };
+
+    let rx = call!(
+        address_book_ref,
+        ToAddressBook::WatchTopic,
+        topic,
         updates_only
     )
     .map_err(|_| AddressBookUtilsError::ActorFailed)?;
