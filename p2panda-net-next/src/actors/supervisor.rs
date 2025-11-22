@@ -23,7 +23,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_sync::traits::{Protocol, SyncManager};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
-use tracing::{debug, warn};
+use tracing::{trace, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
@@ -87,7 +87,7 @@ where
         // Spawn the events actor.
         let (events_actor, _) = Events::spawn_linked(
             Some(with_namespace(EVENTS, &actor_namespace)),
-            (),
+            args.clone(),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -149,7 +149,7 @@ where
         match message {
             SupervisionEvent::ActorStarted(actor) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{SUPERVISOR} actor: received ready from {} actor",
                         without_namespace(&name)
                     );
@@ -162,7 +162,7 @@ where
 
                         let (events_actor, _) = Events::spawn_linked(
                             Some(with_namespace(EVENTS, &state.actor_namespace)),
-                            (),
+                            state.args.clone(),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
@@ -212,7 +212,7 @@ where
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
                 if let Some(name) = actor.get_name() {
-                    debug!(
+                    trace!(
                         "{SUPERVISOR} actor: {} actor terminated",
                         without_namespace(&name)
                     );
