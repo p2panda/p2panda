@@ -7,8 +7,7 @@ use assert_matches::assert_matches;
 use p2panda_core::{Body, Operation};
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
-use p2panda_sync::log_sync::{LogSyncEvent, StatusEvent};
-use p2panda_sync::topic_log_sync::TopicLogSyncEvent;
+use p2panda_sync::topic_log_sync::TopicLogSyncEvent as Event;
 use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
@@ -287,16 +286,14 @@ async fn e2e_topic_log_sync() {
         FromSync {
             session_id: 0,
             remote,
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                StatusEvent::Started { .. }
-            )),
+            event: Event::SyncStarted(_),
         } if remote == bob_id
     );
     let event = alice_subscription.recv().await.unwrap();
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            event: Event::SyncStatus(_),
             ..
         }
     );
@@ -304,7 +301,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            event: Event::SyncStatus(_),
             ..
         }
     );
@@ -312,7 +309,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+            event: Event::Operation(_),
             ..
         }
     );
@@ -320,7 +317,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. })),
+            event: Event::SyncFinished(_),
             ..
         }
     );
@@ -333,16 +330,14 @@ async fn e2e_topic_log_sync() {
         FromSync {
             session_id: 0,
             remote,
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                StatusEvent::Started { .. }
-            )),
+            event: Event::SyncStarted(_),
         } if remote == alice_id
     );
     let event = bob_subscription.recv().await.unwrap();
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            event: Event::SyncStatus(_),
             ..
         }
     );
@@ -350,7 +345,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Progress { .. })),
+            event: Event::SyncStatus(_),
             ..
         }
     );
@@ -358,7 +353,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+            event: Event::Operation(_),
             ..
         }
     );
@@ -366,7 +361,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(StatusEvent::Completed { .. })),
+            event: Event::SyncFinished(_),
             ..
         }
     );
@@ -388,7 +383,7 @@ async fn e2e_topic_log_sync() {
     assert_matches!(
         event,
         FromSync {
-            event: TopicLogSyncEvent::Live { .. },
+            event: Event::Operation(_),
             ..
         }
     );

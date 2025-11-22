@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
@@ -19,11 +18,8 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use crate::log_sync::LogSyncEvent;
 use crate::session_topic_map::SessionTopicMap;
-use crate::topic_log_sync::{
-    LiveModeMessage, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
-};
+use crate::topic_log_sync::{TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
 use crate::traits::SyncManager;
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
@@ -32,7 +28,7 @@ type SessionEventReceiver<M> =
 
 #[derive(Debug)]
 pub struct TopicSyncManagerInner<T, E> {
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
     pub(crate) events_rx_set: SelectAll<SessionEventReceiver<TopicLogSyncEvent<E>>>,
     pub(crate) manager_output_queue: Vec<FromSync<TopicLogSyncEvent<E>>>,
 }
@@ -87,10 +83,7 @@ impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
-    <S as LogStore<L, E>>::Error: StdError + Send + Sync + 'static,
-    <S as OperationStore<L, E>>::Error: StdError + Send + Sync + 'static,
     M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
-    <M as TopicLogMap<T, L>>::Error: StdError + Send + Sync + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
     E: Extensions + Send + Sync + 'static,
 {
@@ -98,7 +91,7 @@ where
     type Config = TopicSyncManagerConfig<S, M>;
     type Event = TopicLogSyncEvent<E>;
     type Message = Operation<E>;
-    type Error = TopicSyncManagerError<T, S, M, L, E>;
+    type Error = TopicSyncManagerError<L, E>;
 
     fn from_config(config: Self::Config) -> Self {
         Self::new(config.topic_map, config.store)
@@ -145,10 +138,8 @@ where
         let map_fn = |to_sync: ToSync<Operation<E>>| {
             ready({
                 match to_sync {
-                    ToSync::Payload(operation) => {
-                        Ok::<_, Self::Error>(LiveModeMessage::Operation(Box::new(operation)))
-                    }
-                    ToSync::Close => Ok::<_, Self::Error>(LiveModeMessage::Close),
+                    ToSync::Payload(operation) => Ok::<_, Self::Error>(ToSync::Payload(operation)),
+                    ToSync::Close => Ok::<_, Self::Error>(ToSync::Close),
                 }
             })
         };
@@ -210,15 +201,11 @@ where
         let event = manager_event.event();
 
         let operation = match event {
-            TopicLogSyncEvent::Sync(LogSyncEvent::Data(op)) => {
-                let op = op.clone();
-                Some((op.header, op.body))
-            }
-            TopicLogSyncEvent::Live { header, body } => Some((*header.clone(), body.clone())),
+            TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
             _ => return Some(manager_event),
         };
 
-        if let Some((header, body)) = operation {
+        if let Some(operation) = operation {
             let Some(topic) = state.session_topic_map.topic(session_id) else {
                 debug!("session {session_id} not found");
                 state.session_topic_map.drop(session_id);
@@ -238,13 +225,7 @@ where
                     continue;
                 };
 
-                let result = tx
-                    .send(LiveModeMessage::Operation(Box::new(Operation {
-                        hash: header.hash(),
-                        header: header.clone(),
-                        body: body.clone(),
-                    })))
-                    .await;
+                let result = tx.send(ToSync::Payload(operation.clone())).await;
 
                 if result.is_err() {
                     debug!("failed sending message on session channel");
@@ -300,14 +281,9 @@ pub struct TopicSyncManagerConfig<S, M> {
 }
 
 #[derive(Debug, Error)]
-pub enum TopicSyncManagerError<T, S, M, L, E>
-where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone,
-    M: TopicLogMap<T, L>,
-{
+pub enum TopicSyncManagerError<L, E> {
     #[error(transparent)]
-    TopicLogSync(#[from] TopicLogSyncError<T, S, M, L, E>),
+    TopicLogSync(#[from] TopicLogSyncError<L, E>),
 
     #[error("received operation before topic agreed")]
     OperationBeforeTopic,
@@ -323,14 +299,13 @@ mod tests {
 
     use assert_matches::assert_matches;
     use futures::{SinkExt, StreamExt};
-    use p2panda_core::{Body, Header, Operation};
+    use p2panda_core::{Body, Operation};
 
     use crate::TopicSyncManager;
-    use crate::log_sync::{LogSyncEvent, StatusEvent};
     use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
     use crate::test_utils::{
-        LogIdExtension, Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent,
-        TestTopicSyncManager, drain_stream, run_protocol,
+        Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
+        drain_stream, run_protocol,
     };
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
@@ -409,41 +384,35 @@ mod tests {
                 0 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
                 1 | 2 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
                 4 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::LiveModeClosed(_),
                         ..
                     }
                 ),
@@ -461,9 +430,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
@@ -471,9 +438,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
@@ -481,7 +446,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -489,9 +454,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
@@ -499,7 +462,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Live { .. },
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -507,7 +470,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::LiveModeClosed(_),
                         ..
                     }
                 ),
@@ -623,17 +586,6 @@ mod tests {
         let mut operations_a = vec![];
         let mut operations_b = vec![];
         let mut operations_c = vec![];
-        let push_operation = |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
-                              event: FromSync<TestTopicSyncEvent>| {
-            if let TestTopicSyncEvent::Live { header, body } = event.event() {
-                operations.push((*header.clone(), body.clone()));
-            }
-
-            if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = event.event() {
-                operations.push((operation.header.clone(), operation.body.clone()));
-            }
-        };
-
         let mut event_stream_a = manager_a.subscribe();
         let mut event_stream_b = manager_b.subscribe();
         let mut event_stream_c = manager_c.subscribe();
@@ -641,14 +593,19 @@ mod tests {
             loop {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
-                        push_operation(&mut operations_a, event)
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_a.push(*operation.clone());
+                        }
                     }
                     Some(event) = event_stream_b.next() => {
-                        push_operation(&mut operations_b, event)
-
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_b.push(*operation.clone());
+                        }
                     }
                     Some(event) = event_stream_c.next() => {
-                        push_operation(&mut operations_c, event)
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_c.push(*operation.clone());
+                        }
                     }
                     else => tokio::time::sleep(Duration::from_millis(5)).await
                 }
@@ -664,19 +621,22 @@ mod tests {
         assert!(
             operations_a
                 .iter()
-                .find(|(header, _)| header == &peer_a_header_0 || header == &peer_a_header_1)
+                .find(|operation| operation.header == peer_a_header_0
+                    || operation.header == peer_a_header_1)
                 .is_none()
         );
         assert!(
             operations_b
                 .iter()
-                .find(|(header, _)| header == &peer_b_header_0 || header == &peer_b_header_1)
+                .find(|operation| operation.header == peer_b_header_0
+                    || operation.header == peer_b_header_1)
                 .is_none()
         );
         assert!(
             operations_c
                 .iter()
-                .find(|(header, _)| header == &peer_c_header_0 || header == &peer_c_header_1)
+                .find(|operation| operation.header == peer_c_header_0
+                    || operation.header == peer_c_header_1)
                 .is_none()
         );
     }
@@ -754,9 +714,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
@@ -764,9 +722,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
@@ -774,7 +730,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -782,9 +738,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
@@ -792,7 +746,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Live { .. },
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -800,7 +754,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::LiveModeClosed(_),
                         ..
                     }
                 ),
