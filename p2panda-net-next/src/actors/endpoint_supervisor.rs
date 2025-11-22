@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::ActorCell;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};

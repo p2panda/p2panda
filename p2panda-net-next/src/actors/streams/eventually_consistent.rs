@@ -6,7 +6,6 @@
 //! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
 //! by the stream supervisor actor.
 use std::collections::{HashMap, HashSet};
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 

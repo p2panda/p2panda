@@ -146,7 +146,7 @@ where
             ready({
                 match to_sync {
                     ToSync::Payload(operation) => {
-                        Ok::<_, Self::Error>(LiveModeMessage::Operation(operation))
+                        Ok::<_, Self::Error>(LiveModeMessage::Operation(Box::new(operation)))
                     }
                     ToSync::Close => Ok::<_, Self::Error>(LiveModeMessage::Close),
                 }
@@ -239,11 +239,11 @@ where
                 };
 
                 let result = tx
-                    .send(LiveModeMessage::Operation(Operation {
+                    .send(LiveModeMessage::Operation(Box::new(Operation {
                         hash: header.hash(),
                         header: header.clone(),
                         body: body.clone(),
-                    }))
+                    })))
                     .await;
 
                 if result.is_err() {

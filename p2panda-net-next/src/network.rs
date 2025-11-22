@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};

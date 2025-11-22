@@ -8,8 +8,6 @@
 //!
 //! Use the ephemeral stream if you simply want to send and receive messages without first
 //! synchronising past state with others nodes.
-use std::marker::PhantomData;
-
 use p2panda_sync::FromSync;
 use p2panda_sync::traits::SyncManager;
 use ractor::{ActorRef, call, registry};

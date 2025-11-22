@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::future::ready;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
-use std::error::Error as StdError;
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
@@ -261,7 +261,7 @@ pub struct LiveModeMetrics {
 #[derive(Clone, Debug)]
 pub enum LiveModeMessage<E> {
     /// Operation received from a subscription or a concurrent sync session (via the manager).
-    Operation(Operation<E>),
+    Operation(Box<Operation<E>>),
 
     /// Gracefully close the session.
     Close,
@@ -702,11 +702,11 @@ pub mod tests {
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(LiveModeMessage::Operation(Operation {
+            .send(LiveModeMessage::Operation(Box::new(Operation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),
-            }))
+            })))
             .await
             .unwrap();
 
@@ -844,21 +844,21 @@ pub mod tests {
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(LiveModeMessage::Operation(Operation {
+            .send(LiveModeMessage::Operation(Box::new(Operation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),
-            }))
+            })))
             .await
             .unwrap();
 
         // Sending subscription message twice.
         live_mode_tx
-            .send(LiveModeMessage::Operation(Operation {
+            .send(LiveModeMessage::Operation(Box::new(Operation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),
-            }))
+            })))
             .await
             .unwrap();
 

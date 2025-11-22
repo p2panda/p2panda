@@ -8,7 +8,7 @@ use std::pin::Pin;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
-use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::traits::SyncManager as SyncManagerTrait;
 use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
@@ -22,8 +22,14 @@ use crate::actors::sync::poller::SyncPoller;
 use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
 
-type SessionSink<M: SyncManagerTrait<TopicId>> =
-    Pin<Box<dyn Sink<ToSync<M::Message>, Error = M::Error>>>;
+type SessionSink<M> = Pin<
+    Box<
+        dyn Sink<
+                ToSync<<M as SyncManagerTrait<TopicId>>::Message>,
+                Error = <M as SyncManagerTrait<TopicId>>::Error,
+            >,
+    >,
+>;
 
 #[derive(Debug)]
 pub enum ToSyncManager<T> {

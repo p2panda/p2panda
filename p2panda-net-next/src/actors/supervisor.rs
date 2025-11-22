@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{debug, warn};
@@ -64,7 +64,7 @@ impl<S, M> ThreadLocalActor for Supervisor<S, M>
 where
     S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
     S::Error: StdError + Send + Sync + 'static,
-    M: SyncManager<TopicId> + Send + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     type State = SupervisorState<S, M::Config>;
 

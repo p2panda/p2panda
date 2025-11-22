@@ -7,7 +7,6 @@ use iroh::discovery::UserData;
 use iroh::endpoint_info::MaxLengthExceededError;
 use p2panda_core::{IdentityError, Signature};
 use thiserror::Error;
-use tracing::error;
 
 use crate::TransportInfo;
 

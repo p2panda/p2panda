@@ -19,11 +19,10 @@
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{debug, warn};

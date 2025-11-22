@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
-use std::error::Error as StdError;
 use std::fmt::Debug;
 
 use assert_matches::assert_matches;
-use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Body, Operation};
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
 use p2panda_sync::log_sync::{LogSyncEvent, StatusEvent};
 use p2panda_sync::topic_log_sync::TopicLogSyncEvent;
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
 use rand::Rng;

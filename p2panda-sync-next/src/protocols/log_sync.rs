@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
+use std::error::Error as StdError;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
-use std::error::Error as StdError;
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
