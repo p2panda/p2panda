@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::time::Duration;
 
 use assert_matches::assert_matches;
 use p2panda_core::{Body, Operation};
@@ -321,6 +322,14 @@ async fn e2e_topic_log_sync() {
             ..
         }
     );
+    let event: FromSync<Event<()>> = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::LiveModeStarted,
+            ..
+        }
+    );
 
     // Assert Bob receives the expected events.
     let alice_id = alice.node_id();
@@ -365,6 +374,14 @@ async fn e2e_topic_log_sync() {
             ..
         }
     );
+    let event: FromSync<Event<()>> = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::LiveModeStarted,
+            ..
+        }
+    );
 
     // Alice publishes a live mode message.
     let body = Body::new(b"live message from alice");
@@ -378,12 +395,51 @@ async fn e2e_topic_log_sync() {
         .await
         .unwrap();
 
-    // Bob receives this message.
+    // Bob receives Alice's message.
     let event = bob_subscription.recv().await.unwrap();
     assert_matches!(
         event,
         FromSync {
             event: Event::Operation(_),
+            ..
+        }
+    );
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    alice_stream.close().unwrap();
+
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::LiveModeFinished(_),
+            ..
+        }
+    );
+    let event = bob_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::Closed,
+            ..
+        }
+    );
+
+    // Assert Alice's final events.
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::LiveModeFinished(_),
+            ..
+        }
+    );
+    let event = alice_subscription.recv().await.unwrap();
+    assert_matches!(
+        event,
+        FromSync {
+            event: Event::Closed,
             ..
         }
     );

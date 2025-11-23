@@ -377,7 +377,7 @@ mod tests {
         // Assert Peer A's events.
         let event_stream = peer_a_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 6);
+        assert_eq!(events.len(), 8);
         for (index, event) in events.into_iter().enumerate() {
             assert_eq!(event.session_id(), 0);
             match index {
@@ -412,7 +412,21 @@ mod tests {
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::LiveModeClosed(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
+                        ..
+                    }
+                ),
+                6 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
                         ..
                     }
                 ),
@@ -423,7 +437,7 @@ mod tests {
         // Assert Peer B's events.
         let event_stream = peer_b_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 7);
+        assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
@@ -461,8 +475,7 @@ mod tests {
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -470,11 +483,25 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::LiveModeClosed(_),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
-                _ => break,
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                8 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
+                        ..
+                    }
+                ),
+                _ => panic!(),
             }
         }
     }
@@ -707,7 +734,7 @@ mod tests {
         // Assert Peer B's events.
         let event_stream = peer_b_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 7);
+        assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
@@ -745,8 +772,7 @@ mod tests {
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -754,11 +780,25 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::LiveModeClosed(_),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
-                _ => break,
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                8 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
+                        ..
+                    }
+                ),
+                _ => panic!(),
             }
         }
     }

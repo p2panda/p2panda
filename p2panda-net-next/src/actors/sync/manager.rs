@@ -212,7 +212,7 @@ where
                         .session_topic_map
                         .sender_mut(id)
                         .expect("session handle exists");
-                    handle.send(ToSync::Close).await?;
+                    let _ = handle.send(ToSync::Close).await;
                     Self::drop_session(state, id);
                 }
             }

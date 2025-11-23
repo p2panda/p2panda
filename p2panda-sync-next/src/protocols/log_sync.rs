@@ -247,7 +247,10 @@ where
                     // streams is done concurrently.
                     loop {
                         select! {
-                            Some(message) = stream.next(), if !sync_done_received => {
+                            message = stream.next(), if !sync_done_received => {
+                                let Some(message) = message else {
+                                    break;
+                                };
                                 let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
@@ -293,7 +296,8 @@ where
                                 }
                             },
                             else => {
-                                // If both streams are empty (they return None) exit the loop.
+                                // If both streams are empty (they return None), or we received a
+                                // sync done message and we sent all our pending operations, exit the loop.
                                 break;
                             }
                         }
@@ -317,9 +321,6 @@ where
             }
         }
 
-        sink.flush()
-            .await
-            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
         Ok(dedup)
@@ -505,16 +506,16 @@ pub enum LogSyncError<L> {
     #[error(transparent)]
     MpscSend(#[from] mpsc::SendError),
 
-    #[error("error sending on message sink: {0}")]
+    #[error("log sync error sending on message sink: {0}")]
     MessageSink(String),
 
-    #[error("error receiving from message stream: {0}")]
+    #[error("log sync error receiving from message stream: {0}")]
     MessageStream(String),
 
-    #[error("stream ended before protocol completion")]
+    #[error("log sync stream ended before protocol completion")]
     UnexpectedStreamClosure,
 
-    #[error("received unexpected protocol message: {0}")]
+    #[error("log sync received unexpected protocol message: {0}")]
     UnexpectedMessage(LogSyncMessage<L>),
 }
 

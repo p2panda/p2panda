@@ -345,6 +345,11 @@ where
                 }
             }
             ToEventuallyConsistentStreams::Close(topic) => {
+                // Close all sync sessions running over this topic.
+                if let Some((actor, _)) = state.sync_managers.topic_manager_map.get(&topic) {
+                    actor.send_message(ToSyncManager::CloseAll { topic })?;
+                }
+
                 // Tell the gossip actor to unsubscribe from this topic.
                 state.unsubscribe_from_gossip(topic).await?;
 
@@ -355,18 +360,23 @@ where
                 // Inform address book about removed topic.
                 state.update_address_book();
 
+                // @TODO(sam): If we drop the sync manager here we lose some final messages coming
+                // from the poller to the subscription channel. Not totally sure why yet, I
+                // imagine it's because the actor being killed tears down some processes to soon,
+                // probably the sync session actor which needs time to wind down. 
+                //
                 // Drop the sync manager state for this topic.
-                if let Some((sync_manager, _)) =
-                    state.sync_managers.topic_manager_map.remove(&topic)
-                {
-                    state
-                        .sync_managers
-                        .actor_topic_map
-                        .remove(&sync_manager.get_id());
-
-                    // Finish processing all messages in the manager's queue and then kill it.
-                    sync_manager.drain()?;
-                }
+//                 if let Some((sync_manager, _)) =
+//                     state.sync_managers.topic_manager_map.remove(&topic)
+//                 {
+//                     state
+//                         .sync_managers
+//                         .actor_topic_map
+//                         .remove(&sync_manager.get_id());
+// 
+//                     // Finish processing all messages in the manager's queue and then kill it.
+//                     sync_manager.drain()?;
+//                 }
             }
             ToEventuallyConsistentStreams::InitiateSync(topic, node_id) => {
                 if let Some((sync_manager_actor, live_mode)) =
