@@ -162,7 +162,7 @@ where
                     message = stream.next() => {
                         let Some(Ok(message))= message else {
                             // Either the stream returned None or there was an error reading from
-                            // it. In both cases it signals that the remote closed the stream. 
+                            // it. In both cases it signals that the remote closed the stream.
                             break;
                         };
 
