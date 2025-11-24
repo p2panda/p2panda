@@ -11,7 +11,7 @@ mod protocols;
 pub mod streams;
 #[cfg(test)]
 mod test_utils;
-mod utils;
+pub mod utils;
 
 pub use addrs::{
     AuthenticatedTransportInfo, NodeId, NodeInfo, NodeInfoError, NodeTransportInfo,
