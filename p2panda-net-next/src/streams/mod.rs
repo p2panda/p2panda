@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-pub mod ephemeral;
-pub mod eventually_consistent;
+mod ephemeral;
+mod eventually_consistent;
 
 use thiserror::Error;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 use tokio::sync::mpsc::error::SendError;
 
 use crate::TopicId;
+
+pub use ephemeral::{EphemeralStream, EphemeralSubscription};
+pub use eventually_consistent::{EventuallyConsistentStream, EventuallyConsistentSubscription};
 
 #[derive(Debug, Error)]
 pub enum StreamError<T> {
