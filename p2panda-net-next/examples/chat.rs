@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
     let (line_tx, mut line_rx) = mpsc::channel(1);
     std::thread::spawn(move || input_loop(line_tx));
 
-    let mut seq_num = 1;
+    let mut seq_num = 0;
     let mut backlink = None;
 
     // Sign and encode each line of text input and broadcast it on the chat topic.
