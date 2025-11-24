@@ -11,7 +11,6 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tracing::info;
 
-use crate::NodeInfo;
 use crate::actors::address_book::watch_node_info;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
@@ -25,11 +24,11 @@ pub enum ToEvents {
     /// Set up events actor.
     Initialise,
 
-    /// Our own node info got updated.
-    UpdatedNodeInfo(NodeInfo),
-
     /// Subscribe to system events.
     Subscribe(RpcReplyPort<EventsReceiver>),
+
+    /// Inform all subscribers about this system event.
+    Notify(NetworkEvent),
 }
 
 pub struct EventsState {
@@ -98,7 +97,9 @@ impl ThreadLocalActor for Events {
                     while let Some(event) = rx.recv().await {
                         if let Some(node_info) = event.value
                             && myself
-                                .send_message(ToEvents::UpdatedNodeInfo(node_info))
+                                .send_message(ToEvents::Notify(NetworkEvent::ConnectionStatus(
+                                    node_info.into(),
+                                )))
                                 .is_err()
                         {
                             break;
@@ -108,19 +109,12 @@ impl ThreadLocalActor for Events {
 
                 state.watch_addr_handle = Some(watch_addr_handle);
             }
-            ToEvents::UpdatedNodeInfo(node_info) => {
-                if let Some(ref transport_info) = node_info.transports {
-                    info!(%transport_info, "updated our address");
-                } else {
-                    info!("we're currently 'not reachable'");
-                }
-
-                let _ = state
-                    .tx
-                    .send(NetworkEvent::ConnectionStatus(node_info.into()));
-            }
             ToEvents::Subscribe(reply) => {
                 let _ = reply.send(state.tx.subscribe());
+            }
+            ToEvents::Notify(event) => {
+                info!("{:?}", event);
+                let _ = state.tx.send(event);
             }
         }
 
