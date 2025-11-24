@@ -19,11 +19,10 @@
 /// Stream supervisor actor name.
 pub const STREAM_SUPERVISOR: &str = "net.stream_supervisor";
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent, call, registry};
 use tracing::{trace, warn};
@@ -39,13 +38,16 @@ use crate::actors::{generate_actor_namespace, with_namespace, without_namespace}
 use crate::args::ApplicationArguments;
 use crate::utils::to_public_key;
 
-pub struct StreamSupervisorState<C, E> {
+pub struct StreamSupervisorState<M>
+where
+    M: SyncManager<TopicId> + Debug + Send + 'static,
+{
     args: ApplicationArguments,
-    sync_config: C,
+    sync_config: M::Config,
     endpoint: iroh::Endpoint,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
-    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams<E>>,
+    eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams<M>>,
     eventually_consistent_streams_actor_failures: u16,
     ephemeral_streams_actor: ActorRef<ToEphemeralStreams>,
     ephemeral_streams_actor_failures: u16,
@@ -65,13 +67,9 @@ impl<M> Default for StreamSupervisor<M> {
 
 impl<M> ThreadLocalActor for StreamSupervisor<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
-    type State = StreamSupervisorState<M::Config, <M::Protocol as Protocol>::Event>;
+    type State = StreamSupervisorState<M>;
     type Msg = ();
     type Arguments = (ApplicationArguments, M::Config);
 
@@ -97,7 +95,7 @@ where
         let endpoint = call!(endpoint_actor, ToIrohEndpoint::Endpoint).unwrap();
 
         // Spawn the gossip actor.
-        let (gossip_actor, _) = Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
+        let (gossip_actor, _) = Gossip::<M>::spawn_linked(
             Some(with_namespace(GOSSIP, &actor_namespace)),
             (args.clone(), endpoint.clone()),
             myself.clone().into(),
@@ -173,14 +171,13 @@ where
                         );
 
                         // Respawn the gossip actor.
-                        let (gossip_actor, _) =
-                            Gossip::<<M::Protocol as Protocol>::Event>::spawn_linked(
-                                Some(with_namespace(GOSSIP, &actor_namespace)),
-                                (state.args.clone(), state.endpoint.clone()),
-                                myself.clone().into(),
-                                state.args.root_thread_pool.clone(),
-                            )
-                            .await?;
+                        let (gossip_actor, _) = Gossip::<M>::spawn_linked(
+                            Some(with_namespace(GOSSIP, &actor_namespace)),
+                            (state.args.clone(), state.endpoint.clone()),
+                            myself.clone().into(),
+                            state.args.root_thread_pool.clone(),
+                        )
+                        .await?;
 
                         // NOTE: We're registering the gossip protocol in our own iroh endpoint
                         // actor outside of the gossip actor itself. All gossip actor tests are not

@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::PrivateKey;
+use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
 use p2panda_discovery::address_book::memory::MemoryStore;
+use p2panda_store::{LogStore, OperationStore};
+use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
+use p2panda_sync::topic_log_sync::TopicLogMap;
 use p2panda_sync::traits::{Protocol, SyncManager};
-use p2panda_sync::{FromSync, ToSync};
+use p2panda_sync::{FromSync, ToSync, TopicSyncManager};
+use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -75,6 +80,134 @@ fn deterministic_args() {
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
 
+// General test types.
+pub type LogId = u64;
+pub type TestMemoryStore = p2panda_store::MemoryStore<LogId, ()>;
+pub type TestSyncConfig = TopicSyncManagerConfig<TestMemoryStore, TestTopicMap>;
+pub type TestTopicSyncManager = TopicSyncManager<TopicId, TestMemoryStore, TestTopicMap, LogId, ()>;
+
+/// Peer abstraction used in tests.
+///
+/// Contains a private key, store and topic map, produces sessions for either log or topic sync
+/// protocols.
+pub struct App {
+    pub store: TestMemoryStore,
+    pub private_key: PrivateKey,
+    pub topic_map: TestTopicMap,
+}
+
+impl App {
+    pub fn new(id: u64) -> Self {
+        let store = TestMemoryStore::new();
+        let topic_map = TestTopicMap::new();
+        let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(id);
+        let private_key = PrivateKey::from_bytes(&rng.random());
+        Self {
+            store,
+            private_key: private_key.clone(),
+            topic_map,
+        }
+    }
+
+    /// The public key of this peer.
+    pub fn id(&self) -> PublicKey {
+        self.private_key.public_key()
+    }
+
+    /// Create and insert an operation to the store.
+    pub async fn create_operation(&mut self, body: &Body, log_id: LogId) -> (Header<()>, Vec<u8>) {
+        let (header, header_bytes) = self.create_operation_no_insert(body, log_id).await;
+
+        self.store
+            .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
+            .await
+            .unwrap();
+        (header, header_bytes)
+    }
+
+    /// Create an operation but don't insert it in the store.
+    pub async fn create_operation_no_insert(
+        &mut self,
+        body: &Body,
+        log_id: u64,
+    ) -> (Header<()>, Vec<u8>) {
+        let (seq_num, backlink) = self
+            .store
+            .latest_operation(&self.private_key.public_key(), &log_id)
+            .await
+            .unwrap()
+            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
+            .unwrap_or((0, None));
+
+        let (header, header_bytes) =
+            create_operation(&self.private_key, body, seq_num, seq_num, backlink);
+
+        (header, header_bytes)
+    }
+
+    pub fn insert_topic(&mut self, topic: &TopicId, logs: &HashMap<PublicKey, Vec<u64>>) {
+        self.topic_map.insert(topic, logs.to_owned());
+    }
+
+    pub fn sync_config(&self) -> TestSyncConfig {
+        TestSyncConfig {
+            store: self.store.clone(),
+            topic_map: self.topic_map.clone(),
+        }
+    }
+}
+
+/// Create a single operation.
+pub fn create_operation(
+    private_key: &PrivateKey,
+    body: &Body,
+    seq_num: u64,
+    timestamp: u64,
+    backlink: Option<Hash>,
+) -> (Header<()>, Vec<u8>) {
+    let mut header = Header::<()> {
+        version: 1,
+        public_key: private_key.public_key(),
+        signature: None,
+        payload_size: body.size(),
+        payload_hash: Some(body.hash()),
+        timestamp,
+        seq_num,
+        backlink,
+        previous: vec![],
+        extensions: (),
+    };
+    header.sign(private_key);
+    let header_bytes = header.to_bytes();
+    (header, header_bytes)
+}
+
+/// Test topic map.
+#[derive(Clone, Debug)]
+pub struct TestTopicMap(HashMap<TopicId, HashMap<PublicKey, Vec<LogId>>>);
+
+impl TestTopicMap {
+    pub fn new() -> Self {
+        TestTopicMap(HashMap::new())
+    }
+
+    pub fn insert(
+        &mut self,
+        topic: &TopicId,
+        logs: HashMap<PublicKey, Vec<LogId>>,
+    ) -> Option<HashMap<PublicKey, Vec<LogId>>> {
+        self.0.insert(topic.clone(), logs)
+    }
+}
+
+impl TopicLogMap<TopicId, LogId> for TestTopicMap {
+    type Error = Infallible;
+
+    async fn get(&self, topic: &TopicId) -> Result<HashMap<PublicKey, Vec<LogId>>, Self::Error> {
+        Ok(self.0.get(topic).cloned().unwrap_or_default())
+    }
+}
+
 pub struct NoSyncProtocol {
     session_id: u64,
     config: p2panda_sync::SyncSessionConfig<TopicId>,
@@ -84,7 +217,6 @@ pub struct NoSyncProtocol {
 impl Protocol for NoSyncProtocol {
     type Output = ();
     type Error = Infallible;
-    type Event = NoSyncEvent;
     type Message = NoSyncMessage;
 
     async fn run(
@@ -169,7 +301,9 @@ impl NoSyncConfig {
 
 impl SyncManager<TopicId> for NoSyncManager {
     type Protocol = NoSyncProtocol;
+    type Event = NoSyncEvent;
     type Config = NoSyncConfig;
+    type Message = ();
     type Error = SendError;
 
     fn from_config(config: Self::Config) -> Self {
@@ -202,17 +336,14 @@ impl SyncManager<TopicId> for NoSyncManager {
     async fn session_handle(
         &self,
         _session_id: u64,
-    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
+    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>> {
         // NOTE: just a dummy channel to satisfy the API in testing environment.
-        let (tx, _) = mpsc::channel::<ToSync>(128);
-        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>;
+        let (tx, _) = mpsc::channel::<ToSync<Self::Message>>(128);
+        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>;
         Some(sink)
     }
 
-    fn subscribe(
-        &self,
-    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static
-    {
+    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let stream = BroadcastStream::new(self.event_tx.subscribe())
             .filter_map(|event| async { event.ok() });
         Box::pin(stream)

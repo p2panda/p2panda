@@ -8,9 +8,8 @@
 //!
 //! Use the ephemeral stream if you simply want to send and receive messages without first
 //! synchronising past state with others nodes.
-use std::marker::PhantomData;
-
 use p2panda_sync::FromSync;
+use p2panda_sync::traits::SyncManager;
 use ractor::{ActorRef, call, registry};
 use tokio::sync::broadcast::Receiver as BroadcastReceiver;
 
@@ -25,39 +24,40 @@ use crate::streams::StreamError;
 /// A handle to an eventually consistent messaging stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
-pub struct EventuallyConsistentStream<E> {
+pub struct EventuallyConsistentStream<M>
+where
+    M: SyncManager<TopicId> + Send + 'static,
+{
     actor_namespace: ActorNamespace,
     topic: TopicId,
-    sync_manager: ActorRef<ToSyncManager>,
-    _phantom: PhantomData<E>,
+    sync_manager: ActorRef<ToSyncManager<M::Message>>,
 }
 
-impl<E> EventuallyConsistentStream<E>
+impl<M> EventuallyConsistentStream<M>
 where
-    E: Clone + Send + 'static,
+    M: SyncManager<TopicId> + Send + 'static,
 {
     /// Returns a handle to an eventually consistent messaging stream.
     pub(crate) fn new(
         actor_namespace: ActorNamespace,
         topic: TopicId,
-        sync_manager: ActorRef<ToSyncManager>,
+        sync_manager: ActorRef<ToSyncManager<M::Message>>,
     ) -> Self {
         Self {
             actor_namespace,
             topic,
             sync_manager,
-            _phantom: PhantomData,
         }
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, bytes: impl Into<Vec<u8>>) -> Result<(), StreamError<Vec<u8>>> {
+    pub async fn publish(&self, message: M::Message) -> Result<(), StreamError<M::Message>> {
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.sync_manager
             .send_message(ToSyncManager::Publish {
                 topic: self.topic,
-                data: bytes.into(),
+                data: message,
             })
             // @TODO: change this when we decide on error propagation strategy.
             .map_err(|_| StreamError::Publish(self.topic))?;
@@ -69,7 +69,9 @@ where
     ///
     /// The returned `EventuallyConsistentSubscription` provides a means of receiving messages from
     /// the stream.
-    pub async fn subscribe(&self) -> Result<EventuallyConsistentSubscription<E>, StreamError<()>> {
+    pub async fn subscribe(
+        &self,
+    ) -> Result<EventuallyConsistentSubscription<M::Event>, StreamError<()>> {
         // Get a reference to the eventually consistent streams actor.
         let actor = self
             .eventually_consistent_streams_actor()
@@ -107,12 +109,12 @@ where
     /// Internal helper to get a reference to the eventually consistent streams actor.
     fn eventually_consistent_streams_actor(
         &self,
-    ) -> Option<ActorRef<ToEventuallyConsistentStreams<E>>> {
+    ) -> Option<ActorRef<ToEventuallyConsistentStreams<M>>> {
         if let Some(eventually_consistent_streams_actor) = registry::where_is(with_namespace(
             EVENTUALLY_CONSISTENT_STREAMS,
             &self.actor_namespace,
         )) {
-            let actor: ActorRef<ToEventuallyConsistentStreams<E>> =
+            let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
                 eventually_consistent_streams_actor.into();
 
             Some(actor)
