@@ -14,7 +14,7 @@ mod test_utils;
 #[cfg(test)]
 mod tests;
 pub mod timestamp;
-mod utils;
+pub mod utils;
 
 pub use addrs::{
     AuthenticatedTransportInfo, NodeId, NodeInfo, NodeInfoError, NodeTransportInfo,
