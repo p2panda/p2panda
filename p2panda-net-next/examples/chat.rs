@@ -3,7 +3,8 @@
 //! Example chat application using p2panda-net.
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::Parser;
@@ -17,16 +18,22 @@ use p2panda_sync::TopicSyncManager;
 use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::{TopicLogMap, TopicLogSyncEvent};
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{RwLock, mpsc};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
+type LogId = u64;
+
 const TOPIC_ID: [u8; 32] = [1; 32];
+
 const NETWORK_ID: [u8; 32] = [7; 32];
+
 const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
+
+const LOG_ID: LogId = 1;
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -47,19 +54,33 @@ struct Args {
     bootstrap_id: Option<NodeId>,
 }
 
-type LogId = u64;
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ChatExtensions;
 
 #[derive(Clone, Default, Debug)]
-pub struct ChatTopicMap(pub HashMap<TopicId, Logs<LogId>>);
+pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
+
+impl ChatTopicMap {
+    async fn insert(&self, node_id: NodeId, log_id: LogId) {
+        let mut map = self.0.write().await;
+        map.entry(TOPIC_ID)
+            .and_modify(|logs| {
+                logs.insert(node_id, vec![log_id]);
+            })
+            .or_insert({
+                let mut value = HashMap::new();
+                value.insert(node_id, vec![log_id]);
+                value
+            });
+    }
+}
 
 impl TopicLogMap<TopicId, LogId> for ChatTopicMap {
     type Error = Infallible;
 
     async fn get(&self, topic_query: &TopicId) -> Result<Logs<LogId>, Self::Error> {
-        Ok(self.0.get(topic_query).cloned().unwrap_or_default())
+        let map = self.0.read().await;
+        Ok(map.get(topic_query).cloned().unwrap_or_default())
     }
 }
 
@@ -81,19 +102,19 @@ async fn main() -> Result<()> {
     let private_key = PrivateKey::from_bytes(&seed);
     let public_key = private_key.public_key();
 
-    let log_id: u64 = rand::rng().random();
     let mut logs = HashMap::new();
-    logs.insert(public_key, vec![log_id]);
+    logs.insert(public_key, vec![LOG_ID]);
 
     println!("network id: {}", NETWORK_ID.fmt_short());
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
     let mut store = ChatStore::new();
-    let mut topic_map = ChatTopicMap::default();
-    topic_map.0.insert(TOPIC_ID, logs);
+    let topic_map = ChatTopicMap::default();
+    topic_map.insert(public_key, LOG_ID).await;
+
     let sync_config = TopicSyncManagerConfig {
-        topic_map,
+        topic_map: topic_map.clone(),
         store: store.clone(),
     };
 
@@ -115,49 +136,68 @@ async fn main() -> Result<()> {
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
 
-    // Ephemeral stream.
-    let ephemeral = network.ephemeral_stream([99; 32]).await?;
-    let mut ephemeral_subscriber = ephemeral.subscribe().await?;
-
-    tokio::task::spawn(async move {
-        loop {
-            let message = ephemeral_subscriber.recv().await.unwrap();
-            // println!(
-            //     "heartbeat <3 {}",
-            //     u64::from_be_bytes(message.try_into().unwrap())
-            // );
-        }
-    });
-
-    tokio::task::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            let rnd: u64 = rand::random();
-            ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
-        }
-    });
+    // @TODO: Enable this later.
+    // // Ephemeral stream.
+    // let ephemeral = network.ephemeral_stream([99; 32]).await?;
+    // let mut ephemeral_subscriber = ephemeral.subscribe().await?;
+    //
+    // tokio::task::spawn(async move {
+    //     loop {
+    //         let _message = ephemeral_subscriber.recv().await.unwrap();
+    //         // println!(
+    //         //     "heartbeat <3 {}",
+    //         //     u64::from_be_bytes(message.try_into().unwrap())
+    //         // );
+    //     }
+    // });
+    //
+    // tokio::task::spawn(async move {
+    //     loop {
+    //         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    //         let rnd: u64 = rand::random();
+    //         ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
+    //     }
+    // });
 
     // Eventually consistent stream.
     let stream = network.stream(TOPIC_ID, true).await?;
     let mut stream_subscriber = stream.subscribe().await?;
 
     // Receive messages from the network stream.
-    tokio::task::spawn(async move {
-        while let Ok(from_sync) = stream_subscriber.recv().await {
-            // TODO: Proper match on FromSync<TopicLogSyncEvent<ChatExtensions>>.
-            // TODO: Insert new log id's into topic map.
-            match from_sync.event {
-                TopicLogSyncEvent::Operation(operation) => {
-                    println!(
-                        "{}: {}",
-                        operation.header.public_key.fmt_short(),
-                        String::from_utf8(operation.body.unwrap().to_bytes()).unwrap()
-                    );
+    {
+        let mut store = store.clone();
+        tokio::task::spawn(async move {
+            while let Ok(from_sync) = stream_subscriber.recv().await {
+                match from_sync.event {
+                    TopicLogSyncEvent::Operation(operation) => {
+                        if store.has_operation(operation.hash).await.unwrap() {
+                            continue;
+                        }
+
+                        println!(
+                            "{}: {}",
+                            operation.header.public_key.fmt_short(),
+                            String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap()
+                        );
+
+                        store
+                            .insert_operation(
+                                operation.hash,
+                                &operation.header,
+                                operation.body.as_ref(),
+                                &operation.header.to_bytes(),
+                                &LOG_ID,
+                            )
+                            .await
+                            .unwrap();
+
+                        topic_map.insert(operation.header.public_key, LOG_ID).await;
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
-        }
-    });
+        });
+    }
 
     // Listen for text input via the terminal.
     let (line_tx, mut line_rx) = mpsc::channel(1);
@@ -177,7 +217,7 @@ async fn main() -> Result<()> {
         let (hash, header, header_bytes, operation) =
             create_operation(&private_key, &body, seq_num, timestamp, backlink);
         store
-            .insert_operation(hash, &header, Some(&body), &header_bytes, &log_id)
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
             .await
             .unwrap();
 
