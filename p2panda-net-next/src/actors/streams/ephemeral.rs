@@ -20,7 +20,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::gossip::ToGossip;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
-use crate::streams::ephemeral::{EphemeralStream, EphemeralSubscription};
+use crate::streams::{EphemeralStream, EphemeralSubscription};
 
 /// Ephemeral streams actor name.
 pub const EPHEMERAL_STREAMS: &str = "net.streams.ephemeral";

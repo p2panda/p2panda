@@ -35,9 +35,7 @@ use crate::actors::sync::{SYNC_PROTOCOL_ID, SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::streams::eventually_consistent::{
-    EventuallyConsistentStream, EventuallyConsistentSubscription,
-};
+use crate::streams::{EventuallyConsistentStream, EventuallyConsistentSubscription};
 use crate::utils::{ShortFormat, to_public_key};
 use crate::{NodeId, TopicId};
 
