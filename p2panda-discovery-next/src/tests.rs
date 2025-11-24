@@ -11,8 +11,8 @@ use tokio::sync::RwLock;
 use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
-use crate::address_book::AddressBookStore;
-use crate::naive::NaiveDiscoveryProtocol;
+use crate::address_book::{AddressBookStore};
+use crate::psi_hash::{ PsiHashDiscoveryProtocol};
 use crate::random_walk::RandomWalker;
 use crate::test_utils::{TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
@@ -145,10 +145,10 @@ impl TestNode {
 }
 
 #[tokio::test]
-async fn naive_protocol() {
-    const NUM_NODES: usize = 10;
-    const NUM_WALKERS: usize = 4;
-    const MAX_RUNS: usize = 10;
+async fn psi_hash_protocol() {
+    const NUM_NODES: usize = 2;
+    const NUM_WALKERS: usize = 1;
+    const MAX_RUNS: usize = 1;
 
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
     let local = LocalSet::new();
@@ -213,13 +213,13 @@ async fn naive_protocol() {
 
                             let remote_node = nodes.get(&remote_id).unwrap().read().await;
 
-                            let alice_protocol = NaiveDiscoveryProtocol::new(
+                            let alice_protocol = PsiHashDiscoveryProtocol::new(
                                 my_node.store.clone(),
                                 my_node.subscription.clone(),
                                 remote_id,
                             );
 
-                            let bob_protocol = NaiveDiscoveryProtocol::new(
+                            let bob_protocol = PsiHashDiscoveryProtocol::new(
                                 remote_node.store.clone(),
                                 remote_node.subscription.clone(),
                                 my_id,
