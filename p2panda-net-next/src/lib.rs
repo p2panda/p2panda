@@ -7,7 +7,7 @@ mod cbor;
 mod config;
 mod network;
 mod protocols;
-mod streams;
+pub mod streams;
 #[cfg(test)]
 mod test_utils;
 mod utils;
@@ -18,7 +18,7 @@ pub use addrs::{
 };
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;
-pub use network::{Network, NetworkBuilder};
+pub use network::{Network, NetworkBuilder, NetworkError};
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///

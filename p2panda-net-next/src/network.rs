@@ -22,9 +22,7 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 #[cfg(feature = "mdns")]
 use crate::config::MdnsDiscoveryMode;
-use crate::streams::StreamError;
-use crate::streams::ephemeral::EphemeralStream;
-use crate::streams::eventually_consistent::EventuallyConsistentStream;
+use crate::streams::{EphemeralStream, EventuallyConsistentStream, StreamError};
 use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
 /// Builds an overlay peer-to-peer network for ephemeral and eventually-consistent pub/sub.
