@@ -3,7 +3,7 @@
 //! Example chat application using p2panda-net.
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::Parser;
@@ -16,7 +16,7 @@ use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::TopicSyncManager;
 use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
-use p2panda_sync::topic_log_sync::TopicLogMap;
+use p2panda_sync::topic_log_sync::{TopicLogMap, TopicLogSyncEvent};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -115,6 +115,29 @@ async fn main() -> Result<()> {
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
 
+    // Ephemeral stream.
+    let ephemeral = network.ephemeral_stream([99; 32]).await?;
+    let mut ephemeral_subscriber = ephemeral.subscribe().await?;
+
+    tokio::task::spawn(async move {
+        loop {
+            let message = ephemeral_subscriber.recv().await.unwrap();
+            // println!(
+            //     "heartbeat <3 {}",
+            //     u64::from_be_bytes(message.try_into().unwrap())
+            // );
+        }
+    });
+
+    tokio::task::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            let rnd: u64 = rand::random();
+            ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
+        }
+    });
+
+    // Eventually consistent stream.
     let stream = network.stream(TOPIC_ID, true).await?;
     let mut stream_subscriber = stream.subscribe().await?;
 
@@ -123,7 +146,16 @@ async fn main() -> Result<()> {
         while let Ok(from_sync) = stream_subscriber.recv().await {
             // TODO: Proper match on FromSync<TopicLogSyncEvent<ChatExtensions>>.
             // TODO: Insert new log id's into topic map.
-            println!("{:?}", from_sync);
+            match from_sync.event {
+                TopicLogSyncEvent::Operation(operation) => {
+                    println!(
+                        "{}: {}",
+                        operation.header.public_key.fmt_short(),
+                        String::from_utf8(operation.body.unwrap().to_bytes()).unwrap()
+                    );
+                }
+                _ => (),
+            }
         }
     });
 
