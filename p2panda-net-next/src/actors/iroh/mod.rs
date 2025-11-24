@@ -12,7 +12,6 @@ pub mod user_data;
 use iroh::protocol::ProtocolHandler;
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
-use tracing::error;
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;

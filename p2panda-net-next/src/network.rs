@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::SyncManager;
 use ractor::errors::SpawnErr;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call, registry};
@@ -111,15 +110,11 @@ impl NetworkBuilder {
         self,
         store: S,
         sync_config: M::Config,
-    ) -> Result<Network<M>, NetworkError<<M::Protocol as Protocol>::Event>>
+    ) -> Result<Network<M>, NetworkError<M::Event>>
     where
         S: AddressBookStore<NodeId, NodeInfo> + Clone + Debug + Send + Sync + 'static,
         S::Error: std::error::Error + Send + Sync + 'static,
-        M: SyncManager<TopicId> + Send + 'static,
-        M::Error: StdError + Send + Sync + 'static,
-        M::Protocol: Send + 'static,
-        <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-        <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+        M: SyncManager<TopicId> + Debug + Send + 'static,
     {
         // Compute a six character actor namespace using the node's public key.
         let actor_namespace = generate_actor_namespace(&self.args.public_key);
@@ -128,7 +123,7 @@ impl NetworkBuilder {
         let root_thread_pool = self.args.root_thread_pool.clone();
         let (supervisor_actor, supervisor_actor_handle) = Supervisor::<S, M>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
-            (self.args, store, sync_config),
+            (self.args, store, sync_config.clone()),
             root_thread_pool.clone(),
         )
         .await?;
@@ -164,11 +159,7 @@ pub struct Network<M> {
 
 impl<M> Network<M>
 where
-    M: SyncManager<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManager<TopicId> + Debug + Send + 'static,
 {
     /// Creates an ephemeral messaging stream and returns a handle.
     ///
@@ -220,14 +211,13 @@ where
         &self,
         topic: TopicId,
         live_mode: bool,
-    ) -> Result<EventuallyConsistentStream<<M::Protocol as Protocol>::Event>, NetworkError<TopicId>>
-    {
+    ) -> Result<EventuallyConsistentStream<M>, NetworkError<TopicId>> {
         // Get a reference to the eventually consistent streams actor.
         if let Some(eventually_consistent_streams_actor) = registry::where_is(with_namespace(
             EVENTUALLY_CONSISTENT_STREAMS,
             &self.actor_namespace,
         )) {
-            let actor: ActorRef<ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>> =
+            let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
                 eventually_consistent_streams_actor.into();
 
             // Ask the eventually consistent streams actor for a stream.
