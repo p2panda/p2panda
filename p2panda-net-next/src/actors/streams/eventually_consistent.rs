@@ -366,17 +366,17 @@ where
                 // probably the sync session actor which needs time to wind down.
                 //
                 // Drop the sync manager state for this topic.
-                //                 if let Some((sync_manager, _)) =
-                //                     state.sync_managers.topic_manager_map.remove(&topic)
-                //                 {
-                //                     state
-                //                         .sync_managers
-                //                         .actor_topic_map
-                //                         .remove(&sync_manager.get_id());
-                //
-                //                     // Finish processing all messages in the manager's queue and then kill it.
-                //                     sync_manager.drain()?;
-                //                 }
+                if let Some((sync_manager, _)) =
+                    state.sync_managers.topic_manager_map.remove(&topic)
+                {
+                    state
+                        .sync_managers
+                        .actor_topic_map
+                        .remove(&sync_manager.get_id());
+
+                    // Finish processing all messages in the manager's queue and then kill it.
+                    sync_manager.drain()?;
+                }
             }
             ToEventuallyConsistentStreams::InitiateSync(topic, node_id) => {
                 if let Some((sync_manager_actor, live_mode)) =
