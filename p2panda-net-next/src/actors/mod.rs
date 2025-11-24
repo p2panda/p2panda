@@ -3,7 +3,7 @@
 mod address_book;
 mod discovery;
 mod endpoint_supervisor;
-mod events;
+pub mod events;
 mod gossip;
 pub mod iroh;
 mod stream_supervisor;
