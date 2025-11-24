@@ -360,10 +360,18 @@ where
                     warn!("oneshot gossip joined receiver dropped")
                 }
 
-                let peer_set = HashSet::from_iter(peers);
-
-                // Store the neighbours with whom we have joined the topic.
+                // Generate an empty set of neighbours.
+                // This will be populated with joined peers in the `NeighborUp` event handler.
+                let peer_set = HashSet::new();
                 state.neighbours.insert(topic, peer_set);
+
+                // Generate `NeighborUp` events. These are required to initiate sync.
+                peers.iter().for_each(|peer| {
+                    let _ = myself.cast(ToGossip::NeighborUp {
+                        node_id: *peer,
+                        session_id,
+                    });
+                });
 
                 Ok(())
             }
