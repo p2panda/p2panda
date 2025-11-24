@@ -5,7 +5,7 @@
 //! Receives events from other actors, aggregating and enriching them before informing upstream
 //! subscribers.
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast, registry};
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -122,17 +122,17 @@ impl ThreadLocalActor for Events {
                             // Nothing has changed.
                         }
                         (None, Some(next)) => {
-                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                            myself.send_message(ToEvents::Notify(NetworkEvent::Relay(
                                 RelayStatus::Connected(next),
                             )))?;
                         }
                         (Some(_previous), None) => {
-                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                            myself.send_message(ToEvents::Notify(NetworkEvent::Relay(
                                 RelayStatus::Disconnected,
                             )))?;
                         }
                         (Some(_previous), Some(next)) => {
-                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                            myself.send_message(ToEvents::Notify(NetworkEvent::Relay(
                                 RelayStatus::Changed(next),
                             )))?;
                         }
@@ -140,9 +140,7 @@ impl ThreadLocalActor for Events {
                 };
 
                 // Notify users about the latest transport info.
-                myself.send_message(ToEvents::Notify(NetworkEvent::ConnectionStatus(
-                    node_info.into(),
-                )))?;
+                myself.send_message(ToEvents::Notify(NetworkEvent::Transport(node_info.into())))?;
             }
             ToEvents::Subscribe(reply) => {
                 let _ = reply.send(state.tx.subscribe());
@@ -163,9 +161,19 @@ pub async fn subscribe_to_network_events(
     let actor_ref = registry::where_is(with_namespace(EVENTS, actor_namespace))
         .map(ActorRef::<ToEvents>::from)
         .ok_or(SubscribeError::ActorNotAvailable)?;
-    let rx =
-        call!(actor_ref, ToEvents::Subscribe).map_err(|_| SubscribeError::SubscriptionFailed)?;
+    let rx = call!(actor_ref, ToEvents::Subscribe).map_err(|_| SubscribeError::ActorFailed)?;
     Ok(rx)
+}
+
+pub(crate) async fn notify_subscribers(
+    actor_namespace: &ActorNamespace,
+    event: NetworkEvent,
+) -> Result<(), SubscribeError> {
+    let actor_ref = registry::where_is(with_namespace(EVENTS, actor_namespace))
+        .map(ActorRef::<ToEvents>::from)
+        .ok_or(SubscribeError::ActorNotAvailable)?;
+    cast!(actor_ref, ToEvents::Notify(event)).map_err(|_| SubscribeError::ActorFailed)?;
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -173,6 +181,6 @@ pub enum SubscribeError {
     #[error("events actor is not available")]
     ActorNotAvailable,
 
-    #[error("could not subscribe to events actor")]
-    SubscriptionFailed,
+    #[error("events actor failed handling message")]
+    ActorFailed,
 }

@@ -13,6 +13,7 @@ use ractor::{ActorProcessingErr, ActorRef};
 
 use crate::TopicId;
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
+use crate::actors::events::notify_subscribers;
 use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
@@ -126,6 +127,9 @@ where
                 (connection, tx, rx)
             }
         };
+
+        // @TODO
+        // let _ = notify_subscribers(&actor_namespace, NetworkEvent).await;
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.

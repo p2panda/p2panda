@@ -2,14 +2,14 @@
 
 use tokio::sync::broadcast;
 
-use crate::NodeInfo;
+use crate::{NodeId, NodeInfo};
 
 pub type EventsReceiver = broadcast::Receiver<NetworkEvent>;
 
 pub type EventsSender = broadcast::Sender<NetworkEvent>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ConnectionStatus {
+pub enum TransportStatus {
     /// Our node can be reached either directly or via a relay.
     ///
     /// We're connected to a relay which guarantees that other nodes can establish a connection
@@ -34,23 +34,23 @@ pub enum ConnectionStatus {
     Offline,
 }
 
-impl From<NodeInfo> for ConnectionStatus {
+impl From<NodeInfo> for TransportStatus {
     fn from(node_info: NodeInfo) -> Self {
         // If there's no iroh-related transport info at all we are "offline".
         let Ok(endpoint_addr) = iroh::EndpointAddr::try_from(node_info) else {
-            return ConnectionStatus::Offline;
+            return TransportStatus::Offline;
         };
 
         // There's iroh-related info, but it's empty ..
         if endpoint_addr.is_empty() {
-            return ConnectionStatus::Offline;
+            return TransportStatus::Offline;
         }
 
         if endpoint_addr.relay_urls().next().is_none() {
-            return ConnectionStatus::MaybeOnline(endpoint_addr);
+            return TransportStatus::MaybeOnline(endpoint_addr);
         }
 
-        ConnectionStatus::Online(endpoint_addr)
+        TransportStatus::Online(endpoint_addr)
     }
 }
 
@@ -67,7 +67,26 @@ pub enum RelayStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionStatus {
+    Connected,
+    Disconnected,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Protocol {
+    Discovery,
+    Gossip,
+    Sync,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkEvent {
-    ConnectionStatus(ConnectionStatus),
-    RelayStatus(RelayStatus),
+    Transport(TransportStatus),
+    Relay(RelayStatus),
+    Connection {
+        protocol: Protocol,
+        node_id: NodeId,
+        status: ConnectionStatus,
+    },
 }
