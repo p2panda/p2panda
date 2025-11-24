@@ -11,10 +11,11 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tracing::info;
 
+use crate::NodeInfo;
 use crate::actors::address_book::watch_node_info;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
-use crate::events::{EventsReceiver, EventsSender, NetworkEvent};
+use crate::events::{EventsReceiver, EventsSender, NetworkEvent, RelayStatus};
 
 /// Events actor name.
 pub const EVENTS: &str = "net.events";
@@ -23,6 +24,9 @@ pub const EVENTS: &str = "net.events";
 pub enum ToEvents {
     /// Set up events actor.
     Initialise,
+
+    /// Our own node info got updated.
+    UpdatedNodeInfo(NodeInfo),
 
     /// Subscribe to system events.
     Subscribe(RpcReplyPort<EventsReceiver>),
@@ -36,6 +40,7 @@ pub struct EventsState {
     args: ApplicationArguments,
     tx: EventsSender,
     watch_addr_handle: Option<JoinHandle<()>>,
+    home_relay_url: Option<iroh::RelayUrl>,
 }
 
 #[derive(Default)]
@@ -65,6 +70,7 @@ impl ThreadLocalActor for Events {
             args,
             tx,
             watch_addr_handle: None,
+            home_relay_url: None,
         })
     }
 
@@ -97,9 +103,7 @@ impl ThreadLocalActor for Events {
                     while let Some(event) = rx.recv().await {
                         if let Some(node_info) = event.value
                             && myself
-                                .send_message(ToEvents::Notify(NetworkEvent::ConnectionStatus(
-                                    node_info.into(),
-                                )))
+                                .send_message(ToEvents::UpdatedNodeInfo(node_info))
                                 .is_err()
                         {
                             break;
@@ -108,6 +112,37 @@ impl ThreadLocalActor for Events {
                 });
 
                 state.watch_addr_handle = Some(watch_addr_handle);
+            }
+            ToEvents::UpdatedNodeInfo(node_info) => {
+                // Find out if our relay status has changed.
+                if let Ok(endpoint_addr) = iroh::EndpointAddr::try_from(node_info.clone()) {
+                    let home_relay_url = endpoint_addr.relay_urls().next().cloned();
+                    match (&state.home_relay_url, home_relay_url) {
+                        (None, None) => {
+                            // Nothing has changed.
+                        }
+                        (None, Some(next)) => {
+                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                                RelayStatus::Connected(next),
+                            )))?;
+                        }
+                        (Some(_previous), None) => {
+                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                                RelayStatus::Disconnected,
+                            )))?;
+                        }
+                        (Some(_previous), Some(next)) => {
+                            myself.send_message(ToEvents::Notify(NetworkEvent::RelayStatus(
+                                RelayStatus::Changed(next),
+                            )))?;
+                        }
+                    }
+                };
+
+                // Notify users about the latest transport info.
+                myself.send_message(ToEvents::Notify(NetworkEvent::ConnectionStatus(
+                    node_info.into(),
+                )))?;
             }
             ToEvents::Subscribe(reply) => {
                 let _ = reply.send(state.tx.subscribe());

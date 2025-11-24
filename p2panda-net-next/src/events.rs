@@ -55,6 +55,19 @@ impl From<NodeInfo> for ConnectionStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RelayStatus {
+    /// Successfully connected to our home relay.
+    Connected(iroh::RelayUrl),
+
+    /// We've changed our home relay.
+    Changed(iroh::RelayUrl),
+
+    /// Disconnected from home relay.
+    Disconnected,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkEvent {
     ConnectionStatus(ConnectionStatus),
+    RelayStatus(RelayStatus),
 }
