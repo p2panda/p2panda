@@ -8,23 +8,32 @@ use std::pin::Pin;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
-use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::traits::SyncManager as SyncManagerTrait;
 use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::broadcast;
+use tokio::time::Duration;
 use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
 use crate::actors::sync::SyncSessionName;
-use crate::actors::sync::poller::SyncPoller;
+use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
 use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
 
-type SessionSink<M> = Pin<Box<dyn Sink<ToSync, Error = <M as SyncManagerTrait<TopicId>>::Error>>>;
+type SessionSink<M> = Pin<
+    Box<
+        dyn Sink<
+                ToSync<<M as SyncManagerTrait<TopicId>>::Message>,
+                Error = <M as SyncManagerTrait<TopicId>>::Error,
+            >,
+    >,
+>;
 
-pub enum ToSyncManager {
+#[derive(Debug)]
+pub enum ToSyncManager<T> {
     /// Initiate a sync session with this peer over the given topic.
     Initiate {
         node_id: NodeId,
@@ -41,7 +50,7 @@ pub enum ToSyncManager {
     },
 
     /// Send newly published data to all sync sessions running over the given topic.
-    Publish { topic: TopicId, data: Vec<u8> },
+    Publish { topic: TopicId, data: T },
 
     /// Close all active sync sessions running over the given topic.
     CloseAll { topic: TopicId },
@@ -61,6 +70,7 @@ where
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
     next_session_id: SyncSessionId,
+    sync_poller_actor: ActorRef<ToSyncPoller>,
     pool: ThreadLocalActorSpawner,
 }
 
@@ -79,26 +89,22 @@ impl<M> Default for SyncManager<M> {
 
 impl<M> ThreadLocalActor for SyncManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
     type State = SyncManagerState<M>;
 
-    type Msg = ToSyncManager;
+    type Msg = ToSyncManager<M::Message>;
 
     type Arguments = (
         ActorNamespace,
         TopicId,
         M::Config,
-        broadcast::Sender<FromSync<<M::Protocol as Protocol>::Event>>,
+        broadcast::Sender<FromSync<M::Event>>,
     );
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (actor_namespace, topic, config, sender) = args;
@@ -107,10 +113,11 @@ where
         let manager = M::from_config(config);
         let event_stream = manager.subscribe();
 
-        let (_, _) = SyncPoller::spawn_linked(
+        // The sync poller actor lives as long as the manager and only terminates due to the
+        // manager actor itself terminating. Therefore no supervision is required.
+        let (sync_poller_actor, _) = SyncPoller::spawn(
             None,
             (actor_namespace.clone(), event_stream, sender),
-            myself.clone().into(),
             pool.clone(),
         )
         .await?;
@@ -122,8 +129,24 @@ where
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
             next_session_id: 0,
+            sync_poller_actor,
             pool,
         })
+    }
+
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Drain the sync poller to ensure that all sync session messages are forwarded before it
+        // is shut down. A timeout is included to ensure that the drain call cannot wait forever.
+        state
+            .sync_poller_actor
+            .drain_and_wait(Some(Duration::from_millis(5000)))
+            .await?;
+
+        Ok(())
     }
 
     async fn handle(
@@ -207,7 +230,7 @@ where
                         .session_topic_map
                         .sender_mut(id)
                         .expect("session handle exists");
-                    handle.send(ToSync::Close).await?;
+                    let _ = handle.send(ToSync::Close).await;
                     Self::drop_session(state, id);
                 }
             }

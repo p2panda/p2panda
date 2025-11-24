@@ -30,12 +30,11 @@ where
 
 impl<T, Evt> Protocol for TopicHandshakeInitiator<T, Evt>
 where
-    T: Clone + Debug + for<'de> Deserialize<'de> + Serialize,
+    T: Clone + Debug + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
     Evt: From<TopicHandshakeEvent<T>>,
 {
     type Error = TopicHandshakeError<T>;
     type Output = ();
-    type Event = TopicHandshakeEvent<T>;
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(
@@ -105,12 +104,11 @@ where
 
 impl<T, Evt> Protocol for TopicHandshakeAcceptor<T, Evt>
 where
-    T: Clone + for<'de> Deserialize<'de> + Serialize,
+    T: Clone + Debug + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
     Evt: From<TopicHandshakeEvent<T>>,
 {
     type Error = TopicHandshakeError<T>;
     type Output = T;
-    type Event = TopicHandshakeEvent<T>;
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(

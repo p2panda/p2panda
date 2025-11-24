@@ -25,8 +25,8 @@ pub struct SyncSessionConfig<T> {
 
 /// Message sent to running sync sessions.
 #[derive(Clone, Debug)]
-pub enum ToSync {
-    Payload(Vec<u8>),
+pub enum ToSync<M> {
+    Payload(M),
     Close,
 }
 

@@ -5,21 +5,20 @@ use std::{collections::HashMap, convert::Infallible};
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
-use p2panda_core::PublicKey;
-use p2panda_core::{Body, Extension, Hash, Header, PrivateKey};
+use p2panda_core::{Body, Extension, Hash, Header, Operation, PrivateKey, PublicKey};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tokio::join;
 
-use crate::TopicSyncManager;
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_log_sync::TopicLogMap;
 use crate::topic_log_sync::{
-    LiveModeMessage, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
+    TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
 };
 use crate::traits::Protocol;
+use crate::{ToSync, TopicSyncManager};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -28,15 +27,14 @@ pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
 pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
-pub type TestLogSyncError = LogSyncError<u64, LogIdExtension, TestMemoryStore>;
+pub type TestLogSyncError = LogSyncError<u64>;
 
 // Types used in topic log sync protocol tests.
 pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, LogIdExtension>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<LogIdExtension>;
 pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
-pub type TestTopicSyncError =
-    TopicLogSyncError<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+pub type TestTopicSyncError = TopicLogSyncError<u64, LogIdExtension>;
 
 pub type TestTopicSyncManager =
     TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
@@ -77,7 +75,7 @@ impl Peer {
     ) -> (
         TestTopicSync,
         mpsc::Receiver<TestTopicSyncEvent>,
-        mpsc::Sender<LiveModeMessage<LogIdExtension>>,
+        mpsc::Sender<ToSync<Operation<LogIdExtension>>>,
     ) {
         let (event_tx, event_rx) = mpsc::channel(128);
         let (live_tx, live_rx) = mpsc::channel(128);
@@ -154,7 +152,7 @@ impl Peer {
 /// Run a pair of topic sync sessions.
 pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), P::Error>
 where
-    P: Protocol + 'static,
+    P: Protocol + Send + Sync + 'static,
 {
     let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
