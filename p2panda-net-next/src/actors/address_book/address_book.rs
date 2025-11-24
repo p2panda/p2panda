@@ -454,6 +454,8 @@ impl Watched for WatchedTopic {
         if difference.is_empty() {
             UpdateResult::Unchanged
         } else {
+            self.node_ids.replace(cmp.to_owned());
+
             {
                 let node_ids: Vec<String> = self
                     .node_ids
@@ -467,8 +469,6 @@ impl Watched for WatchedTopic {
                     "interested nodes for topic changed"
                 );
             }
-
-            self.node_ids.replace(cmp.to_owned());
 
             UpdateResult::Changed(WatchedValue {
                 difference: Some(difference),
