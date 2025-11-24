@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Listen for messages from the user and forward them to the gossip sender.
+//! Poll the sync manager for events and forward them to all subscribers.
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -14,8 +14,8 @@ use tokio::sync::broadcast;
 use crate::actors::ActorNamespace;
 
 pub enum ToSyncPoller {
-    /// Wait for a message on the gossip sync channel.
-    WaitForMessage,
+    /// Wait for an event from the sync manager.
+    WaitForEvent,
 }
 
 pub struct SyncPollerState<S, E> {
@@ -54,7 +54,7 @@ where
         let (_, stream, sender) = args;
 
         // Invoke the handler to wait for the first stream event.
-        let _ = myself.cast(ToSyncPoller::WaitForMessage);
+        let _ = myself.cast(ToSyncPoller::WaitForEvent);
 
         Ok(SyncPollerState { stream, sender })
     }
@@ -73,7 +73,7 @@ where
         }
 
         tokio::time::sleep(Duration::from_millis(20)).await;
-        let _ = myself.cast(ToSyncPoller::WaitForMessage);
+        let _ = myself.cast(ToSyncPoller::WaitForEvent);
 
         Ok(())
     }

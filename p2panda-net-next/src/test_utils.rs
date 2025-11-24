@@ -217,7 +217,6 @@ pub struct NoSyncProtocol {
 impl Protocol for NoSyncProtocol {
     type Output = ();
     type Error = Infallible;
-    type Event = NoSyncEvent;
     type Message = NoSyncMessage;
 
     async fn run(
@@ -302,7 +301,9 @@ impl NoSyncConfig {
 
 impl SyncManager<TopicId> for NoSyncManager {
     type Protocol = NoSyncProtocol;
+    type Event = NoSyncEvent;
     type Config = NoSyncConfig;
+    type Message = ();
     type Error = SendError;
 
     fn from_config(config: Self::Config) -> Self {
@@ -335,17 +336,14 @@ impl SyncManager<TopicId> for NoSyncManager {
     async fn session_handle(
         &self,
         _session_id: u64,
-    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
+    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>> {
         // NOTE: just a dummy channel to satisfy the API in testing environment.
-        let (tx, _) = mpsc::channel::<ToSync>(128);
-        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>;
+        let (tx, _) = mpsc::channel::<ToSync<Self::Message>>(128);
+        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>;
         Some(sink)
     }
 
-    fn subscribe(
-        &self,
-    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static
-    {
+    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let stream = BroadcastStream::new(self.event_tx.subscribe())
             .filter_map(|event| async { event.ok() });
         Box::pin(stream)

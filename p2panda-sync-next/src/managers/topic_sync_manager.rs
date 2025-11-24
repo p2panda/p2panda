@@ -11,20 +11,16 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::{Map, SelectAll};
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::cbor::decode_cbor;
-use p2panda_core::{Body, Extensions, Header};
+use p2panda_core::{Extensions, Operation};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use crate::log_sync::LogSyncEvent;
 use crate::session_topic_map::SessionTopicMap;
-use crate::topic_log_sync::{
-    LiveModeMessage, TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent,
-};
-use crate::traits::{NetworkRequirements, Protocol, SyncManager};
+use crate::topic_log_sync::{TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::traits::SyncManager;
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
 type SessionEventReceiver<M> =
@@ -32,7 +28,7 @@ type SessionEventReceiver<M> =
 
 #[derive(Debug)]
 pub struct TopicSyncManagerInner<T, E> {
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<LiveModeMessage<E>>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
     pub(crate) events_rx_set: SelectAll<SessionEventReceiver<TopicLogSyncEvent<E>>>,
     pub(crate) manager_output_queue: Vec<FromSync<TopicLogSyncEvent<E>>>,
 }
@@ -85,15 +81,17 @@ where
 
 impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    M: TopicLogMap<T, L> + NetworkRequirements,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + 'static,
-    E: Extensions + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + NetworkRequirements,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
+    M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
     type Config = TopicSyncManagerConfig<S, M>;
-    type Error = TopicSyncManagerError<T, S, M, L, E>;
+    type Event = TopicLogSyncEvent<E>;
+    type Message = Operation<E>;
+    type Error = TopicSyncManagerError<L, E>;
 
     fn from_config(config: Self::Config) -> Self {
         Self::new(config.topic_map, config.store)
@@ -136,40 +134,24 @@ where
     async fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>> {
-        let map_fn = |to_sync: ToSync| {
+    ) -> Option<Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>> {
+        let map_fn = |to_sync: ToSync<Operation<E>>| {
             ready({
                 match to_sync {
-                    ToSync::Payload(bytes) => {
-                        // @TODO(sam): not sure what will be happening at this interface
-                        // yet, this code assumes that bytes are sent from p2panda-net and
-                        // we decode them here as the topic sync protocol expects messages
-                        // to contain decoded types. We could change that so that we send
-                        // bytes to the remote and they decode it. Maybe this is
-                        // preferable to avoid an extra decoding/encoding round.
-                        let (header, body): (Header<E>, Option<Body>) =
-                            decode_cbor(&bytes[..]).unwrap();
-
-                        Ok::<_, Self::Error>(LiveModeMessage::Operation {
-                            header: Box::new(header),
-                            body,
-                        })
-                    }
-                    ToSync::Close => Ok::<_, Self::Error>(LiveModeMessage::Close),
+                    ToSync::Payload(operation) => Ok::<_, Self::Error>(ToSync::Payload(operation)),
+                    ToSync::Close => Ok::<_, Self::Error>(ToSync::Close),
                 }
             })
         };
 
         let inner = self.inner.lock().await;
         inner.session_topic_map.sender(session_id).map(|tx| {
-            Box::pin(tx.clone().with(map_fn)) as Pin<Box<dyn Sink<ToSync, Error = Self::Error>>>
+            Box::pin(tx.clone().with(map_fn))
+                as Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>
         })
     }
 
-    fn subscribe(
-        &self,
-    ) -> impl Stream<Item = FromSync<<Self::Protocol as Protocol>::Event>> + Send + Unpin + 'static
-    {
+    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let stream = ManagerEventStream {
             state: self.inner.clone(),
             pending: Default::default(),
@@ -219,15 +201,11 @@ where
         let event = manager_event.event();
 
         let operation = match event {
-            TopicLogSyncEvent::Sync(LogSyncEvent::Data(op)) => {
-                let op = op.clone();
-                Some((op.header, op.body))
-            }
-            TopicLogSyncEvent::Live { header, body } => Some((*header.clone(), body.clone())),
+            TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
             _ => return Some(manager_event),
         };
 
-        if let Some((header, body)) = operation {
+        if let Some(operation) = operation {
             let Some(topic) = state.session_topic_map.topic(session_id) else {
                 debug!("session {session_id} not found");
                 state.session_topic_map.drop(session_id);
@@ -247,12 +225,7 @@ where
                     continue;
                 };
 
-                let result = tx
-                    .send(LiveModeMessage::Operation {
-                        header: Box::new(header.clone()),
-                        body: body.clone(),
-                    })
-                    .await;
+                let result = tx.send(ToSync::Payload(operation.clone())).await;
 
                 if result.is_err() {
                     debug!("failed sending message on session channel");
@@ -308,14 +281,9 @@ pub struct TopicSyncManagerConfig<S, M> {
 }
 
 #[derive(Debug, Error)]
-pub enum TopicSyncManagerError<T, S, M, L, E>
-where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone,
-    M: TopicLogMap<T, L>,
-{
+pub enum TopicSyncManagerError<L, E> {
     #[error(transparent)]
-    TopicLogSync(#[from] TopicLogSyncError<T, S, M, L, E>),
+    TopicLogSync(#[from] TopicLogSyncError<L, E>),
 
     #[error("received operation before topic agreed")]
     OperationBeforeTopic,
@@ -331,15 +299,13 @@ mod tests {
 
     use assert_matches::assert_matches;
     use futures::{SinkExt, StreamExt};
-    use p2panda_core::Header;
-    use p2panda_core::{Body, cbor::encode_cbor};
+    use p2panda_core::{Body, Operation};
 
     use crate::TopicSyncManager;
-    use crate::log_sync::{LogSyncEvent, StatusEvent};
     use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
     use crate::test_utils::{
-        LogIdExtension, Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent,
-        TestTopicSyncManager, drain_stream, run_protocol,
+        Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
+        drain_stream, run_protocol,
     };
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
@@ -395,8 +361,14 @@ mod tests {
 
         // Create and send a new live-mode message.
         let (header_1, _) = peer_a.create_operation_no_insert(&body, LOG_ID).await;
-        let bytes = encode_cbor(&(header_1.clone(), Some(body.clone()))).unwrap();
-        peer_a_handle.send(ToSync::Payload(bytes)).await.unwrap();
+        peer_a_handle
+            .send(ToSync::Payload(Operation {
+                hash: header_1.hash(),
+                header: header_1.clone(),
+                body: Some(body.clone()),
+            }))
+            .await
+            .unwrap();
         peer_a_handle.send(ToSync::Close).await.unwrap();
 
         // Actually run the protocol.
@@ -405,48 +377,56 @@ mod tests {
         // Assert Peer A's events.
         let event_stream = peer_a_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 6);
+        assert_eq!(events.len(), 8);
         for (index, event) in events.into_iter().enumerate() {
             assert_eq!(event.session_id(), 0);
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
                 1 | 2 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
                 4 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::LiveModeStarted,
+                        ..
+                    }
+                ),
+                6 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
                         ..
                     }
                 ),
@@ -457,16 +437,14 @@ mod tests {
         // Assert Peer B's events.
         let event_stream = peer_b_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 7);
+        assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
@@ -474,9 +452,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
@@ -484,7 +460,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -492,17 +468,14 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Live { .. },
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -510,11 +483,25 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
-                _ => break,
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                8 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
+                        ..
+                    }
+                ),
+                _ => panic!(),
             }
         }
     }
@@ -598,9 +585,21 @@ mod tests {
         let (peer_b_header_1, _) = peer_b.create_operation(&body_b, LOG_ID).await;
         let (peer_c_header_1, _) = peer_c.create_operation(&body_c, LOG_ID).await;
 
-        let operation_a = encode_cbor(&(peer_a_header_1.clone(), Some(body_a))).unwrap();
-        let operation_b = encode_cbor(&(peer_b_header_1.clone(), Some(body_b))).unwrap();
-        let operation_c = encode_cbor(&(peer_c_header_1.clone(), Some(body_c))).unwrap();
+        let operation_a = Operation {
+            hash: peer_a_header_1.hash(),
+            header: peer_a_header_1.clone(),
+            body: Some(body_a.clone()),
+        };
+        let operation_b = Operation {
+            hash: peer_b_header_1.hash(),
+            header: peer_b_header_1.clone(),
+            body: Some(body_b.clone()),
+        };
+        let operation_c = Operation {
+            hash: peer_c_header_1.hash(),
+            header: peer_c_header_1.clone(),
+            body: Some(body_c.clone()),
+        };
 
         handle_ab
             .send(ToSync::Payload(operation_a.clone()))
@@ -614,17 +613,6 @@ mod tests {
         let mut operations_a = vec![];
         let mut operations_b = vec![];
         let mut operations_c = vec![];
-        let push_operation = |operations: &mut Vec<(Header<LogIdExtension>, Option<Body>)>,
-                              event: FromSync<TestTopicSyncEvent>| {
-            if let TestTopicSyncEvent::Live { header, body } = event.event() {
-                operations.push((*header.clone(), body.clone()));
-            }
-
-            if let TestTopicSyncEvent::Sync(LogSyncEvent::Data(operation)) = event.event() {
-                operations.push((operation.header.clone(), operation.body.clone()));
-            }
-        };
-
         let mut event_stream_a = manager_a.subscribe();
         let mut event_stream_b = manager_b.subscribe();
         let mut event_stream_c = manager_c.subscribe();
@@ -632,14 +620,19 @@ mod tests {
             loop {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
-                        push_operation(&mut operations_a, event)
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_a.push(*operation.clone());
+                        }
                     }
                     Some(event) = event_stream_b.next() => {
-                        push_operation(&mut operations_b, event)
-
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_b.push(*operation.clone());
+                        }
                     }
                     Some(event) = event_stream_c.next() => {
-                        push_operation(&mut operations_c, event)
+                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                            operations_c.push(*operation.clone());
+                        }
                     }
                     else => tokio::time::sleep(Duration::from_millis(5)).await
                 }
@@ -655,19 +648,22 @@ mod tests {
         assert!(
             operations_a
                 .iter()
-                .find(|(header, _)| header == &peer_a_header_0 || header == &peer_a_header_1)
+                .find(|operation| operation.header == peer_a_header_0
+                    || operation.header == peer_a_header_1)
                 .is_none()
         );
         assert!(
             operations_b
                 .iter()
-                .find(|(header, _)| header == &peer_b_header_0 || header == &peer_b_header_1)
+                .find(|operation| operation.header == peer_b_header_0
+                    || operation.header == peer_b_header_1)
                 .is_none()
         );
         assert!(
             operations_c
                 .iter()
-                .find(|(header, _)| header == &peer_c_header_0 || header == &peer_c_header_1)
+                .find(|operation| operation.header == peer_c_header_0
+                    || operation.header == peer_c_header_1)
                 .is_none()
         );
     }
@@ -722,8 +718,14 @@ mod tests {
 
         // Create and send a new live-mode message.
         let (header_1, _) = peer_a.create_operation_no_insert(&body, LOG_ID).await;
-        let bytes = encode_cbor(&(header_1.clone(), Some(body.clone()))).unwrap();
-        peer_a_handle.send(ToSync::Payload(bytes)).await.unwrap();
+        peer_a_handle
+            .send(ToSync::Payload(Operation {
+                hash: header_1.hash(),
+                header: header_1.clone(),
+                body: Some(body.clone()),
+            }))
+            .await
+            .unwrap();
         peer_a_handle.send(ToSync::Close).await.unwrap();
 
         // Actually run the protocol.
@@ -732,16 +734,14 @@ mod tests {
         // Assert Peer B's events.
         let event_stream = peer_b_manager.subscribe();
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 7);
+        assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Started { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStarted(_),
                         ..
                     }
                 ),
@@ -749,9 +749,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Progress { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncStatus(_),
                         ..
                     }
                 ),
@@ -759,7 +757,7 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Data(_)),
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
@@ -767,17 +765,14 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Sync(LogSyncEvent::Status(
-                            StatusEvent::Completed { .. }
-                        )),
+                        event: TopicLogSyncEvent::SyncFinished(_),
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Live { .. },
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -785,11 +780,25 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::Close { .. },
+                        event: TopicLogSyncEvent::Operation(_),
                         ..
                     }
                 ),
-                _ => break,
+                7 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::LiveModeFinished(_),
+                        ..
+                    }
+                ),
+                8 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::Closed,
+                        ..
+                    }
+                ),
+                _ => panic!(),
             }
         }
     }

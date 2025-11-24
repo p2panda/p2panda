@@ -89,14 +89,13 @@ impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
 
 impl<L, E, S, Evt> Protocol for LogSyncProtocol<L, E, S, Evt>
 where
-    L: LogId + for<'de> Deserialize<'de> + Serialize,
-    E: Extensions,
-    S: LogStore<L, E> + OperationStore<L, E>,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
     Evt: From<LogSyncEvent<E>>,
 {
-    type Error = LogSyncError<L, E, S>;
+    type Error = LogSyncError<L>;
     type Output = Dedup<Hash>;
-    type Event = LogSyncEvent<E>;
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -248,7 +247,10 @@ where
                     // streams is done concurrently.
                     loop {
                         select! {
-                            Some(message) = stream.next(), if !sync_done_received => {
+                            message = stream.next(), if !sync_done_received => {
+                                let Some(message) = message else {
+                                    break;
+                                };
                                 let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
@@ -283,7 +285,7 @@ where
                                 dedup.insert(hash);
 
                                 // Fetch raw message bytes and send to remote.
-                                let (header, body) = self.store.get_raw_operation(hash).await.map_err(LogSyncError::OperationStore)?.expect("operation to be in store");
+                                let (header, body) = self.store.get_raw_operation(hash).await.map_err(|err| LogSyncError::OperationStore(format!("{err}")))?.expect("operation to be in store");
                                 metrics.total_bytes_sent += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
                                 metrics.total_operations_sent += 1;
                                 sink.send(LogSyncMessage::Operation(header, body)).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
@@ -294,7 +296,8 @@ where
                                 }
                             },
                             else => {
-                                // If both streams are empty (they return None) exit the loop.
+                                // If both streams are empty (they return None), or we received a
+                                // sync done message and we sent all our pending operations, exit the loop.
                                 break;
                             }
                         }
@@ -318,9 +321,6 @@ where
             }
         }
 
-        sink.flush()
-            .await
-            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
         self.event_tx.flush().await?;
 
         Ok(dedup)
@@ -331,7 +331,7 @@ where
 async fn local_log_heights<L, E, S>(
     store: &S,
     logs: &Logs<L>,
-) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L, E, S>>
+) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L>>
 where
     L: LogId,
     S: LogStore<L, E> + OperationStore<L, E>,
@@ -343,7 +343,7 @@ where
             let latest = store
                 .latest_operation(public_key, log_id)
                 .await
-                .map_err(LogSyncError::LogStore)?;
+                .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
             if let Some((header, _)) = latest {
                 log_heights.push((log_id.clone(), header.seq_num));
@@ -361,7 +361,7 @@ async fn operations_needed_by_remote<L, E, S>(
     store: &S,
     logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<Hash>, u64), LogSyncError<L, E, S>>
+) -> Result<(Vec<Hash>, u64), LogSyncError<L>>
 where
     L: LogId,
     E: Extensions,
@@ -380,7 +380,7 @@ where
             let latest_operation = store
                 .latest_operation(public_key, log_id)
                 .await
-                .map_err(LogSyncError::LogStore)?;
+                .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
             let log_height = match latest_operation {
                 Some((header, _)) => header.seq_num,
@@ -408,7 +408,7 @@ where
                 let log = store
                     .get_log_hashes(public_key, log_id, Some(remote_needs_from))
                     .await
-                    .map_err(LogSyncError::LogStore)?;
+                    .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                 if let Some(log) = log {
                     operations.extend(log);
@@ -417,7 +417,7 @@ where
                 let size = store
                     .get_log_size(public_key, log_id, Some(remote_needs_from))
                     .await
-                    .map_err(LogSyncError::LogStore)?;
+                    .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                 if let Some(size) = size {
                     total_size += size;
@@ -493,32 +493,29 @@ pub enum StatusEvent {
 
 /// Protocol error types.
 #[derive(Debug, Error)]
-pub enum LogSyncError<L, E, S>
-where
-    S: LogStore<L, E> + OperationStore<L, E>,
-{
+pub enum LogSyncError<L> {
     #[error(transparent)]
     Decode(#[from] DecodeError),
 
-    #[error(transparent)]
-    LogStore(<S as LogStore<L, E>>::Error),
+    #[error("log store error: {0}")]
+    LogStore(String),
 
-    #[error(transparent)]
-    OperationStore(<S as OperationStore<L, E>>::Error),
+    #[error("operation store error: {0}")]
+    OperationStore(String),
 
     #[error(transparent)]
     MpscSend(#[from] mpsc::SendError),
 
-    #[error("error sending on message sink: {0}")]
+    #[error("log sync error sending on message sink: {0}")]
     MessageSink(String),
 
-    #[error("error receiving from message stream: {0}")]
+    #[error("log sync error receiving from message stream: {0}")]
     MessageStream(String),
 
-    #[error("stream ended before protocol completion")]
+    #[error("log sync stream ended before protocol completion")]
     UnexpectedStreamClosure,
 
-    #[error("received unexpected protocol message: {0}")]
+    #[error("log sync received unexpected protocol message: {0}")]
     UnexpectedMessage(LogSyncMessage<L>),
 }
 
