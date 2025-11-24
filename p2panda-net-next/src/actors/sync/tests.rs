@@ -229,8 +229,12 @@ async fn e2e_topic_log_sync() {
         TestNode::spawn([13; 32], vec![], bob_app.sync_config()).await;
 
     // Setup Alice's node.
-    let alice: TestNode<TestTopicSyncManager> =
-        TestNode::spawn([12; 32], vec![bob.node_info()], alice_app.sync_config()).await;
+    let alice: TestNode<TestTopicSyncManager> = TestNode::spawn(
+        [12; 32],
+        vec![generate_node_info(&mut bob.args)],
+        alice_app.sync_config(),
+    )
+    .await;
 
     // Create Alice's stream.
     let alice_stream = call!(
