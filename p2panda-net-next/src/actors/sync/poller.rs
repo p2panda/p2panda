@@ -10,6 +10,7 @@ use p2panda_sync::FromSync;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::broadcast;
+use tracing::trace;
 
 use crate::actors::ActorNamespace;
 
@@ -69,6 +70,7 @@ where
         // return events coming from running sync sessions. We then forward these events onto all
         // subscribers.
         while let Some(event) = state.stream.next().await {
+            trace!("from sync: {:?}", event);
             state.sender.send(event)?;
         }
 
