@@ -360,11 +360,6 @@ where
                 // Inform address book about removed topic.
                 state.update_address_book();
 
-                // @TODO(sam): If we drop the sync manager here we lose some final messages coming
-                // from the poller to the subscription channel. Not totally sure why yet, I
-                // imagine it's because the actor being killed tears down some processes to soon,
-                // probably the sync session actor which needs time to wind down.
-                //
                 // Drop the sync manager state for this topic.
                 if let Some((sync_manager, _)) =
                     state.sync_managers.topic_manager_map.remove(&topic)
