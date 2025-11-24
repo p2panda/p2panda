@@ -109,11 +109,15 @@ impl ThreadLocalActor for Events {
                 state.watch_addr_handle = Some(watch_addr_handle);
             }
             ToEvents::UpdatedNodeInfo(node_info) => {
-                if let Some(transport_info) = node_info.transports {
+                if let Some(ref transport_info) = node_info.transports {
                     info!(%transport_info, "updated our address");
                 } else {
                     info!("we're currently 'not reachable'");
                 }
+
+                let _ = state
+                    .tx
+                    .send(NetworkEvent::ConnectionStatus(node_info.into()));
             }
             ToEvents::Subscribe(reply) => {
                 let _ = reply.send(state.tx.subscribe());
@@ -127,7 +131,7 @@ impl ThreadLocalActor for Events {
 pub async fn subscribe_to_network_events(
     actor_namespace: &ActorNamespace,
 ) -> Result<broadcast::Receiver<NetworkEvent>, SubscribeError> {
-    let actor_ref = registry::where_is(with_namespace(EVENTS, &actor_namespace))
+    let actor_ref = registry::where_is(with_namespace(EVENTS, actor_namespace))
         .map(ActorRef::<ToEvents>::from)
         .ok_or(SubscribeError::ActorNotAvailable)?;
     let rx =
