@@ -6,7 +6,6 @@
 //! sub-systems. It is not responsible for spawning or respawning actors, that role is carried out
 //! by the stream supervisor actor.
 use std::collections::{HashMap, HashSet};
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -47,18 +46,21 @@ pub const EVENTUALLY_CONSISTENT_STREAMS: &str = "net.streams.eventually_consiste
 
 type IsLiveModeEnabled = bool;
 
-pub enum ToEventuallyConsistentStreams<E> {
+pub enum ToEventuallyConsistentStreams<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+{
     /// Create an eventually consistent stream for the topic and return a publishing handle.
     Create(
         TopicId,
         IsLiveModeEnabled,
-        RpcReplyPort<EventuallyConsistentStream<E>>,
+        RpcReplyPort<EventuallyConsistentStream<M>>,
     ),
 
     /// Return an eventually consistent subscription handle for the given topic.
     Subscribe(
         TopicId,
-        RpcReplyPort<Option<EventuallyConsistentSubscription<E>>>,
+        RpcReplyPort<Option<EventuallyConsistentSubscription<M::Event>>>,
     ),
 
     /// Close all eventually consistent streams for the given topic.
@@ -83,24 +85,38 @@ type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>
 /// Mapping of topic to the receiver channel from the associated sync manager.
 type SyncReceivers<E> = HashMap<TopicId, BroadcastReceiver<FromSync<E>>>;
 
-#[derive(Default)]
-struct SyncManagers {
-    topic_manager_map: HashMap<TopicId, (ActorRef<ToSyncManager>, IsLiveModeEnabled)>,
+struct SyncManagers<T> {
+    topic_manager_map: HashMap<TopicId, (ActorRef<ToSyncManager<T>>, IsLiveModeEnabled)>,
     actor_topic_map: HashMap<ActorId, TopicId>,
 }
 
-pub struct EventuallyConsistentStreamsState<C, E> {
+impl<T> Default for SyncManagers<T> {
+    fn default() -> Self {
+        Self {
+            topic_manager_map: Default::default(),
+            actor_topic_map: Default::default(),
+        }
+    }
+}
+
+pub struct EventuallyConsistentStreamsState<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+{
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     gossip_actor: ActorRef<ToGossip>,
     gossip_senders: GossipSenders,
-    sync_managers: SyncManagers,
-    sync_receivers: SyncReceivers<E>,
-    sync_config: C,
+    sync_managers: SyncManagers<M::Message>,
+    sync_receivers: SyncReceivers<M::Event>,
+    sync_config: M::Config,
     stream_thread_pool: ThreadLocalActorSpawner,
 }
 
-impl<M, E> EventuallyConsistentStreamsState<M, E> {
+impl<M> EventuallyConsistentStreamsState<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+{
     /// Drop all internal state associated with the given topic.
     fn drop_topic_state(&mut self, topic: &TopicId) {
         self.sync_managers.topic_manager_map.remove(topic);
@@ -168,15 +184,11 @@ impl<M> Default for EventuallyConsistentStreams<M> {
 
 impl<M> ThreadLocalActor for EventuallyConsistentStreams<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-    M::Error: StdError + Send + Sync + 'static,
-    M::Protocol: Send + 'static,
-    <M::Protocol as Protocol>::Event: Clone + Debug + Send + Sync + 'static,
-    <M::Protocol as Protocol>::Error: StdError + Send + Sync + 'static,
+    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
-    type State = EventuallyConsistentStreamsState<M::Config, <M::Protocol as Protocol>::Event>;
+    type State = EventuallyConsistentStreamsState<M>;
 
-    type Msg = ToEventuallyConsistentStreams<<M::Protocol as Protocol>::Event>;
+    type Msg = ToEventuallyConsistentStreams<M>;
 
     type Arguments = (ApplicationArguments, ActorRef<ToGossip>, M::Config);
 
@@ -333,6 +345,11 @@ where
                 }
             }
             ToEventuallyConsistentStreams::Close(topic) => {
+                // Close all sync sessions running over this topic.
+                if let Some((actor, _)) = state.sync_managers.topic_manager_map.get(&topic) {
+                    actor.send_message(ToSyncManager::CloseAll { topic })?;
+                }
+
                 // Tell the gossip actor to unsubscribe from this topic.
                 state.unsubscribe_from_gossip(topic).await?;
 
@@ -460,13 +477,16 @@ where
 }
 
 #[derive(Debug)]
-struct SyncProtocolHandler<E> {
-    stream_ref: ActorRef<ToEventuallyConsistentStreams<E>>,
+struct SyncProtocolHandler<M>
+where
+    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
+{
+    stream_ref: ActorRef<ToEventuallyConsistentStreams<M>>,
 }
 
-impl<E> ProtocolHandler for SyncProtocolHandler<E>
+impl<M> ProtocolHandler for SyncProtocolHandler<M>
 where
-    E: Debug + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
     async fn accept(
         &self,
