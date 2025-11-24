@@ -74,6 +74,12 @@ pub enum ConnectionStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionRole {
+    Initialised,
+    Accepted,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Protocol {
     Discovery,
     Gossip,
@@ -86,7 +92,8 @@ pub enum NetworkEvent {
     Relay(RelayStatus),
     Connection {
         protocol: Protocol,
-        node_id: NodeId,
+        role: ConnectionRole,
+        remote_node_id: NodeId,
         status: ConnectionStatus,
     },
 }
