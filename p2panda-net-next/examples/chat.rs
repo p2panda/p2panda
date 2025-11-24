@@ -4,26 +4,25 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::Parser;
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
-use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::memory::MemoryStore as AddressBookMemoryStore;
-use p2panda_net_next::utils::{ShortFormat, from_public_key};
+use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_net_next::utils::{from_public_key, ShortFormat};
 use p2panda_net_next::{Network, NetworkBuilder, NodeId, NodeInfo, TopicId};
-use p2panda_store::{MemoryStore, OperationStore};
-use p2panda_sync::TopicSyncManager;
+use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::Logs;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
-use p2panda_sync::topic_log_sync::{TopicLogMap, TopicLogSyncEvent};
+use p2panda_sync::topic_log_sync::TopicLogMap;
+use p2panda_sync::TopicSyncManager;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
-use tracing_subscriber::EnvFilter;
+use tokio::sync::{mpsc, RwLock};
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 type LogId = u64;
 
@@ -109,7 +108,7 @@ async fn main() -> Result<()> {
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
-    let mut store = ChatStore::new();
+    let store = ChatStore::new();
     let topic_map = ChatTopicMap::default();
     topic_map.insert(public_key, LOG_ID).await;
 
@@ -136,95 +135,23 @@ async fn main() -> Result<()> {
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
 
-    // @TODO: Enable this later.
-    // // Ephemeral stream.
-    // let ephemeral = network.ephemeral_stream([99; 32]).await?;
-    // let mut ephemeral_subscriber = ephemeral.subscribe().await?;
-    //
-    // tokio::task::spawn(async move {
-    //     loop {
-    //         let _message = ephemeral_subscriber.recv().await.unwrap();
-    //         // println!(
-    //         //     "heartbeat <3 {}",
-    //         //     u64::from_be_bytes(message.try_into().unwrap())
-    //         // );
-    //     }
-    // });
-    //
-    // tokio::task::spawn(async move {
-    //     loop {
-    //         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    //         let rnd: u64 = rand::random();
-    //         ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
-    //     }
-    // });
+    // Ephemeral stream.
+    let ephemeral = network.ephemeral_stream([99; 32]).await?;
+    let mut ephemeral_subscriber = ephemeral.subscribe().await?;
 
-    // Eventually consistent stream.
-    let stream = network.stream(TOPIC_ID, true).await?;
-    let mut stream_subscriber = stream.subscribe().await?;
-
-    // Receive messages from the network stream.
-    {
-        let mut store = store.clone();
-        tokio::task::spawn(async move {
-            while let Ok(from_sync) = stream_subscriber.recv().await {
-                match from_sync.event {
-                    TopicLogSyncEvent::Operation(operation) => {
-                        if store.has_operation(operation.hash).await.unwrap() {
-                            continue;
-                        }
-
-                        println!(
-                            "{}: {}",
-                            operation.header.public_key.fmt_short(),
-                            String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap()
-                        );
-
-                        store
-                            .insert_operation(
-                                operation.hash,
-                                &operation.header,
-                                operation.body.as_ref(),
-                                &operation.header.to_bytes(),
-                                &LOG_ID,
-                            )
-                            .await
-                            .unwrap();
-
-                        topic_map.insert(operation.header.public_key, LOG_ID).await;
-                    }
-                    _ => (),
-                }
-            }
-        });
-    }
+    tokio::task::spawn(async move {
+        loop {
+            let message = ephemeral_subscriber.recv().await.unwrap();
+            println!("{}", String::from_utf8(message).unwrap());
+        }
+    });
 
     // Listen for text input via the terminal.
     let (line_tx, mut line_rx) = mpsc::channel(1);
     std::thread::spawn(move || input_loop(line_tx));
 
-    let mut seq_num = 0;
-    let mut backlink = None;
-
-    // Sign and encode each line of text input and broadcast it on the chat topic.
     while let Some(text) = line_rx.recv().await {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let body = Body::new(text.as_bytes());
-        let (hash, header, header_bytes, operation) =
-            create_operation(&private_key, &body, seq_num, timestamp, backlink);
-        store
-            .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
-            .await
-            .unwrap();
-
-        stream.publish(operation).await.unwrap();
-
-        seq_num += 1;
-        backlink = Some(hash);
+        ephemeral.publish(text.into_bytes()).await.unwrap()
     }
 
     // Listen for `Ctrl+c` and shutdown the node.
@@ -241,42 +168,4 @@ fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
         line_tx.blocking_send(buffer.clone())?;
         buffer.clear();
     }
-}
-
-fn create_operation(
-    private_key: &PrivateKey,
-    body: &Body,
-    seq_num: u64,
-    timestamp: u64,
-    backlink: Option<Hash>,
-) -> (
-    Hash,
-    Header<ChatExtensions>,
-    Vec<u8>,
-    Operation<ChatExtensions>,
-) {
-    let mut header = Header {
-        version: 1,
-        public_key: private_key.public_key(),
-        signature: None,
-        payload_size: body.size(),
-        payload_hash: Some(body.hash()),
-        timestamp,
-        seq_num,
-        backlink,
-        previous: vec![],
-        extensions: ChatExtensions,
-    };
-
-    header.sign(private_key);
-    let header_bytes = header.to_bytes();
-    let hash = header.hash();
-
-    let operation = Operation {
-        hash,
-        header: header.clone(),
-        body: Some(body.to_owned()),
-    };
-
-    (hash, header, header_bytes, operation)
 }
