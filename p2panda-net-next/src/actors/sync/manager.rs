@@ -13,12 +13,13 @@ use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::broadcast;
+use tokio::time::Duration;
 use tracing::{debug, warn};
 
 use crate::TopicId;
 use crate::actors::ActorNamespace;
 use crate::actors::sync::SyncSessionName;
-use crate::actors::sync::poller::SyncPoller;
+use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
 use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
 
@@ -69,6 +70,7 @@ where
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
     next_session_id: SyncSessionId,
+    sync_poller_actor: ActorRef<ToSyncPoller>,
     pool: ThreadLocalActorSpawner,
 }
 
@@ -113,7 +115,7 @@ where
 
         // The sync poller actor lives as long as the manager and only terminates due to the
         // manager actor itself terminating. Therefore no supervision is required.
-        let (_, _) = SyncPoller::spawn(
+        let (sync_poller_actor, _) = SyncPoller::spawn(
             None,
             (actor_namespace.clone(), event_stream, sender),
             pool.clone(),
@@ -127,8 +129,24 @@ where
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
             next_session_id: 0,
+            sync_poller_actor,
             pool,
         })
+    }
+
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Drain the sync poller to ensure that all sync session messages are forwarded before it
+        // is shut down. A timeout is included to ensure that the drain call cannot wait forever.
+        state
+            .sync_poller_actor
+            .drain_and_wait(Some(Duration::from_millis(5000)))
+            .await?;
+
+        Ok(())
     }
 
     async fn handle(
