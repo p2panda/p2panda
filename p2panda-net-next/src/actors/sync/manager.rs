@@ -22,6 +22,7 @@ use crate::actors::sync::SyncSessionName;
 use crate::actors::sync::poller::{SyncPoller, ToSyncPoller};
 use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::addrs::NodeId;
+use crate::utils::ShortFormat;
 
 type SessionSink<M> = Pin<
     Box<
@@ -161,6 +162,13 @@ where
                 topic,
                 live_mode,
             } => {
+                debug!(
+                    remote_node_id = %node_id.fmt_short(),
+                    topic = %topic.fmt_short(),
+                    %live_mode,
+                    "initiate sync session"
+                );
+
                 let config = SyncSessionConfig {
                     topic,
                     remote: node_id,
@@ -188,6 +196,13 @@ where
                 topic,
                 live_mode,
             } => {
+                debug!(
+                    remote_node_id = %node_id.fmt_short(),
+                    topic = %topic.fmt_short(),
+                    %live_mode,
+                    "accept sync session"
+                );
+
                 let config = SyncSessionConfig {
                     topic,
                     remote: node_id,
