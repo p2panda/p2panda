@@ -11,7 +11,7 @@ use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore as AddressBookMemoryStore;
 use p2panda_net_next::utils::{ShortFormat, from_public_key};
-use p2panda_net_next::{Network, NetworkBuilder, NodeId, NodeInfo, TopicId, TrustedTransportInfo};
+use p2panda_net_next::{Network, NetworkBuilder, NodeId, NodeInfo, TopicId};
 use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::TopicSyncManager;
 use p2panda_sync::log_sync::Logs;
@@ -20,7 +20,6 @@ use p2panda_sync::topic_log_sync::TopicLogMap;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -46,10 +45,6 @@ struct Args {
     /// Supply the node ID of a bootstrap node.
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
-
-    /// Supply the serialized transport info of a bootstrap node.
-    #[arg(short = 'i', long, value_name = "BOOTSTRAP_INFO")]
-    bootstrap_info: Option<String>,
 }
 
 type LogId = u64;
@@ -84,18 +79,15 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| rand::random::<[u8; 32]>());
 
     let private_key = PrivateKey::from_bytes(&seed);
+    let public_key = private_key.public_key();
+
     let log_id: u64 = rand::rng().random();
     let mut logs = HashMap::new();
-    logs.insert(private_key.public_key(), vec![log_id]);
-
-    let endpoint_addr = iroh::EndpointAddr::new(from_public_key(private_key.public_key()));
-    let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
-    let transport_info: TrustedTransportInfo = endpoint_addr.into();
+    logs.insert(public_key, vec![log_id]);
 
     println!("network id: {}", NETWORK_ID.fmt_short());
-    println!("public key: {}", private_key.public_key().to_hex());
+    println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
-    println!("node info: {}", json!(transport_info));
 
     let mut store = ChatStore::new();
     let mut topic_map = ChatTopicMap::default();
@@ -109,12 +101,11 @@ async fn main() -> Result<()> {
     let address_book = AddressBookMemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
 
     if let Some(id) = args.bootstrap_id {
-        if let Some(transport_info) = args.bootstrap_info {
-            let transports: TrustedTransportInfo = serde_json::from_str(&transport_info)?;
-            let mut node_info = NodeInfo::new(id);
-            node_info.update_transports(transports.into())?;
-            address_book.insert_node_info(node_info).await?;
-        }
+        let endpoint_addr = iroh::EndpointAddr::new(from_public_key(id));
+        let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
+        address_book
+            .insert_node_info(NodeInfo::from(endpoint_addr))
+            .await?;
     }
 
     let builder = NetworkBuilder::new(NETWORK_ID);
@@ -131,6 +122,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         while let Ok(from_sync) = stream_subscriber.recv().await {
             // TODO: Proper match on FromSync<TopicLogSyncEvent<ChatExtensions>>.
+            // TODO: Insert new log id's into topic map.
             println!("{:?}", from_sync);
         }
     });
