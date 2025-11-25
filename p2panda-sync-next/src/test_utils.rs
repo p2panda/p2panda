@@ -11,6 +11,7 @@ use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use tokio::join;
+use tokio::sync::broadcast;
 
 use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
 use crate::topic_log_sync::TopicLogMap;
@@ -27,7 +28,7 @@ pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
 pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
-pub type TestLogSyncError = LogSyncError<u64>;
+pub type TestLogSyncError = LogSyncError<u64, TestLogSyncEvent>;
 
 // Types used in topic log sync protocol tests.
 pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, LogIdExtension>;
@@ -74,10 +75,10 @@ impl Peer {
         live_mode: bool,
     ) -> (
         TestTopicSync,
-        mpsc::Receiver<TestTopicSyncEvent>,
+        broadcast::Receiver<TestTopicSyncEvent>,
         mpsc::Sender<ToSync<Operation<LogIdExtension>>>,
     ) {
-        let (event_tx, event_rx) = mpsc::channel(128);
+        let (event_tx, event_rx) = broadcast::channel(128);
         let (live_tx, live_rx) = mpsc::channel(128);
         let live_rx = if live_mode { Some(live_rx) } else { None };
         let session = TopicLogSync::new(
@@ -94,8 +95,8 @@ impl Peer {
     pub fn log_sync_protocol(
         &mut self,
         logs: &Logs<u64>,
-    ) -> (TestLogSync, mpsc::Receiver<TestLogSyncEvent>) {
-        let (event_tx, event_rx) = mpsc::channel(128);
+    ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
+        let (event_tx, event_rx) = broadcast::channel(128);
         let session = LogSyncProtocol::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
     }
@@ -146,6 +147,14 @@ impl Peer {
 
     pub fn insert_topic(&mut self, topic: &TestTopic, logs: &HashMap<PublicKey, Vec<u64>>) {
         self.topic_map.insert(topic, logs.to_owned());
+    }
+}
+
+pub fn setup_logging() {
+    if std::env::var("RUST_LOG").is_ok() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
     }
 }
 

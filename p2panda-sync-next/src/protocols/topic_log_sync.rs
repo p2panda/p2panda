@@ -11,6 +11,7 @@ use p2panda_core::{Body, Extensions, Header, Operation};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::broadcast;
 
 use crate::log_sync::{
     LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncProtocol, Logs, StatusEvent,
@@ -23,7 +24,7 @@ pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
     pub topic_map: M,
     pub topic: T,
-    pub event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
+    pub event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
     pub live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
@@ -51,7 +52,7 @@ where
         store: S,
         topic_map: M,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
+        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
     ) -> Self {
         Self::new_with_capacity(
             topic,
@@ -68,7 +69,7 @@ where
         store: S,
         topic_map: M,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
+        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
@@ -96,7 +97,7 @@ where
     type Output = ();
 
     async fn run(
-        mut self,
+        self,
         mut sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         mut stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
@@ -134,7 +135,6 @@ where
         if let Some(mut live_mode_rx) = self.live_mode_rx {
             self.event_tx
                 .send(TopicLogSyncEvent::LiveModeStarted)
-                .await
                 .map_err(TopicSyncChannelError::EventSend)?;
             loop {
                 tokio::select! {
@@ -186,14 +186,13 @@ where
 
                         metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
                         metrics.operations_received += 1;
-                        self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).await.map_err(TopicSyncChannelError::EventSend)?;
+                        self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
                     }
                 }
             }
 
             self.event_tx
                 .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-                .await
                 .map_err(TopicSyncChannelError::EventSend)?;
         }
 
@@ -203,7 +202,6 @@ where
 
         self.event_tx
             .send(TopicLogSyncEvent::Closed)
-            .await
             .map_err(TopicSyncChannelError::EventSend)?;
 
         Ok(())
@@ -216,13 +214,13 @@ pub(crate) fn sync_channels<'a, L, E>(
     sink: &mut (impl Sink<TopicLogSyncMessage<L, E>, Error = impl Debug> + Unpin),
     stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L, E>, impl Debug>> + Unpin),
 ) -> (
-    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError> + Unpin,
-    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError>> + Unpin,
+    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError<E>> + Unpin,
+    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError<E>>> + Unpin,
 ) {
     let log_sync_sink = sink
         .sink_map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))
         .with(|message| {
-            ready(Ok::<_, TopicSyncChannelError>(
+            ready(Ok::<_, TopicSyncChannelError<E>>(
                 TopicLogSyncMessage::<L, E>::Sync(message),
             ))
         });
@@ -239,7 +237,7 @@ pub(crate) fn sync_channels<'a, L, E>(
 
 /// Error type occurring in topic log sync protocol.
 #[derive(Debug, Error)]
-pub enum TopicSyncChannelError {
+pub enum TopicSyncChannelError<E> {
     #[error("error sending on message sink: {0}")]
     MessageSink(String),
 
@@ -247,14 +245,14 @@ pub enum TopicSyncChannelError {
     MessageStream(String),
 
     #[error(transparent)]
-    EventSend(#[from] mpsc::SendError),
+    EventSend(#[from] broadcast::error::SendError<TopicLogSyncEvent<E>>),
 }
 
 /// Error type occurring in topic log sync protocol.
 #[derive(Debug, Error)]
 pub enum TopicLogSyncError<L, E> {
     #[error(transparent)]
-    Sync(#[from] LogSyncError<L>),
+    Sync(#[from] LogSyncError<L, TopicLogSyncEvent<E>>),
 
     #[error("topic map error: {0}")]
     TopicMap(String),
@@ -263,7 +261,7 @@ pub enum TopicLogSyncError<L, E> {
     UnexpectedProtocolMessage(Box<TopicLogSyncMessage<L, E>>),
 
     #[error(transparent)]
-    Channel(#[from] TopicSyncChannelError),
+    Channel(#[from] TopicSyncChannelError<E>),
 }
 
 /// Sync metrics emitted in event messages.
@@ -381,7 +379,7 @@ pub mod tests {
         let mut peer = Peer::new(0);
         peer.insert_topic(&topic, &HashMap::default());
 
-        let (session, events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
+        let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
         let remote_rx = run_protocol_uni(
             session,
@@ -393,26 +391,23 @@ pub mod tests {
         .await
         .unwrap();
 
-        let events = events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 5);
-        for (index, event) in events.into_iter().enumerate() {
-            match index {
-                0 => assert_matches!(event, TestTopicSyncEvent::SyncStarted(_)),
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_))
-                }
-                4 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
-                }
-                _ => panic!(),
-            };
-        }
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStarted(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncFinished(_)
+        );
+        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Closed);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 2);
@@ -445,7 +440,7 @@ pub mod tests {
         let logs = HashMap::from([(peer.id(), vec![log_id])]);
         peer.insert_topic(&topic, &logs);
 
-        let (session, events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
+        let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
         let remote_rx = run_protocol_uni(
             session,
@@ -457,28 +452,23 @@ pub mod tests {
         .await
         .unwrap();
 
-        let events = events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 5);
-        for (index, event) in events.into_iter().enumerate() {
-            match index {
-                0 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));
-                }
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_))
-                }
-                4 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
-                }
-                _ => panic!(),
-            };
-        }
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStarted(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncFinished(_)
+        );
+        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Closed);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 6);
@@ -556,81 +546,75 @@ pub mod tests {
         let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
         peer_a.insert_topic(&topic, &logs);
 
-        let (peer_a_session, peer_a_events_rx, _) =
+        let (peer_a_session, mut peer_a_events_rx, _) =
             peer_a.topic_sync_protocol(topic.clone(), false);
 
-        let (peer_b_session, peer_b_events_rx, _) =
+        let (peer_b_session, mut peer_b_events_rx, _) =
             peer_b.topic_sync_protocol(topic.clone(), false);
 
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
-        let events = peer_a_events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 5);
-        for (index, event) in events.into_iter().enumerate() {
-            match index {
-                0 => assert_matches!(event, TestTopicSyncEvent::SyncStarted(_)),
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_));
-                }
-                4 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
-                }
-                _ => panic!(),
-            };
-        }
+        // Assert peer a events.
+        assert_matches!(
+            peer_a_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStarted(_)
+        );
+        assert_matches!(
+            peer_a_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            peer_a_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            peer_a_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncFinished(_)
+        );
+        assert_matches!(
+            peer_a_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::Closed
+        );
 
-        let events = peer_b_events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 8);
-        for (index, event) in events.into_iter().enumerate() {
-            match index {
-                0 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));
-                }
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_0);
-                    assert_eq!(body_inner.unwrap(), body);
-                }
-                4 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_1);
-                    assert_eq!(body_inner.unwrap(), body);
-                }
-                5 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_2);
-                    assert_eq!(body_inner.unwrap(), body);
-                }
-                6 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_));
-                }
-                7 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
-                }
-                _ => panic!(),
-            };
-        }
+        // Assert peer b events.
+        assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStarted(_)
+        );
+        assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncStatus(_)
+        );
+        let (header, body_inner) = assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+        );
+        assert_eq!(header, header_0);
+        assert_eq!(body_inner.unwrap(), body);
+        let (header, body_inner) = assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+        );
+        assert_eq!(header, header_1);
+        assert_eq!(body_inner.unwrap(), body);
+        let (header, body_inner) = assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+        );
+        assert_eq!(header, header_2);
+        assert_eq!(body_inner.unwrap(), body);
+        assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::SyncFinished(_)
+        );
+        assert_matches!(
+            peer_b_events_rx.recv().await.unwrap(),
+            TestTopicSyncEvent::Closed
+        );
     }
 
     #[tokio::test]
@@ -656,7 +640,7 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, mut live_mode_tx) =
+        let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
@@ -690,9 +674,8 @@ pub mod tests {
         .await
         .unwrap();
 
-        let events = events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 9);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=8 {
+            let event = events_rx.recv().await.unwrap();
             match index {
                 0 => {
                     assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));
@@ -782,7 +765,7 @@ pub mod tests {
         let expected_live_mode_bytes_sent =
             header_2.payload_size + header_2.to_bytes().len() as u64;
 
-        let (protocol, events_rx, mut live_mode_tx) =
+        let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
@@ -831,9 +814,8 @@ pub mod tests {
         .await
         .unwrap();
 
-        let events = events_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 9);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=8 {
+            let event = events_rx.recv().await.unwrap();
             match index {
                 0 => {
                     assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));

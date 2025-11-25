@@ -111,7 +111,7 @@ where
         let (actor_namespace, topic, config, sender) = args;
         let pool = ThreadLocalActorSpawner::new();
 
-        let manager = M::from_config(config);
+        let mut manager = M::from_config(config);
         let event_stream = manager.subscribe();
 
         // The sync poller actor lives as long as the manager and only terminates due to the

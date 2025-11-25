@@ -46,5 +46,5 @@ pub trait SyncManager<T> {
     ) -> impl Future<Output = Option<Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>>>;
 
     /// Subscribe to the manager event stream.
-    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static;
+    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static;
 }
