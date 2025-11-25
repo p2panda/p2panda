@@ -115,7 +115,7 @@ where
         let event_stream = manager.subscribe();
 
         // The sync poller actor lives as long as the manager and only terminates due to the
-        // manager actor itself terminating. Therefore no supervision is required.
+        // manager actor itself terminating.
         let (sync_poller_actor, _) = SyncPoller::spawn(
             None,
             (actor_namespace.clone(), event_stream, sender),
@@ -274,6 +274,7 @@ where
         Ok(())
     }
 
+    // Handle supervision events from sync session and poller actors.
     async fn handle_supervisor_evt(
         &self,
         _myself: ActorRef<Self::Msg>,
@@ -282,14 +283,22 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match message {
             SupervisionEvent::ActorTerminated(actor, _, _) => {
-                let name = SyncSessionName::from_actor_cell(&actor);
-                debug!("sync session {} terminated", name.session_id);
-                Self::drop_session(state, name.session_id);
+                if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
+                    debug!(%name.session_id, topic = state.topic.fmt_short(), "sync session terminated");
+                    Self::drop_session(state, name.session_id);
+                } else {
+                    let actor_id = actor.get_id();
+                    debug!(%actor_id, topic = state.topic.fmt_short(), "sync poller terminated");
+                }
             }
             SupervisionEvent::ActorFailed(actor, err) => {
-                let name = SyncSessionName::from_actor_cell(&actor);
-                warn!("sync session {} failed: {}", name.session_id, err);
-                Self::drop_session(state, name.session_id);
+                if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
+                    warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
+                    Self::drop_session(state, name.session_id);
+                } else {
+                    let actor_id = actor.get_id();
+                    warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
+                }
             }
             _ => (),
         }
