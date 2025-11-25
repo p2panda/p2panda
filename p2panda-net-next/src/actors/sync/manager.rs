@@ -293,10 +293,12 @@ where
             }
             SupervisionEvent::ActorFailed(actor, err) => {
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
+                    println!("{err:?}");
                     warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
                     Self::drop_session(state, name.session_id);
                 } else {
                     let actor_id = actor.get_id();
+                    println!("{err:?}");
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
                 }
             }

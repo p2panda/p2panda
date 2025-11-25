@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
+use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Body, Operation};
 use p2panda_discovery::address_book::AddressBookStore as _;
 use p2panda_sync::FromSync;
@@ -730,4 +731,134 @@ async fn e2e_topic_log_sync_three_party() {
             ..
         }
     );
+}
+
+#[tokio::test]
+async fn send_many_messages() {
+    setup_logging();
+    const TOPIC_ID: [u8; 32] = [0; 32];
+    const LOG_ID: u64 = 0;
+
+    // Setup Alice's app logic.
+    let mut alice_app = {
+        // @NOTE: In these tests the "app" layer where the p2panda identity lives has a different
+        // private key from the node.
+        let mut app = App::new(0);
+        let logs = HashMap::from([(app.id(), vec![LOG_ID])]);
+        app.insert_topic(&TOPIC_ID, &logs);
+        app
+    };
+
+    // Setup Bob's app logic.
+    let mut bob_app = {
+        let mut app = App::new(1);
+        let logs = HashMap::from([(app.id(), vec![LOG_ID])]);
+        app.insert_topic(&TOPIC_ID, &logs);
+        app
+    };
+
+    // Setup Bob's node.
+    let mut bob: TestNode<TestTopicSyncManager> =
+        TestNode::spawn([17; 32], vec![], bob_app.sync_config()).await;
+
+    // Setup Alice's node.
+    let alice: TestNode<TestTopicSyncManager> = TestNode::spawn(
+        [18; 32],
+        vec![generate_node_info(&mut bob.args)],
+        alice_app.sync_config(),
+    )
+    .await;
+
+    // Create Alice's stream.
+    let alice_stream = call!(
+        alice.stream_ref,
+        ToEventuallyConsistentStreams::Create,
+        TOPIC_ID,
+        true
+    )
+    .unwrap();
+
+    // Create Bob's stream.
+    let bob_stream = call!(
+        bob.stream_ref,
+        ToEventuallyConsistentStreams::Create,
+        TOPIC_ID,
+        true
+    )
+    .unwrap();
+
+    // Subscribe to both streams.
+    let mut alice_subscription = alice_stream.subscribe().await.unwrap();
+    let mut bob_subscription = bob_stream.subscribe().await.unwrap();
+
+    // Alice initiates sync.
+    alice
+        .stream_ref
+        .cast(ToEventuallyConsistentStreams::InitiateSync(
+            TOPIC_ID,
+            bob.node_id(),
+        ))
+        .unwrap();
+
+    const TOTAL_OPERATIONS: u64 = 100;
+
+    tokio::task::spawn(async move {
+        println!("Alice publishes messages");
+        for i in 0..TOTAL_OPERATIONS {
+            let body = Body::new(&encode_cbor(&i).unwrap());
+            let (header, _) = alice_app.create_operation(&body, LOG_ID).await;
+            let result = alice_stream
+                .publish(Operation {
+                    hash: header.hash(),
+                    header: header.clone(),
+                    body: Some(body.clone()),
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        }
+    });
+
+    tokio::task::spawn(async move {
+        println!("Bob publishes messages");
+        for i in 0..TOTAL_OPERATIONS {
+            let body = Body::new(&encode_cbor(&i).unwrap());
+            let (header, _) = bob_app.create_operation(&body, LOG_ID).await;
+            let result = bob_stream
+                .publish(Operation {
+                    hash: header.hash(),
+                    header: header.clone(),
+                    body: Some(body.clone()),
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+        }
+    });
+
+    let mut index_a = 0;
+    let mut index_b = 0;
+    let alice_received_protocol_messages = TOTAL_OPERATIONS + 6;
+    let bob_received_protocol_messages = TOTAL_OPERATIONS + 6;
+    loop {
+        tokio::select! {
+            event = alice_subscription.recv() => {
+                index_a += 1;
+                println!("message {index_a} on stream a");
+            }
+            event = bob_subscription.recv() => {
+                index_b += 1;
+                println!("message {index_b} on stream b");
+            }
+        }
+        if index_a > alice_received_protocol_messages || index_b > bob_received_protocol_messages {
+            panic!("more messages than we expected");
+        }
+
+        if index_a == alice_received_protocol_messages && index_b == bob_received_protocol_messages
+        {
+            break;
+        }
+    }
+
+    alice.shutdown();
+    bob.shutdown();
 }
