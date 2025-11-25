@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::future::ready;
-use futures::stream::{Map, SelectAll};
+use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Extensions, Operation, PublicKey};
 use p2panda_store::{LogId, LogStore, OperationStore};
@@ -28,6 +28,7 @@ use crate::{FromSync, SyncSessionConfig, ToSync};
 static CHANNEL_BUFFER: usize = 1028;
 
 pub trait StreamDebug<Item>: Stream<Item = Item> + Send + Debug + 'static {}
+
 impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debug + 'static {}
 
 /// Create and manage topic log sync sessions.
@@ -178,19 +179,22 @@ where
 
         let mut session_rx_set = SelectAll::new();
         for ((id, remote), tx) in self.from_session_tx.iter() {
-            let session_id = id.clone();
-            let remote = remote.clone();
+            let session_id = *id;
+            let remote = *remote;
             let stream = BroadcastStream::new(tx.subscribe());
-            let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>> =
-                Box::pin(stream.map(Box::new(
-                    move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
-                        event.ok().map(|event| FromSync {
-                            session_id,
-                            remote,
-                            event,
-                        })
-                    },
-                )));
+
+            #[allow(clippy::type_complexity)]
+            let stream: Pin<
+                Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>,
+            > = Box::pin(stream.map(Box::new(
+                move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
+                    event.ok().map(|event| FromSync {
+                        session_id,
+                        remote,
+                        event,
+                    })
+                },
+            )));
             session_rx_set.push(stream);
         }
 
@@ -209,6 +213,7 @@ where
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub struct ManagerEventStreamState<T, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -273,6 +278,8 @@ where
                     .insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
 
                     let stream = BroadcastStream::new(manager_event.event_rx);
+
+                    #[allow(clippy::type_complexity)]
                     let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>> =
                         Box::pin(stream.map(Box::new(
                             move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
