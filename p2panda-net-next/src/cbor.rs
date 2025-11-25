@@ -188,9 +188,15 @@ impl From<std::io::Error> for CborCodecError {
 
 #[cfg(test)]
 mod tests {
-    use futures_util::{FutureExt, StreamExt};
+    use futures_util::{FutureExt, SinkExt, StreamExt};
+    use p2panda_core::{Body, Hash, Header, PrivateKey};
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::FramedRead;
+
+    use crate::{
+        cbor::{into_cbor_sink, into_cbor_stream},
+        utils::current_timestamp,
+    };
 
     use super::CborCodec;
 
@@ -256,5 +262,61 @@ mod tests {
 
         let message = stream.next().await;
         assert_eq!(message.unwrap().unwrap(), "hello".to_string());
+    }
+
+    #[tokio::test]
+    async fn operations_stream() {
+        type Payload = (Header<()>, Option<Body>);
+
+        fn create_operation(
+            private_key: &PrivateKey,
+            body: &[u8],
+            seq_num: u64,
+            backlink: Option<Hash>,
+        ) -> Payload {
+            let body = Body::from(body);
+            let mut header = Header {
+                version: 1,
+                public_key: private_key.public_key(),
+                signature: None,
+                payload_size: body.size(),
+                payload_hash: Some(body.hash()),
+                timestamp: current_timestamp(),
+                seq_num,
+                backlink,
+                previous: vec![],
+                extensions: (),
+            };
+            header.sign(private_key);
+            (header, Some(body))
+        }
+
+        let (tx_inner, rx_inner) = tokio::io::duplex(64);
+
+        let mut tx = into_cbor_sink::<Payload, _>(tx_inner);
+        let mut rx = into_cbor_stream::<Payload, _>(rx_inner);
+
+        tokio::task::spawn(async move {
+            let private_key = PrivateKey::new();
+
+            let mut seq_num = 0;
+            let mut backlink = None;
+
+            for _ in 0..100 {
+                let (header, body) = create_operation(&private_key, b"Hello", seq_num, backlink);
+                seq_num += 1;
+                backlink = Some(header.hash());
+
+                tx.send((header, body)).await.unwrap();
+            }
+        });
+
+        loop {
+            if let Some(message) = rx.next().await {
+                if let Err(err) = message {
+                    panic!("{err}");
+                }
+            }
+        }
     }
 }
