@@ -12,6 +12,7 @@ use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
+use tracing::{debug, warn};
 
 use crate::log_sync::{
     LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncProtocol, Logs, StatusEvent,
@@ -148,6 +149,7 @@ where
 
                                 metrics.bytes_sent += operation.header.to_bytes().len()  as u64 + operation.header.payload_size;
                                 metrics.operations_sent += 1;
+
                                 sink.send(TopicLogSyncMessage::Live(operation.header.clone(), operation.body.clone()))
                                     .await
                                     .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
@@ -160,33 +162,41 @@ where
                         };
                     }
                     message = stream.next() => {
-                        let Some(Ok(message))= message else {
-                            // Either the stream returned None or there was an error reading from
-                            // it. In both cases it signals that the remote closed the stream.
+                        let Some(message) = message else {
+                            debug!("remote closed the stream");
                             break;
                         };
 
-                        if let TopicLogSyncMessage::Close = message {
-                            // We received the remotes close message and should close the
-                            // connection ourselves.
-                            break;
-                        };
+                        match message {
+                            Ok(message) => {
+                                if let TopicLogSyncMessage::Close = message {
+                                    // We received the remotes close message and should close the
+                                    // connection ourselves.
+                                    debug!("received close message from remote");
+                                    break;
+                                };
 
-                        let TopicLogSyncMessage::Live(header, body) = message else {
-                            return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
-                        };
+                                let TopicLogSyncMessage::Live(header, body) = message else {
+                                    return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
+                                };
 
-                        // @TODO: check that this message is a part of our topic T set.
+                                // @TODO: check that this message is a part of our topic T set.
 
-                        // Insert operation hash into deduplication buffer and if it was
-                        // previously present do not forward the operation to the application layer.
-                        if !dedup.insert(header.hash()) {
-                            continue;
+                                // Insert operation hash into deduplication buffer and if it was
+                                // previously present do not forward the operation to the application layer.
+                                if !dedup.insert(header.hash()) {
+                                    continue;
+                                }
+
+                                metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
+                                metrics.operations_received += 1;
+                                self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
+                            },
+                            Err(err) => {
+                                warn!("error in live-mode: {err:#?}");
+                            },
                         }
 
-                        metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
-                        metrics.operations_received += 1;
-                        self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
                     }
                 }
             }
