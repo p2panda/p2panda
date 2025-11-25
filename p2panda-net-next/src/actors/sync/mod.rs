@@ -25,19 +25,25 @@ impl SyncSessionName {
         Self { session_id }
     }
 
-    fn from_string(name: &str) -> Self {
+    fn from_string(name: &str) -> Option<Self> {
         let name = without_namespace(name);
         if name.contains(SYNC_SESSION) {
-            Self {
+            Some(Self {
                 session_id: Self::extract_id(name),
-            }
+            })
         } else {
-            unreachable!("actor name must be sync session")
+            // The actor is not a sync session.
+            None
         }
     }
 
-    pub fn from_actor_cell(actor_cell: &ActorCell) -> Self {
-        Self::from_string(&actor_cell.get_name().expect("actor needs to have a name"))
+    pub fn from_actor_cell(actor_cell: &ActorCell) -> Option<Self> {
+        if let Some(name) = &actor_cell.get_name() {
+            Self::from_string(name)
+        } else {
+            // The actor is not named.
+            None
+        }
     }
 
     fn extract_id(actor_name: &str) -> u64 {

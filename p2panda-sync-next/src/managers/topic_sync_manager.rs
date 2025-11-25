@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::future::ready;
-use futures::stream::{Map, SelectAll};
+use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Operation};
+use p2panda_core::{Extensions, Operation, PublicKey};
 use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
 use crate::session_topic_map::SessionTopicMap;
@@ -23,25 +25,11 @@ use crate::topic_log_sync::{TopicLogMap, TopicLogSync, TopicLogSyncError, TopicL
 use crate::traits::SyncManager;
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
-type SessionEventReceiver<M> =
-    Map<mpsc::Receiver<M>, Box<dyn FnMut(M) -> FromSync<M> + Send + 'static>>;
+static CHANNEL_BUFFER: usize = 1028;
 
-#[derive(Debug)]
-pub struct TopicSyncManagerInner<T, E> {
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
-    pub(crate) events_rx_set: SelectAll<SessionEventReceiver<TopicLogSyncEvent<E>>>,
-    pub(crate) manager_output_queue: Vec<FromSync<TopicLogSyncEvent<E>>>,
-}
+pub trait StreamDebug<Item>: Stream<Item = Item> + Send + Debug + 'static {}
 
-impl<T, E> Default for TopicSyncManagerInner<T, E> {
-    fn default() -> Self {
-        Self {
-            session_topic_map: Default::default(),
-            events_rx_set: Default::default(),
-            manager_output_queue: Default::default(),
-        }
-    }
-}
+impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debug + 'static {}
 
 /// Create and manage topic log sync sessions.
 ///
@@ -56,24 +44,49 @@ impl<T, E> Default for TopicSyncManagerInner<T, E> {
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
 /// any topic subscriptions in order to understand the correct mappings.  
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 #[allow(clippy::type_complexity)]
-pub struct TopicSyncManager<T, S, M, L, E> {
+pub struct TopicSyncManager<T, S, M, L, E>
+where
+    T: Clone,
+    E: Clone,
+{
     pub(crate) topic_map: M,
     pub(crate) store: S,
-    pub(crate) inner: Arc<Mutex<TopicSyncManagerInner<T, E>>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
+    pub(crate) from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
+    pub(crate) from_session_rx:
+        HashMap<(u64, PublicKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
+    pub(crate) manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
     _phantom: PhantomData<L>,
+}
+
+#[derive(Debug)]
+pub struct SessionStream<T, E>
+where
+    T: Clone,
+    E: Clone,
+{
+    pub session_id: u64,
+    pub topic: T,
+    pub remote: PublicKey,
+    pub event_rx: broadcast::Receiver<TopicLogSyncEvent<E>>,
+    pub live_tx: mpsc::Sender<ToSync<Operation<E>>>,
 }
 
 impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
 where
+    T: Clone,
     E: Clone,
 {
     pub fn new(topic_map: M, store: S) -> Self {
         Self {
             topic_map,
             store,
-            inner: Arc::new(Mutex::new(Default::default())),
+            manager_tx: Default::default(),
+            session_topic_map: Default::default(),
+            from_session_tx: Default::default(),
+            from_session_rx: Default::default(),
             _phantom: PhantomData,
         }
     }
@@ -98,22 +111,32 @@ where
     }
 
     async fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
-        let (live_tx, live_rx) = mpsc::channel(128);
-        let (event_tx, event_rx) = mpsc::channel(128);
-        let remote = config.remote;
+        let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
+        let (event_tx, event_rx) = broadcast::channel::<TopicLogSyncEvent<E>>(CHANNEL_BUFFER);
 
-        {
-            let mut inner = self.inner.lock().await;
-            inner
-                .session_topic_map
-                .insert_with_topic(session_id, config.topic.clone(), live_tx);
-            inner
-                .events_rx_set
-                .push(event_rx.map(Box::new(move |event| FromSync {
+        self.from_session_tx
+            .insert((session_id, config.remote), event_tx.clone());
+
+        self.from_session_rx
+            .insert((session_id, config.remote), event_rx);
+
+        self.session_topic_map
+            .insert_with_topic(session_id, config.topic.clone(), live_tx.clone());
+
+        for manager_tx in self.manager_tx.iter_mut() {
+            if manager_tx
+                .send(SessionStream {
                     session_id,
-                    remote,
-                    event,
-                })));
+                    topic: config.topic.clone(),
+                    remote: config.remote,
+                    event_rx: event_tx.subscribe(),
+                    live_tx: live_tx.clone(),
+                })
+                .await
+                .is_err()
+            {
+                debug!("manager handle dropped");
+            };
         }
 
         let live_rx = if config.live_mode {
@@ -144,16 +167,45 @@ where
             })
         };
 
-        let inner = self.inner.lock().await;
-        inner.session_topic_map.sender(session_id).map(|tx| {
+        self.session_topic_map.sender(session_id).map(|tx| {
             Box::pin(tx.clone().with(map_fn))
                 as Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>
         })
     }
 
-    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
+    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
+        let (manager_tx, manager_rx) = mpsc::channel(CHANNEL_BUFFER);
+        self.manager_tx.push(manager_tx);
+
+        let mut session_rx_set = SelectAll::new();
+        for ((id, remote), tx) in self.from_session_tx.iter() {
+            let session_id = *id;
+            let remote = *remote;
+            let stream = BroadcastStream::new(tx.subscribe());
+
+            #[allow(clippy::type_complexity)]
+            let stream: Pin<
+                Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>,
+            > = Box::pin(stream.map(Box::new(
+                move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
+                    event.ok().map(|event| FromSync {
+                        session_id,
+                        remote,
+                        event,
+                    })
+                },
+            )));
+            session_rx_set.push(stream);
+        }
+
+        let state = ManagerEventStreamState {
+            manager_rx,
+            session_rx_set,
+            session_topic_map: self.session_topic_map.clone(),
+        };
+
         let stream = ManagerEventStream {
-            state: self.inner.clone(),
+            state: Some(state),
             pending: Default::default(),
         };
 
@@ -161,21 +213,44 @@ where
     }
 }
 
+#[allow(clippy::type_complexity)]
+pub struct ManagerEventStreamState<T, E>
+where
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    E: Extensions + Send + 'static,
+{
+    manager_rx: mpsc::Receiver<SessionStream<T, E>>,
+
+    session_rx_set: SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
+
+    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
+}
+
 /// Event stream for a manager returned from SyncManager::subscribe().
 ///
-/// This stream must be polled in order for the manager to perform work based on events received
-/// from running sync sessions.
+/// This stream must be polled in order for the manager to forward live mode events onto
+/// concurrently running sync sessions.
 #[allow(clippy::type_complexity)]
 pub struct ManagerEventStream<T, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     E: Extensions + Send + 'static,
 {
-    /// Internal state shared with the manager.
-    state: Arc<Mutex<TopicSyncManagerInner<T, E>>>,
+    state: Option<ManagerEventStreamState<T, E>>,
 
     /// The current future being polled.
-    pending: Option<Pin<Box<dyn Future<Output = Option<FromSync<TopicLogSyncEvent<E>>>> + Send>>>,
+    pending: Option<
+        Pin<
+            Box<
+                dyn Future<
+                        Output = (
+                            ManagerEventStreamState<T, E>,
+                            Option<FromSync<TopicLogSyncEvent<E>>>,
+                        ),
+                    > + Send,
+            >,
+        >,
+    >,
 }
 
 impl<T, E> ManagerEventStream<T, E>
@@ -184,61 +259,86 @@ where
     E: Extensions + Send + 'static,
 {
     async fn next_event(
-        state: Arc<Mutex<TopicSyncManagerInner<T, E>>>,
-    ) -> Option<FromSync<TopicLogSyncEvent<E>>> {
-        let mut state = state.lock().await;
+        mut state: ManagerEventStreamState<T, E>,
+    ) -> (
+        ManagerEventStreamState<T, E>,
+        Option<FromSync<TopicLogSyncEvent<E>>>,
+    ) {
+        loop {
+            tokio::select!(
+                biased;
+                item = state.manager_rx.next() => {
+                    let Some(manager_event) = item else {
+                        debug!("manager event stream closed");
+                        return (state, None)
+                    };
+                    debug!("manager event received: {manager_event:?}");
+                    let session_id = manager_event.session_id;
+                    state.session_topic_map
+                    .insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
 
-        if let Some(manager_event) = state.manager_output_queue.pop() {
-            return Some(manager_event);
-        }
+                    let stream = BroadcastStream::new(manager_event.event_rx);
 
-        let manager_event = match state.events_rx_set.next().await {
-            Some(ev) => ev,
-            None => return None,
-        };
-
-        let session_id = manager_event.session_id();
-        let event = manager_event.event();
-
-        let operation = match event {
-            TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
-            _ => return Some(manager_event),
-        };
-
-        if let Some(operation) = operation {
-            let Some(topic) = state.session_topic_map.topic(session_id) else {
-                debug!("session {session_id} not found");
-                state.session_topic_map.drop(session_id);
-                return None;
-            };
-            let keys = state.session_topic_map.sessions(topic);
-            let mut dropped = vec![];
-
-            for id in keys {
-                if id == session_id {
-                    continue;
+                    #[allow(clippy::type_complexity)]
+                    let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>> =
+                        Box::pin(stream.map(Box::new(
+                            move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
+                                event.ok().map(|event| FromSync {
+                                    session_id,
+                                    remote: manager_event.remote,
+                                    event,
+                                })
+                            },
+                        )));
+                    state.session_rx_set.push(stream);
                 }
+                Some(Some(from_sync)) = state.session_rx_set.next() => {
+                    debug!("from sync event received: {from_sync:?}");
+                    let session_id = from_sync.session_id();
+                    let event = from_sync.event();
 
-                let Some(tx) = state.session_topic_map.sender_mut(id) else {
-                    debug!("session {id} channel unexpectedly closed");
-                    state.session_topic_map.drop(session_id);
-                    continue;
-                };
+                    let operation = match event {
+                        TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
+                        _ => return (state, Some(from_sync)),
+                    };
 
-                let result = tx.send(ToSync::Payload(operation.clone())).await;
+                    if let Some(operation) = operation {
+                        let Some(topic) = state.session_topic_map.topic(session_id) else {
+                            debug!("session {session_id} not found");
+                            state.session_topic_map.drop(session_id);
+                            continue;
+                        };
+                        let keys = state.session_topic_map.sessions(topic);
+                        let mut dropped = vec![];
 
-                if result.is_err() {
-                    debug!("failed sending message on session channel");
-                    dropped.push(id);
+                        for id in keys {
+                            if id == session_id {
+                                continue;
+                            }
+
+                            let Some(tx) = state.session_topic_map.sender_mut(id) else {
+                                debug!("session {id} channel unexpectedly closed");
+                                state.session_topic_map.drop(session_id);
+                                continue;
+                            };
+
+                            let result = tx.send(ToSync::Payload(operation.clone())).await;
+
+                            if result.is_err() {
+                                debug!("failed sending message on session channel");
+                                dropped.push(id);
+                            }
+                        }
+
+                        for id in dropped {
+                            state.session_topic_map.drop(id);
+                        }
+                    }
+
+                    return (state, Some(from_sync))
                 }
-            }
-
-            for id in dropped {
-                state.session_topic_map.drop(id);
-            }
+            )
         }
-
-        Some(manager_event)
     }
 }
 
@@ -258,16 +358,18 @@ where
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if self.pending.is_none() {
-            let state = self.state.clone();
-            let fut = Box::pin(ManagerEventStream::<T, E>::next_event(state));
+            let fut = Box::pin(ManagerEventStream::next_event(
+                self.state.take().expect("state is not None"),
+            ));
             self.pending = Some(fut);
         }
 
         let fut = self.pending.as_mut().unwrap();
         match fut.as_mut().poll(cx) {
             Poll::Pending => Poll::Pending,
-            Poll::Ready(item) => {
+            Poll::Ready((state, item)) => {
                 self.pending = None;
+                self.state.replace(state);
                 Poll::Ready(item)
             }
         }
@@ -305,7 +407,7 @@ mod tests {
     use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
     use crate::test_utils::{
         Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
-        drain_stream, run_protocol,
+        drain_stream, run_protocol, setup_logging,
     };
     use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
@@ -321,6 +423,8 @@ mod tests {
 
     #[tokio::test]
     async fn manager_e2e() {
+        setup_logging();
+
         const TOPIC_NAME: &str = "messages";
         const LOG_ID: u64 = 0;
         const SESSION_ID: u64 = 0;
@@ -351,6 +455,12 @@ mod tests {
             remote: peer_b.id(),
             live_mode: true,
         };
+
+        // Subscribe to both managers.
+        let mut event_stream_a = peer_a_manager.subscribe();
+        let mut event_stream_b = peer_b_manager.subscribe();
+
+        // Instantiate sync session for Peer A.
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
         // Instantiate sync session for Peer B.
@@ -375,10 +485,8 @@ mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert Peer A's events.
-        let event_stream = peer_a_manager.subscribe();
-        let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 8);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=7 {
+            let event = event_stream_a.next().await.unwrap();
             assert_eq!(event.session_id(), 0);
             match index {
                 0 => assert_matches!(
@@ -435,10 +543,8 @@ mod tests {
         }
 
         // Assert Peer B's events.
-        let event_stream = peer_b_manager.subscribe();
-        let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 9);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=8 {
+            let event = event_stream_b.next().await.unwrap();
             match index {
                 0 => assert_matches!(
                     event,
@@ -564,6 +670,10 @@ mod tests {
         config.remote = peer_a.id();
         let session_c = manager_c.session(SESSION_CA, &config).await;
 
+        let mut event_stream_a = manager_a.subscribe();
+        let mut event_stream_b = manager_b.subscribe();
+        let mut event_stream_c = manager_c.subscribe();
+
         // Run both protocols concurrently
         tokio::spawn(async move {
             run_protocol(session_ab, session_b).await.unwrap();
@@ -613,9 +723,6 @@ mod tests {
         let mut operations_a = vec![];
         let mut operations_b = vec![];
         let mut operations_c = vec![];
-        let mut event_stream_a = manager_a.subscribe();
-        let mut event_stream_b = manager_b.subscribe();
-        let mut event_stream_c = manager_c.subscribe();
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
             loop {
                 tokio::select! {
@@ -708,9 +815,11 @@ mod tests {
             remote: peer_b.id(),
             live_mode: true,
         };
+
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
         // Instantiate sync session for Peer B.
+        let event_stream = peer_b_manager.subscribe();
         let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
 
         // Get a handle to Peer A sync session.
@@ -732,7 +841,6 @@ mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert Peer B's events.
-        let event_stream = peer_b_manager.subscribe();
         let events = drain_stream(event_stream).await;
         assert_eq!(events.len(), 9);
         for (index, event) in events.into_iter().enumerate() {

@@ -343,7 +343,7 @@ impl SyncManager<TopicId> for NoSyncManager {
         Some(sink)
     }
 
-    fn subscribe(&self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
+    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let stream = BroadcastStream::new(self.event_tx.subscribe())
             .filter_map(|event| async { event.ok() });
         Box::pin(stream)

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::{Body, Extensions, Hash, Header, Operation, PublicKey};
@@ -12,6 +11,7 @@ use p2panda_store::{LogId, LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
+use tokio::sync::broadcast;
 
 use crate::traits::Protocol;
 use crate::{DEFAULT_BUFFER_CAPACITY, Dedup};
@@ -60,20 +60,20 @@ pub struct LogSyncProtocol<L, E, S, Evt> {
     state: State,
     logs: Logs<L>,
     store: S,
-    event_tx: mpsc::Sender<Evt>,
+    event_tx: broadcast::Sender<Evt>,
     buffer_capacity: usize,
     _marker: PhantomData<E>,
 }
 
 impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
-    pub fn new(store: S, logs: Logs<L>, event_tx: mpsc::Sender<Evt>) -> Self {
+    pub fn new(store: S, logs: Logs<L>, event_tx: broadcast::Sender<Evt>) -> Self {
         Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
     }
 
     pub fn new_with_capacity(
         store: S,
         logs: Logs<L>,
-        event_tx: mpsc::Sender<Evt>,
+        event_tx: broadcast::Sender<Evt>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
@@ -92,9 +92,9 @@ where
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
     E: Extensions + Send + Sync + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
-    Evt: From<LogSyncEvent<E>>,
+    Evt: From<LogSyncEvent<E>> + Debug + Send + Sync + 'static,
 {
-    type Error = LogSyncError<L>;
+    type Error = LogSyncError<L, Evt>;
     type Output = Dedup<Hash>;
     type Message = LogSyncMessage<L>;
 
@@ -111,14 +111,12 @@ where
             match self.state {
                 State::Start => {
                     let metrics = LogSyncMetrics::default();
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(StatusEvent::Started {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .await?;
+                    self.event_tx.send(
+                        LogSyncEvent::Status(StatusEvent::Started {
+                            metrics: metrics.clone(),
+                        })
+                        .into(),
+                    )?;
                     self.state = State::SendHave { metrics };
                 }
                 State::SendHave { metrics } => {
@@ -179,14 +177,12 @@ where
                             .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                     }
 
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(StatusEvent::Progress {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .await?;
+                    self.event_tx.send(
+                        LogSyncEvent::Status(StatusEvent::Progress {
+                            metrics: metrics.clone(),
+                        })
+                        .into(),
+                    )?;
 
                     self.state = State::ReceivePreSyncOrDone {
                         operations,
@@ -218,14 +214,12 @@ where
                         message => return Err(LogSyncError::UnexpectedMessage(message)),
                     }
 
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(StatusEvent::Progress {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .await?;
+                    self.event_tx.send(
+                        LogSyncEvent::Status(StatusEvent::Progress {
+                            metrics: metrics.clone(),
+                        })
+                        .into(),
+                    )?;
 
                     self.state = State::Sync {
                         operations,
@@ -272,7 +266,7 @@ where
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(LogSyncEvent::Data(Box::new(Operation { hash: header.hash(), header, body })).into())
-                                            .await?;
+                                            ?;
                                     },
                                     LogSyncMessage::Done => {
                                         sync_done_received = true;
@@ -308,30 +302,26 @@ where
                     self.state = State::End { metrics };
                 }
                 State::End { metrics } => {
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(StatusEvent::Completed {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .await?;
+                    self.event_tx.send(
+                        LogSyncEvent::Status(StatusEvent::Completed {
+                            metrics: metrics.clone(),
+                        })
+                        .into(),
+                    )?;
                     break;
                 }
             }
         }
-
-        self.event_tx.flush().await?;
 
         Ok(dedup)
     }
 }
 
 /// Return the local log heights of all passed logs.
-async fn local_log_heights<L, E, S>(
+async fn local_log_heights<L, E, S, Evt>(
     store: &S,
     logs: &Logs<L>,
-) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L>>
+) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L, Evt>>
 where
     L: LogId,
     S: LogStore<L, E> + OperationStore<L, E>,
@@ -357,11 +347,11 @@ where
 
 /// Compare the local log heights with the remote log heights for all given logs and return the
 /// hashes of all operations the remote needs, as well as the total bytes.
-async fn operations_needed_by_remote<L, E, S>(
+async fn operations_needed_by_remote<L, E, S, Evt>(
     store: &S,
     logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<Hash>, u64), LogSyncError<L>>
+) -> Result<(Vec<Hash>, u64), LogSyncError<L, Evt>>
 where
     L: LogId,
     E: Extensions,
@@ -493,7 +483,7 @@ pub enum StatusEvent {
 
 /// Protocol error types.
 #[derive(Debug, Error)]
-pub enum LogSyncError<L> {
+pub enum LogSyncError<L, Evt> {
     #[error(transparent)]
     Decode(#[from] DecodeError),
 
@@ -504,7 +494,7 @@ pub enum LogSyncError<L> {
     OperationStore(String),
 
     #[error(transparent)]
-    MpscSend(#[from] mpsc::SendError),
+    BroadcastSend(#[from] broadcast::error::SendError<Evt>),
 
     #[error("log sync error sending on message sink: {0}")]
     MessageSink(String),
@@ -534,7 +524,7 @@ mod tests {
     async fn log_sync_no_operations() {
         let mut peer: Peer = Peer::new(0);
 
-        let (session, event_rx) = peer.log_sync_protocol(&Logs::default());
+        let (session, mut event_rx) = peer.log_sync_protocol(&Logs::default());
         let remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
@@ -542,9 +532,8 @@ mod tests {
         .await
         .unwrap();
 
-        let events = event_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 4);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=3 {
+            let event = event_rx.recv().await.unwrap();
             match index {
                 0 => {
                     let (total_operations, total_bytes) = assert_matches!(
@@ -613,7 +602,7 @@ mod tests {
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![log_id]);
 
-        let (session, event_rx) = peer.log_sync_protocol(&logs);
+        let (session, mut event_rx) = peer.log_sync_protocol(&logs);
         let remote_message_rx = run_protocol_uni(
             session,
             &[TestLogSyncMessage::Have(vec![]), TestLogSyncMessage::Done],
@@ -628,9 +617,8 @@ mod tests {
             + header_2.payload_size
             + header_bytes_2.len() as u64;
 
-        let events = event_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 4);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=3 {
+            let event = event_rx.recv().await.unwrap();
             match index {
                 0 => {
                     assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. }));
@@ -737,14 +725,13 @@ mod tests {
         logs.insert(peer_a.id(), vec![LOG_ID]);
         logs.insert(peer_b.id(), vec![LOG_ID]);
 
-        let (a_session, peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
-        let (b_session, peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
+        let (a_session, mut peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
+        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
 
         run_protocol(a_session, b_session).await.unwrap();
 
-        let events = peer_a_event_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 6);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=5 {
+            let event = peer_a_event_rx.recv().await.unwrap();
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
@@ -773,9 +760,8 @@ mod tests {
             }
         }
 
-        let events = peer_b_event_rx.collect::<Vec<_>>().await;
-        assert_eq!(events.len(), 6);
-        for (index, event) in events.into_iter().enumerate() {
+        for index in 0..=5 {
+            let event = peer_b_event_rx.recv().await.unwrap();
             match index {
                 0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
                 1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
