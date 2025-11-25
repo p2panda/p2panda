@@ -18,7 +18,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::session_topic_map::SessionTopicMap;
 use crate::topic_log_sync::{TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
@@ -187,12 +187,16 @@ where
             let stream: Pin<
                 Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>,
             > = Box::pin(stream.map(Box::new(
-                move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
-                    event.ok().map(|event| FromSync {
+                move |result: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| match result {
+                    Ok(event) => Some(FromSync {
                         session_id,
                         remote,
                         event,
-                    })
+                    }),
+                    Err(err) => {
+                        warn!("{err:?}");
+                        None
+                    }
                 },
             )));
             session_rx_set.push(stream);
@@ -293,7 +297,7 @@ where
                     state.session_rx_set.push(stream);
                 }
                 Some(Some(from_sync)) = state.session_rx_set.next() => {
-                    debug!("from sync event received: {from_sync:?}");
+                    // debug!("from sync event received in manager stream: {from_sync:?}");
                     let session_id = from_sync.session_id();
                     let event = from_sync.event();
 
@@ -401,6 +405,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use futures::{SinkExt, StreamExt};
+    use p2panda_core::cbor::encode_cbor;
     use p2panda_core::{Body, Operation};
 
     use crate::TopicSyncManager;
@@ -907,6 +912,115 @@ mod tests {
                     }
                 ),
                 _ => panic!(),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn many_messages() {
+        setup_logging();
+
+        const TOPIC_NAME: &str = "messages";
+        const LOG_ID: u64 = 0;
+        const SESSION_ID: u64 = 0;
+
+        let topic = TestTopic::new(TOPIC_NAME);
+
+        // Setup Peer A
+        let mut peer_a = Peer::new(0);
+        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.insert_topic(&topic, &logs);
+        let mut peer_a_manager =
+            TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+
+        // Setup Peer B
+        let mut peer_b = Peer::new(1);
+        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.insert_topic(&topic, &logs);
+        let mut peer_b_manager =
+            TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+
+        // Instantiate sync session for Peer A.
+        let config = SyncSessionConfig {
+            topic,
+            remote: peer_b.id(),
+            live_mode: true,
+        };
+
+        // Subscribe to both managers.
+        let mut event_stream_a = peer_a_manager.subscribe();
+        let mut event_stream_b = peer_b_manager.subscribe();
+
+        // Instantiate sync session for Peer A.
+        let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
+
+        // Instantiate sync session for Peer B.
+        let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
+
+        // Get a handle to Peer A sync session.
+        let mut peer_a_handle = peer_a_manager.session_handle(SESSION_ID).await.unwrap();
+        let mut peer_b_handle = peer_b_manager.session_handle(SESSION_ID).await.unwrap();
+
+        const TOTAL_OPERATIONS: u64 = 1000;
+
+        // Peer A sends many live mode messages.
+        println!("publish operations on a");
+        for i in 0..TOTAL_OPERATIONS {
+            let body = Body::new(&encode_cbor(&i).unwrap());
+            let (header, _) = peer_a.create_operation(&body, LOG_ID).await;
+            peer_a_handle
+                .send(ToSync::Payload(Operation {
+                    hash: header.hash(),
+                    header: header.clone(),
+                    body: Some(body.clone()),
+                }))
+                .await
+                .unwrap();
+        }
+
+        peer_a_handle.send(ToSync::Close).await.unwrap();
+
+        println!("publish operations on b");
+        for i in 0..TOTAL_OPERATIONS {
+            let body = Body::new(&encode_cbor(&i).unwrap());
+            let (header, _) = peer_b.create_operation(&body, LOG_ID).await;
+            peer_b_handle
+                .send(ToSync::Payload(Operation {
+                    hash: header.hash(),
+                    header: header.clone(),
+                    body: Some(body.clone()),
+                }))
+                .await
+                .unwrap();
+        }
+
+        peer_b_handle.send(ToSync::Close).await.unwrap();
+
+        // Actually run the protocol.
+        println!("run protocol");
+        tokio::spawn(async move {
+            run_protocol(peer_a_session, peer_b_session).await.unwrap();
+        });
+
+        let mut index_a = 0;
+        let mut index_b = 0;
+        loop {
+            tokio::select! {
+                event = event_stream_a.next() => {
+                    index_a += 1;
+                    println!("message {index_a} on stream a");
+                }
+                event = event_stream_b.next() => {
+                    index_b += 1;
+                    println!("message {index_b} on stream b");
+                }
+            }
+            if index_a > TOTAL_OPERATIONS + 7 || index_b > TOTAL_OPERATIONS + 7 {
+                panic!("more messages than we expected");
+            }
+
+            if index_a == TOTAL_OPERATIONS + 7 && index_b == TOTAL_OPERATIONS + 7 {
+                break;
             }
         }
     }
