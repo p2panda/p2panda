@@ -296,6 +296,7 @@ mod tests {
         let mut tx = into_cbor_sink::<Payload, _>(tx_inner);
         let mut rx = into_cbor_stream::<Payload, _>(rx_inner);
 
+        // Create 100 operations, encode them as CBOR and send bytes to receiver.
         tokio::task::spawn(async move {
             let private_key = PrivateKey::new();
 
@@ -303,7 +304,8 @@ mod tests {
             let mut backlink = None;
 
             for _ in 0..100 {
-                let (header, body) = create_operation(&private_key, b"Hello", seq_num, backlink);
+                let (header, body) =
+                    create_operation(&private_key, b"boom boom boom", seq_num, backlink);
                 seq_num += 1;
                 backlink = Some(header.hash());
 
@@ -311,10 +313,19 @@ mod tests {
             }
         });
 
+        // Receiver writes bytes into buffer, attempts decoding as CBOR and returns header/body
+        // tuple 100 times.
+        let mut i = 1;
         loop {
             if let Some(message) = rx.next().await {
                 if let Err(err) = message {
                     panic!("{err}");
+                }
+
+                i += 1;
+
+                if i == 100 {
+                    break;
                 }
             }
         }
