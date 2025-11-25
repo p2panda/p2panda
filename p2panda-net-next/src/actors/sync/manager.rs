@@ -232,7 +232,7 @@ where
                         .session_topic_map
                         .sender_mut(id)
                         .expect("session handle exists");
-                    handle.send(ToSync::Payload(data.clone())).await?;
+                    let _ = handle.send(ToSync::Payload(data.clone())).await;
                 }
             }
             ToSyncManager::CloseAll { topic } => {
@@ -265,7 +265,7 @@ where
                             .sender_mut(*id)
                             .expect("session handle exists");
 
-                        handle.send(ToSync::Close).await?;
+                        let _ = handle.send(ToSync::Close).await;
                         Self::drop_session(state, *id);
                     }
                 };
