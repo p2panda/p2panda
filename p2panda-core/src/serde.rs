@@ -752,4 +752,16 @@ mod tests {
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn unexpected_eof_when_incomplete() {
+        // ciborium should be able to detect an "Unexpected EOF" error if we're giving it an
+        // incomplete header.
+        let incomplete = [
+            137, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+        ];
+
+        let result: Result<Header<()>, _> = ciborium::de::from_reader(&incomplete[..]);
+        assert!(matches!(result, Err(ciborium::de::Error::Io(_))));
+    }
 }
