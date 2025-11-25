@@ -5,7 +5,7 @@
 //! Receives events from other actors, aggregating and enriching them before informing upstream
 //! subscribers.
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, cast, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -13,6 +13,7 @@ use tracing::info;
 
 use crate::NodeInfo;
 use crate::actors::address_book::watch_node_info;
+use crate::actors::discovery::{DiscoveryEvent, ToDiscoveryManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::ApplicationArguments;
 use crate::events::{EventsReceiver, EventsSender, NetworkEvent, RelayStatus};
@@ -25,14 +26,17 @@ pub enum ToEvents {
     /// Set up events actor.
     Initialise,
 
-    /// Our own node info got updated.
-    UpdatedNodeInfo(NodeInfo),
-
     /// Subscribe to system events.
     Subscribe(RpcReplyPort<EventsReceiver>),
 
+    /// Subscribe to events from the discovery system.
+    SubscribeDiscovery(ActorRef<ToDiscoveryManager>),
+
     /// Inform all subscribers about this system event.
     Notify(NetworkEvent),
+
+    /// Our own node info got updated.
+    UpdatedNodeInfo(NodeInfo),
 }
 
 pub struct EventsState {
@@ -145,6 +149,9 @@ impl ThreadLocalActor for Events {
             ToEvents::Subscribe(reply) => {
                 let _ = reply.send(state.tx.subscribe());
             }
+            ToEvents::SubscribeDiscovery(actor_ref) => {
+                let rx = call!(actor_ref, ToDiscoveryManager::Events)?;
+            }
             ToEvents::Notify(event) => {
                 info!("{:?}", event);
                 let _ = state.tx.send(event);
@@ -163,17 +170,6 @@ pub async fn subscribe_to_network_events(
         .ok_or(SubscribeError::ActorNotAvailable)?;
     let rx = call!(actor_ref, ToEvents::Subscribe).map_err(|_| SubscribeError::ActorFailed)?;
     Ok(rx)
-}
-
-pub(crate) async fn notify_subscribers(
-    actor_namespace: &ActorNamespace,
-    event: NetworkEvent,
-) -> Result<(), SubscribeError> {
-    let actor_ref = registry::where_is(with_namespace(EVENTS, actor_namespace))
-        .map(ActorRef::<ToEvents>::from)
-        .ok_or(SubscribeError::ActorNotAvailable)?;
-    cast!(actor_ref, ToEvents::Notify(event)).map_err(|_| SubscribeError::ActorFailed)?;
-    Ok(())
 }
 
 #[derive(Debug, Error)]

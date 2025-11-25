@@ -48,7 +48,7 @@ where
 
 /// Result containing node information and topics of a session between Alice and Bob running a
 /// discovery protocol.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DiscoveryResult<ID, N>
 where
     N: NodeInfo<ID>,

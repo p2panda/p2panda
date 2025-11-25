@@ -12,6 +12,7 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
+use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
@@ -19,7 +20,9 @@ use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
 };
 use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkFromHere};
-use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, DiscoveryActorName};
+use crate::actors::discovery::{
+    DISCOVERY_PROTOCOL_ID, DiscoveryActorName, DiscoveryEvent, SessionRole,
+};
 use crate::actors::iroh::register_protocol;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
@@ -50,6 +53,9 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
+    /// Subscribe to system events.
+    Events(RpcReplyPort<broadcast::Receiver<DiscoveryEvent>>),
+
     /// Returns current metrics.
     #[allow(unused)]
     Metrics(RpcReplyPort<DiscoveryMetrics>),
@@ -63,6 +69,7 @@ pub struct DiscoveryManagerState<S> {
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
     walkers: HashMap<usize, WalkerInfo>,
+    events_tx: broadcast::Sender<DiscoveryEvent>,
     metrics: DiscoveryMetrics,
 }
 
@@ -225,6 +232,8 @@ where
             );
         }
 
+        let (events_tx, _) = broadcast::channel(64);
+
         // Invoke the handler to register the discovery protocol.
         let _ = myself.cast(ToDiscoveryManager::RegisterProtocol);
 
@@ -236,6 +245,7 @@ where
             next_session_id: 0,
             sessions: HashMap::new(),
             walkers,
+            events_tx,
             metrics: DiscoveryMetrics::default(),
         })
     }
@@ -291,6 +301,12 @@ where
                         handle,
                     },
                 );
+
+                // Inform subscribers about this discovery "system" event.
+                let _ = state.events_tx.send(DiscoveryEvent::SessionStarted {
+                    role: SessionRole::Initiated,
+                    remote_node_id,
+                });
             }
             ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
                 // @TODO: Have a max. of concurrently running discovery sessions.
@@ -323,17 +339,26 @@ where
                         handle,
                     },
                 );
+
+                // Inform subscribers about this discovery "system" event.
+                let _ = state.events_tx.send(DiscoveryEvent::SessionStarted {
+                    role: SessionRole::Accepted,
+                    remote_node_id,
+                });
             }
             ToDiscoveryManager::OnSuccess(session_id, discovery_result) => {
                 state.metrics.successful_discovery_sessions += 1;
+
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when it successfully ended");
+                let duration = session_info.started_at().elapsed();
+
                 debug!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
-                    duration_ms = session_info.started_at().elapsed().as_millis(),
+                    duration_ms = duration.as_millis(),
                     transport_infos = %discovery_result.node_transport_infos.len(),
                     sync_topics = %discovery_result.sync_topics.len(),
                     ephemeral_messaging_topics = %discovery_result.ephemeral_messaging_topics.len(),
@@ -352,17 +377,40 @@ where
                         newly_learned_transport_infos,
                     );
                 }
+
+                // Inform subscribers about this discovery "system" event.
+                match session_info {
+                    DiscoverySessionInfo::Initiated { remote_node_id, .. } => {
+                        let _ = state.events_tx.send(DiscoveryEvent::SessionEnded {
+                            role: SessionRole::Initiated,
+                            remote_node_id,
+                            result: discovery_result,
+                            duration,
+                        });
+                    }
+                    DiscoverySessionInfo::Accepted { remote_node_id, .. } => {
+                        let _ = state.events_tx.send(DiscoveryEvent::SessionEnded {
+                            role: SessionRole::Accepted,
+                            remote_node_id,
+                            result: discovery_result,
+                            duration,
+                        });
+                    }
+                }
             }
             ToDiscoveryManager::OnFailure(session_id, err) => {
                 state.metrics.failed_discovery_sessions += 1;
+
                 let session_info = state
                     .sessions
                     .remove(&session_id)
                     .expect("session info to exist when session failed");
+                let duration = session_info.started_at().elapsed();
+
                 warn!(
                     %session_id,
                     node_id = session_info.remote_node_id().fmt_short(),
-                    duration_ms = session_info.started_at().elapsed().as_millis(),
+                    duration_ms = duration.as_millis(),
                     "failed discovery session: {err:#}"
                 );
 
@@ -370,6 +418,29 @@ where
                     // Continue random walk.
                     state.repeat_last_walk_step(walker_id);
                 }
+
+                // Inform subscribers about this discovery "system" event.
+                match session_info {
+                    DiscoverySessionInfo::Initiated { remote_node_id, .. } => {
+                        let _ = state.events_tx.send(DiscoveryEvent::SessionFailed {
+                            role: SessionRole::Initiated,
+                            remote_node_id,
+                            duration,
+                            reason: err.to_string(),
+                        });
+                    }
+                    DiscoverySessionInfo::Accepted { remote_node_id, .. } => {
+                        let _ = state.events_tx.send(DiscoveryEvent::SessionFailed {
+                            role: SessionRole::Accepted,
+                            remote_node_id,
+                            duration,
+                            reason: err.to_string(),
+                        });
+                    }
+                }
+            }
+            ToDiscoveryManager::Events(reply) => {
+                let _ = reply.send(state.events_tx.subscribe());
             }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());

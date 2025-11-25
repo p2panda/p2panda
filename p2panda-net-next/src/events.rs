@@ -2,7 +2,8 @@
 
 use tokio::sync::broadcast;
 
-use crate::{NodeId, NodeInfo};
+use crate::NodeInfo;
+use crate::actors::discovery::DiscoveryEvent;
 
 pub type EventsReceiver = broadcast::Receiver<NetworkEvent>;
 
@@ -67,33 +68,8 @@ pub enum RelayStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ConnectionStatus {
-    Connected,
-    Disconnected,
-    Failed,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ConnectionRole {
-    Initialised,
-    Accepted,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Protocol {
-    Discovery,
-    Gossip,
-    Sync,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NetworkEvent {
     Transport(TransportStatus),
     Relay(RelayStatus),
-    Connection {
-        protocol: Protocol,
-        role: ConnectionRole,
-        remote_node_id: NodeId,
-        status: ConnectionStatus,
-    },
+    Discovery(DiscoveryEvent),
 }

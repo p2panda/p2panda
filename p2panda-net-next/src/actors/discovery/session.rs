@@ -13,12 +13,10 @@ use ractor::{ActorProcessingErr, ActorRef};
 
 use crate::TopicId;
 use crate::actors::discovery::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
-use crate::actors::events::notify_subscribers;
 use crate::actors::generate_actor_namespace;
 use crate::actors::iroh::connect;
 use crate::addrs::{NodeId, NodeInfo};
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::events::{ConnectionRole, ConnectionStatus, NetworkEvent, Protocol};
 
 /// Actor name prefix for a session.
 pub const DISCOVERY_SESSION: &str = "net.discovery.session";
@@ -129,20 +127,6 @@ where
             }
         };
 
-        let _ = notify_subscribers(
-            &actor_namespace,
-            NetworkEvent::Connection {
-                protocol: Protocol::Discovery,
-                role: match role {
-                    Role::Alice => ConnectionRole::Initialised,
-                    Role::Bob => ConnectionRole::Accepted,
-                },
-                remote_node_id,
-                status: ConnectionStatus::Connected,
-            },
-        )
-        .await;
-
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
         let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<NodeId, NodeInfo>, _>(tx);
@@ -167,20 +151,6 @@ where
                 result
             }
         };
-
-        let _ = notify_subscribers(
-            &actor_namespace,
-            NetworkEvent::Connection {
-                protocol: Protocol::Discovery,
-                role: match role {
-                    Role::Alice => ConnectionRole::Initialised,
-                    Role::Bob => ConnectionRole::Accepted,
-                },
-                remote_node_id,
-                status: ConnectionStatus::Disconnected,
-            },
-        )
-        .await;
 
         // Inform manager about our results.
         let _ = manager_ref.send_message(ToDiscoveryManager::OnSuccess(session_id, result));
