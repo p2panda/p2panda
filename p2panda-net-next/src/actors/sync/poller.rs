@@ -3,7 +3,6 @@
 //! Poll the sync manager for events and forward them to all subscribers.
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::time::Duration;
 
 use futures_util::{Stream, StreamExt};
 use p2panda_sync::FromSync;
@@ -62,7 +61,7 @@ where
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         _message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -73,9 +72,6 @@ where
             trace!("from sync: {:?}", event);
             state.sender.send(event)?;
         }
-
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        let _ = myself.cast(ToSyncPoller::WaitForEvent);
 
         Ok(())
     }
