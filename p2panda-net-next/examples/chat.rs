@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::Parser;
@@ -54,8 +54,12 @@ struct Args {
     bootstrap_id: Option<NodeId>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ChatExtensions;
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ChatExtensions {
+    // @TODO: Mostly a placeholder to unbreak this:
+    // https://github.com/p2panda/p2panda/issues/884
+    _hack: u64,
+}
 
 #[derive(Clone, Default, Debug)]
 pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
@@ -136,28 +140,27 @@ async fn main() -> Result<()> {
     let network: Network<ChatTopicSyncManager> =
         builder.build(address_book, sync_config).await.unwrap();
 
-    // @TODO: Enable this later.
-    // // Ephemeral stream.
-    // let ephemeral = network.ephemeral_stream([99; 32]).await?;
-    // let mut ephemeral_subscriber = ephemeral.subscribe().await?;
-    //
-    // tokio::task::spawn(async move {
-    //     loop {
-    //         let _message = ephemeral_subscriber.recv().await.unwrap();
-    //         // println!(
-    //         //     "heartbeat <3 {}",
-    //         //     u64::from_be_bytes(message.try_into().unwrap())
-    //         // );
-    //     }
-    // });
-    //
-    // tokio::task::spawn(async move {
-    //     loop {
-    //         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    //         let rnd: u64 = rand::random();
-    //         ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
-    //     }
-    // });
+    // Ephemeral stream.
+    let ephemeral = network.ephemeral_stream([99; 32]).await?;
+    let mut ephemeral_subscriber = ephemeral.subscribe().await?;
+
+    tokio::task::spawn(async move {
+        loop {
+            let message = ephemeral_subscriber.recv().await.unwrap();
+            println!(
+                "heartbeat <3 {}",
+                u64::from_be_bytes(message.try_into().unwrap())
+            );
+        }
+    });
+
+    tokio::task::spawn(async move {
+        loop {
+            let rnd: u64 = rand::random();
+            ephemeral.publish(rnd.to_be_bytes()).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
+        }
+    });
 
     // Eventually consistent stream.
     let stream = network.stream(TOPIC_ID, true).await?;
@@ -265,7 +268,7 @@ fn create_operation(
         seq_num,
         backlink,
         previous: vec![],
-        extensions: ChatExtensions,
+        extensions: ChatExtensions::default(),
     };
 
     header.sign(private_key);
