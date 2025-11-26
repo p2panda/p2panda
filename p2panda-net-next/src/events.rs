@@ -68,6 +68,7 @@ pub enum RelayStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum NetworkEvent {
     Transport(TransportStatus),
     Relay(RelayStatus),

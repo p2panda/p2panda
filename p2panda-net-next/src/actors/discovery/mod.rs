@@ -94,6 +94,8 @@ impl DiscoveryActorName {
 
 /// Discovery "system" events other processes can subscribe to.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
+#[allow(clippy::large_enum_variant)]
 pub enum DiscoveryEvent {
     SessionStarted {
         role: SessionRole,
