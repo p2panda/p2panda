@@ -2,6 +2,7 @@
 
 use std::error::Error as StdError;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Duration;
 
 use p2panda_discovery::address_book::AddressBookStore;
@@ -11,6 +12,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
 use rand::Rng;
 use rand_chacha::ChaCha20Rng;
+use tokio::sync::Notify;
 use tokio::time;
 use tracing::trace;
 
@@ -115,14 +117,19 @@ where
 
     type Msg = ToDiscoveryWalker;
 
-    type Arguments = (ApplicationArguments, S, ActorRef<ToDiscoveryManager>);
+    type Arguments = (
+        ApplicationArguments,
+        S,
+        Arc<Notify>,
+        ActorRef<ToDiscoveryManager>,
+    );
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, store, manager_ref) = args;
+        let (args, store, backoff_reset, manager_ref) = args;
         Ok(DiscoveryWalkerState {
             manager_ref,
             walker: RandomWalker::from_config(
@@ -133,7 +140,7 @@ where
                     reset_walk_probability: args.discovery_config.reset_walk_probability,
                 },
             ),
-            backoff: Backoff::new(BackoffConfig::default(), args.rng),
+            backoff: Backoff::new(BackoffConfig::default(), backoff_reset, args.rng),
         })
     }
 
@@ -225,15 +232,17 @@ struct Backoff {
     value: Duration,
     next_reset_at: u64,
     config: BackoffConfig,
+    reset: Arc<Notify>,
     rng: ChaCha20Rng,
 }
 
 impl Backoff {
-    pub fn new(config: BackoffConfig, rng: ChaCha20Rng) -> Self {
+    pub fn new(config: BackoffConfig, reset: Arc<Notify>, rng: ChaCha20Rng) -> Self {
         let mut backoff = Self {
             value: config.initial_value,
             next_reset_at: 0,
             config,
+            reset,
             rng,
         };
         backoff.reset();
@@ -256,8 +265,17 @@ impl Backoff {
     }
 
     pub async fn sleep(&self) {
+        if self.value.is_zero() {
+            return;
+        }
+
         trace!("backoff {} seconds", self.value.as_secs());
-        tokio::time::sleep(self.value).await;
+
+        // Wait until backoff has finished or we've received a "reset" signal from the outside.
+        tokio::select! {
+            _ = self.reset.notified() => (),
+            _ = tokio::time::sleep(self.value) => (),
+        }
     }
 
     pub fn reset(&mut self) {
