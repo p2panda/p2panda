@@ -301,9 +301,9 @@ where
                             && myself
                                 .send_message(ToDiscoveryManager::ResetBackoff)
                                 .is_err()
-                            {
-                                break;
-                            }
+                        {
+                            break;
+                        }
                     }
                 });
 

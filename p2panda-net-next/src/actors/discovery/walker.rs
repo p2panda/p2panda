@@ -264,7 +264,7 @@ impl Backoff {
         }
     }
 
-    pub async fn sleep(&self) {
+    pub async fn sleep(&mut self) {
         if self.value.is_zero() {
             return;
         }
@@ -273,7 +273,11 @@ impl Backoff {
 
         // Wait until backoff has finished or we've received a "reset" signal from the outside.
         tokio::select! {
-            _ = self.reset.notified() => (),
+            _ = self.reset.notified() => {
+                // Reset the backoff and stop waiting.
+                trace!("backoff got notified to reset");
+                self.reset();
+            },
             _ = tokio::time::sleep(self.value) => (),
         }
     }
