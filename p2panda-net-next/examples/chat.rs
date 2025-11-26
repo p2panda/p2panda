@@ -20,19 +20,21 @@ use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::{TopicLogMap, TopicLogSyncEvent};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 type LogId = u64;
 
-const TOPIC_ID: [u8; 32] = [1; 32];
+const CHAT_TOPIC: [u8; 32] = [1; 32];
+
+const HEARTBEAT_TOPIC: [u8; 32] = [2; 32];
 
 const NETWORK_ID: [u8; 32] = [7; 32];
 
 const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
 
+/// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
 
 pub fn setup_logging() {
@@ -45,20 +47,13 @@ pub fn setup_logging() {
 
 #[derive(Parser)]
 struct Args {
-    /// Supply seed for deterministic node id generation.
-    #[arg(short = 's', long, value_name = "SEED")]
-    seed: Option<u8>,
-
-    /// Supply the node ID of a bootstrap node.
+    /// Identifier of a bootstrap node.
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
-}
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ChatExtensions {
-    // @TODO: Mostly a placeholder to unbreak this:
-    // https://github.com/p2panda/p2panda/issues/884
-    _hack: u64,
+    /// Seed for deterministic private key generation.
+    #[arg(short = 's', long, value_name = "SEED")]
+    seed: Option<u8>,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -67,7 +62,7 @@ pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
 impl ChatTopicMap {
     async fn insert(&self, node_id: NodeId, log_id: LogId) {
         let mut map = self.0.write().await;
-        map.entry(TOPIC_ID)
+        map.entry(CHAT_TOPIC)
             .and_modify(|logs| {
                 logs.insert(node_id, vec![log_id]);
             })
@@ -88,16 +83,17 @@ impl TopicLogMap<TopicId, LogId> for ChatTopicMap {
     }
 }
 
-type ChatStore = MemoryStore<LogId, ChatExtensions>;
+type ChatStore = MemoryStore<LogId, ()>;
 
-type ChatTopicSyncManager =
-    TopicSyncManager<TopicId, ChatStore, ChatTopicMap, LogId, ChatExtensions>;
+type ChatTopicSyncManager = TopicSyncManager<TopicId, ChatStore, ChatTopicMap, LogId, ()>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();
 
     let args = Args::parse();
+
+    // Use manually configured seed or pick a random one.
     let seed = args
         .seed
         .map(|seed| [seed; 32])
@@ -106,14 +102,13 @@ async fn main() -> Result<()> {
     let private_key = PrivateKey::from_bytes(&seed);
     let public_key = private_key.public_key();
 
-    let mut logs = HashMap::new();
-    logs.insert(public_key, vec![LOG_ID]);
-
     println!("network id: {}", NETWORK_ID.fmt_short());
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
+    // Set up sync for p2panda operations.
     let mut store = ChatStore::new();
+
     let topic_map = ChatTopicMap::default();
     topic_map.insert(public_key, LOG_ID).await;
 
@@ -122,9 +117,13 @@ async fn main() -> Result<()> {
         store: store.clone(),
     };
 
-    let rng: ChaCha20Rng = ChaCha20Rng::from_seed(seed);
-    let address_book = AddressBookMemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
+    // Prepare address book.
+    let address_book = {
+        let rng = ChaCha20Rng::from_seed(seed);
+        AddressBookMemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone())
+    };
 
+    // If user mentioned a bootstrap node, we're adding it here to our address book.
     if let Some(id) = args.bootstrap_id {
         let endpoint_addr = iroh::EndpointAddr::new(from_public_key(id));
         let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
@@ -133,15 +132,18 @@ async fn main() -> Result<()> {
             .await?;
     }
 
-    let builder = NetworkBuilder::new(NETWORK_ID);
-    let builder = builder.private_key(private_key.clone());
-    let builder = builder.relay(RELAY_URL.parse().unwrap());
+    // Set up peer-to-peer network and launch it.
+    let builder = NetworkBuilder::new(NETWORK_ID)
+        .private_key(private_key.clone())
+        .relay(RELAY_URL.parse().expect("correct relay url"));
 
-    let network: Network<ChatTopicSyncManager> =
-        builder.build(address_book, sync_config).await.unwrap();
+    let network: Network<ChatTopicSyncManager> = builder
+        .build(address_book, sync_config)
+        .await
+        .expect("spawned supervised network");
 
     // Ephemeral stream.
-    let ephemeral = network.ephemeral_stream([99; 32]).await?;
+    let ephemeral = network.ephemeral_stream(HEARTBEAT_TOPIC).await?;
     let mut ephemeral_subscriber = ephemeral.subscribe().await?;
 
     tokio::task::spawn(async move {
@@ -163,15 +165,23 @@ async fn main() -> Result<()> {
     });
 
     // Eventually consistent stream.
-    let stream = network.stream(TOPIC_ID, true).await?;
+    let stream = network.stream(CHAT_TOPIC, true).await?;
     let mut stream_subscriber = stream.subscribe().await?;
 
     // Receive messages from the network stream.
     {
         let mut store = store.clone();
+
         tokio::task::spawn(async move {
             while let Ok(from_sync) = stream_subscriber.recv().await {
                 match from_sync.event {
+                    TopicLogSyncEvent::SyncFinished(metrics) => {
+                        println!(
+                            "finished sync session, bytes received = {}, bytes sent = {}",
+                            metrics.total_bytes_remote.unwrap_or_default(),
+                            metrics.total_bytes_local.unwrap_or_default()
+                        );
+                    }
                     TopicLogSyncEvent::Operation(operation) => {
                         if store.has_operation(operation.hash).await.unwrap() {
                             continue;
@@ -211,14 +221,9 @@ async fn main() -> Result<()> {
 
     // Sign and encode each line of text input and broadcast it on the chat topic.
     while let Some(text) = line_rx.recv().await {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
         let body = Body::new(text.as_bytes());
         let (hash, header, header_bytes, operation) =
-            create_operation(&private_key, &body, seq_num, timestamp, backlink);
+            create_operation(&private_key, &body, seq_num, backlink);
         store
             .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
             .await
@@ -250,14 +255,13 @@ fn create_operation(
     private_key: &PrivateKey,
     body: &Body,
     seq_num: u64,
-    timestamp: u64,
     backlink: Option<Hash>,
-) -> (
-    Hash,
-    Header<ChatExtensions>,
-    Vec<u8>,
-    Operation<ChatExtensions>,
-) {
+) -> (Hash, Header, Vec<u8>, Operation) {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
     let mut header = Header {
         version: 1,
         public_key: private_key.public_key(),
@@ -268,7 +272,7 @@ fn create_operation(
         seq_num,
         backlink,
         previous: vec![],
-        extensions: ChatExtensions::default(),
+        extensions: (),
     };
 
     header.sign(private_key);
