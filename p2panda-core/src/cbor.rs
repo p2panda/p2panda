@@ -97,7 +97,7 @@ impl From<DeserializeError<std::io::Error>> for DecodeError {
 mod tests {
     use crate::{Body, Header, PrivateKey};
 
-    use super::{decode_cbor, encode_cbor};
+    use super::{DecodeError, decode_cbor, encode_cbor};
 
     #[test]
     fn encode_decode() {
@@ -115,5 +115,16 @@ mod tests {
         let header_again: Header<()> = decode_cbor(&bytes[..]).unwrap();
 
         assert_eq!(header.hash(), header_again.hash());
+    }
+
+    #[test]
+    fn decode_eof() {
+        // This is an incomplete byte sequence of a header / body tuple.
+        let bytes = hex::decode("828901582014d59877a250").unwrap();
+        let err = decode_cbor::<(Header<()>, Option<Body>), _>(&bytes[..]);
+
+        // We're expecting an "Unexpected EOF" error here. The underlying decoder should be able to
+        // detect that there's bytes missing.
+        assert!(matches!(err, Err(DecodeError::Io(_))));
     }
 }
