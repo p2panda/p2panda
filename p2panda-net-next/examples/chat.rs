@@ -12,7 +12,7 @@ use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore as AddressBookMemoryStore;
 use p2panda_net_next::utils::{ShortFormat, from_public_key};
-use p2panda_net_next::{Network, NetworkBuilder, NodeId, NodeInfo, TopicId};
+use p2panda_net_next::{MdnsDiscoveryMode, Network, NetworkBuilder, NodeId, NodeInfo, TopicId};
 use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::TopicSyncManager;
 use p2panda_sync::log_sync::Logs;
@@ -54,6 +54,10 @@ struct Args {
     /// Seed for deterministic private key generation.
     #[arg(short = 's', long, value_name = "SEED")]
     seed: Option<u8>,
+
+    /// Enable mDNS discovery
+    #[arg(short = 'm', long, action)]
+    mdns: bool,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -133,9 +137,13 @@ async fn main() -> Result<()> {
     }
 
     // Set up peer-to-peer network and launch it.
-    let builder = NetworkBuilder::new(NETWORK_ID)
+    let mut builder = NetworkBuilder::new(NETWORK_ID)
         .private_key(private_key.clone())
         .relay(RELAY_URL.parse().expect("correct relay url"));
+
+    if args.mdns {
+        builder = builder.mdns(MdnsDiscoveryMode::Active);
+    }
 
     let network: Network<ChatTopicSyncManager> = builder
         .build(address_book, sync_config)
