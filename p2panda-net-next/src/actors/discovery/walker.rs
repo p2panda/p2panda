@@ -94,6 +94,7 @@ pub struct DiscoveryWalkerState<S> {
     manager_ref: ActorRef<ToDiscoveryManager>,
     walker: RandomWalker<ChaCha20Rng, S, NodeId, NodeInfo>,
     backoff: Backoff,
+    walker_reset: Arc<Notify>,
 }
 
 pub struct DiscoveryWalker<S> {
@@ -129,7 +130,7 @@ where
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, store, backoff_reset, manager_ref) = args;
+        let (args, store, walker_reset, manager_ref) = args;
         Ok(DiscoveryWalkerState {
             manager_ref,
             walker: RandomWalker::from_config(
@@ -140,7 +141,8 @@ where
                     reset_walk_probability: args.discovery_config.reset_walk_probability,
                 },
             ),
-            backoff: Backoff::new(BackoffConfig::default(), backoff_reset, args.rng),
+            backoff: Backoff::new(BackoffConfig::default(), args.rng),
+            walker_reset,
         })
     }
 
@@ -151,7 +153,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryWalker::NextNode(walk_from_here) => {
+            ToDiscoveryWalker::NextNode(mut walk_from_here) => {
                 // We use a simple incremental backoff logic to determine if this walker can slow
                 // down when it doesn't bring any new results anymore.
                 if walk_from_here.success_rate() < SUCCESS_RATE_THRESHOLD {
@@ -162,7 +164,15 @@ where
                     state.backoff.reset();
                 }
 
-                state.backoff.sleep().await;
+                // Wait until backoff has finished or we've received a "reset" signal from the
+                // outside.
+                tokio::select! {
+                    _ = state.walker_reset.notified() => {
+                        walk_from_here = WalkFromHere::Bootstrap;
+                        state.backoff.reset();
+                    }
+                    _ = state.backoff.sleep() => (),
+                }
 
                 // Next "random walker" step finds us another node id to connect to. If this fails
                 // a critical store error occurred and we stop the actor.
@@ -232,17 +242,15 @@ struct Backoff {
     value: Duration,
     next_reset_at: u64,
     config: BackoffConfig,
-    reset: Arc<Notify>,
     rng: ChaCha20Rng,
 }
 
 impl Backoff {
-    pub fn new(config: BackoffConfig, reset: Arc<Notify>, rng: ChaCha20Rng) -> Self {
+    pub fn new(config: BackoffConfig, rng: ChaCha20Rng) -> Self {
         let mut backoff = Self {
             value: config.initial_value,
             next_reset_at: 0,
             config,
-            reset,
             rng,
         };
         backoff.reset();
@@ -264,22 +272,13 @@ impl Backoff {
         }
     }
 
-    pub async fn sleep(&mut self) {
+    pub async fn sleep(&self) {
         if self.value.is_zero() {
             return;
         }
 
         trace!("backoff {} seconds", self.value.as_secs());
-
-        // Wait until backoff has finished or we've received a "reset" signal from the outside.
-        tokio::select! {
-            _ = self.reset.notified() => {
-                // Reset the backoff and stop waiting.
-                trace!("backoff got notified to reset");
-                self.reset();
-            },
-            _ = tokio::time::sleep(self.value) => (),
-        }
+        tokio::time::sleep(self.value).await;
     }
 
     pub fn reset(&mut self) {
