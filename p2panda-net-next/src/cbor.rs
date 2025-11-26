@@ -193,12 +193,9 @@ mod tests {
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::FramedRead;
 
-    use crate::{
-        cbor::{into_cbor_sink, into_cbor_stream},
-        utils::current_timestamp,
-    };
+    use crate::utils::current_timestamp;
 
-    use super::CborCodec;
+    use super::{CborCodec, into_cbor_sink, into_cbor_stream};
 
     #[tokio::test]
     async fn decoding_exactly_one_frame() {
