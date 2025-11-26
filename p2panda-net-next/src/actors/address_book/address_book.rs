@@ -112,6 +112,13 @@ pub enum ToAddressBook {
         UpdatesOnly,
         RpcReplyPort<WatcherReceiver<HashSet<NodeId>>>,
     ),
+
+    /// Subscribes to channel informing us about topic changes for a particular node.
+    WatchNodeTopics(
+        NodeId,
+        UpdatesOnly,
+        RpcReplyPort<WatcherReceiver<HashSet<TopicId>>>,
+    ),
 }
 
 pub struct AddressBookState<S> {
@@ -119,6 +126,7 @@ pub struct AddressBookState<S> {
     store: S,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
+    node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
 }
 
 impl<S> AddressBookState<S>
@@ -156,6 +164,13 @@ where
             .collect();
 
         Ok(result)
+    }
+
+    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, S::Error> {
+        let ephemeral_topics = self.store.node_ephemeral_messaging_topics(node_id).await?;
+        let mut topics = self.store.node_sync_topics(node_id).await?;
+        topics.extend(ephemeral_topics);
+        Ok(topics)
     }
 }
 
@@ -195,6 +210,7 @@ where
             store,
             node_watchers: WatcherSet::new(),
             topic_watchers: WatcherSet::new(),
+            node_topics_watchers: WatcherSet::new(),
         })
     }
 
@@ -310,6 +326,15 @@ where
                 );
                 let _ = reply.send(rx);
             }
+            ToAddressBook::WatchNodeTopics(node_id, updates_only, reply) => {
+                let topics = state.topics_for_node(&node_id).await?;
+                let rx = state.node_topics_watchers.subscribe(
+                    node_id,
+                    updates_only,
+                    WatchedNodeTopics::from_topics(node_id, topics),
+                );
+                let _ = reply.send(rx);
+            }
 
             // Mostly a wrapper around the store ..
             ToAddressBook::NodeInfo(node_id, reply) => {
@@ -340,6 +365,10 @@ where
                         .topic_watchers
                         .update(topic, HashSet::from_iter(node_ids));
                 }
+
+                // Inform subscribers about changes in set of topics.
+                let topics = state.topics_for_node(&node_id).await?;
+                state.node_topics_watchers.update(&node_id, topics);
             }
             ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
                 state
@@ -358,6 +387,10 @@ where
                         .topic_watchers
                         .update(topic, HashSet::from_iter(node_ids));
                 }
+
+                // Inform subscribers about changes in set of topics.
+                let topics = state.topics_for_node(&node_id).await?;
+                state.node_topics_watchers.update(&node_id, topics);
             }
             ToAddressBook::RemoveNodeInfo(node_id, reply) => {
                 let result = state.store.remove_node_info(&node_id).await?;
@@ -379,6 +412,7 @@ pub enum AddressBookError {
     NodeInfo(crate::addrs::NodeInfoError),
 }
 
+/// Watch for changes of a node's info.
 #[derive(Default)]
 pub struct WatchedNodeInfo(RefCell<Option<NodeInfo>>);
 
@@ -422,6 +456,7 @@ impl Watched for WatchedNodeInfo {
     }
 }
 
+/// Watch for changes of nodes being interested in a topic.
 pub struct WatchedTopic {
     topic: TopicId,
     node_ids: RefCell<HashSet<NodeId>>,
@@ -467,6 +502,63 @@ impl Watched for WatchedTopic {
                     topic = self.topic.fmt_short(),
                     node_ids = ?node_ids,
                     "interested nodes for topic changed"
+                );
+            }
+
+            UpdateResult::Changed(WatchedValue {
+                difference: Some(difference),
+                value: cmp.to_owned(),
+            })
+        }
+    }
+}
+
+/// Watch for changes of topics for a node.
+pub struct WatchedNodeTopics {
+    node_id: NodeId,
+    topic_ids: RefCell<HashSet<TopicId>>,
+}
+
+impl WatchedNodeTopics {
+    pub fn from_topics(node_id: NodeId, topic_ids: HashSet<TopicId>) -> Self {
+        Self {
+            node_id,
+            topic_ids: RefCell::new(topic_ids),
+        }
+    }
+}
+
+impl Watched for WatchedNodeTopics {
+    type Value = HashSet<TopicId>;
+
+    fn current(&self) -> Self::Value {
+        self.topic_ids.borrow().clone()
+    }
+
+    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
+        let difference: HashSet<TopicId> = self
+            .topic_ids
+            .borrow()
+            .symmetric_difference(cmp)
+            .cloned()
+            .collect();
+
+        if difference.is_empty() {
+            UpdateResult::Unchanged
+        } else {
+            self.topic_ids.replace(cmp.to_owned());
+
+            {
+                let topic_ids: Vec<String> = self
+                    .topic_ids
+                    .borrow()
+                    .iter()
+                    .map(|id| id.fmt_short())
+                    .collect();
+                debug!(
+                    node_id = self.node_id.fmt_short(),
+                    topic_ids = ?topic_ids,
+                    "topics for node changed"
                 );
             }
 
