@@ -196,73 +196,57 @@ where
                 A: SeqAccess<'de>,
             {
                 let version: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid version, expected u64"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("version missing"))?;
 
                 let public_key: PublicKey = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid public key, expected bytes"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("public key missing"))?;
 
                 let signature: Signature = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid signature, expected bytes"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("signature missing"))?;
 
                 let payload_size: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid payload size, expected u64"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("payload size missing"))?;
 
                 let payload_hash: Option<Hash> = match payload_size {
                     0 => None,
                     _ => {
                         let hash: Hash = seq
-                            .next_element()
-                            .map_err(|_| {
-                                SerdeError::custom("invalid payload hash, expected bytes")
-                            })?
+                            .next_element()?
                             .ok_or(SerdeError::custom("payload hash missing"))?;
                         Some(hash)
                     }
                 };
 
                 let timestamp: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid timestamp, expected u64"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("timestamp missing"))?;
 
                 let seq_num: u64 = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid sequence number, expected u64"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("sequence number missing"))?;
 
                 let backlink: Option<Hash> = match seq_num {
                     0 => None,
                     _ => {
                         let hash: Hash = seq
-                            .next_element()
-                            .map_err(|err| {
-                                SerdeError::custom(format!(
-                                    "invalid backlink, expected bytes {err}"
-                                ))
-                            })?
+                            .next_element()?
                             .ok_or(SerdeError::custom("backlink missing"))?;
                         Some(hash)
                     }
                 };
 
                 let previous: Vec<Hash> = seq
-                    .next_element()
-                    .map_err(|_| SerdeError::custom("invalid previous links, expected array"))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("previous array missing"))?;
 
                 // @TODO: If `E` is a zero-sized type, use `mem::conjure_zst` when ready.
                 // See https://github.com/rust-lang/rust/pull/146479
                 let extensions: E = seq
-                    .next_element()
-                    .map_err(|err| SerdeError::custom(format!("invalid extensions: {err}")))?
+                    .next_element()?
                     .ok_or(SerdeError::custom("extensions missing"))?;
 
                 Ok(Header {
@@ -751,5 +735,17 @@ mod tests {
 
         let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unexpected_eof_when_incomplete() {
+        // ciborium should be able to detect an "Unexpected EOF" error if we're giving it an
+        // incomplete header.
+        let incomplete = [
+            137, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+        ];
+
+        let result: Result<Header<()>, _> = ciborium::de::from_reader(&incomplete[..]);
+        assert!(matches!(result, Err(ciborium::de::Error::Io(_))));
     }
 }
