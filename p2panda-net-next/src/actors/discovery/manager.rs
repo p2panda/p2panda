@@ -16,7 +16,9 @@ use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call,
 use tokio::sync::Notify;
 use tracing::{debug, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook, watch_node_topics};
+use crate::actors::address_book::{
+    ADDRESS_BOOK, ToAddressBook, watch_node_info, watch_node_topics,
+};
 use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
 };
@@ -52,9 +54,10 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
-    /// Reset backoff logic of all walkers. This will allow them to faster do their work and can be
-    /// used to improve the user experience in moments where the application needs discovery.
-    ResetBackoff,
+    /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
+    /// will allow them to faster do their work and can be used to improve the user experience in
+    /// moments where the application needs discovery.
+    ResetWalkers,
 
     /// Returns current metrics.
     #[allow(unused)]
@@ -69,7 +72,7 @@ pub struct DiscoveryManagerState<S> {
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
     walkers: HashMap<usize, WalkerInfo>,
-    backoff_reset: Arc<Notify>,
+    walkers_reset: Arc<Notify>,
     watch_handle: Option<JoinHandle<()>>,
     metrics: DiscoveryMetrics,
 }
@@ -209,14 +212,14 @@ where
 
         // Spawn random walkers. They automatically initiate discovery sessions.
         let mut walkers = HashMap::new();
-        let backoff_reset = Arc::new(Notify::new());
+        let walkers_reset = Arc::new(Notify::new());
         for walker_id in 0..args.discovery_config.random_walkers_count {
             let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
                 Some(DiscoveryActorName::new_walker(walker_id).to_string(&actor_namespace)),
                 (
                     args.clone(),
                     store.clone(),
-                    backoff_reset.clone(),
+                    walkers_reset.clone(),
                     myself.clone(),
                 ),
                 myself.clone().into(),
@@ -250,7 +253,7 @@ where
             next_session_id: 0,
             sessions: HashMap::new(),
             walkers,
-            backoff_reset,
+            walkers_reset,
             watch_handle: None,
             metrics: DiscoveryMetrics::default(),
         })
@@ -285,22 +288,44 @@ where
                     state.actor_namespace.clone(),
                 )?;
 
-                // Watch for topic changes of our node to find out if user subscribed to a new
-                // topic. If yes, we want to reset the backoff logic of the walkers to allow
-                // finding nodes "faster" for this newly subscribed topic.
-                let mut rx =
+                // Watch for topic changes of our node (to find out if user subscribed to a new
+                // topic) and watch for transport info changing. If yes, we want to reset the
+                // backoff logic of the walkers to allow finding nodes "faster" for this newly
+                // subscribed topic or networking setup.
+                let mut topics_rx =
                     watch_node_topics(state.actor_namespace.clone(), state.args.public_key, true)
                         .await?;
 
-                let handle = tokio::task::spawn(async move {
-                    while let Some(event) = rx.recv().await {
-                        let difference = event.difference.unwrap_or_default();
+                let mut node_info_rx =
+                    watch_node_info(state.actor_namespace.clone(), state.args.public_key, true)
+                        .await?;
 
-                        // Topics have been added to the set.
-                        if difference.is_subset(&event.value)
-                            && myself
-                                .send_message(ToDiscoveryManager::ResetBackoff)
-                                .is_err()
+                let handle = tokio::task::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            Some(event) = topics_rx.recv() => {
+                                // Reset walkers if topics have been _added_ to our set, ignore
+                                // removed topics.
+                                let difference = event.difference.unwrap_or_default();
+                                if difference.is_empty() || !difference.is_subset(&event.value) {
+                                    continue;
+                                }
+                            }
+                            Some(event) = node_info_rx.recv() => {
+                                // Reset walkers if new transport info was set, ignore if we're
+                                // offline (and transport info is `None`).
+                                match event.value {
+                                    Some(node_info) => if node_info.transports.is_none() {
+                                        continue;
+                                    },
+                                    None => continue,
+                                }
+                            }
+                        }
+
+                        if myself
+                            .send_message(ToDiscoveryManager::ResetWalkers)
+                            .is_err()
                         {
                             break;
                         }
@@ -423,8 +448,8 @@ where
                     state.repeat_last_walk_step(walker_id);
                 }
             }
-            ToDiscoveryManager::ResetBackoff => {
-                state.backoff_reset.notify_waiters();
+            ToDiscoveryManager::ResetWalkers => {
+                state.walkers_reset.notify_waiters();
             }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());
