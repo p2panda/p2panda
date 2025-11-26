@@ -297,14 +297,13 @@ where
                         let difference = event.difference.unwrap_or_default();
 
                         // Topics have been added to the set.
-                        if difference.is_subset(&event.value) {
-                            if myself
+                        if difference.is_subset(&event.value)
+                            && myself
                                 .send_message(ToDiscoveryManager::ResetBackoff)
                                 .is_err()
                             {
                                 break;
                             }
-                        }
                     }
                 });
 
