@@ -4,17 +4,22 @@
 //!
 //! Receives events from other actors, aggregating and enriching them before informing upstream
 //! subscribers.
+mod discovery_receiver;
+
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, call, registry};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, registry};
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::NodeInfo;
 use crate::actors::address_book::watch_node_info;
-use crate::actors::discovery::{DiscoveryEvent, ToDiscoveryManager};
-use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
+use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryEvent, ToDiscoveryManager};
+use crate::actors::events::discovery_receiver::{
+    DISCOVERY_EVENTS_RECEIVER, DiscoveryEventsReceiver,
+};
+use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
 use crate::events::{EventsReceiver, EventsSender, NetworkEvent, RelayStatus};
 
@@ -30,7 +35,7 @@ pub enum ToEvents {
     Subscribe(RpcReplyPort<EventsReceiver>),
 
     /// Subscribe to events from the discovery system.
-    SubscribeDiscovery(ActorRef<ToDiscoveryManager>),
+    SubscribeDiscovery,
 
     /// Inform all subscribers about this system event.
     Notify(NetworkEvent),
@@ -147,10 +152,31 @@ impl ThreadLocalActor for Events {
                 myself.send_message(ToEvents::Notify(NetworkEvent::Transport(node_info.into())))?;
             }
             ToEvents::Subscribe(reply) => {
+                // Subscribe to event subsystems.
+                //
+                // These events will be sent into the main network system events channel.
+                myself.send_message(ToEvents::SubscribeDiscovery)?;
+
                 let _ = reply.send(state.tx.subscribe());
             }
-            ToEvents::SubscribeDiscovery(actor_ref) => {
-                let rx = call!(actor_ref, ToDiscoveryManager::Events)?;
+            ToEvents::SubscribeDiscovery => {
+                let rx = subscribe_to_discovery_events(&state.actor_namespace).await?;
+
+                // Spawn the discovery events receiver.
+                //
+                // This actor is responsible for receiving discovery events and sending them to the
+                // network system event channel; this allows us to unify all system events into a
+                // single channel for the subscriber.
+                let (_discovery_events_receiver_actor, _) = DiscoveryEventsReceiver::spawn_linked(
+                    Some(with_namespace(
+                        DISCOVERY_EVENTS_RECEIVER,
+                        &state.actor_namespace,
+                    )),
+                    (state.tx.clone(), rx),
+                    myself.clone().into(),
+                    state.args.root_thread_pool.clone(),
+                )
+                .await?;
             }
             ToEvents::Notify(event) => {
                 info!("{:?}", event);
@@ -160,6 +186,56 @@ impl ThreadLocalActor for Events {
 
         Ok(())
     }
+
+    async fn handle_supervisor_evt(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        message: SupervisionEvent,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        match message {
+            SupervisionEvent::ActorStarted(actor) => {
+                if let Some(name) = actor.get_name() {
+                    debug!(
+                        "{EVENTS} actor: received ready from {} actor",
+                        without_namespace(&name)
+                    );
+                }
+            }
+            SupervisionEvent::ActorFailed(actor, panic_msg) => {
+                if let Some(name) = actor.get_name().as_deref()
+                    && name == with_namespace(DISCOVERY_EVENTS_RECEIVER, &state.actor_namespace)
+                {
+                    warn!(
+                        "{EVENTS} actor: {DISCOVERY_EVENTS_RECEIVER} actor failed: {}",
+                        panic_msg
+                    );
+                }
+            }
+            SupervisionEvent::ActorTerminated(actor, _last_state, _reason) => {
+                if let Some(name) = actor.get_name() {
+                    debug!(
+                        "{EVENTS} actor: {} actor terminated",
+                        without_namespace(&name)
+                    );
+                }
+            }
+            _ => (),
+        }
+
+        Ok(())
+    }
+}
+
+async fn subscribe_to_discovery_events(
+    actor_namespace: &ActorNamespace,
+) -> Result<broadcast::Receiver<DiscoveryEvent>, SubscribeError> {
+    let actor_ref = registry::where_is(with_namespace(DISCOVERY_MANAGER, actor_namespace))
+        .map(ActorRef::<ToDiscoveryManager>::from)
+        .ok_or(SubscribeError::ActorNotAvailable)?;
+    let rx =
+        call!(actor_ref, ToDiscoveryManager::Events).map_err(|_| SubscribeError::ActorFailed)?;
+    Ok(rx)
 }
 
 pub async fn subscribe_to_network_events(
