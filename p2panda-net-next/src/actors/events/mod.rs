@@ -5,6 +5,8 @@
 //! Receives events from other actors, aggregating and enriching them before informing upstream
 //! subscribers.
 mod discovery_receiver;
+#[cfg(test)]
+mod tests;
 
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, registry};
