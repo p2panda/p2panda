@@ -492,16 +492,19 @@ mod tests {
 
     #[tokio::test]
     async fn sample_random_nodes() {
-        let rng = ChaCha20Rng::from_seed([1; 32]);
-        let store = TestStore::new(rng);
+        let mut rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng.clone());
 
         for id in 0..100 {
-            store.insert_node_info(TestInfo::new(id)).await.unwrap();
+            store
+                .insert_node_info(TestInfo::new(id).with_random_address(&mut rng))
+                .await
+                .unwrap();
         }
 
         for id in 200..300 {
             store
-                .insert_node_info(TestInfo::new_bootstrap(id))
+                .insert_node_info(TestInfo::new_bootstrap(id).with_random_address(&mut rng))
                 .await
                 .unwrap();
         }
