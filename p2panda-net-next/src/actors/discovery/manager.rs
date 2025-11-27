@@ -14,7 +14,7 @@ use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
 use tokio::sync::Notify;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::actors::address_book::{
     ADDRESS_BOOK, ToAddressBook, address_book_ref, watch_node_info, watch_node_topics,

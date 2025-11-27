@@ -217,7 +217,7 @@ impl ThreadLocalActor for IrohEndpoint {
                             alpn: mixed_protocol_id,
                             reply,
                         },
-                        myself.into(),
+                        myself.clone(),
                     ),
                     state.worker_pool.clone(),
                 )
@@ -238,7 +238,7 @@ impl ThreadLocalActor for IrohEndpoint {
                             incoming,
                             protocols: state.protocols.clone(),
                         },
-                        myself.clone().into(),
+                        myself.clone(),
                     ),
                     state.worker_pool.clone(),
                 )
