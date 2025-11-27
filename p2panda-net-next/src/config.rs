@@ -105,7 +105,7 @@ pub struct DiscoveryConfig {
 impl Default for DiscoveryConfig {
     fn default() -> Self {
         Self {
-            random_walkers_count: 1,
+            random_walkers_count: 2,
             reset_walk_probability: 0.02, // 2% chance
         }
     }
