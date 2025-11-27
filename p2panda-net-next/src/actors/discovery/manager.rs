@@ -33,9 +33,6 @@ use crate::utils::{ShortFormat, to_public_key};
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
 pub enum ToDiscoveryManager {
-    /// Accept incoming "discovery protocol" connection requests.
-    Initiate,
-
     /// Initiate a discovery session with the given node.
     ///
     /// A reference to the walker actor which initiated this session is kept, so the result of the
@@ -242,9 +239,6 @@ where
             );
         }
 
-        // Invoke the handler to register the discovery protocol and do other setups.
-        let _ = myself.cast(ToDiscoveryManager::Initiate);
-
         Ok(DiscoveryManagerState {
             actor_namespace,
             args,
@@ -257,6 +251,67 @@ where
             watch_handle: None,
             metrics: DiscoveryMetrics::default(),
         })
+    }
+
+    async fn post_start(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Accept incoming "discovery protocol" connection requests.
+        register_protocol(
+            DISCOVERY_PROTOCOL_ID,
+            DiscoveryProtocolHandler {
+                manager_ref: myself.clone(),
+            },
+            state.actor_namespace.clone(),
+        )?;
+
+        // Watch for topic changes of our node (to find out if user subscribed to a new
+        // topic) and watch for transport info changing. If yes, we want to reset the
+        // backoff logic of the walkers to allow finding nodes "faster" for this newly
+        // subscribed topic or networking setup.
+        let mut topics_rx =
+            watch_node_topics(state.actor_namespace.clone(), state.args.public_key, true).await?;
+
+        let mut node_info_rx =
+            watch_node_info(state.actor_namespace.clone(), state.args.public_key, true).await?;
+
+        let handle = tokio::task::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(event) = topics_rx.recv() => {
+                        // Reset walkers if topics have been _added_ to our set, ignore
+                        // removed topics.
+                        let difference = event.difference.unwrap_or_default();
+                        if difference.is_empty() || !difference.is_subset(&event.value) {
+                            continue;
+                        }
+                    }
+                    Some(event) = node_info_rx.recv() => {
+                        // Reset walkers if new transport info was set, ignore if we're
+                        // offline (and transport info is `None`).
+                        match event.value {
+                            Some(node_info) => if node_info.transports.is_none() {
+                                continue;
+                            },
+                            None => continue,
+                        }
+                    }
+                }
+
+                if myself
+                    .send_message(ToDiscoveryManager::ResetWalkers)
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+        state.watch_handle = Some(handle);
+
+        Ok(())
     }
 
     async fn post_stop(
@@ -278,62 +333,6 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryManager::Initiate => {
-                // Accept incoming "discovery protocol" connection requests.
-                register_protocol(
-                    DISCOVERY_PROTOCOL_ID,
-                    DiscoveryProtocolHandler {
-                        manager_ref: myself.clone(),
-                    },
-                    state.actor_namespace.clone(),
-                )?;
-
-                // Watch for topic changes of our node (to find out if user subscribed to a new
-                // topic) and watch for transport info changing. If yes, we want to reset the
-                // backoff logic of the walkers to allow finding nodes "faster" for this newly
-                // subscribed topic or networking setup.
-                let mut topics_rx =
-                    watch_node_topics(state.actor_namespace.clone(), state.args.public_key, true)
-                        .await?;
-
-                let mut node_info_rx =
-                    watch_node_info(state.actor_namespace.clone(), state.args.public_key, true)
-                        .await?;
-
-                let handle = tokio::task::spawn(async move {
-                    loop {
-                        tokio::select! {
-                            Some(event) = topics_rx.recv() => {
-                                // Reset walkers if topics have been _added_ to our set, ignore
-                                // removed topics.
-                                let difference = event.difference.unwrap_or_default();
-                                if difference.is_empty() || !difference.is_subset(&event.value) {
-                                    continue;
-                                }
-                            }
-                            Some(event) = node_info_rx.recv() => {
-                                // Reset walkers if new transport info was set, ignore if we're
-                                // offline (and transport info is `None`).
-                                match event.value {
-                                    Some(node_info) => if node_info.transports.is_none() {
-                                        continue;
-                                    },
-                                    None => continue,
-                                }
-                            }
-                        }
-
-                        if myself
-                            .send_message(ToDiscoveryManager::ResetWalkers)
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                });
-
-                state.watch_handle = Some(handle);
-            }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
