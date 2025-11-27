@@ -5,6 +5,7 @@ use std::pin::Pin;
 
 use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::discovery::{Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo};
+use p2panda_discovery::address_book::NodeInfo;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, error, info_span, trace, warn};
 
@@ -100,17 +101,27 @@ impl Discovery for AddressBookDiscovery {
                 Ok(rx) => UnboundedReceiverStream::new(rx)
                     .filter_map(|event| async {
                         match event.value {
-                            Some(node_info) => match iroh::EndpointAddr::try_from(node_info) {
-                                Ok(endpoint_addr) => {
-                                    let info = EndpointInfo::from(endpoint_addr);
-                                    Some(Ok(DiscoveryItem::new(info, PROVENANCE, None)))
+                            Some(node_info) => {
+                                // Abort resolving if node info has been marked as "stale".
+                                if node_info.is_stale() {
+                                    return Some(Err(DiscoveryError::from_err_any(
+                                        PROVENANCE,
+                                        "node is marked as stale",
+                                    )));
                                 }
-                                Err(_) => {
-                                    // No iroh-related transport information was available, ignore
-                                    // this event and wait ..
-                                    None
+
+                                match iroh::EndpointAddr::try_from(node_info) {
+                                    Ok(endpoint_addr) => {
+                                        let info = EndpointInfo::from(endpoint_addr);
+                                        Some(Ok(DiscoveryItem::new(info, PROVENANCE, None)))
+                                    }
+                                    Err(_) => {
+                                        // No iroh-related transport information was available,
+                                        // ignore this event and wait ..
+                                        None
+                                    }
                                 }
-                            },
+                            }
                             None => {
                                 // No node info was available in the address book yet, ignore this
                                 // event and wait ..

@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::{NodeId, NodeInfo, NodeMetrics};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 use crate::config::IrohConfig;
 use crate::{NetworkId, TopicId, TransportAddress, UnsignedTransportInfo};
@@ -362,5 +362,6 @@ pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
         node_id: args.public_key,
         bootstrap: false,
         transports: Some(transport_info.into()),
+        metrics: NodeMetrics::default(),
     }
 }

@@ -21,6 +21,7 @@ pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
 
 const MDNS_SERVICE_NAME: &str = "p2pandav1";
 
+#[allow(clippy::large_enum_variant)]
 pub enum ToMdns {
     /// Start mDNS "ambient" discovery.
     Initialise(iroh::EndpointId, MdnsDiscoveryMode),
