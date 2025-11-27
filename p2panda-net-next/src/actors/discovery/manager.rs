@@ -287,6 +287,8 @@ where
                         if difference.is_empty() || !difference.is_subset(&event.value) {
                             continue;
                         }
+
+                        debug!("detected new topic subscription, reset walkers");
                     }
                     Some(event) = node_info_rx.recv() => {
                         // Reset walkers if new transport info was set, ignore if we're
@@ -297,6 +299,8 @@ where
                             },
                             None => continue,
                         }
+
+                        debug!("detected our transport info changing, reset walkers");
                     }
                 }
 
