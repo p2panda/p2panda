@@ -614,22 +614,22 @@ impl Display for TransportAddress {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NodeMetrics {
-    failed_connection_attempts: usize,
-    successful_connection_attempts: usize,
+    failed_connections: usize,
+    successful_connections: usize,
     last_failed_at: Option<u64>,
     last_succeeded_at: Option<u64>,
 }
 
 impl NodeMetrics {
-    /// Records failed connection attempt.
+    /// Records failed connection attempt (both incoming or outgoing).
     pub fn report_failed_connection(&mut self) {
-        self.failed_connection_attempts += 1;
+        self.failed_connections += 1;
         self.last_failed_at = Some(current_timestamp());
     }
 
-    /// Records successful connection attempt.
+    /// Records successful connection attempt (both incoming or outgoing).
     pub fn report_successful_connection(&mut self) {
-        self.successful_connection_attempts += 1;
+        self.successful_connections += 1;
         self.last_succeeded_at = Some(current_timestamp());
     }
 

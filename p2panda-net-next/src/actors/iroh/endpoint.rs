@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call};
+use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, cast};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -17,10 +17,11 @@ use crate::NodeId;
 use crate::actors::address_book::{ToAddressBook, address_book_ref};
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::actors::iroh::discovery::AddressBookDiscovery;
+use crate::actors::iroh::{ConnectionOutcome, ConnectionRole};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
-use crate::utils::{ShortFormat, from_private_key, to_public_key};
+use crate::utils::{ShortFormat, from_private_key};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
@@ -52,6 +53,17 @@ pub enum ToIrohEndpoint {
 
     /// We've received a connection attempt from a remote iroh endpoint.
     Incoming(iroh::endpoint::Incoming),
+
+    /// Inform endpoint actor about this successful, incoming connection attempt.
+    ///
+    /// It will help us to remove any "stale" status of this node since it successfully contacted
+    /// us now.
+    Report {
+        remote_node_id: NodeId,
+        #[allow(unused)]
+        role: ConnectionRole,
+        outcome: ConnectionOutcome,
+    },
 }
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
@@ -63,13 +75,7 @@ pub struct IrohState {
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
-    connection_actors: BTreeMap<ActorId, ConnectionInfo>,
     worker_pool: ThreadLocalActorSpawner,
-}
-
-enum ConnectionInfo {
-    Connect { remote_node_id: NodeId },
-    Accept,
 }
 
 #[derive(Default)]
@@ -99,7 +105,6 @@ impl ThreadLocalActor for IrohEndpoint {
             protocols: Arc::default(),
             accept_handle: None,
             watch_addr_handle: None,
-            connection_actors: BTreeMap::new(),
             worker_pool: ThreadLocalActorSpawner::new(),
         })
     }
@@ -198,7 +203,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 // responsibility to handle the connection object is shifted to the caller from
                 // this point on, so using this actor to reason about the state of the connection
                 // is not possible here.
-                let (actor_ref, _) = IrohConnection::spawn_linked(
+                IrohConnection::spawn(
                     None,
                     (
                         state.args.public_key,
@@ -212,18 +217,11 @@ impl ThreadLocalActor for IrohEndpoint {
                             alpn: mixed_protocol_id,
                             reply,
                         },
+                        myself.into(),
                     ),
-                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
-
-                state.connection_actors.insert(
-                    actor_ref.get_id(),
-                    ConnectionInfo::Connect {
-                        remote_node_id: to_public_key(endpoint_addr.id),
-                    },
-                );
             }
             ToIrohEndpoint::Incoming(incoming) => {
                 // This actor runs as long as the protocol session holds the "accept" method. If
@@ -232,7 +230,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 //
                 // This means: The lifetime of this actor does _not_ indicate the lifetime of the
                 // connection itself.
-                let (actor_ref, _) = IrohConnection::spawn_linked(
+                IrohConnection::spawn(
                     None,
                     (
                         state.args.public_key,
@@ -240,20 +238,33 @@ impl ThreadLocalActor for IrohEndpoint {
                             incoming,
                             protocols: state.protocols.clone(),
                         },
+                        myself.clone().into(),
                     ),
-                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
-
-                state
-                    .connection_actors
-                    .insert(actor_ref.get_id(), ConnectionInfo::Accept);
             }
             ToIrohEndpoint::Endpoint(reply) => {
                 let _ = reply.send(state.endpoint.clone().expect(
                     "bind always takes place first, an endpoint must exist after this point",
                 ));
+            }
+            ToIrohEndpoint::Report {
+                remote_node_id,
+                outcome,
+                ..
+            } => {
+                // @TODO(adz): We want to use an events API here instead where the address book
+                // subscribes to the endpoint rather than pushing the data from here.
+                let Some(address_book) = address_book_ref(state.actor_namespace.clone()).await
+                else {
+                    warn!("could not record connection outcome in address book");
+                    return Ok(());
+                };
+
+                if cast!(address_book, ToAddressBook::Report(remote_node_id, outcome)).is_err() {
+                    warn!("could not record connection outcome in address book");
+                }
             }
         }
 
@@ -263,47 +274,12 @@ impl ThreadLocalActor for IrohEndpoint {
     async fn handle_supervisor_evt(
         &self,
         _myself: ActorRef<Self::Msg>,
-        message: SupervisionEvent,
-        state: &mut Self::State,
+        _message: SupervisionEvent,
+        _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        match message {
-            SupervisionEvent::ActorTerminated(actor_cell, _, _) => {
-                state.connection_actors.remove(&actor_cell.get_id());
-            }
-            SupervisionEvent::ActorFailed(actor_cell, err) => {
-                // If outgoing connection attempts failed we mark that node as "stale", to avoid
-                // clogging up the network with potentially outdated transport information.
-                //
-                // Note that we're _not_ doing that for incoming connection attempts ("accept").
-                if let Some(ConnectionInfo::Connect { remote_node_id }) =
-                    state.connection_actors.remove(&actor_cell.get_id())
-                {
-                    debug!(
-                        remote_node_id = %remote_node_id.fmt_short(),
-                        "mark node as stale, remove transport info, reason: {err}"
-                    );
-
-                    let Some(address_book_ref) =
-                        address_book_ref(state.actor_namespace.clone()).await
-                    else {
-                        warn!("could not mark node as stale as address book actor failed");
-                        return Ok(());
-                    };
-
-                    if call!(
-                        address_book_ref,
-                        ToAddressBook::RemoveTransportInfo,
-                        remote_node_id
-                    )
-                    .is_err()
-                    {
-                        warn!("could not mark node as stale as address book actor failed");
-                    }
-                }
-            }
-            _ => (),
-        }
-
+        // NOTE: We're not supervising any child actors here right now but override the default
+        // impl of `handle_supervisor_evt` anyhow, to prevent potential footguns in the future: Any
+        // termination of any child actor would cause the endpoint to go down as well otherwise.
         Ok(())
     }
 }
