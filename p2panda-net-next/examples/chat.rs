@@ -185,7 +185,8 @@ async fn main() -> Result<()> {
                 match from_sync.event {
                     TopicLogSyncEvent::SyncFinished(metrics) => {
                         println!(
-                            "finished sync session, bytes received = {}, bytes sent = {}",
+                            "finished sync session with {}, bytes received = {}, bytes sent = {}",
+                            from_sync.remote.fmt_short(),
                             metrics.total_bytes_remote.unwrap_or_default(),
                             metrics.total_bytes_local.unwrap_or_default()
                         );
