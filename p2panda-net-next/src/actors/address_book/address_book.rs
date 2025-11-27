@@ -148,10 +148,10 @@ where
     ) -> Result<Vec<NodeInfo>, S::Error> {
         let result = self.store.node_infos_by_sync_topics(&topics).await?;
 
-        // Remove ourselves.
+        // Remove ourselves and "stale" nodes.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key)
+            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
             .collect();
 
         Ok(result)
@@ -166,10 +166,10 @@ where
             .node_infos_by_ephemeral_messaging_topics(&topics)
             .await?;
 
-        // Remove ourselves.
+        // Remove ourselves and "stale" nodes.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key)
+            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
             .collect();
 
         Ok(result)
