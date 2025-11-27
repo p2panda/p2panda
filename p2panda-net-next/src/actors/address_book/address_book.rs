@@ -336,7 +336,7 @@ where
                 let _ = reply.send(rx);
             }
 
-            // Mostly a wrapper around the store ..
+            // Mostly a wrapper around the store.
             ToAddressBook::NodeInfo(node_id, reply) => {
                 let result = state.store.node_info(&node_id).await?;
                 let _ = reply.send(result);
