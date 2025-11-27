@@ -106,15 +106,17 @@ impl Discovery for AddressBookDiscovery {
                                     Some(Ok(DiscoveryItem::new(info, PROVENANCE, None)))
                                 }
                                 Err(_) => {
-                                    // No iroh-related transport information was available, ignore
-                                    // this event and wait ..
-                                    None
+                                    Some(Err(DiscoveryError::from_err_any(
+                                        PROVENANCE,
+                                        "no transport info available",
+                                    )))
                                 }
                             },
                             None => {
-                                // No node info was available in the address book yet, ignore this
-                                // event and wait ..
-                                None
+                                Some(Err(DiscoveryError::from_err_any(
+                                    PROVENANCE,
+                                    "no node info available",
+                                )))
                             }
                         }
                     })
