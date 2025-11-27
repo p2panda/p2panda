@@ -345,6 +345,8 @@ where
                     return Ok(());
                 };
 
+                let before = node_info.is_stale();
+
                 match outcome {
                     ConnectionOutcome::Successful => {
                         node_info.metrics.report_successful_connection();
@@ -352,6 +354,21 @@ where
                     ConnectionOutcome::Failed => {
                         node_info.metrics.report_failed_connection();
                     }
+                }
+
+                let after = node_info.is_stale();
+
+                match (before, after) {
+                    (true, false) => {
+                        debug!(
+                            remote_node_id = %remote_node_id.fmt_short(),
+                            "mark node as active after being stale"
+                        );
+                    }
+                    (false, true) => {
+                        debug!(remote_node_id = %remote_node_id.fmt_short(), "mark node as stale");
+                    }
+                    _ => (),
                 }
 
                 state.store.insert_node_info(node_info).await?;
