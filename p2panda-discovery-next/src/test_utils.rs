@@ -96,6 +96,10 @@ impl NodeInfo<TestId> for TestInfo {
         self.bootstrap
     }
 
+    fn is_stale(&self) -> bool {
+        false
+    }
+
     fn transports(&self) -> Option<Self::Transports> {
         self.transports.clone()
     }

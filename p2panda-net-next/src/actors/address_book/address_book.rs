@@ -16,6 +16,7 @@ use tracing::{debug, warn};
 use crate::actors::address_book::watchers::{
     UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
 };
+use crate::actors::iroh::ConnectionOutcome;
 use crate::addrs::NodeTransportInfo;
 use crate::args::ApplicationArguments;
 use crate::utils::ShortFormat;
@@ -84,15 +85,6 @@ pub enum ToAddressBook {
     #[allow(unused)]
     RemoveNodeInfo(NodeId, RpcReplyPort<bool>),
 
-    /// Removes transport information for a node which will make it "not connectable" for us. This
-    /// method can be used to mark nodes as "stale", for example after a failed connection attempt.
-    ///
-    /// Transport info can be set again either manually or if that node connected us and we've
-    /// exchanged their info again during discovery.
-    ///
-    /// Returns `true` if info was removed and `false` if it did not exist.
-    RemoveTransportInfo(NodeId, RpcReplyPort<bool>),
-
     /// Remove all node informations which are older than the given duration (from now). Returns
     /// number of removed entries.
     ///
@@ -128,6 +120,10 @@ pub enum ToAddressBook {
         UpdatesOnly,
         RpcReplyPort<WatcherReceiver<HashSet<TopicId>>>,
     ),
+
+    // @TODO(adz): We want to use an events API here instead where the address book subscribes to
+    // the endpoint rather than pushing the data from there.
+    Report(NodeId, ConnectionOutcome),
 }
 
 pub struct AddressBookState<S> {
@@ -148,10 +144,10 @@ where
     ) -> Result<Vec<NodeInfo>, S::Error> {
         let result = self.store.node_infos_by_sync_topics(&topics).await?;
 
-        // Remove ourselves and "stale" nodes.
+        // Remove ourselves.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
+            .filter(|info| info.id() != self.args.public_key)
             .collect();
 
         Ok(result)
@@ -166,10 +162,10 @@ where
             .node_infos_by_ephemeral_messaging_topics(&topics)
             .await?;
 
-        // Remove ourselves and "stale" nodes.
+        // Remove ourselves.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
+            .filter(|info| info.id() != self.args.public_key)
             .collect();
 
         Ok(result)
@@ -344,21 +340,38 @@ where
                 );
                 let _ = reply.send(rx);
             }
-            ToAddressBook::RemoveTransportInfo(node_id, reply) => {
-                let info_existed =
-                    if let Some(mut node_info) = state.store.node_info(&node_id).await? {
-                        let info_existed = node_info.transports.is_some();
+            ToAddressBook::Report(remote_node_id, outcome) => {
+                let Some(mut node_info) = state.store.node_info(&remote_node_id).await? else {
+                    return Ok(());
+                };
 
-                        // Remove (public) transport info, but keep (private) node info.
-                        node_info.transports = None;
-                        state.store.insert_node_info(node_info).await?;
+                let before = node_info.is_stale();
 
-                        info_existed
-                    } else {
-                        false
-                    };
+                match outcome {
+                    ConnectionOutcome::Successful => {
+                        node_info.metrics.report_successful_connection();
+                    }
+                    ConnectionOutcome::Failed => {
+                        node_info.metrics.report_failed_connection();
+                    }
+                }
 
-                let _ = reply.send(info_existed);
+                let after = node_info.is_stale();
+
+                match (before, after) {
+                    (true, false) => {
+                        debug!(
+                            remote_node_id = %remote_node_id.fmt_short(),
+                            "mark node as active after being stale"
+                        );
+                    }
+                    (false, true) => {
+                        debug!(remote_node_id = %remote_node_id.fmt_short(), "mark node as stale");
+                    }
+                    _ => (),
+                }
+
+                state.store.insert_node_info(node_info).await?;
             }
 
             // Mostly a wrapper around the store.
@@ -603,7 +616,9 @@ mod tests {
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::addrs::{NodeInfo, NodeTransportInfo, TransportAddress, UnsignedTransportInfo};
+    use crate::addrs::{
+        NodeInfo, NodeMetrics, NodeTransportInfo, TransportAddress, UnsignedTransportInfo,
+    };
     use crate::test_utils::test_args;
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -659,6 +674,7 @@ mod tests {
                     transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
                     transport_info.into()
                 }),
+                metrics: NodeMetrics::default(),
             }
         };
         assert!(node_info.verify().is_err());

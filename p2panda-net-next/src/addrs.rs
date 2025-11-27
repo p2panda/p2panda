@@ -37,6 +37,11 @@ pub struct NodeInfo {
     // initial discovery).
     pub bootstrap: bool,
 
+    /// Records of successful or failed connection attempts with this node.
+    ///
+    /// This is useful to understand if we can consider this node as "stale" or not.
+    pub metrics: NodeMetrics,
+
     /// Transport protocols we can use to connect to this node.
     ///
     /// If `None` then no information was received and we can't connect yet.
@@ -49,6 +54,7 @@ impl NodeInfo {
             node_id,
             bootstrap: false,
             transports: None,
+            metrics: NodeMetrics::default(),
         }
     }
 
@@ -120,6 +126,7 @@ impl From<iroh::EndpointAddr> for NodeInfo {
             node_id,
             bootstrap: false,
             transports: Some(transports),
+            metrics: NodeMetrics::default(),
         }
     }
 }
@@ -133,6 +140,10 @@ impl address_book::NodeInfo<NodeId> for NodeInfo {
 
     fn is_bootstrap(&self) -> bool {
         self.bootstrap
+    }
+
+    fn is_stale(&self) -> bool {
+        self.metrics.is_stale()
     }
 
     fn transports(&self) -> Option<Self::Transports> {
@@ -601,6 +612,38 @@ impl Display for TransportAddress {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NodeMetrics {
+    failed_connections: usize,
+    successful_connections: usize,
+    last_failed_at: Option<u64>,
+    last_succeeded_at: Option<u64>,
+}
+
+impl NodeMetrics {
+    /// Records failed connection attempt (both incoming or outgoing).
+    pub fn report_failed_connection(&mut self) {
+        self.failed_connections += 1;
+        self.last_failed_at = Some(current_timestamp());
+    }
+
+    /// Records successful connection attempt (both incoming or outgoing).
+    pub fn report_successful_connection(&mut self) {
+        self.successful_connections += 1;
+        self.last_succeeded_at = Some(current_timestamp());
+    }
+
+    /// Returns true if last known connection attempt failed.
+    pub fn is_stale(&self) -> bool {
+        match (self.last_succeeded_at, self.last_failed_at) {
+            (None, None) => false,
+            (None, Some(_)) => true,
+            (Some(_), None) => false,
+            (Some(succeeded_at), Some(failed_at)) => succeeded_at < failed_at,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum NodeInfoError {
     #[error("missing or invalid signature")]
@@ -618,11 +661,16 @@ pub enum NodeInfoError {
 
 #[cfg(test)]
 mod tests {
+    use std::thread::sleep;
+    use std::time::Duration;
+
     use p2panda_core::PrivateKey;
 
     use crate::addrs::NodeTransportInfo;
 
-    use super::{AuthenticatedTransportInfo, NodeInfo, TransportAddress, UnsignedTransportInfo};
+    use super::{
+        AuthenticatedTransportInfo, NodeInfo, NodeMetrics, TransportAddress, UnsignedTransportInfo,
+    };
 
     #[test]
     fn deduplicate_transport_address() {
@@ -689,6 +737,7 @@ mod tests {
             node_id: node_id_2,
             bootstrap: false,
             transports: None,
+            metrics: NodeMetrics::default(),
         };
         assert!(node_info.verify().is_ok());
         assert!(node_info.update_transports(transport_info.into()).is_err());
@@ -728,6 +777,7 @@ mod tests {
             node_id: node_id_1,
             bootstrap: true,
             transports: None,
+            metrics: NodeMetrics::default(),
         };
         assert!(node_info.verify().is_ok());
         assert!(node_info.update_transports(transport_info_1.into()).is_ok());
@@ -736,5 +786,38 @@ mod tests {
         // The "newer" transport info is the only one registered.
         assert_eq!(node_info.transports.as_ref().unwrap().len(), 1);
         assert_eq!(node_info.transports.unwrap().timestamp(), 2);
+    }
+
+    #[test]
+    fn stale_nodes() {
+        let signing_key = PrivateKey::new();
+        let node_id = signing_key.public_key();
+
+        let mut node_info = NodeInfo {
+            node_id,
+            bootstrap: true,
+            transports: None,
+            metrics: NodeMetrics::default(),
+        };
+
+        // Node is not stale by default.
+        assert!(!node_info.metrics.is_stale());
+
+        // Node is not stale after reporting successful connection attempt.
+        node_info.metrics.report_successful_connection();
+        assert!(!node_info.metrics.is_stale());
+
+        // @TODO(adz): Refactor time methods to be mockable so we don't need to sleep here.
+        sleep(Duration::from_millis(1000));
+
+        // Node is stale after reporting failed connection attempt.
+        node_info.metrics.report_failed_connection();
+        assert!(node_info.metrics.is_stale());
+
+        sleep(Duration::from_millis(1000));
+
+        // After a successful connection was reported, it is not stale again.
+        node_info.metrics.report_successful_connection();
+        assert!(!node_info.metrics.is_stale());
     }
 }

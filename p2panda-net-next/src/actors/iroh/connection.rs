@@ -8,8 +8,9 @@ use tracing::{Instrument, debug, info_span, warn};
 
 use crate::NodeId;
 use crate::actors::iroh::endpoint::ProtocolMap;
+use crate::actors::iroh::{ConnectionOutcome, ConnectionRole, ToIrohEndpoint};
 use crate::protocols::ProtocolId;
-use crate::utils::ShortFormat;
+use crate::utils::{ShortFormat, to_public_key};
 
 pub type ConnectionReplyPort =
     RpcReplyPort<Result<iroh::endpoint::Connection, ConnectionActorError>>;
@@ -30,7 +31,7 @@ pub enum IrohConnectionArgs {
 }
 
 pub enum ToIrohConnection {
-    EstablishConnection(NodeId, IrohConnectionArgs),
+    EstablishConnection(NodeId, IrohConnectionArgs, ActorRef<ToIrohEndpoint>),
 }
 
 #[derive(Default)]
@@ -41,7 +42,7 @@ impl ThreadLocalActor for IrohConnection {
 
     type Msg = ToIrohConnection;
 
-    type Arguments = (NodeId, IrohConnectionArgs);
+    type Arguments = (NodeId, IrohConnectionArgs, ActorRef<ToIrohEndpoint>);
 
     async fn pre_start(
         &self,
@@ -49,8 +50,12 @@ impl ThreadLocalActor for IrohConnection {
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         // Kick-off connection establishment directly after start.
-        let (node_id, args) = args;
-        myself.send_message(ToIrohConnection::EstablishConnection(node_id, args))?;
+        let (node_id, args, endpoint_ref) = args;
+        myself.send_message(ToIrohConnection::EstablishConnection(
+            node_id,
+            args,
+            endpoint_ref,
+        ))?;
         Ok(())
     }
 
@@ -61,12 +66,14 @@ impl ThreadLocalActor for IrohConnection {
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToIrohConnection::EstablishConnection(node_id, args) => {
+            ToIrohConnection::EstablishConnection(node_id, args, endpoint_ref) => {
                 let span =
                     info_span!("connection", me=%node_id.fmt_short(), remote=Empty, alpn=Empty);
 
                 // This blocks for a while but that's okay since we're inside an independent actor.
-                establish_connection(args).instrument(span).await?;
+                establish_connection(args, endpoint_ref)
+                    .instrument(span)
+                    .await?;
 
                 // If something failed this actor already terminated, propagating the error to the
                 // parent actor, if we're done here after a successful connection attempt, we stop
@@ -78,7 +85,10 @@ impl ThreadLocalActor for IrohConnection {
     }
 }
 
-async fn establish_connection(args: IrohConnectionArgs) -> Result<(), ConnectionActorError> {
+async fn establish_connection(
+    args: IrohConnectionArgs,
+    endpoint_ref: ActorRef<ToIrohEndpoint>,
+) -> Result<(), ConnectionActorError> {
     match args {
         IrohConnectionArgs::Connect {
             endpoint,
@@ -87,6 +97,8 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             reply,
         } => {
             tracing::Span::current().record("alpn", alpn.fmt_short());
+            let remote_node_id = to_public_key(endpoint_addr.id);
+
             match endpoint
                 .connect(endpoint_addr, &alpn)
                 .await
@@ -94,11 +106,25 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
             {
                 Ok(connection) => {
                     debug!("successfully initiated connection");
+
+                    let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
+                        remote_node_id,
+                        role: ConnectionRole::Connect,
+                        outcome: ConnectionOutcome::Successful,
+                    });
+
                     // Give connection object to the caller and stop actor, we're done here.
                     let _ = reply.send(Ok(connection));
                 }
                 Err(err) => {
                     warn!("connection establishment failed: {err:#}");
+
+                    let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
+                        remote_node_id,
+                        role: ConnectionRole::Connect,
+                        outcome: ConnectionOutcome::Failed,
+                    });
+
                     // Inform caller about what went wrong and shut down actor with a failure.
                     // Since the error types do not implement `Clone` we're helping ourselves with
                     // an own type holding the string representation.
@@ -149,6 +175,13 @@ async fn establish_connection(args: IrohConnectionArgs) -> Result<(), Connection
                 tracing::field::display(connection.remote_id().fmt_short()),
             );
             debug!("successfully accepted connection");
+
+            // Inform endpoint actor about this successful, incoming connection attempt.
+            let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
+                remote_node_id: to_public_key(connection.remote_id()),
+                role: ConnectionRole::Accept,
+                outcome: ConnectionOutcome::Successful,
+            });
 
             // Pass over connection to handler, ignore any errors here as this is nothing we need
             // to be aware of anymore, this is the end of this actor.
