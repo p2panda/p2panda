@@ -80,6 +80,26 @@ pub async fn watch_topic(
     Ok(rx)
 }
 
+pub async fn watch_node_topics(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+    updates_only: UpdatesOnly,
+) -> Result<WatcherReceiver<HashSet<TopicId>>, AddressBookUtilsError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookUtilsError::ActorNotAvailable);
+    };
+
+    let rx = call!(
+        address_book_ref,
+        ToAddressBook::WatchNodeTopics,
+        node_id,
+        updates_only
+    )
+    .map_err(|_| AddressBookUtilsError::ActorFailed)?;
+
+    Ok(rx)
+}
+
 #[derive(Debug, Error)]
 pub enum AddressBookUtilsError {
     #[error("address book actor is not available")]
