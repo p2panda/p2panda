@@ -8,7 +8,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::actors::discovery::DiscoveryEvent;
 use crate::events::{EventsSender, NetworkEvent};
@@ -79,7 +79,8 @@ impl ThreadLocalActor for DiscoveryEventsReceiver {
                     }
                 }
                 Err(RecvError::Closed) => {
-                    error!("discovery events receiver actor: channel closed");
+                    // This has likely occurred because the events actor has stopped.
+                    warn!("discovery events receiver actor: channel closed");
                     myself.stop(Some("channel closed".to_string()));
                     return Ok(());
                 }
