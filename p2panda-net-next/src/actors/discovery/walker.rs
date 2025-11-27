@@ -168,6 +168,7 @@ where
                 // outside.
                 tokio::select! {
                     _ = state.walker_reset.notified() => {
+                        trace!("received notification to reset walker and backoff");
                         walk_from_here = WalkFromHere::Bootstrap;
                         state.backoff.reset();
                     }
