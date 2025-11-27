@@ -227,19 +227,23 @@ pub mod memory {
 
         async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
             let node_infos = self.node_infos.read().await;
-            Ok(node_infos.values().cloned().collect())
+            Ok(node_infos
+                .values()
+                .filter(|info| !info.is_stale())
+                .cloned()
+                .collect())
         }
 
         async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
             let node_infos = self.node_infos.read().await;
-            Ok(node_infos.len())
+            Ok(node_infos.values().filter(|info| !info.is_stale()).count())
         }
 
         async fn all_bootstrap_nodes_len(&self) -> Result<usize, Self::Error> {
             let node_infos = self.node_infos.read().await;
             Ok(node_infos
                 .values()
-                .filter(|info| info.is_bootstrap())
+                .filter(|info| info.is_bootstrap() && !info.is_stale())
                 .count())
         }
 
@@ -303,7 +307,13 @@ pub mod memory {
                     }
                 })
                 .collect();
-            self.selected_node_infos(ids.as_slice()).await
+            let node_infos = self.selected_node_infos(ids.as_slice()).await?;
+
+            // Remove stale nodes.
+            Ok(node_infos
+                .into_iter()
+                .filter(|info| !info.is_stale())
+                .collect())
         }
 
         async fn node_infos_by_ephemeral_messaging_topics(
@@ -321,7 +331,13 @@ pub mod memory {
                     }
                 })
                 .collect();
-            self.selected_node_infos(ids.as_slice()).await
+            let node_infos = self.selected_node_infos(ids.as_slice()).await?;
+
+            // Remove stale nodes.
+            Ok(node_infos
+                .into_iter()
+                .filter(|info| !info.is_stale())
+                .collect())
         }
 
         async fn random_node(&self) -> Result<Option<N>, Self::Error> {

@@ -9,15 +9,15 @@ use std::time::Instant;
 
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
-use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
 use tokio::sync::Notify;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::actors::address_book::{
-    ADDRESS_BOOK, ToAddressBook, watch_node_info, watch_node_topics,
+    ADDRESS_BOOK, ToAddressBook, address_book_ref, watch_node_info, watch_node_topics,
 };
 use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
@@ -117,6 +117,20 @@ impl<S> DiscoveryManagerState<S> {
                 last_successful: info.last_result.clone(),
             },
         ));
+    }
+
+    /// Returns true if the given node is stale.
+    pub async fn is_stale(&self, remote_node_id: NodeId) -> bool {
+        let Some(address_book) = address_book_ref(self.actor_namespace.clone()).await else {
+            return false;
+        };
+
+        let Ok(Some(node_info)) = call!(address_book, ToAddressBook::NodeInfo, remote_node_id)
+        else {
+            return false;
+        };
+
+        node_info.is_stale()
     }
 }
 
@@ -340,8 +354,16 @@ where
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
-                let session_id = state.next_session_id();
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
+
+                // Check first if this node became stale in the meantime and cancel this session if
+                // it is.
+                if state.is_stale(remote_node_id).await {
+                    state.repeat_last_walk_step(walker_id);
+                    return Ok(());
+                }
+
+                let session_id = state.next_session_id();
 
                 let (_, handle) = DiscoverySession::spawn_linked(
                     Some(
