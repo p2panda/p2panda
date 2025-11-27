@@ -30,9 +30,6 @@ pub const EVENTS: &str = "net.events";
 
 #[allow(clippy::large_enum_variant)]
 pub enum ToEvents {
-    /// Set up events actor.
-    Initialise,
-
     /// Subscribe to system events.
     Subscribe(RpcReplyPort<EventsReceiver>),
 
@@ -66,15 +63,12 @@ impl ThreadLocalActor for Events {
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
         let (tx, _) = broadcast::channel(256);
-
-        // Initialise events actor automatically.
-        myself.send_message(ToEvents::Initialise)?;
 
         Ok(EventsState {
             actor_namespace,
@@ -83,6 +77,32 @@ impl ThreadLocalActor for Events {
             watch_addr_handle: None,
             home_relay_url: None,
         })
+    }
+
+    async fn post_start(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Subscribe to our own node info to find out if transport addresses have changed.
+        let mut rx =
+            watch_node_info(state.actor_namespace.clone(), state.args.public_key, false).await?;
+
+        let watch_addr_handle = tokio::task::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                if let Some(node_info) = event.value
+                    && myself
+                        .send_message(ToEvents::UpdatedNodeInfo(node_info))
+                        .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+        state.watch_addr_handle = Some(watch_addr_handle);
+
+        Ok(())
     }
 
     async fn post_stop(
@@ -104,26 +124,6 @@ impl ThreadLocalActor for Events {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToEvents::Initialise => {
-                // Subscribe to our own node info to find out if transport addresses have changed.
-                let mut rx =
-                    watch_node_info(state.actor_namespace.clone(), state.args.public_key, false)
-                        .await?;
-
-                let watch_addr_handle = tokio::task::spawn(async move {
-                    while let Some(event) = rx.recv().await {
-                        if let Some(node_info) = event.value
-                            && myself
-                                .send_message(ToEvents::UpdatedNodeInfo(node_info))
-                                .is_err()
-                        {
-                            break;
-                        }
-                    }
-                });
-
-                state.watch_addr_handle = Some(watch_addr_handle);
-            }
             ToEvents::UpdatedNodeInfo(node_info) => {
                 // Find out if our relay status has changed.
                 if let Ok(endpoint_addr) = iroh::EndpointAddr::try_from(node_info.clone()) {
