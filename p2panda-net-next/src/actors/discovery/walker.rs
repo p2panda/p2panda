@@ -2,6 +2,7 @@
 
 use std::error::Error as StdError;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Duration;
 
 use p2panda_discovery::address_book::AddressBookStore;
@@ -11,6 +12,7 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
 use rand::Rng;
 use rand_chacha::ChaCha20Rng;
+use tokio::sync::Notify;
 use tokio::time;
 use tracing::trace;
 
@@ -92,6 +94,7 @@ pub struct DiscoveryWalkerState<S> {
     manager_ref: ActorRef<ToDiscoveryManager>,
     walker: RandomWalker<ChaCha20Rng, S, NodeId, NodeInfo>,
     backoff: Backoff,
+    walker_reset: Arc<Notify>,
 }
 
 pub struct DiscoveryWalker<S> {
@@ -115,14 +118,19 @@ where
 
     type Msg = ToDiscoveryWalker;
 
-    type Arguments = (ApplicationArguments, S, ActorRef<ToDiscoveryManager>);
+    type Arguments = (
+        ApplicationArguments,
+        S,
+        Arc<Notify>,
+        ActorRef<ToDiscoveryManager>,
+    );
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, store, manager_ref) = args;
+        let (args, store, walker_reset, manager_ref) = args;
         Ok(DiscoveryWalkerState {
             manager_ref,
             walker: RandomWalker::from_config(
@@ -134,6 +142,7 @@ where
                 },
             ),
             backoff: Backoff::new(BackoffConfig::default(), args.rng),
+            walker_reset,
         })
     }
 
@@ -144,7 +153,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryWalker::NextNode(walk_from_here) => {
+            ToDiscoveryWalker::NextNode(mut walk_from_here) => {
                 // We use a simple incremental backoff logic to determine if this walker can slow
                 // down when it doesn't bring any new results anymore.
                 if walk_from_here.success_rate() < SUCCESS_RATE_THRESHOLD {
@@ -155,7 +164,16 @@ where
                     state.backoff.reset();
                 }
 
-                state.backoff.sleep().await;
+                // Wait until backoff has finished or we've received a "reset" signal from the
+                // outside.
+                tokio::select! {
+                    _ = state.walker_reset.notified() => {
+                        trace!("received notification to reset walker and backoff");
+                        walk_from_here = WalkFromHere::Bootstrap;
+                        state.backoff.reset();
+                    }
+                    _ = state.backoff.sleep() => (),
+                }
 
                 // Next "random walker" step finds us another node id to connect to. If this fails
                 // a critical store error occurred and we stop the actor.
@@ -256,6 +274,10 @@ impl Backoff {
     }
 
     pub async fn sleep(&self) {
+        if self.value.is_zero() {
+            return;
+        }
+
         trace!("backoff {} seconds", self.value.as_secs());
         tokio::time::sleep(self.value).await;
     }

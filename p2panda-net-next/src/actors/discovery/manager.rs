@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Instant;
 
 use iroh::protocol::ProtocolHandler;
@@ -12,9 +13,12 @@ use p2panda_discovery::address_book::AddressBookStore;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
+use tokio::sync::Notify;
 use tracing::{debug, warn};
 
-use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
+use crate::actors::address_book::{
+    ADDRESS_BOOK, ToAddressBook, watch_node_info, watch_node_topics,
+};
 use crate::actors::discovery::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,
 };
@@ -29,9 +33,6 @@ use crate::utils::{ShortFormat, to_public_key};
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 
 pub enum ToDiscoveryManager {
-    /// Accept incoming "discovery protocol" connection requests.
-    RegisterProtocol,
-
     /// Initiate a discovery session with the given node.
     ///
     /// A reference to the walker actor which initiated this session is kept, so the result of the
@@ -50,6 +51,11 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
+    /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
+    /// will allow them to do their work faster and can be used to improve the user experience in
+    /// moments where the application needs discovery.
+    ResetWalkers,
+
     /// Returns current metrics.
     #[allow(unused)]
     Metrics(RpcReplyPort<DiscoveryMetrics>),
@@ -63,6 +69,8 @@ pub struct DiscoveryManagerState<S> {
     next_session_id: DiscoverySessionId,
     sessions: HashMap<DiscoverySessionId, DiscoverySessionInfo>,
     walkers: HashMap<usize, WalkerInfo>,
+    walkers_reset: Arc<Notify>,
+    watch_handle: Option<JoinHandle<()>>,
     metrics: DiscoveryMetrics,
 }
 
@@ -201,10 +209,16 @@ where
 
         // Spawn random walkers. They automatically initiate discovery sessions.
         let mut walkers = HashMap::new();
+        let walkers_reset = Arc::new(Notify::new());
         for walker_id in 0..args.discovery_config.random_walkers_count {
             let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
                 Some(DiscoveryActorName::new_walker(walker_id).to_string(&actor_namespace)),
-                (args.clone(), store.clone(), myself.clone()),
+                (
+                    args.clone(),
+                    store.clone(),
+                    walkers_reset.clone(),
+                    myself.clone(),
+                ),
                 myself.clone().into(),
                 pool.clone(),
             )
@@ -225,9 +239,6 @@ where
             );
         }
 
-        // Invoke the handler to register the discovery protocol.
-        let _ = myself.cast(ToDiscoveryManager::RegisterProtocol);
-
         Ok(DiscoveryManagerState {
             actor_namespace,
             args,
@@ -236,8 +247,83 @@ where
             next_session_id: 0,
             sessions: HashMap::new(),
             walkers,
+            walkers_reset,
+            watch_handle: None,
             metrics: DiscoveryMetrics::default(),
         })
+    }
+
+    async fn post_start(
+        &self,
+        myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        // Accept incoming "discovery protocol" connection requests.
+        register_protocol(
+            DISCOVERY_PROTOCOL_ID,
+            DiscoveryProtocolHandler {
+                manager_ref: myself.clone(),
+            },
+            state.actor_namespace.clone(),
+        )?;
+
+        // Watch for topic changes of our node (to find out if user subscribed to a new
+        // topic) and watch for transport info changing. If yes, we want to reset the
+        // backoff logic of the walkers to allow finding nodes "faster" for this newly
+        // subscribed topic or networking setup.
+        let mut topics_rx =
+            watch_node_topics(state.actor_namespace.clone(), state.args.public_key, true).await?;
+
+        let mut node_info_rx =
+            watch_node_info(state.actor_namespace.clone(), state.args.public_key, true).await?;
+
+        let handle = tokio::task::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(event) = topics_rx.recv() => {
+                        // Reset walkers if topics have been _added_ to our set, ignore
+                        // removed topics.
+                        let difference = event.difference.unwrap_or_default();
+                        if difference.is_empty() || !difference.is_subset(&event.value) {
+                            continue;
+                        }
+                    }
+                    Some(event) = node_info_rx.recv() => {
+                        // Reset walkers if new transport info was set, ignore if we're
+                        // offline (and transport info is `None`).
+                        match event.value {
+                            Some(node_info) => if node_info.transports.is_none() {
+                                continue;
+                            },
+                            None => continue,
+                        }
+                    }
+                }
+
+                if myself
+                    .send_message(ToDiscoveryManager::ResetWalkers)
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+
+        state.watch_handle = Some(handle);
+
+        Ok(())
+    }
+
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        if let Some(handle) = &state.watch_handle {
+            handle.abort();
+        }
+
+        Ok(())
     }
 
     async fn handle(
@@ -247,16 +333,6 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToDiscoveryManager::RegisterProtocol => {
-                // Accept incoming "discovery protocol" connection requests.
-                register_protocol(
-                    DISCOVERY_PROTOCOL_ID,
-                    DiscoveryProtocolHandler {
-                        manager_ref: myself.clone(),
-                    },
-                    state.actor_namespace.clone(),
-                )?;
-            }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
                 // Each walker can only ever run max. one discovery sessions at a time.
@@ -370,6 +446,9 @@ where
                     // Continue random walk.
                     state.repeat_last_walk_step(walker_id);
                 }
+            }
+            ToDiscoveryManager::ResetWalkers => {
+                state.walkers_reset.notify_waiters();
             }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());
