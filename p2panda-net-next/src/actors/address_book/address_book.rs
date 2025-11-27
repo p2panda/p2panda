@@ -84,6 +84,15 @@ pub enum ToAddressBook {
     #[allow(unused)]
     RemoveNodeInfo(NodeId, RpcReplyPort<bool>),
 
+    /// Removes transport information for a node which will make it "not connectable" for us. This
+    /// method can be used to mark nodes as "stale", for example after a failed connection attempt.
+    ///
+    /// Transport info can be set again either manually or if that node connected us and we've
+    /// exchanged their info again during discovery.
+    ///
+    /// Returns `true` if info was removed and `false` if it did not exist.
+    RemoveTransportInfo(NodeId, RpcReplyPort<bool>),
+
     /// Remove all node informations which are older than the given duration (from now). Returns
     /// number of removed entries.
     ///
@@ -334,6 +343,22 @@ where
                     WatchedNodeTopics::from_topics(node_id, topics),
                 );
                 let _ = reply.send(rx);
+            }
+            ToAddressBook::RemoveTransportInfo(node_id, reply) => {
+                let info_existed =
+                    if let Some(mut node_info) = state.store.node_info(&node_id).await? {
+                        let info_existed = node_info.transports.is_some();
+
+                        // Remove (public) transport info, but keep (private) node info.
+                        node_info.transports = None;
+                        state.store.insert_node_info(node_info).await?;
+
+                        info_existed
+                    } else {
+                        false
+                    };
+
+                let _ = reply.send(info_existed);
             }
 
             // Mostly a wrapper around the store.
