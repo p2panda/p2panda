@@ -5,6 +5,7 @@ mod addrs;
 mod args;
 mod cbor;
 mod config;
+pub mod events;
 mod network;
 mod protocols;
 pub mod streams;
