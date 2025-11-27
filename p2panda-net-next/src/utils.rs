@@ -6,6 +6,7 @@ use crate::NodeId;
 
 /// Returns current UNIX timestamp from local system time.
 pub fn current_timestamp() -> u64 {
+    // @TODO: We want this to be mockable, so we can better tests without "sleeping".
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock moved backwards")

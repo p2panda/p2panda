@@ -603,7 +603,7 @@ mod tests {
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::addrs::{NodeInfo, NodeTransportInfo, TransportAddress, UnsignedTransportInfo};
+    use crate::addrs::{NodeInfo, NodeMetrics, NodeTransportInfo, TransportAddress, UnsignedTransportInfo};
     use crate::test_utils::test_args;
 
     use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -659,6 +659,7 @@ mod tests {
                     transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
                     transport_info.into()
                 }),
+                metrics: NodeMetrics::default(),
             }
         };
         assert!(node_info.verify().is_err());

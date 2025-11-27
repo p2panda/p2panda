@@ -19,6 +19,12 @@ pub trait NodeInfo<ID> {
     /// Returns `true` if node is marked as a "boostrap".
     fn is_bootstrap(&self) -> bool;
 
+    /// Returns `true` if node is marked as a "stale".
+    ///
+    /// Stale nodes should not be considered for connection attempts anymore and should not be
+    /// shared during discovery with other nodes.
+    fn is_stale(&self) -> bool;
+
     /// Returns attached transport information for this node, if available.
     fn transports(&self) -> Option<Self::Transports>;
 }
