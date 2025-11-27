@@ -19,6 +19,12 @@ pub trait NodeInfo<ID> {
     /// Returns `true` if node is marked as a "boostrap".
     fn is_bootstrap(&self) -> bool;
 
+    /// Returns `true` if node is marked as a "stale".
+    ///
+    /// Stale nodes should not be considered for connection attempts anymore and should not be
+    /// shared during discovery with other nodes.
+    fn is_stale(&self) -> bool;
+
     /// Returns attached transport information for this node, if available.
     fn transports(&self) -> Option<Self::Transports>;
 }
@@ -221,19 +227,23 @@ pub mod memory {
 
         async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
             let node_infos = self.node_infos.read().await;
-            Ok(node_infos.values().cloned().collect())
+            Ok(node_infos
+                .values()
+                .filter(|info| !info.is_stale())
+                .cloned()
+                .collect())
         }
 
         async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
             let node_infos = self.node_infos.read().await;
-            Ok(node_infos.len())
+            Ok(node_infos.values().filter(|info| !info.is_stale()).count())
         }
 
         async fn all_bootstrap_nodes_len(&self) -> Result<usize, Self::Error> {
             let node_infos = self.node_infos.read().await;
             Ok(node_infos
                 .values()
-                .filter(|info| info.is_bootstrap())
+                .filter(|info| info.is_bootstrap() && !info.is_stale())
                 .count())
         }
 
@@ -297,7 +307,13 @@ pub mod memory {
                     }
                 })
                 .collect();
-            self.selected_node_infos(ids.as_slice()).await
+            let node_infos = self.selected_node_infos(ids.as_slice()).await?;
+
+            // Remove stale nodes.
+            Ok(node_infos
+                .into_iter()
+                .filter(|info| !info.is_stale())
+                .collect())
         }
 
         async fn node_infos_by_ephemeral_messaging_topics(
@@ -315,50 +331,33 @@ pub mod memory {
                     }
                 })
                 .collect();
-            self.selected_node_infos(ids.as_slice()).await
+            let node_infos = self.selected_node_infos(ids.as_slice()).await?;
+
+            // Remove stale nodes.
+            Ok(node_infos
+                .into_iter()
+                .filter(|info| !info.is_stale())
+                .collect())
         }
 
         async fn random_node(&self) -> Result<Option<N>, Self::Error> {
-            let node_infos: Vec<N> = self
-                .node_infos
-                .read()
-                .await
-                .iter()
-                .filter_map(|(_, node_info)| {
-                    // Remove all node infos without any transports attached.
-                    if node_info.transports().is_some() {
-                        Some(node_info.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let node_infos = self.node_infos.read().await;
             let mut rng = self.rng.lock().await;
-            let result = node_infos.into_iter().choose(&mut *rng);
-            Ok(result)
+            let result = node_infos
+                .values()
+                .filter(|info| !info.is_stale())
+                .choose(&mut *rng);
+            Ok(result.cloned())
         }
 
         async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
-            let node_infos: Vec<N> = self
-                .node_infos
-                .read()
-                .await
-                .iter()
-                .filter_map(|(_, node_info)| {
-                    // Remove all node infos without any transports attached.
-                    if node_info.transports().is_some() {
-                        Some(node_info.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let node_infos = self.node_infos.read().await;
             let mut rng = self.rng.lock().await;
             let result = node_infos
-                .into_iter()
-                .filter(|info| info.is_bootstrap())
+                .values()
+                .filter(|info| info.is_bootstrap() && !info.is_stale())
                 .choose(&mut *rng);
-            Ok(result)
+            Ok(result.cloned())
         }
 
         async fn node_sync_topics(&self, id: &ID) -> Result<HashSet<[u8; 32]>, Self::Error> {

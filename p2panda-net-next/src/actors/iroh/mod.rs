@@ -108,3 +108,15 @@ pub enum ConnectError {
     #[error(transparent)]
     ConnectionActor(#[from] ConnectionActorError),
 }
+
+#[derive(Debug)]
+pub enum ConnectionOutcome {
+    Successful,
+    Failed,
+}
+
+#[derive(Debug)]
+pub enum ConnectionRole {
+    Connect,
+    Accept,
+}

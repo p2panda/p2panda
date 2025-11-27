@@ -102,7 +102,7 @@ where
             .map_err(RandomWalkError::Store)?
             .into_iter()
             .filter_map(|info| {
-                // Remove ourselves from set.
+                // Remove ourselves.
                 let id = info.id();
                 if id != self.my_id { Some(id) } else { None }
             });
