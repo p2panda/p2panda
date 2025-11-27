@@ -325,46 +325,23 @@ pub mod memory {
         }
 
         async fn random_node(&self) -> Result<Option<N>, Self::Error> {
-            let node_infos: Vec<N> = self
-                .node_infos
-                .read()
-                .await
-                .iter()
-                .filter_map(|(_, node_info)| {
-                    // Remove all node infos without any transports attached.
-                    if node_info.transports().is_some() {
-                        Some(node_info.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let node_infos = self.node_infos.read().await;
             let mut rng = self.rng.lock().await;
-            let result = node_infos.into_iter().choose(&mut *rng);
-            Ok(result)
+            let result = node_infos
+                .values()
+                .filter(|info| !info.is_stale())
+                .choose(&mut *rng);
+            Ok(result.cloned())
         }
 
         async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
-            let node_infos: Vec<N> = self
-                .node_infos
-                .read()
-                .await
-                .iter()
-                .filter_map(|(_, node_info)| {
-                    // Remove all node infos without any transports attached.
-                    if node_info.transports().is_some() {
-                        Some(node_info.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let node_infos = self.node_infos.read().await;
             let mut rng = self.rng.lock().await;
             let result = node_infos
-                .into_iter()
-                .filter(|info| info.is_bootstrap())
+                .values()
+                .filter(|info| info.is_bootstrap() && !info.is_stale())
                 .choose(&mut *rng);
-            Ok(result)
+            Ok(result.cloned())
         }
 
         async fn node_sync_topics(&self, id: &ID) -> Result<HashSet<[u8; 32]>, Self::Error> {

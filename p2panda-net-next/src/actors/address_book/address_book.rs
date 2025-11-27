@@ -147,7 +147,7 @@ where
         // Remove ourselves and "stale" nodes.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
+            .filter(|info| info.id() != self.args.public_key && !info.is_stale())
             .collect();
 
         Ok(result)
@@ -165,7 +165,7 @@ where
         // Remove ourselves and "stale" nodes.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key && info.transports().is_some())
+            .filter(|info| info.id() != self.args.public_key && !info.is_stale())
             .collect();
 
         Ok(result)
