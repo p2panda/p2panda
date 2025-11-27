@@ -15,7 +15,7 @@ use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 pub use address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 
-async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
+pub async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRef<ToAddressBook>> {
     registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace))
         .map(ActorRef::<ToAddressBook>::from)
 }
