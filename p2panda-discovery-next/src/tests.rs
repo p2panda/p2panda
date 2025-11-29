@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures_channel::mpsc;
@@ -11,10 +11,12 @@ use tokio::sync::RwLock;
 use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
-use crate::address_book::{AddressBookStore};
-use crate::psi_hash::{ PsiHashDiscoveryProtocol};
+use crate::address_book::{AddressBookStore, NodeInfo};
+use crate::psi_hash::PsiHashDiscoveryProtocol;
 use crate::random_walk::RandomWalker;
-use crate::test_utils::{TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo};
+use crate::test_utils::{
+    TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo, pad_to_32_bytes,
+};
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
 
 struct TestWalker {
@@ -145,7 +147,7 @@ impl TestNode {
 }
 
 #[tokio::test]
-async fn psi_hash_protocol() {
+async fn peer_discovery_in_network() {
     const NUM_NODES: usize = 2;
     const NUM_WALKERS: usize = 1;
     const MAX_RUNS: usize = 1;
@@ -249,3 +251,42 @@ async fn psi_hash_protocol() {
 
     handle.await;
 }
+
+#[tokio::test]
+async fn topic_discovery() {
+    let rng = ChaCha20Rng::from_seed([1; 32]);
+
+    let local = LocalSet::new();
+    let handle = local.run_until(async move {
+        let alice_node = TestNode::new(0, 0, rng.clone());
+        let bob_node = TestNode::new(1, 0, rng);
+
+        let mut alice_subscription = TestSubscription::default();
+        alice_subscription.sync_topics.insert(pad_to_32_bytes(123));
+        alice_subscription.sync_topics.insert(pad_to_32_bytes(456));
+        let mut bob_subscription = TestSubscription::default();
+        bob_subscription.sync_topics.insert(pad_to_32_bytes(456));
+        bob_subscription.sync_topics.insert(pad_to_32_bytes(789));
+
+        let alice_protocol = PsiHashDiscoveryProtocol::new(
+            alice_node.store.clone(),
+            alice_subscription,
+            bob_node.id,
+        );
+
+        let bob_protocol =
+            PsiHashDiscoveryProtocol::new(bob_node.store.clone(), bob_subscription, alice_node.id);
+
+        let result = alice_node
+            .connect(alice_protocol, bob_protocol, &bob_node)
+            .await;
+
+        let mut expected = HashSet::new();
+        expected.insert(pad_to_32_bytes(456));
+
+        assert_eq!(expected, result.sync_topics);
+    });
+
+    handle.await;
+}
+
