@@ -139,3 +139,10 @@ impl DiscoveryResult<TestId, TestInfo> {
         }
     }
 }
+
+pub fn pad_to_32_bytes(value: u32) -> [u8; 32] {
+    let bytes = value.to_be_bytes(); // 16 bytes for u128
+    let mut out = [0u8; 32];
+    out[32 - bytes.len()..].copy_from_slice(&bytes);
+    out
+}
