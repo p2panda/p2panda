@@ -234,6 +234,12 @@ where
     }
 }
 
+impl<M> Drop for Network<M> {
+    fn drop(&mut self) {
+        self.supervisor_actor.stop(None);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
