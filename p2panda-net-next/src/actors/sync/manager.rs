@@ -116,6 +116,9 @@ where
 
         // The sync poller actor lives as long as the manager and only terminates due to the
         // manager actor itself terminating.
+        //
+        // @TODO: We want to link the poller actor so it gets terminated even on a critical
+        // failure.
         let (sync_poller_actor, _) = SyncPoller::spawn(
             None,
             (actor_namespace.clone(), event_stream, sender),

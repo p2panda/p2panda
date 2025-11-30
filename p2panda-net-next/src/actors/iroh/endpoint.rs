@@ -203,7 +203,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 // responsibility to handle the connection object is shifted to the caller from
                 // this point on, so using this actor to reason about the state of the connection
                 // is not possible here.
-                IrohConnection::spawn(
+                IrohConnection::spawn_linked(
                     None,
                     (
                         state.args.public_key,
@@ -219,6 +219,7 @@ impl ThreadLocalActor for IrohEndpoint {
                         },
                         myself.clone(),
                     ),
+                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
@@ -230,7 +231,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 //
                 // This means: The lifetime of this actor does _not_ indicate the lifetime of the
                 // connection itself.
-                IrohConnection::spawn(
+                IrohConnection::spawn_linked(
                     None,
                     (
                         state.args.public_key,
@@ -240,6 +241,7 @@ impl ThreadLocalActor for IrohEndpoint {
                         },
                         myself.clone(),
                     ),
+                    myself.into(),
                     state.worker_pool.clone(),
                 )
                 .await?;
