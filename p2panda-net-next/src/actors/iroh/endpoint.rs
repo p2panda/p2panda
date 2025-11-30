@@ -5,7 +5,9 @@
 use std::collections::BTreeMap;
 use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
+use std::time::Duration;
 
+use iroh::endpoint::TransportConfig;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, cast};
@@ -24,6 +26,16 @@ use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
+
+/// Period of inactivity before sending a keep-alive packet.
+///
+/// Keep-alive packets prevent an inactive but otherwise healthy connection from timing out.
+///
+/// Must be set lower than the idle_timeout of both peers to be effective.
+pub const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(5);
+
+/// Maximum duration of inactivity to accept before timing out the connection.
+pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -144,6 +156,13 @@ impl ThreadLocalActor for IrohEndpoint {
                 let socket_address_v6 =
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
+                // Adjust QUIC transport parameters.
+                let mut transport_config = TransportConfig::default();
+                transport_config.keep_alive_interval(Some(KEEP_ALIVE_INTERVAL));
+                transport_config.max_idle_timeout(Some(
+                    MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+                ));
+
                 // Register list of possible "home relays" for this node.
                 let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
                 let relay_mode = iroh::RelayMode::Custom(relay_map);
@@ -156,6 +175,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 let endpoint = iroh::Endpoint::empty_builder(relay_mode)
                     .discovery(address_book_discovery)
                     .secret_key(from_private_key(state.args.private_key.clone()))
+                    .transport_config(transport_config)
                     .bind_addr_v4(socket_address_v4)
                     .bind_addr_v6(socket_address_v6)
                     .bind()
