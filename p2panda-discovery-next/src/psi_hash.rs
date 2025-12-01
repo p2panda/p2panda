@@ -94,8 +94,7 @@ where
             .map_err(|_| PsiHashDiscoveryError::Sink)?;
 
         println!("alice wait m2");
-        let message_2 = rx.next().await;
-        let message_2 = match message_2 {
+        let message_2 = match rx.next().await {
             Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
             None => {
                 return Err(PsiHashDiscoveryError::Stream);
@@ -110,11 +109,9 @@ where
         else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
-        println!("alice recieve m2");
-        // TODO: santity check bob salt half and bail if its 0s or short
 
-        // now that bob has responded, lets grab our topics so we can hash them
-        // keep topics as a vector so we can do lookups later
+        println!("alice recieve m2");
+        
         let my_sync_topics: Vec<[u8; 32]> = self
             .subscription
             .sync_topics()
@@ -122,7 +119,6 @@ where
             .map_err(PsiHashDiscoveryError::Subscription)?
             .into_iter()
             .collect();
-        println!("alice has {} sync topics", my_sync_topics.len());
 
         let my_ephemeral_topics: Vec<[u8; 32]> = self
             .subscription
@@ -136,56 +132,33 @@ where
         let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT_BIT);
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BIT);
 
-        let local_bob_sync_hashed: Vec<[u8; 32]> = hash_vector(&my_sync_topics, &bob_final_salt)?;
-
-        //  my_sync_topics
-        //     .iter()
-        //     .cloned()
-        //     .map(|topic| hash(&topic, &bob_final_salt))
-        //     .collect::<Result<Vec<blake3::Hash>, _>>()?
-        //     .into_iter()
-        //     .map(|h| h.as_bytes().clone())
-        //     .collect();
-
-        let bob_hashed_for_alice_set: HashSet<[u8; 32]> =
-            HashSet::from_iter(sync_topics_for_alice.iter().cloned());
-
-        // alice computes intersection of her own work with what bob sent her
-        println!("alice hashed items {:?} ", local_bob_hashed);
-        println!("alice from bob {:?}", bob_hashed_for_alice_set);
-
-        let mut alice_intersection: HashSet<[u8; 32]> = HashSet::new();
-        for (i, local_hash) in local_bob_hashed.iter().enumerate() {
-            if bob_hashed_for_alice_set.contains(local_hash) {
-                alice_intersection.insert(my_sync_topics[i].clone());
-            }
-        }
+        // // alice computes intersection of her own work with what bob sent her
+        let sync_topics_intersection =
+            compute_intersection(&my_sync_topics, &sync_topics_for_alice, &bob_final_salt)?;
+        let ephemeral_messaging_topics_intersection = compute_intersection(
+            &my_ephemeral_topics,
+            &ephemeral_messaging_topics_for_alice,
+            &bob_final_salt,
+        )?;
 
         // now alice needs to hash her data with her salt and send to bob so he can do the same
-
-        let alice_hashed_for_bob: HashSet<[u8; 32]> = HashSet::from_iter(
-            my_sync_topics
-                .into_iter()
-                .map(|topic| hash(&topic, &alice_final_salt))
-                .collect::<Result<Vec<blake3::Hash>, _>>()?
-                .into_iter()
-                .map(|h| h.as_bytes().clone()),
-        );
+        let sync_topics_for_bob: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_sync_topics, &alice_final_salt)?.into_iter());
+        let ephemeral_messaging_topics_for_bob: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_ephemeral_topics, &alice_final_salt)?.into_iter());
 
         println!("alice send final");
 
         tx.send(PsiHashDiscoveryMessage::AliceHashedData {
-            sync_topics_for_bob: alice_hashed_for_bob,
-            ephemeral_messaging_topics_for_bob: HashSet::new(), // todo for real
+            sync_topics_for_bob,
+            ephemeral_messaging_topics_for_bob
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
 
         println!("alice await recieve message 4 from bob ");
-        // todo return real data
 
-        let message_4 = rx.next().await;
-        let message_4 = match message_4 {
+        let message_4 = match rx.next().await {
             Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
             None => {
                 return Err(PsiHashDiscoveryError::Stream);
@@ -223,8 +196,8 @@ where
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: transport_infos,
-            sync_topics: alice_intersection,
-            ephemeral_messaging_topics: HashSet::new(),
+            sync_topics: sync_topics_intersection,
+            ephemeral_messaging_topics: ephemeral_messaging_topics_intersection,
         })
     }
 
@@ -242,10 +215,8 @@ where
         let PsiHashDiscoveryMessage::AliceSecretHalf { alice_salt_half } = message_1 else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
-
         let bob_salt_half = generate_salt();
 
-        // final salts
         let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT_BIT);
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BIT);
 
@@ -265,31 +236,16 @@ where
             .into_iter()
             .collect();
 
-        let sync_topics_for_alice: HashSet<[u8; 32]> = HashSet::from_iter(
-            my_sync_topics
-                .iter()
-                .cloned()
-                .map(|topic| hash(&topic, &bob_final_salt))
-                .collect::<Result<Vec<blake3::Hash>, _>>()?
-                .into_iter()
-                .map(|h| h.as_bytes().clone()),
-        );
-
-        let ephemeral_topics_for_alice: HashSet<[u8; 32]> = HashSet::from_iter(
-            my_sync_topics
-                .iter()
-                .cloned()
-                .map(|topic| hash(&topic, &bob_final_salt))
-                .collect::<Result<Vec<blake3::Hash>, _>>()?
-                .into_iter()
-                .map(|h| h.as_bytes().clone()),
-        );
+        let sync_topics_for_alice: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_sync_topics, &bob_final_salt)?.into_iter());
+        let ephemeral_messaging_topics_for_alice: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_ephemeral_topics, &bob_final_salt)?.into_iter());
 
         println!("bob send message 2");
         tx.send(PsiHashDiscoveryMessage::BobSecretHalfAndHashedData {
             bob_salt_half,
             sync_topics_for_alice,
-            ephemeral_messaging_topics_for_alice: ephemeral_topics_for_alice,
+            ephemeral_messaging_topics_for_alice
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
@@ -312,9 +268,11 @@ where
         let sync_topics_intersection =
             compute_intersection(&my_sync_topics, &sync_topics_for_bob, &alice_final_salt)?;
 
-        
-        let ephemral_topics_intersection =
-            compute_intersection(&my_ephemeral_topics, &ephemeral_messaging_topics_for_bob, &alice_final_salt)?;
+        let ephemral_topics_intersection = compute_intersection(
+            &my_ephemeral_topics,
+            &ephemeral_messaging_topics_for_bob,
+            &alice_final_salt,
+        )?;
 
         // send alice our nodes we know about
         let node_infos = self
@@ -353,62 +311,39 @@ where
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: transport_infos,
             sync_topics: sync_topics_intersection,
-            ephemeral_messaging_topics: ephemral_topics_intersection
+            ephemeral_messaging_topics: ephemral_topics_intersection,
         })
     }
 }
 
-pub fn compute_intersection<S, P, ID, N>(
+pub fn compute_intersection(
     local_topics: &Vec<[u8; 32]>,
     remote_hashes: &HashSet<[u8; 32]>,
     salt: &Vec<u8>,
-) -> Result<HashSet<[u8; 32]>, PsiHashDiscoveryError<S, P, ID, N>>
-where
-    S: AddressBookStore<ID, N>,
-    P: LocalTopics,
-    ID: Clone + Ord,
-    N: NodeInfo<ID>,
-    for<'a> N::Transports: Serialize + Deserialize<'a>,
-{
-    let alice_hashed_for_bob_map: HashSet<[u8; 32]> =
-        HashSet::from_iter(remote_hashes.iter().cloned());
+) -> Result<HashSet<[u8; 32]>, std::io::Error> {
+    let local_topics_hashed = hash_vector(local_topics, salt)?;
 
-    let local_alice_hashed: Vec<[u8; 32]> = local_topics
-        .iter()
-        .cloned()
-        .map(|topic| hash(&topic, &salt))
-        .collect::<Result<Vec<blake3::Hash>, _>>()?
-        .iter()
-        .map(|h| h.as_bytes().clone())
-        .collect();
-
-    // bob computes intersection
-    let mut bob_intersection: HashSet<[u8; 32]> = HashSet::new();
-    for (i, local_hash) in local_alice_hashed.iter().enumerate() {
-        if alice_hashed_for_bob_map.contains(local_hash) {
-            bob_intersection.insert(local_topics[i].clone());
+    let mut intersection: HashSet<[u8; 32]> = HashSet::new();
+    for (i, local_hash) in local_topics_hashed.iter().enumerate() {
+        if remote_hashes.contains(local_hash) {
+            intersection.insert(local_topics[i].clone());
         }
     }
-
-    Ok(bob_intersection)
+    Ok(intersection)
 }
 
-fn hash_vector(topics: &Vec<[u8;32]>, salt: &[u8]) -> Result<Vec<blake3::Hash>, std::io::Error> {
-    topics
-        .iter()
-        .map(|topic| hash(&topic, salt))
-        .collect()
+fn hash_vector(topics: &Vec<[u8; 32]>, salt: &[u8]) -> Result<Vec<[u8; 32]>, std::io::Error> {
+    topics.iter().map(|topic| hash(&topic, salt)).collect()
 }
 
 pub fn hash(
     data: &[u8; 32],
     salt: &[u8], // TODO make this a fixed or minimum length?
-) -> Result<blake3::Hash, std::io::Error>
-{
+) -> Result<[u8; 32], std::io::Error> {
     let mut hash = blake3::Hasher::new();
     hash.write_all(data)?;
     hash.write_all(salt)?;
-    Ok(hash.finalize())
+    Ok(hash.finalize().as_bytes().clone())
 }
 
 pub fn generate_salt() -> Vec<u8> {
@@ -455,5 +390,5 @@ where
     Sink,
 
     #[error(transparent)]
-    Hash(#[from] std::io::Error)
+    Hash(#[from] std::io::Error),
 }

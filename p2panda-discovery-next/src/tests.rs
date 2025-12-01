@@ -259,17 +259,25 @@ async fn topic_discovery() {
     let mut alice_subscription = TestSubscription::default();
     alice_subscription.sync_topics.insert(pad_to_32_bytes(1));
     alice_subscription.sync_topics.insert(pad_to_32_bytes(2));
-    alice_subscription.ephemeral_messaging_topics.insert(pad_to_32_bytes(98));
-    alice_subscription.ephemeral_messaging_topics.insert(pad_to_32_bytes(99));
+    alice_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(98));
+    alice_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(99));
     let alice_store = TestStore::new(rng.clone());
-    
+
     let mut bob_subscription = TestSubscription::default();
     bob_subscription.sync_topics.insert(pad_to_32_bytes(2));
     bob_subscription.sync_topics.insert(pad_to_32_bytes(3));
-    bob_subscription.ephemeral_messaging_topics.insert(pad_to_32_bytes(99));
-    bob_subscription.ephemeral_messaging_topics.insert(pad_to_32_bytes(100));
+    bob_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(99));
+    bob_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(100));
     let bob_store = TestStore::new(rng.clone());
-    
+
     let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
     let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0);
 
@@ -291,7 +299,7 @@ async fn topic_discovery() {
     let Ok(alice_result) = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await else {
         panic!("running alice protocol failed");
     };
-    
+
     // Wait until Bob has finished and store their results.
     println!("wait until bob");
     let bob_result = bob_handle.await.expect("local task failure");
@@ -299,9 +307,9 @@ async fn topic_discovery() {
     let mut expected = HashSet::new();
     expected.insert(pad_to_32_bytes(2));
     assert_eq!(alice_result.sync_topics, expected);
-    assert_eq!(bob_result.sync_topics, expected); 
-    
-     let mut expected = HashSet::new();
+    assert_eq!(bob_result.sync_topics, expected);
+
+    let mut expected = HashSet::new();
     expected.insert(pad_to_32_bytes(99));
     assert_eq!(alice_result.ephemeral_messaging_topics, expected);
     assert_eq!(bob_result.ephemeral_messaging_topics, expected);
