@@ -248,7 +248,7 @@ where
                 // Retrieve all known nodes for the given topic.
                 let node_infos = call!(
                     address_book_actor,
-                    ToAddressBook::NodeInfosByEphemeralMessagingTopics,
+                    ToAddressBook::NodeInfosBySyncTopics,
                     vec![topic]
                 )
                 .expect("address book actor should handle call");
