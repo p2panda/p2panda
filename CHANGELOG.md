@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 - Enable nonblocking for unbound socket used in mdns discovery [#794](https://github.com/p2panda/p2panda/pull/794)
 - Allow managing multiple long-term pre-keys [#830](https://github.com/p2panda/p2panda/pull/830)
 - Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
+- Handle outdated operations which got processed while being pruned, fix overflow substraction bug [#894](https://github.com/p2panda/p2panda/pull/894)
 
 ## [0.4.0] - 07/07/2025
 
@@ -37,10 +38,6 @@ Highlights are marked with a pancake 🥞
 - `p2panda-encryption`: decentralized data- and message encryption for groups [#731](https://github.com/p2panda/p2panda/issues/731) 🥞
 - Expose sqlite migrations [#744](https://github.com/p2panda/p2panda/pull/744)
 - Trait definitions for atomic write transactions [#755](https://github.com/p2panda/p2panda/pull/755)
-
-### Fixed
-
-- Handle outdated operations which got processed while being pruned, fix overflow substraction bug [#754](https://github.com/p2panda/p2panda/pull/754)
 
 ## [0.3.1] - 14/04/2025
 
