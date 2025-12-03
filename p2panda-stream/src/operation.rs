@@ -249,10 +249,10 @@ mod tests {
             seq_num: 1,
             backlink: Some(Hash::new(b"mock operation")),
             previous: vec![],
-            extensions: Some(Extensions {
+            extensions: Extensions {
                 stream_name: StreamName::new(private_key.public_key(), None),
                 prune_flag: true.into(),
-            }),
+            },
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
@@ -271,7 +271,10 @@ mod tests {
             seq_num: 0,
             backlink: None,
             previous: vec![],
-            extensions: None,
+            extensions: Extensions {
+                stream_name: StreamName::new(private_key.public_key(), None),
+                prune_flag: false.into(),
+            },
         };
         header.sign(&private_key);
         let header_bytes = header.to_bytes();
