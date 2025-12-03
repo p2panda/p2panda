@@ -42,7 +42,7 @@ where
     if !already_exists {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation.
-        if !prune_flag && operation.header.seq_num > 0 {
+        if !prune_flag {
             let latest_operation = store
                 .latest_operation(&operation.header.public_key, log_id)
                 .await
@@ -64,7 +64,7 @@ where
                             // backlink yet.
                             OperationError::SeqNumNonIncremental(expected, given) => {
                                 // Overflows happen when the given operation is already "outdated"
-                                // and was pruned and our log grown in the meantime (thus "latest
+                                // and was pruned and our log grew in the meantime (thus "latest
                                 // operation" returns a higher sequence number). This is a race
                                 // condition which can occur in this async setting.
                                 //
@@ -90,12 +90,18 @@ where
                 }
                 // We're missing the whole log so far.
                 None => {
-                    return Ok(IngestResult::Retry(
-                        operation.header.clone(),
-                        operation.body.clone(),
-                        header_bytes,
-                        operation.header.seq_num,
-                    ));
+                    if operation.header.seq_num == 0 {
+                        // We're at the beginning of the log, it's okay if there's no previous
+                        // operation.
+                    } else {
+                        // We didn't prune, there's no previous operation, something is missing.
+                        return Ok(IngestResult::Retry(
+                            operation.header.clone(),
+                            operation.body.clone(),
+                            header_bytes,
+                            operation.header.seq_num,
+                        ));
+                    }
                 }
             }
         }
@@ -139,7 +145,7 @@ pub enum IngestResult<E> {
     /// again.
     Retry(Header<E>, Option<Body>, Vec<u8>, u64),
 
-    /// Operation can be considered "outdated" as an "newer" operation in the log removed this
+    /// Operation can be considered "outdated" as a "newer" operation in the log removed this
     /// operation ("pruning") while we processed it.
     ///
     /// Applications usually want to ignore these operations as the latest operation will hold all
