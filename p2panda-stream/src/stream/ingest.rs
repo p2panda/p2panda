@@ -145,13 +145,23 @@ where
                             break Poll::Ready(None);
                         };
 
-                        // In the next iteration we should prioritize the stream again.
+                        // In the next iteration we should prioritise the stream again.
                         park_buffer = true;
 
                         continue;
                     }
                     Ok((IngestResult::Complete(operation), _)) => {
                         return Poll::Ready(Some(Ok(operation)));
+                    }
+                    Ok((IngestResult::Outdated(_), _)) => {
+                        // Ignore "outdated" operations. This can happen if we've processed an
+                        // operation which was removed concurrently by a newer one (via pruning) in
+                        // the same log.
+
+                        // In the next iteration we should prioritise the stream again.
+                        park_buffer = true;
+
+                        continue;
                     }
                     Err(err) => {
                         // Ingest failed and we want the stream consumers to be aware of that.
@@ -162,13 +172,13 @@ where
 
             // 3. Pull in the next item from the external stream or out-of-order buffer.
             let res = {
-                // If the buffer ran full we prioritize pulling from it first, re-attempting
+                // If the buffer ran full we prioritise pulling from it first, re-attempting
                 // ingest. This avoids clogging up the pipeline.
                 if this.ooo_buffer_rx.size_hint().0 == *this.ooo_buffer_size {
                     ready!(this.ooo_buffer_rx.as_mut().poll_next(cx))
                 } else {
                     // Otherwise prefer pulling from the external stream first as freshly incoming
-                    // data should be prioritized.
+                    // data should be prioritised.
                     match this.stream.as_mut().poll_next(cx) {
                         Poll::Ready(Some((header, body, header_bytes))) => {
                             Some(IngestAttempt(header, body, header_bytes, 1))
@@ -360,7 +370,7 @@ mod tests {
                 let _ = tx.send(operation).await;
 
                 // Waiting here is crucial to cause the bug: The polling logic will not receive a
-                // new item directly from the stream but rather prioritize the buffer.
+                // new item directly from the stream but rather prioritise the buffer.
                 time::sleep(Duration::from_millis(10)).await;
             }
         });
