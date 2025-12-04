@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod address_book;
-mod discovery;
+pub mod discovery;
 mod endpoint_supervisor;
-mod events;
+pub mod events;
 mod gossip;
 pub mod iroh;
 mod stream_supervisor;

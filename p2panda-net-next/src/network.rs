@@ -13,6 +13,7 @@ use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
+use crate::actors::events::{SubscribeError, subscribe_to_network_events};
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
@@ -22,6 +23,7 @@ use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 #[cfg(feature = "mdns")]
 use crate::config::MdnsDiscoveryMode;
+use crate::events::EventsReceiver;
 use crate::streams::{EphemeralStream, EventuallyConsistentStream, StreamError};
 use crate::{NetworkId, NodeId, NodeInfo, TopicId};
 
@@ -136,15 +138,6 @@ impl NetworkBuilder {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum NetworkError<T> {
-    #[error(transparent)]
-    StreamError(#[from] StreamError<T>),
-
-    #[error("a critical error occurred in a network subsystem: {0}")]
-    Critical(#[from] SpawnErr),
-}
-
 #[derive(Debug)]
 #[allow(unused)]
 pub struct Network<M> {
@@ -232,6 +225,24 @@ where
             Err(StreamError::Create(topic))?
         }
     }
+
+    /// Subscribes to a channel to receive system-wide network events.
+    pub async fn events(&self) -> Result<EventsReceiver, NetworkError<()>> {
+        let rx = subscribe_to_network_events(&self.actor_namespace).await?;
+        Ok(rx)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum NetworkError<T> {
+    #[error(transparent)]
+    Stream(#[from] StreamError<T>),
+
+    #[error("a critical error occurred in a network subsystem: {0}")]
+    Critical(#[from] SpawnErr),
+
+    #[error(transparent)]
+    Events(#[from] SubscribeError),
 }
 
 impl<M> Drop for Network<M> {

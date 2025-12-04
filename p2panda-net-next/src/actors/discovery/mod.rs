@@ -6,11 +6,15 @@ mod session;
 mod tests;
 mod walker;
 
+use std::time::Duration;
+
+use p2panda_discovery::DiscoveryResult;
 use ractor::{ActorCell, ActorRef};
 
 use crate::actors::discovery::session::{DISCOVERY_SESSION, DiscoverySessionId};
 use crate::actors::discovery::walker::DISCOVERY_WALKER;
 use crate::actors::{ActorNamespace, with_namespace, without_namespace};
+use crate::{NodeId, NodeInfo};
 
 pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 
@@ -86,4 +90,33 @@ impl DiscoveryActorName {
             ),
         }
     }
+}
+
+/// Discovery "system" events other processes can subscribe to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
+#[allow(clippy::large_enum_variant)]
+pub enum DiscoveryEvent {
+    SessionStarted {
+        role: SessionRole,
+        remote_node_id: NodeId,
+    },
+    SessionEnded {
+        role: SessionRole,
+        remote_node_id: NodeId,
+        result: DiscoveryResult<NodeId, NodeInfo>,
+        duration: Duration,
+    },
+    SessionFailed {
+        role: SessionRole,
+        remote_node_id: NodeId,
+        duration: Duration,
+        reason: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionRole {
+    Initiated,
+    Accepted,
 }
