@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
-use crate::address_book::{AddressBookStore, NodeInfo};
+use crate::address_book::AddressBookStore;
 use crate::psi_hash::PsiHashDiscoveryProtocol;
 use crate::random_walk::RandomWalker;
 use crate::test_utils::{
@@ -284,7 +284,6 @@ async fn topic_discovery() {
     let (mut alice_tx, alice_rx) = mpsc::channel(16);
     let (mut bob_tx, bob_rx) = mpsc::channel(16);
 
-    println!("spawn task");
     let bob_handle = tokio::task::spawn(async move {
         let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
         let Ok(result) = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await else {
@@ -295,13 +294,11 @@ async fn topic_discovery() {
 
     // Wait until Alice has finished and store their results
     let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
-    println!("wait until alice");
     let Ok(alice_result) = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await else {
         panic!("running alice protocol failed");
     };
 
     // Wait until Bob has finished and store their results.
-    println!("wait until bob");
     let bob_result = bob_handle.await.expect("local task failure");
 
     let mut expected = HashSet::new();
