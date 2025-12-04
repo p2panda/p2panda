@@ -21,6 +21,7 @@ use p2panda_sync::topic_log_sync::{TopicLogMap, TopicLogSyncEvent};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::{RwLock, mpsc};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
@@ -150,6 +151,22 @@ async fn main() -> Result<()> {
         .await
         .expect("spawned supervised network");
 
+    // System events.
+    let mut events = network.events().await?;
+    tokio::task::spawn(async move {
+        loop {
+            match events.recv().await.unwrap() {
+                p2panda_net_next::events::NetworkEvent::Transport(status) => {
+                    info!("{:?}", status);
+                }
+                p2panda_net_next::events::NetworkEvent::Relay(status) => {
+                    info!("{:?}", status);
+                }
+                _ => (),
+            }
+        }
+    });
+
     // Ephemeral stream.
     let ephemeral = network.ephemeral_stream(HEARTBEAT_TOPIC).await?;
     let mut ephemeral_subscriber = ephemeral.subscribe().await?;
@@ -157,7 +174,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         loop {
             let message = ephemeral_subscriber.recv().await.unwrap();
-            println!(
+            info!(
                 "heartbeat <3 {}",
                 u64::from_be_bytes(message.try_into().unwrap())
             );
@@ -184,7 +201,7 @@ async fn main() -> Result<()> {
             while let Ok(from_sync) = stream_subscriber.recv().await {
                 match from_sync.event {
                     TopicLogSyncEvent::SyncFinished(metrics) => {
-                        println!(
+                        info!(
                             "finished sync session with {}, bytes received = {}, bytes sent = {}",
                             from_sync.remote.fmt_short(),
                             metrics.total_bytes_remote.unwrap_or_default(),
