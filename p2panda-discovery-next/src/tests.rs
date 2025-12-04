@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures_channel::mpsc;
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
@@ -12,7 +12,7 @@ use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
 use crate::address_book::AddressBookStore;
-use crate::psi_hash::PsiHashDiscoveryProtocol;
+use crate::psi_hash::{PsiHashDiscoveryError, PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
 use crate::random_walk::RandomWalker;
 use crate::test_utils::{
     TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo, pad_to_32_bytes,
@@ -310,4 +310,70 @@ async fn topic_discovery() {
     expected.insert(pad_to_32_bytes(99));
     assert_eq!(alice_result.ephemeral_messaging_topics, expected);
     assert_eq!(bob_result.ephemeral_messaging_topics, expected);
+}
+
+#[tokio::test]
+async fn topic_out_of_order_alice() {
+    let rng = ChaCha20Rng::from_seed([1; 32]);
+
+    let mut alice_subscription = TestSubscription::default();
+    alice_subscription.sync_topics.insert(pad_to_32_bytes(1));
+    alice_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(99));
+    let alice_store = TestStore::new(rng.clone());
+
+    let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
+
+    let (mut alice_tx, _alice_rx) = mpsc::channel(16);
+    let (mut bob_tx, bob_rx) = mpsc::channel(16);
+
+    let bob_handle = tokio::task::spawn(async move {
+        let _result = bob_tx
+            .send(PsiHashDiscoveryMessage::AliceSecretHalf {
+                alice_salt_half: pad_to_32_bytes(0),
+            })
+            .await;
+    });
+
+    let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
+    let alice_result = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await;
+    let _bob_result = bob_handle.await;
+    assert!(matches!(
+        alice_result,
+        Err(PsiHashDiscoveryError::UnexpectedMessage)
+    ));
+}
+
+#[tokio::test]
+async fn topic_out_of_order_bob() {
+    let rng = ChaCha20Rng::from_seed([1; 32]);
+
+    let mut bob_subscription = TestSubscription::default();
+    bob_subscription.sync_topics.insert(pad_to_32_bytes(1));
+    bob_subscription
+        .ephemeral_messaging_topics
+        .insert(pad_to_32_bytes(99));
+    let bob_store = TestStore::new(rng.clone());
+
+    let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1);
+
+    let (mut bob_tx, _) = mpsc::channel(16);
+    let (mut alice_tx, alice_rx) = mpsc::channel(16);
+
+    tokio::task::spawn(async move {
+        let _result = alice_tx
+            .send(PsiHashDiscoveryMessage::AliceHashedData {
+                sync_topics_for_bob: HashSet::new(),
+                ephemeral_messaging_topics_for_bob: HashSet::new(),
+            })
+            .await;
+    });
+
+    let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
+    let bob_result = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await;
+    assert!(matches!(
+        bob_result,
+        Err(PsiHashDiscoveryError::UnexpectedMessage)
+    ));
 }
