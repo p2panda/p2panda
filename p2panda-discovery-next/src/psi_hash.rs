@@ -11,19 +11,14 @@ use thiserror::Error;
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryResult, LocalTopics};
 
-///
-///
 use std::io::Write;
 
 use blake3;
 use rand::{RngCore, rng};
 use thiserror;
 
-const ALICE_SALT_BIT: [u8; 1] = [0];
-const BOB_SALT_BIT: [u8; 1] = [1];
-
-////
-///
+const ALICE_SALT_BIT: u8 = 0;
+const BOB_SALT_BIT: u8 = 1;
 
 #[derive(Serialize, Deserialize)]
 pub enum PsiHashDiscoveryMessage<ID, N>
@@ -33,10 +28,10 @@ where
     ID: Ord,
 {
     AliceSecretHalf {
-        alice_salt_half: Vec<u8>,
+        alice_salt_half: [u8; 32],
     },
     BobSecretHalfAndHashedData {
-        bob_salt_half: Vec<u8>,
+        bob_salt_half: [u8; 32],
         sync_topics_for_alice: HashSet<[u8; 32]>,
         ephemeral_messaging_topics_for_alice: HashSet<[u8; 32]>,
     },
@@ -93,7 +88,6 @@ where
             .await
             .map_err(|_| PsiHashDiscoveryError::Sink)?;
 
-        println!("alice wait m2");
         let message_2 = match rx.next().await {
             Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
             None => {
@@ -110,8 +104,6 @@ where
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
 
-        println!("alice recieve m2");
-        
         let my_sync_topics: Vec<[u8; 32]> = self
             .subscription
             .sync_topics()
@@ -147,16 +139,12 @@ where
         let ephemeral_messaging_topics_for_bob: HashSet<[u8; 32]> =
             HashSet::from_iter(hash_vector(&my_ephemeral_topics, &alice_final_salt)?.into_iter());
 
-        println!("alice send final");
-
         tx.send(PsiHashDiscoveryMessage::AliceHashedData {
             sync_topics_for_bob,
-            ephemeral_messaging_topics_for_bob
+            ephemeral_messaging_topics_for_bob,
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
-
-        println!("alice await recieve message 4 from bob ");
 
         let message_4 = match rx.next().await {
             Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
@@ -165,7 +153,6 @@ where
             }
         };
 
-        println!("alice recieve message4, unparsed");
         let PsiHashDiscoveryMessage::Nodes { transport_infos } = message_4 else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
@@ -176,7 +163,6 @@ where
             .await
             .map_err(PsiHashDiscoveryError::Store)?;
 
-        println!("alice send message 5");
         tx.send(PsiHashDiscoveryMessage::Nodes {
             transport_infos: {
                 let mut map = BTreeMap::new();
@@ -190,8 +176,6 @@ where
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
-
-        println!("alice done, OK!");
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
@@ -209,8 +193,6 @@ where
         let Some(Ok(message_1)) = rx.next().await else {
             return Err(PsiHashDiscoveryError::Stream);
         };
-
-        println!("bob recieve message 1");
 
         let PsiHashDiscoveryMessage::AliceSecretHalf { alice_salt_half } = message_1 else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
@@ -241,16 +223,14 @@ where
         let ephemeral_messaging_topics_for_alice: HashSet<[u8; 32]> =
             HashSet::from_iter(hash_vector(&my_ephemeral_topics, &bob_final_salt)?.into_iter());
 
-        println!("bob send message 2");
         tx.send(PsiHashDiscoveryMessage::BobSecretHalfAndHashedData {
             bob_salt_half,
             sync_topics_for_alice,
-            ephemeral_messaging_topics_for_alice
+            ephemeral_messaging_topics_for_alice,
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
 
-        println!("bob wait for message 3");
         let Some(Ok(message_3)) = rx.next().await else {
             return Err(PsiHashDiscoveryError::Stream);
         };
@@ -262,8 +242,6 @@ where
         else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
-
-        println!("bob recieved message 3");
 
         let sync_topics_intersection =
             compute_intersection(&my_sync_topics, &sync_topics_for_bob, &alice_final_salt)?;
@@ -281,7 +259,6 @@ where
             .await
             .map_err(PsiHashDiscoveryError::Store)?;
 
-        println!("bob try send message 4, Nodes");
         tx.send(PsiHashDiscoveryMessage::Nodes {
             transport_infos: {
                 let mut map = BTreeMap::new();
@@ -296,7 +273,6 @@ where
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
 
-        println!("bob wait for message 5, nodes");
         let Some(Ok(message_5)) = rx.next().await else {
             return Err(PsiHashDiscoveryError::Stream);
         };
@@ -304,8 +280,6 @@ where
         let PsiHashDiscoveryMessage::Nodes { transport_infos } = message_5 else {
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
-
-        println!("bob done, Ok!");
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
@@ -319,7 +293,7 @@ where
 pub fn compute_intersection(
     local_topics: &Vec<[u8; 32]>,
     remote_hashes: &HashSet<[u8; 32]>,
-    salt: &Vec<u8>,
+    salt: &[u8; 65],
 ) -> Result<HashSet<[u8; 32]>, std::io::Error> {
     let local_topics_hashed = hash_vector(local_topics, salt)?;
 
@@ -332,39 +306,33 @@ pub fn compute_intersection(
     Ok(intersection)
 }
 
-fn hash_vector(topics: &Vec<[u8; 32]>, salt: &[u8]) -> Result<Vec<[u8; 32]>, std::io::Error> {
+fn hash_vector(topics: &Vec<[u8; 32]>, salt: &[u8; 65]) -> Result<Vec<[u8; 32]>, std::io::Error> {
     topics.iter().map(|topic| hash(&topic, salt)).collect()
 }
 
-pub fn hash(
-    data: &[u8; 32],
-    salt: &[u8], // TODO make this a fixed or minimum length?
-) -> Result<[u8; 32], std::io::Error> {
+pub fn hash(data: &[u8; 32], salt: &[u8; 65]) -> Result<[u8; 32], std::io::Error> {
     let mut hash = blake3::Hasher::new();
     hash.write_all(data)?;
     hash.write_all(salt)?;
     Ok(hash.finalize().as_bytes().clone())
 }
 
-pub fn generate_salt() -> Vec<u8> {
+pub fn generate_salt() -> [u8; 32] {
     let mut generator = rng();
-
-    let mut random_bytes: Vec<u8> = vec![0; 32];
+    let mut random_bytes: [u8; 32] = [0; 32];
     generator.fill_bytes(&mut random_bytes);
-
     random_bytes
 }
 
 pub fn combine_salt(
-    alice_salt_half: &Vec<u8>,
-    bob_salt_half: &Vec<u8>,
-    pair_byte: &[u8; 1],
-) -> Vec<u8> {
-    // let concat_b64 = vec![alice_b64, bob_b64];
-    let mut output = alice_salt_half.to_owned();
-    output.extend_from_slice(alice_salt_half);
-    output.extend_from_slice(&bob_salt_half);
-    output.extend_from_slice(pair_byte);
+    alice_salt_half: &[u8; 32],
+    bob_salt_half: &[u8; 32],
+    pair_byte: &u8,
+) -> [u8; 65] {
+    let mut output: [u8; 65] = [0; 65];
+    output[0..32].copy_from_slice(alice_salt_half);
+    output[32..64].copy_from_slice(bob_salt_half);
+    output[64] = *pair_byte;
     output
 }
 
