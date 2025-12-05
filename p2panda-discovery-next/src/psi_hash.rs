@@ -81,9 +81,7 @@ where
     ) -> Result<DiscoveryResult<ID, N>, Self::Error> {
         let alice_salt_half = generate_salt();
 
-        let message_1 = PsiHashDiscoveryMessage::AliceSecretHalf {
-            alice_salt_half: alice_salt_half.clone(),
-        };
+        let message_1 = PsiHashDiscoveryMessage::AliceSecretHalf { alice_salt_half };
         tx.send(message_1)
             .await
             .map_err(|_| PsiHashDiscoveryError::Sink)?;
@@ -291,7 +289,7 @@ where
 }
 
 pub fn compute_intersection(
-    local_topics: &Vec<[u8; 32]>,
+    local_topics: &[[u8; 32]],
     remote_hashes: &HashSet<[u8; 32]>,
     salt: &[u8; 65],
 ) -> Result<HashSet<[u8; 32]>, std::io::Error> {
@@ -300,21 +298,21 @@ pub fn compute_intersection(
     let mut intersection: HashSet<[u8; 32]> = HashSet::new();
     for (i, local_hash) in local_topics_hashed.iter().enumerate() {
         if remote_hashes.contains(local_hash) {
-            intersection.insert(local_topics[i].clone());
+            intersection.insert(local_topics[i]);
         }
     }
     Ok(intersection)
 }
 
-fn hash_vector(topics: &Vec<[u8; 32]>, salt: &[u8; 65]) -> Result<Vec<[u8; 32]>, std::io::Error> {
-    topics.iter().map(|topic| hash(&topic, salt)).collect()
+fn hash_vector(topics: &[[u8; 32]], salt: &[u8; 65]) -> Result<Vec<[u8; 32]>, std::io::Error> {
+    topics.iter().map(|topic| hash(topic, salt)).collect()
 }
 
 pub fn hash(data: &[u8; 32], salt: &[u8; 65]) -> Result<[u8; 32], std::io::Error> {
     let mut hash = blake3::Hasher::new();
     hash.write_all(data)?;
     hash.write_all(salt)?;
-    Ok(hash.finalize().as_bytes().clone())
+    Ok(*hash.finalize().as_bytes())
 }
 
 pub fn generate_salt() -> [u8; 32] {
