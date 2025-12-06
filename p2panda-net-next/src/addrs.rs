@@ -1,14 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(test)]
-use mock_instant::thread_local::Instant;
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
 #[cfg(test)]
 use std::net::SocketAddr;
-#[cfg(not(test))]
-use std::time::Instant;
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
@@ -620,21 +616,21 @@ impl Display for TransportAddress {
 pub struct NodeMetrics {
     failed_connections: usize,
     successful_connections: usize,
-    last_failed_at: Option<Instant>,
-    last_succeeded_at: Option<Instant>,
+    last_failed_at: Option<u64>,
+    last_succeeded_at: Option<u64>,
 }
 
 impl NodeMetrics {
     /// Records failed connection attempt (both incoming or outgoing).
     pub fn report_failed_connection(&mut self) {
         self.failed_connections += 1;
-        self.last_failed_at = Some(Instant::now());
+        self.last_failed_at = Some(current_timestamp());
     }
 
     /// Records successful connection attempt (both incoming or outgoing).
     pub fn report_successful_connection(&mut self) {
         self.successful_connections += 1;
-        self.last_succeeded_at = Some(Instant::now());
+        self.last_succeeded_at = Some(current_timestamp());
     }
 
     /// Returns true if last known connection attempt failed.
@@ -811,13 +807,13 @@ mod tests {
         node_info.metrics.report_successful_connection();
         assert!(!node_info.metrics.is_stale());
 
-        MockClock::advance(Duration::from_secs(1));
+        MockClock::advance_system_time(Duration::from_secs(1));
 
         // Node is stale after reporting failed connection attempt.
         node_info.metrics.report_failed_connection();
         assert!(node_info.metrics.is_stale());
 
-        MockClock::advance(Duration::from_secs(1));
+        MockClock::advance_system_time(Duration::from_secs(1));
 
         // After a successful connection was reported, it is not stale again.
         node_info.metrics.report_successful_connection();
