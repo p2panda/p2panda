@@ -43,8 +43,11 @@ impl Default for RandomWalkerConfig {
 /// configured set of "bootstrap nodes" if available. The "walker" continues with another random
 /// node sampled from a set of unvisited nodes - and repeats.
 ///
-/// The algorithm resets itself and starts from scratch - based on a configurable probability or
-/// when no new nodes could be found anymore. See `RandomWalkConfig` for details.
+/// Based on a configurable probability the algorithm resets itself and starts from scratch. See
+/// `RandomWalkConfig` for details.
+///
+/// If the walker is at the "end" of the explored graph and visited all nodes it will return
+/// `None`.
 pub struct RandomWalker<R, S, ID, N> {
     my_id: ID,
     store: S,
@@ -211,8 +214,9 @@ where
                 // "bootstrap" nodes.
                 true
             } else if self.state.read().await.unvisited.is_empty() {
-                // We've visited all nodes.
-                true
+                // We've visited all nodes. This will return `None` to the user and _not_ randomly
+                // set the reset flag.
+                false
             } else {
                 // Flip a coin.
                 self.rng
@@ -250,7 +254,7 @@ where
 mod tests {
     use std::collections::{HashMap, HashSet, VecDeque};
 
-    use rand::SeedableRng;
+    use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha20Rng;
 
     use crate::address_book::AddressBookStore;
@@ -354,14 +358,9 @@ mod tests {
             previous = Some(DiscoveryResult::new(id));
         }
 
-        // Next iteration we visited all possible nodes, the walker should automatically reset and
-        // start re-visiting nodes again.
-        let id = strategy
-            .next_node(previous.as_ref())
-            .await
-            .unwrap()
-            .expect("should return a Some value");
-        assert!(visited.contains(&id));
+        // Next iteration we visited all possible nodes, the walker should be at it's end.
+        let result = strategy.next_node(previous.as_ref()).await.unwrap();
+        assert!(result.is_none());
     }
 
     #[tokio::test]
@@ -390,60 +389,95 @@ mod tests {
         // This is done by introducing an "inputs" queue which will contain a number of "empty"
         // (None) results in the beginning. The walker will start working off these first and later
         // get informed about new results.
-        const NUM_NODES: usize = 100;
+        const NUM_NODES: usize = 10_000;
+
+        let mut rng = ChaCha20Rng::from_seed([1; 32]);
 
         // Create a long chain of nodes transitively knowing about the next one in the list:
         //
         // 0 --> 1 --> 2 --> 3 --> ... -> n
+        //
+        // .. and add some random "neighbor" nodes as well.
         //
         // Initially node 0 only knows 1 (bootstrap) and explores the rest of the graph through it
         // by traversing their (transitive) neighbors.
         let mut graph = HashMap::new();
         graph.insert(0, vec![]);
         for i in 1..NUM_NODES {
-            graph.insert(i, vec![i + 1]);
+            if i == NUM_NODES - 1 {
+                // The last node doesn't have any neighbors.
+                graph.insert(i, vec![]);
+            } else {
+                graph.insert(
+                    i,
+                    vec![
+                        // Transitive chain.
+                        i + 1,
+                        // Some random "neighbor" nodes.
+                        rng.random_range(0..NUM_NODES),
+                        rng.random_range(0..NUM_NODES),
+                        rng.random_range(0..NUM_NODES),
+                    ],
+                );
+            }
         }
 
-        let rng = ChaCha20Rng::from_seed([1; 32]);
         let store = TestStore::new(rng.clone());
 
         store.insert_node_info(TestInfo::new(0)).await.unwrap();
+
         store
             .insert_node_info(TestInfo::new_bootstrap(1))
             .await
             .unwrap();
 
-        let strategy = RandomWalker::new(0, store, rng);
+        let strategy = RandomWalker::from_config(
+            0,
+            store,
+            rng,
+            RandomWalkerConfig {
+                // Disable random reset to force exploring graph.
+                reset_walk_probability: 0.0,
+            },
+        );
 
         let mut visited: HashSet<TestId> = HashSet::new();
 
         // Queue of "inputs" for the worker.
         let mut inputs: VecDeque<Option<DiscoveryResult<TestId, TestInfo>>> = VecDeque::new();
 
-        // The first inputs will be empty.
-        for _ in 0..5 {
-            inputs.push_back(None);
-        }
+        // The first input will be empty (eg. starting from "bootstrap" node).
+        inputs.push_back(None);
 
         while let Some(input) = inputs.pop_front() {
-            let id = strategy
-                .next_node(input.as_ref())
-                .await
-                .unwrap()
-                .expect("should return a Some value");
+            // Parallelize the walker by walking from the same point n times where n is the number
+            // of node infos from the last input.
+            let len = match input {
+                Some(ref input) => input.node_transport_infos.len(),
+                None => 1,
+            };
 
-            visited.insert(id);
+            for _ in 0..len {
+                let id = strategy.next_node(input.as_ref()).await.unwrap();
 
-            // Traversal visited all nodes in the network.
-            if visited.len() == graph.len() - 1 {
-                break;
+                if let Some(id) = id {
+                    // Mark node as visited.
+                    visited.insert(id);
+
+                    // Push actual results into the inputs queue.
+                    //
+                    // Theoretically we would concurrently initiate a connection to that node and
+                    // the result of that discovery session would be pushed to the queue at a
+                    // "random" time.
+                    inputs.push_back(Some(DiscoveryResult::from_neighbors(
+                        id,
+                        graph.get(&id).unwrap(),
+                    )));
+                }
             }
-
-            // Push actual results into the inputs queue.
-            inputs.push_back(Some(DiscoveryResult::from_neighbors(
-                id,
-                graph.get(&id).unwrap(),
-            )));
         }
+
+        // Traversal visited all nodes in the network.
+        assert_eq!(visited.len(), graph.len() - 1);
     }
 }
