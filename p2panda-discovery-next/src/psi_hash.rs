@@ -2,20 +2,16 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
+use std::io::Write;
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use rand::{RngCore, rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryResult, LocalTopics};
-
-use std::io::Write;
-
-use blake3;
-use rand::{RngCore, rng};
-use thiserror;
 
 const ALICE_SALT_BIT: u8 = 0;
 const BOB_SALT_BIT: u8 = 1;
@@ -118,11 +114,11 @@ where
             .into_iter()
             .collect();
 
-        // final salts
+        // Final salts.
         let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT_BIT);
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BIT);
 
-        // // alice computes intersection of her own work with what bob sent her
+        // Alice computes intersection of their own work with what Bob sent them.
         let sync_topics_intersection =
             compute_intersection(&my_sync_topics, &sync_topics_for_alice, &bob_final_salt)?;
         let ephemeral_messaging_topics_intersection = compute_intersection(
@@ -131,7 +127,7 @@ where
             &bob_final_salt,
         )?;
 
-        // now alice needs to hash her data with her salt and send to bob so he can do the same
+        // Alice needs to hash their data with their salt and send to Bob so they can do the same.
         let sync_topics_for_bob: HashSet<[u8; 32]> =
             HashSet::from_iter(hash_vector(&my_sync_topics, &alice_final_salt)?.into_iter());
         let ephemeral_messaging_topics_for_bob: HashSet<[u8; 32]> =
@@ -244,13 +240,13 @@ where
         let sync_topics_intersection =
             compute_intersection(&my_sync_topics, &sync_topics_for_bob, &alice_final_salt)?;
 
-        let ephemral_topics_intersection = compute_intersection(
+        let ephemeral_topics_intersection = compute_intersection(
             &my_ephemeral_topics,
             &ephemeral_messaging_topics_for_bob,
             &alice_final_salt,
         )?;
 
-        // send alice our nodes we know about
+        // Send Alice our nodes we know about.
         let node_infos = self
             .store
             .all_node_infos()
@@ -283,7 +279,7 @@ where
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: transport_infos,
             sync_topics: sync_topics_intersection,
-            ephemeral_messaging_topics: ephemral_topics_intersection,
+            ephemeral_messaging_topics: ephemeral_topics_intersection,
         })
     }
 }
@@ -294,7 +290,6 @@ pub fn compute_intersection(
     salt: &[u8; 65],
 ) -> Result<HashSet<[u8; 32]>, std::io::Error> {
     let local_topics_hashed = hash_vector(local_topics, salt)?;
-
     let mut intersection: HashSet<[u8; 32]> = HashSet::new();
     for (i, local_hash) in local_topics_hashed.iter().enumerate() {
         if remote_hashes.contains(local_hash) {
