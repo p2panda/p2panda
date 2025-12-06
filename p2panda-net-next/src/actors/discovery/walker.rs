@@ -10,16 +10,15 @@ use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
-use rand::Rng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::Notify;
 use tokio::time;
 use tracing::trace;
 
+use crate::actors::discovery::backoff::{Backoff, Config as BackoffConfig};
 use crate::actors::discovery::{DISCOVERY_MANAGER, ToDiscoveryManager};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::utils::current_timestamp;
 
 /// Actor name prefix for a walker.
 pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
@@ -210,93 +209,5 @@ where
             }
         }
         Ok(())
-    }
-}
-
-struct BackoffConfig {
-    initial_value: Duration,
-    min_increment: Duration,
-    max_increment: Duration,
-    max_value: Duration,
-    min_reset: Duration,
-    max_reset: Duration,
-}
-
-impl Default for BackoffConfig {
-    fn default() -> Self {
-        Self {
-            initial_value: Duration::from_secs(0),
-            min_increment: Duration::from_secs(1),
-            max_increment: Duration::from_secs(5),
-            max_value: Duration::from_secs(30),
-            min_reset: Duration::from_secs(60),
-            max_reset: Duration::from_secs(60 * 3),
-        }
-    }
-}
-
-/// Simple, incremental backoff logic.
-///
-/// It starts at an initial value and gets incremented by another, random value, until it hits a
-/// ceiling. Another random parameter controls when the backoff gets reset.
-struct Backoff {
-    value: Duration,
-    next_reset_at: u64,
-    config: BackoffConfig,
-    rng: ChaCha20Rng,
-}
-
-impl Backoff {
-    pub fn new(config: BackoffConfig, rng: ChaCha20Rng) -> Self {
-        let mut backoff = Self {
-            value: config.initial_value,
-            next_reset_at: 0,
-            config,
-            rng,
-        };
-        backoff.reset();
-        backoff
-    }
-
-    pub fn increment(&mut self) {
-        // Increment backoff by random value within configured range until it reached maximum.
-        if self.value > self.config.max_value {
-            self.value = self.config.max_value;
-        } else if self.value < self.config.max_value {
-            let increment = self.random_increment();
-            self.value += Duration::from_secs(increment);
-        }
-
-        // Reset backoff after we've waited long enough.
-        if current_timestamp() > self.next_reset_at {
-            self.reset();
-        }
-    }
-
-    pub async fn sleep(&self) {
-        if self.value.is_zero() {
-            return;
-        }
-
-        trace!("backoff {} seconds", self.value.as_secs());
-        tokio::time::sleep(self.value).await;
-    }
-
-    pub fn reset(&mut self) {
-        self.value = self.config.initial_value;
-        self.next_reset_at = self.random_next_reset_at();
-    }
-
-    fn random_increment(&mut self) -> u64 {
-        self.rng.random_range::<u64, _>(
-            self.config.min_increment.as_secs()..self.config.max_increment.as_secs(),
-        )
-    }
-
-    fn random_next_reset_at(&mut self) -> u64 {
-        current_timestamp()
-            + self.rng.random_range::<u64, _>(
-                self.config.min_reset.as_secs()..self.config.max_reset.as_secs(),
-            )
     }
 }

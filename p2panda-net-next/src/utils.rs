@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::NodeId;
 
 /// Returns current UNIX timestamp from local system time.
 pub fn current_timestamp() -> u64 {
-    // @TODO: We want this to be mockable, so we can better tests without "sleeping".
+    #[cfg(test)]
+    use mock_instant::thread_local::{SystemTime, UNIX_EPOCH};
+    #[cfg(not(test))]
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock moved backwards")

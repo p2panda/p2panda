@@ -661,9 +661,9 @@ pub enum NodeInfoError {
 
 #[cfg(test)]
 mod tests {
-    use std::thread::sleep;
     use std::time::Duration;
 
+    use mock_instant::thread_local::MockClock;
     use p2panda_core::PrivateKey;
 
     use crate::addrs::NodeTransportInfo;
@@ -807,14 +807,13 @@ mod tests {
         node_info.metrics.report_successful_connection();
         assert!(!node_info.metrics.is_stale());
 
-        // @TODO(adz): Refactor time methods to be mockable so we don't need to sleep here.
-        sleep(Duration::from_millis(1000));
+        MockClock::advance_system_time(Duration::from_secs(1));
 
         // Node is stale after reporting failed connection attempt.
         node_info.metrics.report_failed_connection();
         assert!(node_info.metrics.is_stale());
 
-        sleep(Duration::from_millis(1000));
+        MockClock::advance_system_time(Duration::from_secs(1));
 
         // After a successful connection was reported, it is not stale again.
         node_info.metrics.report_successful_connection();
