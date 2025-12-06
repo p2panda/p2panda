@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::Duration;
-
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore as _;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
-use tokio::time::sleep;
+use tokio::task::JoinHandle;
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
+use crate::actors::discovery::{
+    DISCOVERY_MANAGER, DiscoveryEvent, DiscoveryManager, SessionRole, ToDiscoveryManager,
+};
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::test_utils::{generate_node_info, setup_logging, test_args_from_seed};
+use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args_from_seed};
 
 use super::DiscoveryActorName;
 
@@ -91,7 +91,24 @@ impl TestNode {
     pub fn shutdown(&self) {
         self.address_book_ref.stop(None);
         self.discovery_manager_ref.stop(None);
+        self.endpoint_ref.stop(None);
     }
+}
+
+async fn session_ended_handle(actor_ref: &ActorRef<ToDiscoveryManager>) -> JoinHandle<()> {
+    let mut events = call!(actor_ref, ToDiscoveryManager::Events).unwrap();
+
+    tokio::spawn(async move {
+        loop {
+            if let DiscoveryEvent::SessionEnded {
+                role: SessionRole::Initiated,
+                ..
+            } = events.recv().await.unwrap()
+            {
+                break;
+            }
+        }
+    })
 }
 
 #[tokio::test]
@@ -101,14 +118,19 @@ async fn smoke_test() {
     // Bob's address book is empty;
     let mut bob = TestNode::spawn([17; 32], vec![]).await;
 
-    // Alice inserts Bob's info in address book.
-    let alice = TestNode::spawn([18; 32], vec![generate_node_info(&mut bob.args)]).await;
+    // Alice inserts Bob's info in their address book.
+    let alice = TestNode::spawn([18; 32], vec![generate_trusted_node_info(&mut bob.args)]).await;
 
-    sleep(Duration::from_millis(100)).await;
+    // Wait until both parties finished at least one discovery session.
+    let alice_session_ended = session_ended_handle(&alice.discovery_manager_ref).await;
+    let bob_session_ended = session_ended_handle(&bob.discovery_manager_ref).await;
+    alice_session_ended.await.unwrap();
+    bob_session_ended.await.unwrap();
 
-    // Alice didn't learn about new transport info of Bob.
+    // Alice didn't learn about new transport info of Bob as their manually added node info was
+    // already the "latest".
     let alice_metrics = call!(alice.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
-    assert_eq!(alice_metrics.newly_learned_transport_infos, 1);
+    assert_eq!(alice_metrics.newly_learned_transport_infos, 0);
 
     // Bob learned of Alice.
     let bob_metrics = call!(bob.discovery_manager_ref, ToDiscoveryManager::Metrics).unwrap();
