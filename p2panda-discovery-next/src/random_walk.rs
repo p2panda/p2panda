@@ -248,7 +248,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{HashMap, HashSet, VecDeque};
 
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
@@ -379,5 +379,71 @@ mod tests {
         // This should never return a value and also not hang in an infinite loop if the only item
         // is ourselves in the database.
         assert!(strategy.next_node(None).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn eager_walk() {
+        // We want to test if we can "eagerly" push the worker forwards without waiting for results
+        // yet. Results are only required to inform the worker about "new" nodes but we can still
+        // move forwards with the "old" ones we already know about.
+        //
+        // This is done by introducing an "inputs" queue which will contain a number of "empty"
+        // (None) results in the beginning. The walker will start working off these first and later
+        // get informed about new results.
+        const NUM_NODES: usize = 100;
+
+        // Create a long chain of nodes transitively knowing about the next one in the list:
+        //
+        // 0 --> 1 --> 2 --> 3 --> ... -> n
+        //
+        // Initially node 0 only knows 1 (bootstrap) and explores the rest of the graph through it
+        // by traversing their (transitive) neighbors.
+        let mut graph = HashMap::new();
+        graph.insert(0, vec![]);
+        for i in 1..NUM_NODES {
+            graph.insert(i, vec![i + 1]);
+        }
+
+        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let store = TestStore::new(rng.clone());
+
+        store.insert_node_info(TestInfo::new(0)).await.unwrap();
+        store
+            .insert_node_info(TestInfo::new_bootstrap(1))
+            .await
+            .unwrap();
+
+        let strategy = RandomWalker::new(0, store, rng);
+
+        let mut visited: HashSet<TestId> = HashSet::new();
+
+        // Queue of "inputs" for the worker.
+        let mut inputs: VecDeque<Option<DiscoveryResult<TestId, TestInfo>>> = VecDeque::new();
+
+        // The first inputs will be empty.
+        for _ in 0..5 {
+            inputs.push_back(None);
+        }
+
+        while let Some(input) = inputs.pop_front() {
+            let id = strategy
+                .next_node(input.as_ref())
+                .await
+                .unwrap()
+                .expect("should return a Some value");
+
+            visited.insert(id);
+
+            // Traversal visited all nodes in the network.
+            if visited.len() == graph.len() - 1 {
+                break;
+            }
+
+            // Push actual results into the inputs queue.
+            inputs.push_back(Some(DiscoveryResult::from_neighbors(
+                id,
+                graph.get(&id).unwrap(),
+            )));
+        }
     }
 }
