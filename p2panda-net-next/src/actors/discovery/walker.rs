@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
+use p2panda_discovery::random_walk::RandomWalker;
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
@@ -132,14 +132,7 @@ where
         let (args, store, walker_reset, manager_ref) = args;
         Ok(DiscoveryWalkerState {
             manager_ref,
-            walker: RandomWalker::from_config(
-                args.public_key,
-                store,
-                args.rng.clone(),
-                RandomWalkerConfig {
-                    reset_walk_probability: args.discovery_config.reset_walk_probability,
-                },
-            ),
+            walker: RandomWalker::new(args.public_key, store, args.rng.clone()),
             backoff: Backoff::new(BackoffConfig::default(), args.rng),
             walker_reset,
         })
