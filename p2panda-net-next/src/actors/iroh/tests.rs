@@ -77,7 +77,8 @@ async fn establish_connection() {
         bob_ref,
         ToIrohEndpoint::Connect,
         alice_addr,
-        ECHO_PROTOCOL_ID.to_vec()
+        ECHO_PROTOCOL_ID.to_vec(),
+        None
     )
     .expect("calling actor should not fail")
     .expect("connection establishment should not fail");

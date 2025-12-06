@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::Arc;
+
+use iroh::endpoint::{ConnectOptions, TransportConfig};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
@@ -22,6 +25,7 @@ pub enum IrohConnectionArgs {
         endpoint: iroh::endpoint::Endpoint,
         endpoint_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
+        transport_config: Option<Arc<TransportConfig>>,
         reply: ConnectionReplyPort,
     },
     Accept {
@@ -94,16 +98,30 @@ async fn establish_connection(
             endpoint,
             endpoint_addr,
             alpn,
+            transport_config,
             reply,
         } => {
             tracing::Span::current().record("alpn", alpn.fmt_short());
             let remote_node_id = to_public_key(endpoint_addr.id);
 
-            match endpoint
-                .connect(endpoint_addr, &alpn)
+            let mut connect_options = ConnectOptions::default();
+            if let Some(config) = transport_config {
+                connect_options = connect_options.with_transport_config(config);
+            }
+
+            let connecting = endpoint
+                .connect_with_opts(endpoint_addr, &alpn, connect_options)
                 .await
-                .map_err(|err| ConnectionActorError::Iroh(err.into()))
-            {
+                .map_err(|err| ConnectionActorError::Iroh(err.into()));
+
+            let connection = match connecting {
+                Ok(connecting) => connecting
+                    .await
+                    .map_err(|err| ConnectionActorError::Iroh(err.into())),
+                Err(err) => Err(err),
+            };
+
+            match connection {
                 Ok(connection) => {
                     debug!("successfully initiated connection");
 
@@ -196,6 +214,12 @@ async fn establish_connection(
 pub enum IrohError {
     #[error(transparent)]
     Connect(#[from] iroh::endpoint::ConnectError),
+
+    #[error(transparent)]
+    ConnectWithOpts(#[from] iroh::endpoint::ConnectWithOptsError),
+
+    #[error(transparent)]
+    Connecting(#[from] iroh::endpoint::ConnectingError),
 
     #[error(transparent)]
     Connection(#[from] iroh::endpoint::ConnectionError),

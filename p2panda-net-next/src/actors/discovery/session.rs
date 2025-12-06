@@ -4,7 +4,9 @@ use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
+use iroh::endpoint::TransportConfig;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
@@ -46,6 +48,7 @@ pub struct DiscoverySessionArguments<S> {
     pub session_id: DiscoverySessionId,
     pub store: S,
     pub manager_ref: ActorRef<ToDiscoveryManager>,
+    pub transport_config: Arc<TransportConfig>,
     pub args: DiscoverySessionRole,
 }
 
@@ -104,6 +107,7 @@ where
             session_id,
             store,
             manager_ref,
+            transport_config,
             args,
         } = args;
         let actor_namespace = generate_actor_namespace(&my_node_id);
@@ -115,6 +119,7 @@ where
                 let connection = connect(
                     remote_node_id,
                     DISCOVERY_PROTOCOL_ID,
+                    Some(transport_config),
                     actor_namespace.clone(),
                 )
                 .await?;

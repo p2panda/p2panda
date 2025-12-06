@@ -61,7 +61,12 @@ pub enum ToIrohEndpoint {
     /// The ALPN byte string, or application-level protocol identifier, is also required. The
     /// remote endpoint must support this alpn, otherwise the connection attempt will fail with an
     /// error.
-    Connect(iroh::EndpointAddr, ProtocolId, ConnectionReplyPort),
+    Connect(
+        iroh::EndpointAddr,
+        ProtocolId,
+        Option<Arc<TransportConfig>>,
+        ConnectionReplyPort,
+    ),
 
     /// We've received a connection attempt from a remote iroh endpoint.
     Incoming(iroh::endpoint::Incoming),
@@ -156,7 +161,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 let socket_address_v6 =
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
-                // Adjust QUIC transport parameters.
+                // Default QUIC transport parameters, can be overwritten when connecting to a node.
                 let mut transport_config = TransportConfig::default();
                 transport_config.keep_alive_interval(Some(KEEP_ALIVE_INTERVAL));
                 transport_config.max_idle_timeout(Some(
@@ -215,7 +220,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     )
                     .set_alpns(protocols.keys().cloned().collect());
             }
-            ToIrohEndpoint::Connect(endpoint_addr, alpn, reply) => {
+            ToIrohEndpoint::Connect(endpoint_addr, alpn, transport_config, reply) => {
                 let mixed_protocol_id =
                     hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
 
@@ -235,6 +240,7 @@ impl ThreadLocalActor for IrohEndpoint {
                                 ),
                             endpoint_addr: endpoint_addr.clone(),
                             alpn: mixed_protocol_id,
+                            transport_config,
                             reply,
                         },
                         myself.clone(),

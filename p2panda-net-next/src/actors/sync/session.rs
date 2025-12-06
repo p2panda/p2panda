@@ -82,7 +82,7 @@ where
                 protocol,
             } => {
                 let connection =
-                    connect(node_id, SYNC_PROTOCOL_ID, actor_namespace.to_string()).await?;
+                    connect(node_id, SYNC_PROTOCOL_ID, None, actor_namespace.to_string()).await?;
 
                 // First we run the TopicHandshake protocol.
                 let (tx, rx) = connection.open_bi().await?;
