@@ -24,7 +24,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::addrs::{NodeId, NodeInfo, NodeMetrics};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 use crate::config::IrohConfig;
-use crate::{NetworkId, TopicId, TransportAddress, UnsignedTransportInfo};
+use crate::{NetworkId, TopicId, TransportAddress, TrustedTransportInfo, UnsignedTransportInfo};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 
@@ -358,6 +358,20 @@ pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
     )]);
     transport_info.timestamp = args.rng.random::<u32>() as u64;
     let transport_info = transport_info.sign(&args.private_key).unwrap();
+    NodeInfo {
+        node_id: args.public_key,
+        bootstrap: false,
+        transports: Some(transport_info.into()),
+        metrics: NodeMetrics::default(),
+    }
+}
+
+pub fn generate_trusted_node_info(args: &mut ApplicationArguments) -> NodeInfo {
+    let transport_info = TrustedTransportInfo::from_addrs([TransportAddress::from_iroh(
+        args.public_key,
+        None,
+        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
+    )]);
     NodeInfo {
         node_id: args.public_key,
         bootstrap: false,
