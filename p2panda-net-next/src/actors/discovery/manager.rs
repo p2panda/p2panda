@@ -5,8 +5,9 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use iroh::endpoint::TransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
@@ -34,6 +35,9 @@ use crate::args::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
+
+/// Maximum duration of inactivity to accept before timing out the connection.
+pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub enum ToDiscoveryManager {
     /// Accept incoming "discovery protocol" connection requests.
@@ -81,6 +85,7 @@ pub struct DiscoveryManagerState<S> {
     walkers_reset: Arc<Notify>,
     watch_handle: Option<JoinHandle<()>>,
     events_tx: broadcast::Sender<DiscoveryEvent>,
+    transport_config: Arc<TransportConfig>,
     metrics: DiscoveryMetrics,
 }
 
@@ -263,6 +268,14 @@ where
             );
         }
 
+        // Custom QUIC transport parameters for discovery protocol. We don't want to wait too long
+        // for unreachable nodes. QUIC should fastly tell us about a timeout which will mark this
+        // node as "stale".
+        let mut transport_config = TransportConfig::default();
+        transport_config.max_idle_timeout(Some(
+            MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+        ));
+
         // Invoke the handler to register the discovery protocol and do other setups.
         let _ = myself.cast(ToDiscoveryManager::Initiate);
 
@@ -279,6 +292,7 @@ where
             walkers_reset,
             watch_handle: None,
             events_tx,
+            transport_config: Arc::new(transport_config),
             metrics: DiscoveryMetrics::default(),
         })
     }
@@ -383,6 +397,7 @@ where
                         remote_node_id,
                         store: state.store.clone(),
                         manager_ref: myself.clone(),
+                        transport_config: state.transport_config.clone(),
                         args: DiscoverySessionRole::Connect,
                     },
                     myself.clone().into(),
@@ -422,6 +437,7 @@ where
                         remote_node_id,
                         store: state.store.clone(),
                         manager_ref: myself.clone(),
+                        transport_config: state.transport_config.clone(),
                         args: DiscoverySessionRole::Accept { connection },
                     },
                     myself.into(),
