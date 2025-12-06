@@ -12,28 +12,6 @@ use tokio::sync::{Mutex, RwLock};
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::{DiscoveryResult, DiscoveryStrategy};
 
-#[derive(Debug)]
-pub struct RandomWalkerConfig {
-    /// Probability of resetting the random walk and starting from scratch, determined on every
-    /// walking step.
-    ///
-    /// ```text
-    /// 0.0 = Never reset
-    /// 1.0 = Always reset
-    /// ```
-    ///
-    /// Defaults to 0.02 (2%) probability.
-    pub reset_walk_probability: f64,
-}
-
-impl Default for RandomWalkerConfig {
-    fn default() -> Self {
-        Self {
-            reset_walk_probability: 0.02, // 2% chance
-        }
-    }
-}
-
 /// Breadth-first "random walk" peer sampling strategy.
 ///
 /// Strategy to traverse a network of nodes of possibly unknown size and shape combined with a
@@ -43,16 +21,12 @@ impl Default for RandomWalkerConfig {
 /// configured set of "bootstrap nodes" if available. The "walker" continues with another random
 /// node sampled from a set of unvisited nodes - and repeats.
 ///
-/// Based on a configurable probability the algorithm resets itself and starts from scratch. See
-/// `RandomWalkConfig` for details.
-///
 /// If the walker is at the "end" of the explored graph and visited all nodes it will return
 /// `None`.
 pub struct RandomWalker<R, S, ID, N> {
     my_id: ID,
     store: S,
     rng: Mutex<R>,
-    config: RandomWalkerConfig,
     state: RwLock<RandomWalkerState<ID>>,
     _marker: PhantomData<N>,
 }
@@ -79,16 +53,11 @@ where
     N: NodeInfo<ID>,
 {
     pub fn new(my_id: ID, store: S, rng: R) -> Self {
-        Self::from_config(my_id, store, rng, RandomWalkerConfig::default())
-    }
-
-    pub fn from_config(my_id: ID, store: S, rng: R, config: RandomWalkerConfig) -> Self {
         Self {
             my_id,
             store,
             rng: Mutex::new(rng),
             state: RwLock::new(RandomWalkerState::default()),
-            config,
             _marker: PhantomData,
         }
     }
@@ -208,25 +177,8 @@ where
             self.merge_previous(previous).await;
         }
 
-        let reset = {
-            if previous.is_none() {
-                // Always reset at the beginning to initialise everything and start with
-                // "bootstrap" nodes.
-                true
-            } else if self.state.read().await.unvisited.is_empty() {
-                // We've visited all nodes. This will return `None` to the user and _not_ randomly
-                // set the reset flag.
-                false
-            } else {
-                // Flip a coin.
-                self.rng
-                    .lock()
-                    .await
-                    .random_bool(self.config.reset_walk_probability)
-            }
-        };
-
-        let node_id = if reset {
+        // Always reset at the beginning to initialise everything and start with "bootstrap" nodes.
+        let node_id = if previous.is_none() {
             self.reset().await?;
             self.random_bootstrap_node().await?
         } else {
@@ -261,7 +213,7 @@ mod tests {
     use crate::test_utils::{TestId, TestInfo, TestStore};
     use crate::traits::{DiscoveryResult, DiscoveryStrategy};
 
-    use super::{RandomWalker, RandomWalkerConfig};
+    use super::RandomWalker;
 
     #[tokio::test]
     async fn explore_full_graph() {
@@ -331,15 +283,7 @@ mod tests {
             store.insert_node_info(TestInfo::new(id)).await.unwrap();
         }
 
-        let strategy = RandomWalker::from_config(
-            0,
-            store,
-            rng,
-            RandomWalkerConfig {
-                // Never reset in this test.
-                reset_walk_probability: 0.0,
-            },
-        );
+        let strategy = RandomWalker::new(0, store, rng);
 
         let mut visited: HashSet<TestId> = HashSet::new();
         let mut previous: Option<DiscoveryResult<TestId, TestInfo>> = None;
@@ -386,9 +330,9 @@ mod tests {
         // yet. Results are only required to inform the worker about "new" nodes but we can still
         // move forwards with the "old" ones we already know about.
         //
-        // This is done by introducing an "inputs" queue which will contain a number of "empty"
-        // (None) results in the beginning. The walker will start working off these first and later
-        // get informed about new results.
+        // This is done by introducing an "inputs" queue which will start with an "empty" item in
+        // the beginning. The walker will start working off these first and later get informed
+        // about new results.
         const NUM_NODES: usize = 10_000;
 
         let mut rng = ChaCha20Rng::from_seed([1; 32]);
@@ -431,15 +375,7 @@ mod tests {
             .await
             .unwrap();
 
-        let strategy = RandomWalker::from_config(
-            0,
-            store,
-            rng,
-            RandomWalkerConfig {
-                // Disable random reset to force exploring graph.
-                reset_walk_probability: 0.0,
-            },
-        );
+        let strategy = RandomWalker::new(0, store, rng);
 
         let mut visited: HashSet<TestId> = HashSet::new();
 
