@@ -13,7 +13,7 @@ use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
-use crate::test_utils::{generate_node_info, setup_logging, test_args_from_seed};
+use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args_from_seed};
 
 use super::NetworkEvent;
 
@@ -101,7 +101,8 @@ async fn discovery_events_are_received() {
     setup_logging();
 
     let mut bob: TestNode = TestNode::spawn([133; 32], vec![]).await;
-    let alice: TestNode = TestNode::spawn([134; 32], vec![generate_node_info(&mut bob.args)]).await;
+    let alice: TestNode =
+        TestNode::spawn([134; 32], vec![generate_trusted_node_info(&mut bob.args)]).await;
 
     let mut alice_events = call!(alice.events_actor, ToEvents::Subscribe).unwrap();
 
@@ -109,9 +110,7 @@ async fn discovery_events_are_received() {
     let mut received_ended = 0;
 
     loop {
-        let alice_event = alice_events.recv().await.unwrap();
-
-        match alice_event {
+        match alice_events.recv().await.unwrap() {
             NetworkEvent::Discovery(DiscoveryEvent::SessionStarted { .. }) => {
                 received_started += 1;
             }
@@ -122,7 +121,7 @@ async fn discovery_events_are_received() {
         }
 
         // We've received at least one started and ended event.
-        if received_started == received_ended && received_started > 0 {
+        if received_started > 0 && received_ended > 0 {
             break;
         }
     }
