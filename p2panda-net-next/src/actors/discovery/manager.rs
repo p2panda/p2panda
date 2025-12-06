@@ -61,9 +61,10 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
-    /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
-    /// will allow them to do their work faster and can be used to improve the user experience in
-    /// moments where the application needs discovery.
+    /// Reset backoff logic of all walkers and make them start from the bootstrap set again.
+    ///
+    /// This will allow them to do their work faster and can be used to improve the user experience
+    /// in moments where the application needs discovery.
     ResetWalkers,
 
     /// Subscribe to system events.

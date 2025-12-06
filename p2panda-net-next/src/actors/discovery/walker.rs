@@ -29,7 +29,7 @@ const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 /// Increment the backoff if success rate falls under this threshold.
 ///
 /// If we're reaching a higher value again, the backoff will be reset.
-const SUCCESS_RATE_THRESHOLD: SuccessRate = 0.02; // 2% new results
+const SUCCESS_RATE_THRESHOLD: SuccessRate = 0.15; // 15% new results
 
 /// Success metric for last discovery session.
 ///
