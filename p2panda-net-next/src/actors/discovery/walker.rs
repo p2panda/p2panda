@@ -70,7 +70,9 @@ impl WalkFromHere {
                 *newly_learned_transport_infos as f32
                     / discovery_result.node_transport_infos.len() as f32
             }
-            WalkFromHere::FailedSession { .. } => 0.0,
+            // Do not increase backoff on failed connections and treat this as a "high" success
+            // rate instead, eg. "ignore" this case.
+            WalkFromHere::FailedSession { .. } => 1.0,
         }
     }
 
