@@ -61,6 +61,9 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
+    /// Walker finished its traversal.
+    OnWalkerFinished(ActorRef<ToDiscoveryWalker>),
+
     /// Reset backoff logic of all walkers and make them start from the bootstrap set again.
     ///
     /// This will allow them to do their work faster and can be used to improve the user experience
@@ -374,8 +377,10 @@ where
                 state.watch_handle = Some(handle);
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
+                // @TODO: Have a max. of concurrently running "outgoing" discovery sessions.
+
                 // Sessions we've initiated ourselves are always connected to a particular walker.
-                // Each walker can only ever run max. one discovery sessions at a time.
+                // Each walker can "eagerly" run many discovery sessions at a time.
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
 
                 // Check first if this node became stale in the meantime and cancel this session if
@@ -424,7 +429,7 @@ where
                 });
             }
             ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
-                // @TODO: Have a max. of concurrently running discovery sessions.
+                // @TODO: Have a max. of concurrently running "incoming" discovery sessions.
                 let session_id = state.next_session_id();
 
                 let (_, handle) = DiscoverySession::spawn_linked(
@@ -554,6 +559,12 @@ where
                         });
                     }
                 }
+            }
+            ToDiscoveryManager::OnWalkerFinished(walker_ref) => {
+                let _walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
+
+                // TODO
+                walker_ref.send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap))?;
             }
             ToDiscoveryManager::Events(reply) => {
                 let _ = reply.send(state.events_tx.subscribe());

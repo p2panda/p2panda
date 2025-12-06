@@ -3,28 +3,23 @@
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::time::Duration;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::random_walk::RandomWalker;
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
 use ractor::thread_local::ThreadLocalActor;
-use ractor::{ActorProcessingErr, ActorRef, cast};
+use ractor::{ActorProcessingErr, ActorRef};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::Notify;
-use tokio::time;
 use tracing::trace;
 
+use crate::actors::discovery::ToDiscoveryManager;
 use crate::actors::discovery::backoff::{Backoff, Config as BackoffConfig};
-use crate::actors::discovery::{DISCOVERY_MANAGER, ToDiscoveryManager};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 
 /// Actor name prefix for a walker.
 pub const DISCOVERY_WALKER: &str = "net.discovery.walker";
-
-/// Delay next step when no result was previously given.
-const NO_RESULTS_DELAY: Duration = Duration::from_secs(2);
 
 /// Increment the backoff if success rate falls under this threshold.
 ///
@@ -43,8 +38,10 @@ pub enum WalkFromHere {
     /// If no bootstrap nodes are available, pick any other random node.
     Bootstrap,
 
-    /// Continue random walk, feeding the walker with information about the last successful
-    /// discovery session which might inform it's behaviour for the next step.
+    /// Continue random walk after a successful session.
+    ///
+    /// We're feeding the walker with information about the last successful discovery session which
+    /// might inform it's behaviour for the next step.
     LastSession {
         discovery_result: DiscoveryResult<NodeId, NodeInfo>,
         newly_learned_transport_infos: usize,
@@ -178,31 +175,23 @@ where
                     .map_err(|err| ActorProcessingErr::from(err.to_string()))?;
 
                 match node_id {
-                    // Tell manager to launch a discovery session with this node. When session
-                    // finished it will "call back" with a result and we can continue our walk.
                     Some(node_id) => {
-                        if cast!(
-                            state.manager_ref,
-                            ToDiscoveryManager::InitiateSession(node_id, myself)
-                        )
-                        .is_err()
-                        {
-                            trace!(
-                                "parent {DISCOVERY_MANAGER} actor not available, probably winding down"
-                            );
-                        }
+                        // Tell manager to launch a discovery session with this node.
+                        let _ = state
+                            .manager_ref
+                            .send_message(ToDiscoveryManager::InitiateSession(node_id, myself));
                     }
-                    // When walker replied with no value we can assume that the address book is
-                    // empty. In this case delay the next iteration to lower the activity,
-                    // hopefully some other process will add entries in the address book soon.
                     None => {
-                        time::sleep(NO_RESULTS_DELAY).await;
-                        let _ = myself
-                            .send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap));
+                        // Tell manager that this walker has finished its traversal. The manager
+                        // will be responsible for re-starting it.
+                        let _ = state
+                            .manager_ref
+                            .send_message(ToDiscoveryManager::OnWalkerFinished(myself));
                     }
                 }
             }
         }
+
         Ok(())
     }
 }
