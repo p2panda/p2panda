@@ -39,6 +39,10 @@ pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 /// Maximum duration of inactivity to accept before timing out the connection.
 pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// Walker can be "eagerly" moved forward by max. n steps after a successful discovery session
+/// without checking for results on every step.
+const MAX_STEPS_AFTER_SESSION: usize = 3;
+
 pub enum ToDiscoveryManager {
     /// Accept incoming "discovery protocol" connection requests.
     Initiate,
@@ -112,6 +116,32 @@ impl<S> DiscoveryManagerState<S> {
             .walkers
             .get_mut(&walker_id)
             .expect("walker with this id must exist");
+
+        // We want to "eagerly" move some steps forward with the walker without telling it about
+        // "fresh" discovery results for each single step.
+        //
+        // The walker will initiate connections after each step as a result which allows
+        // applications to be faster during discovery, optimistically trying to establish multiple
+        // discovery sessions at the same time.
+        //
+        // TODO: This can be very spammy and we want to instead factour out a "connection pool"
+        // which manages a max. of connections. This can be done with a queue of "pending
+        // requests".
+        for _ in 0..std::cmp::min(
+            1,
+            std::cmp::max(
+                MAX_STEPS_AFTER_SESSION,
+                discovery_result.node_transport_infos.len(),
+            ),
+        ) {
+            let _ = info.walker_ref.send_message(ToDiscoveryWalker::NextNode(
+                WalkFromHere::LastSession {
+                    discovery_result: discovery_result.clone(),
+                    newly_learned_transport_infos,
+                },
+            ));
+        }
+
         let _ =
             info.walker_ref
                 .send_message(ToDiscoveryWalker::NextNode(WalkFromHere::LastSession {
@@ -561,9 +591,6 @@ where
                 }
             }
             ToDiscoveryManager::OnWalkerFinished(walker_ref) => {
-                let _walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
-
-                // TODO
                 walker_ref.send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap))?;
             }
             ToDiscoveryManager::Events(reply) => {
