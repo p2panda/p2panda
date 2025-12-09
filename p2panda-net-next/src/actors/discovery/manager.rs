@@ -359,6 +359,11 @@ where
                                     None => continue,
                                 }
                             }
+                            else => {
+                                // When a watcher closed it's sender part, we know the address book
+                                // actor shut down and assume the process is closing for good.
+                                break;
+                            }
                         }
 
                         if myself
