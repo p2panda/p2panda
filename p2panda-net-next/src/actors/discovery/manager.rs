@@ -39,6 +39,10 @@ pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";
 /// Maximum duration of inactivity to accept before timing out the connection.
 pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// Walker can be "eagerly" moved forward by max. n steps after a successful discovery session
+/// without checking for results on every step.
+const MAX_STEPS_AFTER_SESSION: usize = 3;
+
 pub enum ToDiscoveryManager {
     /// Accept incoming "discovery protocol" connection requests.
     Initiate,
@@ -61,9 +65,13 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
-    /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
-    /// will allow them to do their work faster and can be used to improve the user experience in
-    /// moments where the application needs discovery.
+    /// Walker finished its traversal.
+    OnWalkerFinished(ActorRef<ToDiscoveryWalker>),
+
+    /// Reset backoff logic of all walkers and make them start from the bootstrap set again.
+    ///
+    /// This will allow them to do their work faster and can be used to improve the user experience
+    /// in moments where the application needs discovery.
     ResetWalkers,
 
     /// Subscribe to system events.
@@ -108,6 +116,32 @@ impl<S> DiscoveryManagerState<S> {
             .walkers
             .get_mut(&walker_id)
             .expect("walker with this id must exist");
+
+        // We want to "eagerly" move some steps forward with the walker without telling it about
+        // "fresh" discovery results for each single step.
+        //
+        // The walker will initiate connections after each step as a result which allows
+        // applications to be faster during discovery, optimistically trying to establish multiple
+        // discovery sessions at the same time.
+        //
+        // TODO: This can be very spammy and we want to instead factour out a "connection pool"
+        // which manages a max. of connections. This can be done with a queue of "pending
+        // requests".
+        for _ in 0..std::cmp::min(
+            1,
+            std::cmp::max(
+                MAX_STEPS_AFTER_SESSION,
+                discovery_result.node_transport_infos.len(),
+            ),
+        ) {
+            let _ = info.walker_ref.send_message(ToDiscoveryWalker::NextNode(
+                WalkFromHere::LastSession {
+                    discovery_result: discovery_result.clone(),
+                    newly_learned_transport_infos,
+                },
+            ));
+        }
+
         let _ =
             info.walker_ref
                 .send_message(ToDiscoveryWalker::NextNode(WalkFromHere::LastSession {
@@ -378,8 +412,10 @@ where
                 state.watch_handle = Some(handle);
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
+                // @TODO: Have a max. of concurrently running "outgoing" discovery sessions.
+
                 // Sessions we've initiated ourselves are always connected to a particular walker.
-                // Each walker can only ever run max. one discovery sessions at a time.
+                // Each walker can "eagerly" run many discovery sessions at a time.
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
 
                 // Check first if this node became stale in the meantime and cancel this session if
@@ -428,7 +464,7 @@ where
                 });
             }
             ToDiscoveryManager::AcceptSession(remote_node_id, connection) => {
-                // @TODO: Have a max. of concurrently running discovery sessions.
+                // @TODO: Have a max. of concurrently running "incoming" discovery sessions.
                 let session_id = state.next_session_id();
 
                 let (_, handle) = DiscoverySession::spawn_linked(
@@ -558,6 +594,9 @@ where
                         });
                     }
                 }
+            }
+            ToDiscoveryManager::OnWalkerFinished(walker_ref) => {
+                walker_ref.send_message(ToDiscoveryWalker::NextNode(WalkFromHere::Bootstrap))?;
             }
             ToDiscoveryManager::Events(reply) => {
                 let _ = reply.send(state.events_tx.subscribe());

@@ -25,7 +25,9 @@ pub struct Backoff {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Backoff will always begin with this initial value. Defaults to zero / no backoff.
+    /// Backoff will always begin with this initial value.
+    ///
+    /// Defaults to 0 / no backoff.
     initial_value: Duration,
 
     /// Minimum increment value when increasing backoff value.
@@ -48,11 +50,11 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             initial_value: Duration::from_secs(0),
-            min_increment: Duration::from_secs(1),
-            max_increment: Duration::from_secs(5),
-            max_value: Duration::from_secs(30),
-            min_reset: Duration::from_secs(60),
-            max_reset: Duration::from_secs(60 * 3),
+            min_increment: Duration::from_millis(50),
+            max_increment: Duration::from_millis(250),
+            max_value: Duration::from_secs(5),
+            min_reset: Duration::from_secs(30),
+            max_reset: Duration::from_secs(60),
         }
     }
 }
