@@ -84,6 +84,7 @@ pub mod address_book;
 // protocol.
 #[cfg(any(test, feature = "test_utils"))]
 pub mod naive;
+pub mod psi_hash;
 #[cfg(feature = "random_walk")]
 pub mod random_walk;
 #[cfg(any(test, feature = "test_utils"))]
