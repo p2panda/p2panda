@@ -66,6 +66,14 @@ pub enum ToDiscoveryManager {
     /// moments where the application needs discovery.
     ResetWalkers,
 
+    /// Pause all active walkers, preventing new sessions from being initiated. This is called when
+    /// the local node has gone offline.
+    PauseWalkers,
+
+    /// Resume all walkers, allowing iinitiation of new sessions. This is called when new transport
+    /// info has been received for the local node, indicating that we are online.
+    ResumeWalkers,
+
     /// Subscribe to system events.
     Events(RpcReplyPort<broadcast::Receiver<DiscoveryEvent>>),
 
@@ -350,13 +358,21 @@ where
                                 }
                             }
                             Some(event) = node_info_rx.recv() => {
-                                // Reset walkers if new transport info was set, ignore if we're
-                                // offline (and transport info is `None`).
                                 match event.value {
-                                    Some(node_info) => if node_info.transports.is_none() {
+                                    Some(node_info) => if node_info.transports.is_some() {
+                                        continue
+                                    },
+                                    _ => {
+                                        // Pause walkers (local node is offline).
+                                        if myself
+                                            .send_message(ToDiscoveryManager::PauseWalkers)
+                                            .is_err()
+                                        {
+                                            break;
+                                        }
+
                                         continue;
                                     },
-                                    None => continue,
                                 }
                             }
                             else => {
@@ -366,6 +382,16 @@ where
                             }
                         }
 
+                        // Resume walkers (walkers may already be active but we send these messages
+                        // in case they were previously paused due to being offline).
+                        if myself
+                            .send_message(ToDiscoveryManager::ResumeWalkers)
+                            .is_err()
+                        {
+                            break;
+                        }
+
+                        // Reset walkers if new transport info was set for the local node.
                         if myself
                             .send_message(ToDiscoveryManager::ResetWalkers)
                             .is_err()
@@ -379,7 +405,7 @@ where
             }
             ToDiscoveryManager::InitiateSession(remote_node_id, walker_ref) => {
                 // Sessions we've initiated ourselves are always connected to a particular walker.
-                // Each walker can only ever run max. one discovery sessions at a time.
+                // Each walker can only ever run max. one discovery session at a time.
                 let walker_id = DiscoveryActorName::from_actor_ref(&walker_ref).walker_id();
 
                 // Check first if this node became stale in the meantime and cancel this session if
@@ -565,10 +591,21 @@ where
             ToDiscoveryManager::ResetWalkers => {
                 state.walkers_reset.notify_waiters();
             }
+            ToDiscoveryManager::PauseWalkers => {
+                state.walkers.iter().for_each(|(_, walker)| {
+                    let _ = walker.walker_ref.cast(ToDiscoveryWalker::Pause);
+                });
+            }
+            ToDiscoveryManager::ResumeWalkers => {
+                state.walkers.iter().for_each(|(_, walker)| {
+                    let _ = walker.walker_ref.cast(ToDiscoveryWalker::Resume);
+                });
+            }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());
             }
         }
+
         Ok(())
     }
 
