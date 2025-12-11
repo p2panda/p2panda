@@ -358,6 +358,7 @@ where
                                 }
                             }
                             Some(event) = node_info_rx.recv() => {
+                                println!("{:?}", event.value);
                                 match event.value {
                                     Some(node_info) => if node_info.transports.is_some() {
                                         continue
