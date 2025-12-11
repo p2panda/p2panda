@@ -193,6 +193,8 @@ impl ThreadLocalActor for IrohEndpoint {
                         while let Ok(addr) = endpoint.watch_addr().updated().await {
                             if addr.is_empty() {
                                 println!("iroh endpoint is disconnected!");
+                            } else {
+                                println!("iroh endpoint address updated!");
                             }
                         }
                     })
