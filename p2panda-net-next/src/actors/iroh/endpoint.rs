@@ -7,6 +7,7 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
+use iroh::Watcher;
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -186,6 +187,17 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind()
                     .await?;
 
+                let watch_addr_handle = {
+                    let endpoint = endpoint.clone();
+                    tokio::spawn(async move {
+                        while let Ok(addr) = endpoint.watch_addr().updated().await {
+                            if addr.is_empty() {
+                                println!("iroh endpoint is disconnected!");
+                            }
+                        }
+                    })
+                };
+
                 // Handle incoming connection requests from other nodes.
                 let accept_handle = {
                     let endpoint = endpoint.clone();
@@ -201,6 +213,7 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 state.endpoint = Some(endpoint);
                 state.accept_handle = Some(accept_handle);
+                state.watch_addr_handle = Some(watch_addr_handle);
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
