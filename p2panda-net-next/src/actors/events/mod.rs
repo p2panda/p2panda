@@ -138,6 +138,7 @@ impl ThreadLocalActor for Events {
                             )))?;
                         }
                         (Some(_previous), None) => {
+                            println!("disconnected!");
                             myself.send_message(ToEvents::Notify(NetworkEvent::Relay(
                                 RelayStatus::Disconnected,
                             )))?;
