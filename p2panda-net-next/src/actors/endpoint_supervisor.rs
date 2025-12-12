@@ -18,17 +18,18 @@
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_sync::traits::SyncManager;
-use ractor::ActorCell;
 use ractor::thread_local::ThreadLocalActor;
+use ractor::{ActorCell, OutputPort};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tracing::{trace, warn};
 
 use crate::TopicId;
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
-use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
+use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, IrohEndpointAddrs, ToIrohEndpoint};
 #[cfg(feature = "mdns")]
 use crate::actors::iroh::{MDNS_DISCOVERY, Mdns, ToMdns};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
@@ -46,6 +47,7 @@ pub struct EndpointSupervisorState<S, C> {
     sync_config: C,
     iroh_endpoint_actor: ActorRef<ToIrohEndpoint>,
     iroh_endpoint_actor_failures: u16,
+    iroh_endpoint_change_port: Arc<OutputPort<IrohEndpointAddrs>>,
     discovery_manager_actor: ActorRef<ToDiscoveryManager>,
     discovery_manager_actor_failures: u16,
     stream_supervisor: ActorRef<()>,
@@ -147,10 +149,14 @@ where
         let (args, store, sync_config) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
+        // Create the node-local pub-sub port which is used to publish iroh endpoint address
+        // changes to any subscribers (in the form of other actors).
+        let iroh_endpoint_change_port = Arc::new(OutputPort::default());
+
         // Spawn the endpoint actor.
         let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            args.clone(),
+            (args.clone(), iroh_endpoint_change_port.clone()),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -164,6 +170,15 @@ where
             args.root_thread_pool.clone(),
         )
         .await?;
+
+        // Setup the subscription so that the discovery manager receives iroh endpoint address
+        // updates for the local node.
+        //
+        // This allows the discovery manager to terminate and (re)spawn walkers based on changes to
+        // our local network state.
+        iroh_endpoint_change_port.subscribe(discovery_manager_actor.clone(), |addrs| {
+            Some(ToDiscoveryManager::EndpointAddrsUpdate(addrs))
+        });
 
         // Spawn the stream supervisor.
         let (stream_supervisor, _) = StreamSupervisor::<M>::spawn_linked(
@@ -181,6 +196,7 @@ where
             sync_config,
             iroh_endpoint_actor,
             iroh_endpoint_actor_failures: 0,
+            iroh_endpoint_change_port,
             discovery_manager_actor,
             discovery_manager_actor_failures: 0,
             stream_supervisor,
@@ -253,7 +269,7 @@ where
                         // Respawn the iroh endpoint actor.
                         let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
                             Some(with_namespace(IROH_ENDPOINT, &state.actor_namespace)),
-                            state.args.clone(),
+                            (state.args.clone(), state.iroh_endpoint_change_port.clone()),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )

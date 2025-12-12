@@ -28,7 +28,7 @@ use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkF
 use crate::actors::discovery::{
     DISCOVERY_PROTOCOL_ID, DiscoveryActorName, DiscoveryEvent, SessionRole,
 };
-use crate::actors::iroh::register_protocol;
+use crate::actors::iroh::{IrohEndpointAddrs, register_protocol};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
@@ -60,6 +60,9 @@ pub enum ToDiscoveryManager {
         DiscoverySessionId,
         Box<dyn StdError + Send + Sync + 'static>,
     ),
+
+    /// Received updated transport addresses for the local iroh endpoint.
+    EndpointAddrsUpdate(IrohEndpointAddrs),
 
     /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
     /// will allow them to do their work faster and can be used to improve the user experience in
@@ -559,11 +562,15 @@ where
                     }
                 }
             }
-            ToDiscoveryManager::Events(reply) => {
-                let _ = reply.send(state.events_tx.subscribe());
+            ToDiscoveryManager::EndpointAddrsUpdate(addrs) => {
+                // TODO: Terminate walkers.
+                todo!()
             }
             ToDiscoveryManager::ResetWalkers => {
                 state.walkers_reset.notify_waiters();
+            }
+            ToDiscoveryManager::Events(reply) => {
+                let _ = reply.send(state.events_tx.subscribe());
             }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());
