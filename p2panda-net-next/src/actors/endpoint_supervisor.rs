@@ -177,7 +177,7 @@ where
         // This allows the discovery manager to terminate and (re)spawn walkers based on changes to
         // our local network state.
         iroh_endpoint_change_port.subscribe(discovery_manager_actor.clone(), |addrs| {
-            Some(ToDiscoveryManager::EndpointAddrsUpdate(addrs))
+            Some(ToDiscoveryManager::AddressUpdate(addrs))
         });
 
         // Spawn the stream supervisor.

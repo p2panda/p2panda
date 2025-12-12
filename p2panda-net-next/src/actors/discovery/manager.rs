@@ -62,7 +62,7 @@ pub enum ToDiscoveryManager {
     ),
 
     /// Received updated transport addresses for the local iroh endpoint.
-    EndpointAddrsUpdate(IrohEndpointAddrs),
+    AddressUpdate(IrohEndpointAddrs),
 
     /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
     /// will allow them to do their work faster and can be used to improve the user experience in
@@ -562,7 +562,7 @@ where
                     }
                 }
             }
-            ToDiscoveryManager::EndpointAddrsUpdate(addrs) => {
+            ToDiscoveryManager::AddressUpdate(addrs) => {
                 // TODO: Terminate walkers.
                 todo!()
             }
