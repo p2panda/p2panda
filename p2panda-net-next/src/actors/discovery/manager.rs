@@ -562,8 +562,9 @@ where
                     }
                 }
             }
-            ToDiscoveryManager::AddressUpdate(addrs) => {
-                // TODO: Terminate walkers.
+            ToDiscoveryManager::AddressUpdate(_addrs) => {
+                // TODO: Parse addrs to determine whether our connection status has downgraded.
+                // TODO: If we're only available on local network or loopback devices, terminate walkers.
                 todo!()
             }
             ToDiscoveryManager::ResetWalkers => {
