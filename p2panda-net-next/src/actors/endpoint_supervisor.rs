@@ -156,7 +156,7 @@ where
         // Spawn the endpoint actor.
         let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            (args.clone(), iroh_endpoint_change_port.clone()),
+            (args.clone(), Some(iroh_endpoint_change_port.clone())),
             myself.clone().into(),
             args.root_thread_pool.clone(),
         )
@@ -269,7 +269,10 @@ where
                         // Respawn the iroh endpoint actor.
                         let (iroh_endpoint_actor, _) = IrohEndpoint::spawn_linked(
                             Some(with_namespace(IROH_ENDPOINT, &state.actor_namespace)),
-                            (state.args.clone(), state.iroh_endpoint_change_port.clone()),
+                            (
+                                state.args.clone(),
+                                Some(state.iroh_endpoint_change_port.clone()),
+                            ),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )
