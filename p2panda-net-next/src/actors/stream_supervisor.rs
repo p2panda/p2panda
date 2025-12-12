@@ -275,7 +275,7 @@ mod tests {
         // We spawn this here because the stream supervisor depends on it.
         let (endpoint_actor, endpoint_actor_handle) = IrohEndpoint::spawn(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            args.clone(),
+            (args.clone(), None),
             args.root_thread_pool.clone(),
         )
         .await

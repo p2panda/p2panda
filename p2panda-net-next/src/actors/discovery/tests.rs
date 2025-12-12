@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::Arc;
+
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::AddressBookStore as _;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorRef, call};
+use ractor::{ActorRef, OutputPort, call};
 use tokio::task::JoinHandle;
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
@@ -59,9 +61,11 @@ impl TestNode {
         .await
         .unwrap();
 
+        let iroh_endpoint_change_port = Arc::new(OutputPort::default());
+
         let (endpoint_ref, _) = IrohEndpoint::spawn(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            args.clone(),
+            (args.clone(), Some(iroh_endpoint_change_port.clone())),
             thread_pool.clone(),
         )
         .await
