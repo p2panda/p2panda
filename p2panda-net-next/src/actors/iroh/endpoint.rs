@@ -7,9 +7,9 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use iroh::TransportAddr;
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::DynProtocolHandler;
+use iroh::{TransportAddr, Watcher};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, OutputPort, RpcReplyPort, SupervisionEvent, cast};
 use tokio::sync::RwLock;
@@ -49,6 +49,9 @@ pub enum ToIrohEndpoint {
     /// Return the internal iroh endpoint instance (used by iroh-gossip).
     Endpoint(RpcReplyPort<iroh::endpoint::Endpoint>),
 
+    /// Handle an update to the transport addresses for the local endpoint.
+    AddressUpdate(IrohEndpointAddrs),
+
     /// Register protocol handler for a given ALPN (protocol identifier).
     RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
 
@@ -87,8 +90,7 @@ pub enum ToIrohEndpoint {
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
 /// A set of addresses for the local iroh endpoint.
-#[derive(Clone)]
-pub struct IrohEndpointAddrs(BTreeSet<TransportAddr>);
+pub type IrohEndpointAddrs = BTreeSet<TransportAddr>;
 
 pub struct IrohState {
     actor_namespace: ActorNamespace,
@@ -193,6 +195,17 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind()
                     .await?;
 
+                // Listen for changes to our endpoint's addresses.
+                let watch_addr_handle = {
+                    let endpoint = endpoint.clone();
+                    let myself = myself.clone();
+                    tokio::spawn(async move {
+                        while let Ok(addr) = endpoint.watch_addr().updated().await {
+                            let _ = myself.send_message(ToIrohEndpoint::AddressUpdate(addr.addrs));
+                        }
+                    })
+                };
+
                 // Handle incoming connection requests from other nodes.
                 let accept_handle = {
                     let endpoint = endpoint.clone();
@@ -208,6 +221,15 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 state.endpoint = Some(endpoint);
                 state.accept_handle = Some(accept_handle);
+                state.watch_addr_handle = Some(watch_addr_handle);
+            }
+            ToIrohEndpoint::Endpoint(reply) => {
+                let _ = reply.send(state.endpoint.clone().expect(
+                    "bind always takes place first, an endpoint must exist after this point",
+                ));
+            }
+            ToIrohEndpoint::AddressUpdate(addrs) => {
+                state.endpoint_change_port.send(addrs);
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
@@ -278,11 +300,6 @@ impl ThreadLocalActor for IrohEndpoint {
                     state.worker_pool.clone(),
                 )
                 .await?;
-            }
-            ToIrohEndpoint::Endpoint(reply) => {
-                let _ = reply.send(state.endpoint.clone().expect(
-                    "bind always takes place first, an endpoint must exist after this point",
-                ));
             }
             ToIrohEndpoint::Report {
                 remote_node_id,
