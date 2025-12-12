@@ -46,10 +46,10 @@ async fn establish_connection() {
     let thread_pool = ThreadLocalActorSpawner::new();
 
     // Spawn both endpoint actors.
-    let (alice_ref, _) = IrohEndpoint::spawn(None, args_alice.clone(), thread_pool.clone())
+    let (alice_ref, _) = IrohEndpoint::spawn(None, (args_alice.clone(), None), thread_pool.clone())
         .await
         .expect("actor spawns successfully");
-    let (bob_ref, _) = IrohEndpoint::spawn(None, args_bob.clone(), thread_pool.clone())
+    let (bob_ref, _) = IrohEndpoint::spawn(None, (args_bob.clone(), None), thread_pool.clone())
         .await
         .expect("actor spawns successfully");
 
@@ -140,12 +140,13 @@ async fn mdns_discovery() {
 
     // Spawn both endpoint actors, it will populate the address books with the address info.
     let (endpoint_alice_ref, _) =
-        IrohEndpoint::spawn(None, args_alice.clone(), thread_pool.clone())
+        IrohEndpoint::spawn(None, (args_alice.clone(), None), thread_pool.clone())
             .await
             .expect("actor spawns successfully");
-    let (endpoint_bob_ref, _) = IrohEndpoint::spawn(None, args_bob.clone(), thread_pool.clone())
-        .await
-        .expect("actor spawns successfully");
+    let (endpoint_bob_ref, _) =
+        IrohEndpoint::spawn(None, (args_bob.clone(), None), thread_pool.clone())
+            .await
+            .expect("actor spawns successfully");
 
     // Wait until they find each other and exchange transport infos.
     sleep(Duration::from_millis(1000)).await;
