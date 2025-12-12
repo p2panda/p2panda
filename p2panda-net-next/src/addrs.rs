@@ -3,8 +3,7 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
-#[cfg(test)]
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
@@ -675,6 +674,58 @@ pub enum NodeInfoError {
 
     #[error(transparent)]
     Encode(#[from] p2panda_core::cbor::EncodeError),
+}
+
+/// Connectivity status derived from a given IP address.
+///
+/// Defines whether a node appears to be locally-reachable (on the host machine or via WLAN)
+/// or globally-reachable (via the internet). This is not a guarantee of the overall node
+/// connectivity status but a best-guess based on the provided IP address.
+#[derive(Debug, PartialEq)]
+pub enum ConnectivityStatus {
+    /// The IP address is link-local or loopback.
+    Local,
+
+    /// The IP address appears to be globally reachable.
+    Global,
+
+    /// The IP address is neither link-local, loopback nor global.
+    Other,
+}
+
+impl ConnectivityStatus {
+    pub fn is_global(&self) -> bool {
+        self == &ConnectivityStatus::Global
+    }
+}
+
+/// Parse a `SocketAddr` and return the best approximation of the connectivity status based on the
+/// IP address.
+pub fn connectivity_status(addr: &SocketAddr) -> ConnectivityStatus {
+    match addr.ip() {
+        IpAddr::V4(ip) => {
+            if ip.is_loopback() || ip.is_link_local() || ip.is_private() {
+                ConnectivityStatus::Local
+            } else if ip.is_multicast()
+                || ip.is_broadcast()
+                || ip.is_documentation()
+                || ip.is_unspecified()
+            {
+                ConnectivityStatus::Other
+            } else {
+                ConnectivityStatus::Global
+            }
+        }
+        IpAddr::V6(ip) => {
+            if ip.is_loopback() || ip.is_unique_local() || ip.is_unicast_link_local() {
+                ConnectivityStatus::Local
+            } else if ip.is_multicast() || ip.is_unspecified() {
+                ConnectivityStatus::Other
+            } else {
+                ConnectivityStatus::Global
+            }
+        }
+    }
 }
 
 #[cfg(test)]
