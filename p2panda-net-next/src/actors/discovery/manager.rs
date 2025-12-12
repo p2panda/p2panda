@@ -7,13 +7,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use iroh::TransportAddr;
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
+use ractor::{
+    ActorProcessingErr, ActorRef, ActorStatus, RpcReplyPort, SupervisionEvent, call, cast, registry,
+};
 use tokio::sync::Notify;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
@@ -28,9 +31,9 @@ use crate::actors::discovery::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkF
 use crate::actors::discovery::{
     DISCOVERY_PROTOCOL_ID, DiscoveryActorName, DiscoveryEvent, SessionRole,
 };
-use crate::actors::iroh::register_protocol;
+use crate::actors::iroh::{IrohEndpointAddrs, register_protocol};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::{self, ConnectivityStatus, NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 
@@ -61,6 +64,9 @@ pub enum ToDiscoveryManager {
         Box<dyn StdError + Send + Sync + 'static>,
     ),
 
+    /// Received updated transport addresses for the local iroh endpoint.
+    AddressUpdate(IrohEndpointAddrs),
+
     /// Reset backoff logic of all walkers and make them start from the bootstrap set again. This
     /// will allow them to do their work faster and can be used to improve the user experience in
     /// moments where the application needs discovery.
@@ -86,6 +92,7 @@ pub struct DiscoveryManagerState<S> {
     watch_handle: Option<JoinHandle<()>>,
     events_tx: broadcast::Sender<DiscoveryEvent>,
     transport_config: Arc<TransportConfig>,
+    connectivity_status: ConnectivityStatus,
     metrics: DiscoveryMetrics,
 }
 
@@ -203,6 +210,24 @@ pub struct WalkerInfo {
     handle: JoinHandle<()>,
 }
 
+impl WalkerInfo {
+    fn status(&self) -> ActorStatus {
+        self.walker_ref.get_status()
+    }
+}
+
+fn walkers_have_stopped(walkers: &HashMap<usize, WalkerInfo>) -> bool {
+    let mut active_walkers = false;
+
+    walkers.iter().for_each(|(_, walker)| {
+        if walker.status() != ActorStatus::Stopped {
+            active_walkers = true
+        }
+    });
+
+    !active_walkers
+}
+
 #[derive(Debug)]
 pub struct DiscoveryManager<S> {
     _marker: PhantomData<S>,
@@ -293,6 +318,8 @@ where
             watch_handle: None,
             events_tx,
             transport_config: Arc::new(transport_config),
+            // Optimistically set our status as globally-reachable.
+            connectivity_status: ConnectivityStatus::Global,
             metrics: DiscoveryMetrics::default(),
         })
     }
@@ -559,11 +586,101 @@ where
                     }
                 }
             }
-            ToDiscoveryManager::Events(reply) => {
-                let _ = reply.send(state.events_tx.subscribe());
+            ToDiscoveryManager::AddressUpdate(addrs) => {
+                let mut connectivity_status = Vec::new();
+                addrs.iter().for_each(|addr| {
+                    if let TransportAddr::Ip(socket_addr) = addr {
+                        connectivity_status.push(addrs::connectivity_status(socket_addr));
+                    }
+                });
+
+                if connectivity_status.contains(&ConnectivityStatus::Global) {
+                    // Spawn the discovery walkers if we're transitioning from !global to global.
+                    if !state.connectivity_status.is_global() {
+                        debug!("online: spawning discovery walkers");
+
+                        // Before we go ahead and spawn the walkers, we should first check that the
+                        // previous set of walkers have all been stopped.
+                        //
+                        // If this is false, a panic will cause the discovery manager to fail. It
+                        // will then be restarted with fresh state.
+                        assert!(walkers_have_stopped(&state.walkers));
+
+                        // TODO: Make this DRY (nearly the exact same code appears in
+                        // `pre_start()`).
+                        //
+                        // Spawn random walkers.
+                        let mut walkers = HashMap::new();
+                        let walkers_reset = Arc::new(Notify::new());
+                        for walker_id in 0..state.args.discovery_config.random_walkers_count {
+                            let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
+                                Some(
+                                    DiscoveryActorName::new_walker(walker_id)
+                                        .to_string(&state.actor_namespace),
+                                ),
+                                (
+                                    state.args.clone(),
+                                    state.store.clone(),
+                                    walkers_reset.clone(),
+                                    myself.clone(),
+                                ),
+                                myself.clone().into(),
+                                state.pool.clone(),
+                            )
+                            .await?;
+
+                            // Start random walk from bootstrap nodes (if available), from now on it will run
+                            // forever.
+                            walker_ref.send_message(ToDiscoveryWalker::NextNode(
+                                WalkFromHere::Bootstrap,
+                            ))?;
+
+                            walkers.insert(
+                                walker_id,
+                                WalkerInfo {
+                                    walker_id,
+                                    last_result: None,
+                                    walker_ref,
+                                    handle,
+                                },
+                            );
+                        }
+
+                        state.walkers_reset = walkers_reset;
+                        state.walkers = walkers;
+                    }
+
+                    // Update connectivity status.
+                    state.connectivity_status = ConnectivityStatus::Global;
+                } else {
+                    // Terminate the discovery walkers if we're transitioning from global to !global.
+                    if state.connectivity_status.is_global() {
+                        debug!("offline: stopping discovery walkers");
+
+                        // We may have mDNS discovery running over the LAN. In that case we still
+                        // want to stop the discovery walkers because, even if we learn of other
+                        // indirect nodes via nodes on the LAN, we won't be able to dial them
+                        // without an internet connection.
+
+                        // Terminate discovery walkers.
+                        state.walkers.iter().for_each(|(_id, walker)| {
+                            walker.walker_ref.stop(Some("going offline".to_string()));
+                        })
+                    }
+
+                    // Update connectivity status.
+                    if connectivity_status.contains(&ConnectivityStatus::Local) {
+                        state.connectivity_status = ConnectivityStatus::Local
+                    } else {
+                        state.connectivity_status = ConnectivityStatus::Other
+                    }
+                }
             }
             ToDiscoveryManager::ResetWalkers => {
                 state.walkers_reset.notify_waiters();
+            }
+            ToDiscoveryManager::Events(reply) => {
+                let _ = reply.send(state.events_tx.subscribe());
             }
             ToDiscoveryManager::Metrics(reply) => {
                 let _ = reply.send(state.metrics.clone());
@@ -579,12 +696,18 @@ where
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorTerminated(actor, _, _) => {
+            SupervisionEvent::ActorTerminated(actor, _, reason) => {
                 match DiscoveryActorName::from_actor_cell(&actor) {
                     DiscoveryActorName::Walker { walker_id } => {
-                        // Shutting down a walker means we're shutting down the discovery system,
-                        // including this manager.
-                        myself.stop(Some(format!("walker {walker_id} shutting down")));
+                        match reason {
+                            // Walkers are terminated when the connectivity status changes to
+                            // offline. We only want to stop the discovery manager if the
+                            // termination happened for some other reason.
+                            Some(reason) if reason != "going offline" => {
+                                myself.stop(Some(format!("walker {walker_id} shutting down")));
+                            }
+                            _ => (),
+                        }
                     }
                     DiscoveryActorName::Session { .. }
                     | DiscoveryActorName::AcceptedSession { .. } => {

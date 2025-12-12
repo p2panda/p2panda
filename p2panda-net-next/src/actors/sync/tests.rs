@@ -65,7 +65,7 @@ where
         // Spawn the endpoint actor.
         let (endpoint_actor, _) = IrohEndpoint::spawn(
             Some(with_namespace(IROH_ENDPOINT, &actor_namespace)),
-            args.clone(),
+            (args.clone(), None),
             thread_pool.clone(),
         )
         .await

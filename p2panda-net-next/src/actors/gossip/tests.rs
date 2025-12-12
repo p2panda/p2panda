@@ -849,14 +849,14 @@ async fn using_endpoint_actor() {
     // Spawn both endpoint actors.
     let (alice_endpoint_actor, alice_endpoint_actor_handle) = IrohEndpoint::spawn(
         Some(with_namespace(IROH_ENDPOINT, &alice_namespace)),
-        alice_args.clone(),
+        (alice_args.clone(), None),
         thread_pool.clone(),
     )
     .await
     .expect("actor spawns successfully");
     let (bob_endpoint_actor, bob_endpoint_actor_handle) = IrohEndpoint::spawn(
         Some(with_namespace(IROH_ENDPOINT, &bob_namespace)),
-        bob_args.clone(),
+        (bob_args.clone(), None),
         thread_pool.clone(),
     )
     .await

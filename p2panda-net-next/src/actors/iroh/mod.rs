@@ -21,7 +21,7 @@ use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::addrs::NodeId;
 
-pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
+pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, IrohEndpointAddrs, ToIrohEndpoint};
 #[cfg(feature = "mdns")]
 pub use mdns::{MDNS_DISCOVERY, Mdns, ToMdns};
 

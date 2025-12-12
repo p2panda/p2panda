@@ -2,15 +2,16 @@
 
 //! Actor managing an endpoint to establish direct or relayed connections over the Internet
 //! Protocol using the "iroh" crate.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::DynProtocolHandler;
+use iroh::{TransportAddr, Watcher};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, cast};
+use ractor::{ActorProcessingErr, ActorRef, OutputPort, RpcReplyPort, SupervisionEvent, cast};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -47,6 +48,9 @@ pub enum ToIrohEndpoint {
 
     /// Return the internal iroh endpoint instance (used by iroh-gossip).
     Endpoint(RpcReplyPort<iroh::endpoint::Endpoint>),
+
+    /// Handle an update to the transport addresses for the local endpoint.
+    AddressUpdate(IrohEndpointAddrs),
 
     /// Register protocol handler for a given ALPN (protocol identifier).
     RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
@@ -85,10 +89,17 @@ pub enum ToIrohEndpoint {
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
+/// A set of addresses for the local iroh endpoint.
+pub type IrohEndpointAddrs = BTreeSet<TransportAddr>;
+
+/// A ractor pub-sub port for broadcasting iroh endpoint address changes.
+pub type AddrsPubSubPort = Arc<OutputPort<IrohEndpointAddrs>>;
+
 pub struct IrohState {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: Option<iroh::Endpoint>,
+    endpoint_change_port: Option<AddrsPubSubPort>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
@@ -103,12 +114,12 @@ impl ThreadLocalActor for IrohEndpoint {
 
     type Msg = ToIrohEndpoint;
 
-    type Arguments = ApplicationArguments;
+    type Arguments = (ApplicationArguments, Option<AddrsPubSubPort>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        args: Self::Arguments,
+        (args, endpoint_change_port): Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
@@ -119,6 +130,7 @@ impl ThreadLocalActor for IrohEndpoint {
             actor_namespace,
             args,
             endpoint: None,
+            endpoint_change_port,
             protocols: Arc::default(),
             accept_handle: None,
             watch_addr_handle: None,
@@ -186,6 +198,17 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind()
                     .await?;
 
+                // Listen for changes to our endpoint's addresses.
+                let watch_addr_handle = {
+                    let endpoint = endpoint.clone();
+                    let myself = myself.clone();
+                    tokio::spawn(async move {
+                        while let Ok(addr) = endpoint.watch_addr().updated().await {
+                            let _ = myself.send_message(ToIrohEndpoint::AddressUpdate(addr.addrs));
+                        }
+                    })
+                };
+
                 // Handle incoming connection requests from other nodes.
                 let accept_handle = {
                     let endpoint = endpoint.clone();
@@ -201,6 +224,17 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 state.endpoint = Some(endpoint);
                 state.accept_handle = Some(accept_handle);
+                state.watch_addr_handle = Some(watch_addr_handle);
+            }
+            ToIrohEndpoint::Endpoint(reply) => {
+                let _ = reply.send(state.endpoint.clone().expect(
+                    "bind always takes place first, an endpoint must exist after this point",
+                ));
+            }
+            ToIrohEndpoint::AddressUpdate(addrs) => {
+                if let Some(subscribers) = &state.endpoint_change_port {
+                    subscribers.send(addrs)
+                }
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
@@ -271,11 +305,6 @@ impl ThreadLocalActor for IrohEndpoint {
                     state.worker_pool.clone(),
                 )
                 .await?;
-            }
-            ToIrohEndpoint::Endpoint(reply) => {
-                let _ = reply.send(state.endpoint.clone().expect(
-                    "bind always takes place first, an endpoint must exist after this point",
-                ));
             }
             ToIrohEndpoint::Report {
                 remote_node_id,
