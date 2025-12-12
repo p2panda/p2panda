@@ -14,7 +14,9 @@ use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, call, cast, registry};
+use ractor::{
+    ActorProcessingErr, ActorRef, ActorStatus, RpcReplyPort, SupervisionEvent, call, cast, registry,
+};
 use tokio::sync::Notify;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
@@ -206,6 +208,24 @@ pub struct WalkerInfo {
     walker_ref: ActorRef<ToDiscoveryWalker>,
     #[allow(unused)]
     handle: JoinHandle<()>,
+}
+
+impl WalkerInfo {
+    fn status(&self) -> ActorStatus {
+        self.walker_ref.get_status()
+    }
+}
+
+fn walkers_have_stopped(walkers: &HashMap<usize, WalkerInfo>) -> bool {
+    let mut active_walkers = false;
+
+    walkers.iter().for_each(|(_, walker)| {
+        if walker.status() != ActorStatus::Stopped {
+            active_walkers = true
+        }
+    });
+
+    !active_walkers
 }
 
 #[derive(Debug)]
@@ -575,21 +595,77 @@ where
                 });
 
                 if connectivity_status.contains(&ConnectivityStatus::Global) {
-                    // Check our previous status. Spawn the discovery walkers if we're
-                    // transitioning from !global to global.
+                    // Spawn the discovery walkers if we're transitioning from !global to global.
                     if !state.connectivity_status.is_global() {
-                        // Spawn discovery walkers.
-                        todo!();
+                        debug!("online: spawning discovery walkers");
+
+                        // Before we go ahead and spawn the walkers, we should first check that the
+                        // previous set of walkers have all been stopped.
+                        //
+                        // If this is false, a panic will cause the discovery manager to fail. It
+                        // will then be restarted with fresh state.
+                        assert!(walkers_have_stopped(&state.walkers));
+
+                        // TODO: Make this DRY (nearly the exact same code appears in
+                        // `pre_start()`).
+                        //
+                        // Spawn random walkers.
+                        let mut walkers = HashMap::new();
+                        let walkers_reset = Arc::new(Notify::new());
+                        for walker_id in 0..state.args.discovery_config.random_walkers_count {
+                            let (walker_ref, handle) = DiscoveryWalker::spawn_linked(
+                                Some(
+                                    DiscoveryActorName::new_walker(walker_id)
+                                        .to_string(&state.actor_namespace),
+                                ),
+                                (
+                                    state.args.clone(),
+                                    state.store.clone(),
+                                    walkers_reset.clone(),
+                                    myself.clone(),
+                                ),
+                                myself.clone().into(),
+                                state.pool.clone(),
+                            )
+                            .await?;
+
+                            // Start random walk from bootstrap nodes (if available), from now on it will run
+                            // forever.
+                            walker_ref.send_message(ToDiscoveryWalker::NextNode(
+                                WalkFromHere::Bootstrap,
+                            ))?;
+
+                            walkers.insert(
+                                walker_id,
+                                WalkerInfo {
+                                    walker_id,
+                                    last_result: None,
+                                    walker_ref,
+                                    handle,
+                                },
+                            );
+                        }
+
+                        state.walkers_reset = walkers_reset;
+                        state.walkers = walkers;
                     }
 
                     // Update connectivity status.
                     state.connectivity_status = ConnectivityStatus::Global;
                 } else {
-                    // Check our previous status. Terminate the discovery walkers if
-                    // we're transitioning from global to !global.
+                    // Terminate the discovery walkers if we're transitioning from global to !global.
                     if state.connectivity_status.is_global() {
+                        debug!("offline: stopping discovery walkers");
+
+                        // We may have mDNS discovery running over the LAN. In that case we still
+                        // want to stop the discovery walkers because, even if we learn of other
+                        // indirect nodes via nodes on the LAN, we won't be able to dial them
+                        // without an internet connection.
+
                         // Terminate discovery walkers.
-                        todo!();
+                        state.walkers.iter().for_each(|(_id, walker)| {
+                            walker.walker_ref.stop(Some("going offline".to_string()));
+                        })
                     }
 
                     // Update connectivity status.
@@ -620,12 +696,18 @@ where
         _state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorTerminated(actor, _, _) => {
+            SupervisionEvent::ActorTerminated(actor, _, reason) => {
                 match DiscoveryActorName::from_actor_cell(&actor) {
                     DiscoveryActorName::Walker { walker_id } => {
-                        // Shutting down a walker means we're shutting down the discovery system,
-                        // including this manager.
-                        myself.stop(Some(format!("walker {walker_id} shutting down")));
+                        match reason {
+                            // Walkers are terminated when the connectivity status changes to
+                            // offline. We only want to stop the discovery manager if the
+                            // termination happened for some other reason.
+                            Some(reason) if reason != "going offline" => {
+                                myself.stop(Some(format!("walker {walker_id} shutting down")));
+                            }
+                            _ => (),
+                        }
                     }
                     DiscoveryActorName::Session { .. }
                     | DiscoveryActorName::AcceptedSession { .. } => {
