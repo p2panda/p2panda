@@ -92,11 +92,14 @@ pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandle
 /// A set of addresses for the local iroh endpoint.
 pub type IrohEndpointAddrs = BTreeSet<TransportAddr>;
 
+/// A ractor pub-sub port for broadcasting iroh endpoint address changes.
+pub type AddrsPubSubPort = Arc<OutputPort<IrohEndpointAddrs>>;
+
 pub struct IrohState {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: Option<iroh::Endpoint>,
-    endpoint_change_port: Arc<OutputPort<IrohEndpointAddrs>>,
+    endpoint_change_port: Option<AddrsPubSubPort>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
@@ -111,7 +114,7 @@ impl ThreadLocalActor for IrohEndpoint {
 
     type Msg = ToIrohEndpoint;
 
-    type Arguments = (ApplicationArguments, Arc<OutputPort<IrohEndpointAddrs>>);
+    type Arguments = (ApplicationArguments, Option<AddrsPubSubPort>);
 
     async fn pre_start(
         &self,
@@ -229,7 +232,9 @@ impl ThreadLocalActor for IrohEndpoint {
                 ));
             }
             ToIrohEndpoint::AddressUpdate(addrs) => {
-                state.endpoint_change_port.send(addrs);
+                if let Some(subscribers) = &state.endpoint_change_port {
+                    subscribers.send(addrs)
+                }
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
