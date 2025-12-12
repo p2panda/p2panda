@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use iroh::TransportAddr;
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
@@ -30,7 +31,7 @@ use crate::actors::discovery::{
 };
 use crate::actors::iroh::{IrohEndpointAddrs, register_protocol};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::{self, ConnectivityStatus, NodeId, NodeInfo};
 use crate::args::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 
@@ -89,6 +90,7 @@ pub struct DiscoveryManagerState<S> {
     watch_handle: Option<JoinHandle<()>>,
     events_tx: broadcast::Sender<DiscoveryEvent>,
     transport_config: Arc<TransportConfig>,
+    connectivity_status: ConnectivityStatus,
     metrics: DiscoveryMetrics,
 }
 
@@ -296,6 +298,8 @@ where
             watch_handle: None,
             events_tx,
             transport_config: Arc::new(transport_config),
+            // Optimistically set our status as globally-reachable.
+            connectivity_status: ConnectivityStatus::Global,
             metrics: DiscoveryMetrics::default(),
         })
     }
@@ -562,10 +566,39 @@ where
                     }
                 }
             }
-            ToDiscoveryManager::AddressUpdate(_addrs) => {
-                // TODO: Parse addrs to determine whether our connection status has downgraded.
-                // TODO: If we're only available on local network or loopback devices, terminate walkers.
-                todo!()
+            ToDiscoveryManager::AddressUpdate(addrs) => {
+                let mut connectivity_status = Vec::new();
+                addrs.iter().for_each(|addr| {
+                    if let TransportAddr::Ip(socket_addr) = addr {
+                        connectivity_status.push(addrs::connectivity_status(socket_addr));
+                    }
+                });
+
+                if connectivity_status.contains(&ConnectivityStatus::Global) {
+                    // Check our previous status. Spawn the discovery walkers if we're
+                    // transitioning from !global to global.
+                    if !state.connectivity_status.is_global() {
+                        // Spawn discovery walkers.
+                        todo!();
+                    }
+
+                    // Update connectivity status.
+                    state.connectivity_status = ConnectivityStatus::Global;
+                } else {
+                    // Check our previous status. Terminate the discovery walkers if
+                    // we're transitioning from global to !global.
+                    if state.connectivity_status.is_global() {
+                        // Terminate discovery walkers.
+                        todo!();
+                    }
+
+                    // Update connectivity status.
+                    if connectivity_status.contains(&ConnectivityStatus::Local) {
+                        state.connectivity_status = ConnectivityStatus::Local
+                    } else {
+                        state.connectivity_status = ConnectivityStatus::Other
+                    }
+                }
             }
             ToDiscoveryManager::ResetWalkers => {
                 state.walkers_reset.notify_waiters();
