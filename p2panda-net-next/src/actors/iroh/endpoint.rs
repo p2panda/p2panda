@@ -2,15 +2,16 @@
 
 //! Actor managing an endpoint to establish direct or relayed connections over the Internet
 //! Protocol using the "iroh" crate.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
+use iroh::TransportAddr;
 use iroh::endpoint::TransportConfig;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, cast};
+use ractor::{ActorProcessingErr, ActorRef, OutputPort, RpcReplyPort, SupervisionEvent, cast};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
@@ -85,10 +86,15 @@ pub enum ToIrohEndpoint {
 
 pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandler>>>>;
 
+/// A set of addresses for the local iroh endpoint.
+#[derive(Clone)]
+pub struct IrohEndpointAddrs(BTreeSet<TransportAddr>);
+
 pub struct IrohState {
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
     endpoint: Option<iroh::Endpoint>,
+    endpoint_change_port: Arc<OutputPort<IrohEndpointAddrs>>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
     watch_addr_handle: Option<JoinHandle<()>>,
@@ -103,12 +109,12 @@ impl ThreadLocalActor for IrohEndpoint {
 
     type Msg = ToIrohEndpoint;
 
-    type Arguments = ApplicationArguments;
+    type Arguments = (ApplicationArguments, Arc<OutputPort<IrohEndpointAddrs>>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
-        args: Self::Arguments,
+        (args, endpoint_change_port): Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
@@ -119,6 +125,7 @@ impl ThreadLocalActor for IrohEndpoint {
             actor_namespace,
             args,
             endpoint: None,
+            endpoint_change_port,
             protocols: Arc::default(),
             accept_handle: None,
             watch_addr_handle: None,
