@@ -298,18 +298,35 @@ where
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
 
-                    let Some((remote_node_id, _)) = state
-                        .node_session_map
-                        .iter()
-                        .find(|(_, sessions)| sessions.contains(&name.session_id))
+                    // Retrieve the node id from the node session map.
+                    let Some(remote_node_id) =
+                        state
+                            .node_session_map
+                            .iter()
+                            .find_map(|(node_id, sessions)| {
+                                if sessions.contains(&name.session_id) {
+                                    Some(*node_id)
+                                } else {
+                                    None
+                                }
+                            })
                     else {
+                        // If it wasn't present then it means we no longer want to sync with this
+                        // node, clear up any session state and return.
                         Self::drop_session(state, name.session_id);
                         return Ok(());
                     };
 
+                    // Clear up any state from the failed session.
+                    Self::drop_session(state, name.session_id);
+
+                    // @TODO: check how many sessions with this node are remaining, we should set
+                    // a maximum limit.
+                    
+                    // Send a message to initiate a new session with the remote node.
                     debug!(%name.session_id, topic = state.topic.fmt_short(), "restart failed sync session: {}", err);
                     let _ = myself.cast(ToSyncManager::Initiate {
-                        node_id: *remote_node_id,
+                        node_id: remote_node_id,
                         topic: state.topic,
                         // @TODO: for now we default to live-mode is true but we should rather
                         // retrieve this state from the failed sync session.
