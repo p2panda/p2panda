@@ -322,7 +322,7 @@ where
 
                     // @TODO: check how many sessions with this node are remaining, we should set
                     // a maximum limit.
-                    
+
                     // Send a message to initiate a new session with the remote node.
                     debug!(%name.session_id, topic = state.topic.fmt_short(), "restart failed sync session: {}", err);
                     let _ = myself.cast(ToSyncManager::Initiate {
