@@ -308,14 +308,13 @@ where
                     };
 
                     debug!(%name.session_id, topic = state.topic.fmt_short(), "restart failed sync session: {}", err);
-                    let _ = myself
-                        .cast(ToSyncManager::Initiate {
-                            node_id: *remote_node_id,
-                            topic: state.topic,
-                            // @TODO: for now we default to live-mode is true but we should rather
-                            // retrieve this state from the failed sync session.
-                            live_mode: true,
-                        });
+                    let _ = myself.cast(ToSyncManager::Initiate {
+                        node_id: *remote_node_id,
+                        topic: state.topic,
+                        // @TODO: for now we default to live-mode is true but we should rather
+                        // retrieve this state from the failed sync session.
+                        live_mode: true,
+                    });
                 } else {
                     let actor_id = actor.get_id();
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
