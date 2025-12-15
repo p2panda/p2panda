@@ -280,7 +280,7 @@ where
     // Handle supervision events from sync session and poller actors.
     async fn handle_supervisor_evt(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -297,7 +297,25 @@ where
             SupervisionEvent::ActorFailed(actor, err) => {
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
-                    Self::drop_session(state, name.session_id);
+
+                    let Some((remote_node_id, _)) = state
+                        .node_session_map
+                        .iter()
+                        .find(|(_, sessions)| sessions.contains(&name.session_id))
+                    else {
+                        Self::drop_session(state, name.session_id);
+                        return Ok(());
+                    };
+
+                    debug!(%name.session_id, topic = state.topic.fmt_short(), "restart failed sync session: {}", err);
+                    let _ = myself
+                        .cast(ToSyncManager::Initiate {
+                            node_id: *remote_node_id,
+                            topic: state.topic,
+                            // @TODO: for now we default to live-mode is true but we should rather
+                            // retrieve this state from the failed sync session.
+                            live_mode: true,
+                        });
                 } else {
                     let actor_id = actor.get_id();
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
