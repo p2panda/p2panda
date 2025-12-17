@@ -295,6 +295,24 @@ where
             SupervisionEvent::ActorTerminated(actor, _, _) => {
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     debug!(%name.session_id, topic = state.topic.fmt_short(), "sync session terminated");
+
+                    // Reset retry attempts with this node after this successfully completed sync
+                    // session.
+                    if let Some(remote_node_id) =
+                        state
+                            .node_session_map
+                            .iter()
+                            .find_map(|(node_id, sessions)| {
+                                if sessions.contains(&name.session_id) {
+                                    Some(*node_id)
+                                } else {
+                                    None
+                                }
+                            })
+                    {
+                        state.retry_attempts.remove(&remote_node_id);
+                    }
+                    
                     Self::drop_session(state, name.session_id);
                 } else {
                     let actor_id = actor.get_id();
@@ -356,15 +374,17 @@ where
                         err
                     );
                     let topic = state.topic;
-                    let _ = myself.send_after(Duration::from_secs(RETRY_RATE_SECS), move || {
-                        ToSyncManager::Initiate {
-                            node_id: remote_node_id,
-                            topic,
-                            // @TODO: for now we default to live-mode is true but we should rather
-                            // retrieve this state from the failed sync session.
-                            live_mode: true,
-                        }
-                    }).await;
+                    let _ = myself
+                        .send_after(Duration::from_secs(RETRY_RATE_SECS), move || {
+                            ToSyncManager::Initiate {
+                                node_id: remote_node_id,
+                                topic,
+                                // @TODO: for now we default to live-mode is true but we should rather
+                                // retrieve this state from the failed sync session.
+                                live_mode: true,
+                            }
+                        })
+                        .await;
                 } else {
                     let actor_id = actor.get_id();
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
