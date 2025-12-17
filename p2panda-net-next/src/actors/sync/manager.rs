@@ -364,7 +364,7 @@ where
                             // retrieve this state from the failed sync session.
                             live_mode: true,
                         }
-                    });
+                    }).await;
                 } else {
                     let actor_id = actor.get_id();
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);

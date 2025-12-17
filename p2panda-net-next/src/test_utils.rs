@@ -283,12 +283,12 @@ pub enum DummySyncMessage {
 }
 
 #[derive(Debug)]
-pub struct DummySyncManager<C=DummySyncConfig, P=DummySyncProtocol> {
+pub struct DummySyncManager<C = DummySyncConfig, P = DummySyncProtocol> {
     pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
     #[allow(unused)]
     pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
     pub config: C,
-    pub _phantom: PhantomData<P>
+    pub _phantom: PhantomData<P>,
 }
 
 #[derive(Clone, Debug)]
@@ -303,8 +303,7 @@ impl DummySyncConfig {
     }
 }
 
-impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtocol>
-{
+impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtocol> {
     type Protocol = DummySyncProtocol;
     type Event = DummySyncEvent;
     type Config = DummySyncConfig;
@@ -317,7 +316,7 @@ impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtoco
             event_tx: config.event_tx.clone(),
             event_rx,
             config,
-            _phantom: PhantomData
+            _phantom: PhantomData,
         }
     }
 

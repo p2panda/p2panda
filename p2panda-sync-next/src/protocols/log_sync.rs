@@ -466,15 +466,9 @@ pub struct LogSyncMetrics {
 /// Sync status variants sent on log sync events.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StatusEvent {
-    Started {
-        metrics: LogSyncMetrics,
-    },
-    Progress {
-        metrics: LogSyncMetrics,
-    },
-    Completed {
-        metrics: LogSyncMetrics,
-    },
+    Started { metrics: LogSyncMetrics },
+    Progress { metrics: LogSyncMetrics },
+    Completed { metrics: LogSyncMetrics },
 }
 
 /// Protocol error types.
