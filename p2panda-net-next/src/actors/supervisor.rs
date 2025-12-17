@@ -232,7 +232,7 @@ mod tests {
     use crate::actors::endpoint_supervisor::ENDPOINT_SUPERVISOR;
     use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::test_utils::{NoSyncManager, test_args};
+    use crate::test_utils::{DummySyncManager, test_args};
 
     use super::{SUPERVISOR, Supervisor};
 
@@ -241,7 +241,7 @@ mod tests {
         let (args, store, sync_config) = test_args();
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, NoSyncManager>::spawn(
+        let (supervisor_actor, supervisor_actor_handle) = Supervisor::<_, DummySyncManager>::spawn(
             Some(with_namespace(SUPERVISOR, &actor_namespace)),
             (args.clone(), store, sync_config),
             args.root_thread_pool,

@@ -261,7 +261,7 @@ mod tests {
     use crate::actors::streams::ephemeral::EPHEMERAL_STREAMS;
     use crate::actors::streams::eventually_consistent::EVENTUALLY_CONSISTENT_STREAMS;
     use crate::actors::{generate_actor_namespace, with_namespace};
-    use crate::test_utils::{NoSyncManager, test_args};
+    use crate::test_utils::{DummySyncManager, test_args};
 
     use super::{STREAM_SUPERVISOR, StreamSupervisor};
 
@@ -283,7 +283,7 @@ mod tests {
 
         // Spawn the stream supervisor.
         let (stream_supervisor, stream_supervisor_handle) =
-            StreamSupervisor::<NoSyncManager>::spawn(
+            StreamSupervisor::<DummySyncManager>::spawn(
                 Some(with_namespace(STREAM_SUPERVISOR, &actor_namespace)),
                 (args.clone(), sync_config),
                 args.root_thread_pool.clone(),
