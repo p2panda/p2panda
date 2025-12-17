@@ -262,10 +262,22 @@ where
                         .expect("session handle exists");
                     let _ = handle.send(ToSync::Close).await;
                 }
-                state.active_sync_set.drain();
+                for node_id in state.active_sync_set.drain() {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        "removed node from active sync set: {}",
+                        node_id.fmt_short()
+                    );
+                }
             }
             ToSyncManager::Close { node_id, topic } => {
-                state.active_sync_set.remove(&node_id);
+                if state.active_sync_set.remove(&node_id) {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        "removed node from active sync set: {}",
+                        node_id.fmt_short()
+                    );
+                };
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
                 if let Some(node_sessions) = node_sessions {
                     let topic_sessions = state.session_topic_map.sessions(&topic);
