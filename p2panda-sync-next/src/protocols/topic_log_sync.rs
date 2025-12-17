@@ -202,8 +202,9 @@ where
                 }
                 message = stream.next() => {
                     let Some(message) = message else {
-                        debug!("remote closed the stream");
+                        debug!("remote closed the stream unexpectedly");
                         if close_sent {
+                            debug!("remote closed the stream after we sent a close message");
                             break Ok(());
                         }
                         break Err(TopicLogSyncError::UnexpectedStreamClosure);
@@ -235,6 +236,10 @@ where
                             self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
                         },
                         Err(err) => {
+                            if close_sent {
+                                debug!("remote closed the stream after we sent a close message");
+                                break Ok(());
+                            }
                             warn!("error in live-mode: {err:#?}");
                             break Err(TopicLogSyncError::DecodeMessage(format!("{err:?}")));
                         },
