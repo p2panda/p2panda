@@ -45,6 +45,13 @@ pub enum ToSyncManager<T> {
         live_mode: bool,
     },
 
+    /// Retry sync with this peer after a failed session.
+    Retry {
+        node_id: NodeId,
+        topic: TopicId,
+        live_mode: bool,
+    },
+
     /// Accept a sync session on this connection.
     ///
     /// Do not add the node to our active sync set.
@@ -205,6 +212,67 @@ where
                     protocol: session,
                 })?;
             }
+            ToSyncManager::Retry {
+                node_id,
+                topic,
+                live_mode,
+            } => {
+                // If this node was removed from the active sync set we skip retrying.
+                if !state.active_sync_set.contains(&node_id) {
+                    debug!(
+                        remote = %node_id.fmt_short(),
+                        topic = %topic.fmt_short(),
+                        %live_mode,
+                        "skip re-initiate sync: node no longer in active set"
+                    );
+                    return Ok(());
+                };
+
+                let current_sessions = state
+                    .node_session_map
+                    .get(&node_id)
+                    .cloned()
+                    .unwrap_or_default();
+
+                // If there's another session running then we don't need to re-initiate sync.
+                if !current_sessions.is_empty() {
+                    debug!(
+                        remote = %node_id.fmt_short(),
+                        topic = %topic.fmt_short(),
+                        %live_mode,
+                        "skip re-initiate sync: other sync sessions already running"
+                    );
+                    return Ok(());
+                }
+
+                debug!(
+                    remote = %node_id.fmt_short(),
+                    topic = %topic.fmt_short(),
+                    %live_mode,
+                    "re-initiate sync after failed session"
+                );
+
+                let config = SyncSessionConfig {
+                    topic,
+                    remote: node_id,
+                    live_mode,
+                };
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
+                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
+                    name,
+                    state.actor_namespace.clone(),
+                    myself.clone().into(),
+                    state.pool.clone(),
+                )
+                .await?;
+
+                actor_ref.send_message(SyncSessionMessage::Initiate {
+                    node_id,
+                    topic,
+                    protocol: session,
+                })?;
+            }
             ToSyncManager::Accept {
                 node_id,
                 connection,
@@ -212,7 +280,7 @@ where
                 live_mode,
             } => {
                 debug!(
-                    remote_node_id = %node_id.fmt_short(),
+                    remote = %node_id.fmt_short(),
                     topic = %topic.fmt_short(),
                     %live_mode,
                     "accept sync session"
@@ -343,33 +411,21 @@ where
                     // Clear up any state from the failed session.
                     Self::drop_session(state, name.session_id);
 
-                    // If this node isn't in our active peer set then don't re-initiate sync.
+                    // If this node was removed from the active sync set we skip retrying.
                     if !state.active_sync_set.contains(&remote_node_id) {
+                        debug!(
+                            remote = remote_node_id.fmt_short(),
+                            topic = state.topic.fmt_short(),
+                            "skip re-initiate sync: node no longer in active set"
+                        );
                         return Ok(());
-                    }
+                    };
 
-                    let current_sessions = state
-                        .node_session_map
-                        .get(&remote_node_id)
-                        .cloned()
-                        .unwrap_or_default();
-
-                    // If there's another session running then we don't need to re-initiate sync.
-                    if !current_sessions.is_empty() {
-                        return Ok(());
-                    }
-
-                    // Send a message to initiate a new session with the remote node.
-                    debug!(
-                        remote = remote_node_id.fmt_short(),
-                        topic = state.topic.fmt_short(),
-                        "re-initiate sync after failed session: {}",
-                        err
-                    );
+                    // Send a retry message to the actor after a 5 second delay.
                     let topic = state.topic;
                     let _ = myself
                         .send_after(Duration::from_secs(RETRY_RATE_SECS), move || {
-                            ToSyncManager::Initiate {
+                            ToSyncManager::Retry {
                                 node_id: remote_node_id,
                                 topic,
                                 // @TODO: for now we default to live-mode is true but we should rather
