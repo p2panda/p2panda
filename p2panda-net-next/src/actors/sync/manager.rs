@@ -5,6 +5,7 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::thread::current;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
@@ -312,7 +313,7 @@ where
                     {
                         state.retry_attempts.remove(&remote_node_id);
                     }
-                    
+
                     Self::drop_session(state, name.session_id);
                 } else {
                     let actor_id = actor.get_id();
@@ -323,7 +324,7 @@ where
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
 
-                    // Retrieve the node id from the node session map.
+                    // Retrieve the node id and current sessions from the node session map.
                     let Some(remote_node_id) =
                         state
                             .node_session_map
@@ -345,10 +346,21 @@ where
                     // Clear up any state from the failed session.
                     Self::drop_session(state, name.session_id);
 
+                    let current_sessions = state
+                        .node_session_map
+                        .get(&remote_node_id)
+                        .cloned()
+                        .unwrap_or_default();
+
                     let mut retry_attempts = state
                         .retry_attempts
                         .remove(&remote_node_id)
                         .unwrap_or_default();
+
+                    // If there's another session running then we don't need to re-initiate sync.
+                    if !current_sessions.is_empty() {
+                        return Ok(());
+                    }
 
                     if retry_attempts >= MAX_RETRY_ATTEMPTS {
                         warn!(
