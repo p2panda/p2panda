@@ -24,6 +24,8 @@ use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessag
 use crate::addrs::NodeId;
 use crate::utils::ShortFormat;
 
+const RETRY_RATE_SECS: u64 = 5;
+
 type SessionSink<M> = Pin<
     Box<
         dyn Sink<
@@ -35,14 +37,24 @@ type SessionSink<M> = Pin<
 
 #[derive(Debug)]
 pub enum ToSyncManager<T> {
-    /// Initiate a sync session with this peer over the given topic.
+    /// Initiate a sync session with this peer over the given topic and add them to the active
+    /// sync set.
     Initiate {
         node_id: NodeId,
         topic: TopicId,
         live_mode: bool,
     },
 
+    /// Retry sync with this peer after a failed session.
+    Retry {
+        node_id: NodeId,
+        topic: TopicId,
+        live_mode: bool,
+    },
+
     /// Accept a sync session on this connection.
+    ///
+    /// Do not add the node to our active sync set.
     Accept {
         node_id: NodeId,
         topic: TopicId,
@@ -54,9 +66,13 @@ pub enum ToSyncManager<T> {
     Publish { topic: TopicId, data: T },
 
     /// Close all active sync sessions running over the given topic.
+    ///
+    /// Additionally empty the current active sync set
     CloseAll { topic: TopicId },
 
     /// Close all active sync sessions running with the given node id and topic.
+    ///
+    /// Additionally remove them from the active sync set.
     Close { node_id: NodeId, topic: TopicId },
 }
 
@@ -70,6 +86,7 @@ where
     manager: M,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
+    active_sync_set: HashSet<NodeId>,
     next_session_id: SyncSessionId,
     sync_poller_actor: ActorRef<ToSyncPoller>,
     pool: ThreadLocalActorSpawner,
@@ -132,6 +149,7 @@ where
             manager,
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
+            active_sync_set: HashSet::default(),
             next_session_id: 0,
             sync_poller_actor,
             pool,
@@ -172,6 +190,68 @@ where
                     "initiate sync session"
                 );
 
+                state.active_sync_set.insert(node_id);
+                let config = SyncSessionConfig {
+                    topic,
+                    remote: node_id,
+                    live_mode,
+                };
+                let (session, id) = Self::new_session(state, node_id, topic, config).await;
+                let name = Some(SyncSessionName::new(id).to_string(&state.actor_namespace));
+                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
+                    name,
+                    state.actor_namespace.clone(),
+                    myself.clone().into(),
+                    state.pool.clone(),
+                )
+                .await?;
+
+                actor_ref.send_message(SyncSessionMessage::Initiate {
+                    node_id,
+                    topic,
+                    protocol: session,
+                })?;
+            }
+            ToSyncManager::Retry {
+                node_id,
+                topic,
+                live_mode,
+            } => {
+                // If this node was removed from the active sync set we skip retrying.
+                if !state.active_sync_set.contains(&node_id) {
+                    debug!(
+                        remote = %node_id.fmt_short(),
+                        topic = %topic.fmt_short(),
+                        %live_mode,
+                        "skip re-initiate sync: node no longer in active set"
+                    );
+                    return Ok(());
+                };
+
+                let current_sessions = state
+                    .node_session_map
+                    .get(&node_id)
+                    .cloned()
+                    .unwrap_or_default();
+
+                // If there's another session running then we don't need to re-initiate sync.
+                if !current_sessions.is_empty() {
+                    debug!(
+                        remote = %node_id.fmt_short(),
+                        topic = %topic.fmt_short(),
+                        %live_mode,
+                        "skip re-initiate sync: other sync sessions already running"
+                    );
+                    return Ok(());
+                }
+
+                debug!(
+                    remote = %node_id.fmt_short(),
+                    topic = %topic.fmt_short(),
+                    %live_mode,
+                    "re-initiate sync after failed session"
+                );
+
                 let config = SyncSessionConfig {
                     topic,
                     remote: node_id,
@@ -200,7 +280,7 @@ where
                 live_mode,
             } => {
                 debug!(
-                    remote_node_id = %node_id.fmt_short(),
+                    remote = %node_id.fmt_short(),
                     topic = %topic.fmt_short(),
                     %live_mode,
                     "accept sync session"
@@ -249,11 +329,23 @@ where
                         .sender_mut(id)
                         .expect("session handle exists");
                     let _ = handle.send(ToSync::Close).await;
-                    Self::drop_session(state, id);
+                }
+                for node_id in state.active_sync_set.drain() {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        "removed node from active sync set: {}",
+                        node_id.fmt_short()
+                    );
                 }
             }
             ToSyncManager::Close { node_id, topic } => {
-                // Close a sync session with a specific remote and topic.
+                if state.active_sync_set.remove(&node_id) {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        "removed node from active sync set: {}",
+                        node_id.fmt_short()
+                    );
+                };
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
                 if let Some(node_sessions) = node_sessions {
                     let topic_sessions = state.session_topic_map.sessions(&topic);
@@ -269,7 +361,6 @@ where
                             .expect("session handle exists");
 
                         let _ = handle.send(ToSync::Close).await;
-                        Self::drop_session(state, *id);
                     }
                 };
             }
@@ -280,7 +371,7 @@ where
     // Handle supervision events from sync session and poller actors.
     async fn handle_supervisor_evt(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: SupervisionEvent,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -297,7 +388,52 @@ where
             SupervisionEvent::ActorFailed(actor, err) => {
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     warn!(%name.session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
+
+                    // Retrieve the node id and current sessions from the node session map.
+                    let Some(remote_node_id) =
+                        state
+                            .node_session_map
+                            .iter()
+                            .find_map(|(node_id, sessions)| {
+                                if sessions.contains(&name.session_id) {
+                                    Some(*node_id)
+                                } else {
+                                    None
+                                }
+                            })
+                    else {
+                        // If it wasn't present then it means we no longer want to sync with this
+                        // node, clear up any session state and return.
+                        Self::drop_session(state, name.session_id);
+                        return Ok(());
+                    };
+
+                    // Clear up any state from the failed session.
                     Self::drop_session(state, name.session_id);
+
+                    // If this node was removed from the active sync set we skip retrying.
+                    if !state.active_sync_set.contains(&remote_node_id) {
+                        debug!(
+                            remote = remote_node_id.fmt_short(),
+                            topic = state.topic.fmt_short(),
+                            "skip re-initiate sync: node no longer in active set"
+                        );
+                        return Ok(());
+                    };
+
+                    // Send a retry message to the actor after a 5 second delay.
+                    let topic = state.topic;
+                    let _ = myself
+                        .send_after(Duration::from_secs(RETRY_RATE_SECS), move || {
+                            ToSyncManager::Retry {
+                                node_id: remote_node_id,
+                                topic,
+                                // @TODO: for now we default to live-mode is true but we should rather
+                                // retrieve this state from the failed sync session.
+                                live_mode: true,
+                            }
+                        })
+                        .await;
                 } else {
                     let actor_id = actor.get_id();
                     warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
