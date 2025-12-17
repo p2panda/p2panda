@@ -21,13 +21,13 @@ use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::protocols::hash_protocol_id_with_network_id;
 use crate::test_utils::{
-    NoSyncManager, generate_node_info, setup_logging, test_args, test_args_from_seed,
+    DummySyncManager, generate_node_info, setup_logging, test_args, test_args_from_seed,
 };
 use crate::utils::from_private_key;
 
 use super::{Gossip, GossipState, ToGossip};
 
-type TestGossip = Gossip<NoSyncManager>;
+type TestGossip = Gossip<DummySyncManager>;
 
 // Use this internal type to introspect the actor's current state.
 pub struct DebugState {

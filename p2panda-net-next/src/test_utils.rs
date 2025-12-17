@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
 
@@ -31,7 +32,7 @@ pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 pub fn test_args() -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-    NoSyncConfig,
+    DummySyncConfig,
 ) {
     test_args_from_seed(rand::random())
 }
@@ -41,12 +42,12 @@ pub fn test_args_from_seed(
 ) -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-    NoSyncConfig,
+    DummySyncConfig,
 ) {
     let mut rng = ChaCha20Rng::from_seed(seed);
     let store = MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
     let private_key_bytes: [u8; 32] = rng.random();
-    let (sync_config, _) = NoSyncConfig::new();
+    let (sync_config, _) = DummySyncConfig::new();
     (
         ArgsBuilder::new(TEST_NETWORK_ID)
             .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
@@ -208,16 +209,17 @@ impl TopicLogMap<TopicId, LogId> for TestTopicMap {
     }
 }
 
-pub struct NoSyncProtocol {
+#[derive(Debug)]
+pub struct DummySyncProtocol {
     session_id: u64,
     config: p2panda_sync::SyncSessionConfig<TopicId>,
-    event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+    event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
 }
 
-impl Protocol for NoSyncProtocol {
+impl Protocol for DummySyncProtocol {
     type Output = ();
     type Error = Infallible;
-    type Message = NoSyncMessage;
+    type Message = DummySyncMessage;
 
     async fn run(
         self,
@@ -228,11 +230,11 @@ impl Protocol for NoSyncProtocol {
             .send(FromSync {
                 session_id: self.session_id,
                 remote: self.config.remote,
-                event: NoSyncEvent::SyncStarted,
+                event: DummySyncEvent::SyncStarted,
             })
             .unwrap();
 
-        sink.send(NoSyncMessage::Data).await.unwrap();
+        sink.send(DummySyncMessage::Data).await.unwrap();
 
         let message = stream.next().await.unwrap().unwrap();
 
@@ -240,7 +242,7 @@ impl Protocol for NoSyncProtocol {
             .send(FromSync {
                 session_id: self.session_id,
                 remote: self.config.remote,
-                event: NoSyncEvent::Received(message),
+                event: DummySyncEvent::Received(message),
             })
             .unwrap();
 
@@ -248,16 +250,16 @@ impl Protocol for NoSyncProtocol {
             .send(FromSync {
                 session_id: self.session_id,
                 remote: self.config.remote,
-                event: NoSyncEvent::SyncFinished,
+                event: DummySyncEvent::SyncFinished,
             })
             .unwrap();
 
         // Send a close message and wait for the remote to actually close the connection.
-        sink.send(NoSyncMessage::Close).await.unwrap();
+        sink.send(DummySyncMessage::Close).await.unwrap();
         let message = stream.next().await.unwrap();
         match message {
             // We received the remote's close message and so now we close ourselves.
-            Ok(NoSyncMessage::Close) => Ok(()),
+            Ok(DummySyncMessage::Close) => Ok(()),
             // The stream was closed by the remote.
             Err(_) => Ok(()),
             // Unexpected message.
@@ -267,50 +269,54 @@ impl Protocol for NoSyncProtocol {
 }
 
 #[derive(Clone, Debug)]
-pub enum NoSyncEvent {
+pub enum DummySyncEvent {
     SessionCreated,
     SyncStarted,
-    Received(NoSyncMessage),
+    Received(DummySyncMessage),
     SyncFinished,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum NoSyncMessage {
+pub enum DummySyncMessage {
     Data,
     Close,
 }
 
 #[derive(Debug)]
-pub struct NoSyncManager {
-    pub event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+pub struct DummySyncManager<C = DummySyncConfig, P = DummySyncProtocol> {
+    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
     #[allow(unused)]
-    pub event_rx: broadcast::Receiver<FromSync<NoSyncEvent>>,
+    pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
+    pub config: C,
+    pub _phantom: PhantomData<P>,
 }
 
 #[derive(Clone, Debug)]
-pub struct NoSyncConfig {
-    pub event_tx: broadcast::Sender<FromSync<NoSyncEvent>>,
+pub struct DummySyncConfig {
+    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
 }
 
-impl NoSyncConfig {
-    pub fn new() -> (Self, broadcast::Receiver<FromSync<NoSyncEvent>>) {
+impl DummySyncConfig {
+    pub fn new() -> (Self, broadcast::Receiver<FromSync<DummySyncEvent>>) {
         let (tx, rx) = broadcast::channel(128);
         (Self { event_tx: tx }, rx)
     }
 }
 
-impl SyncManager<TopicId> for NoSyncManager {
-    type Protocol = NoSyncProtocol;
-    type Event = NoSyncEvent;
-    type Config = NoSyncConfig;
+impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtocol> {
+    type Protocol = DummySyncProtocol;
+    type Event = DummySyncEvent;
+    type Config = DummySyncConfig;
     type Message = ();
     type Error = SendError;
 
     fn from_config(config: Self::Config) -> Self {
         let event_rx = config.event_tx.subscribe();
-        NoSyncManager {
-            event_tx: config.event_tx,
+        DummySyncManager {
+            event_tx: config.event_tx.clone(),
             event_rx,
+            config,
+            _phantom: PhantomData,
         }
     }
 
@@ -323,10 +329,10 @@ impl SyncManager<TopicId> for NoSyncManager {
             .send(FromSync {
                 session_id,
                 remote: config.remote,
-                event: NoSyncEvent::SessionCreated,
+                event: DummySyncEvent::SessionCreated,
             })
             .unwrap();
-        NoSyncProtocol {
+        DummySyncProtocol {
             session_id,
             config: config.clone(),
             event_tx: self.event_tx.clone(),

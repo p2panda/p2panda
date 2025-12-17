@@ -121,9 +121,39 @@ where
                 self.event_tx.clone(),
                 self.buffer_capacity,
             );
-            protocol
-                .run(&mut log_sync_sink, &mut log_sync_stream)
-                .await?
+            let result = protocol.run(&mut log_sync_sink, &mut log_sync_stream).await;
+
+            // If the log sync session ended with an error, then send a "failed" event and return
+            // here with the error itself.
+            match result {
+                Ok(dedup) => dedup,
+                Err(err) => {
+                    self.event_tx
+                        .send(TopicLogSyncEvent::Failed {
+                            error: err.to_string(),
+                        })
+                        .map_err(TopicSyncChannelError::EventSend)?;
+
+                    log_sync_sink
+                        .close()
+                        .await
+                        .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+
+                    return Err(err.into());
+                }
+            }
+        };
+
+        let Some(mut live_mode_rx) = self.live_mode_rx else {
+            sink.close()
+                .await
+                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+
+            self.event_tx
+                .send(TopicLogSyncEvent::Success)
+                .map_err(TopicSyncChannelError::EventSend)?;
+
+            return Ok(());
         };
 
         // Enter live-mode.
@@ -132,89 +162,113 @@ where
         // subscription or other concurrent sync sessions. In both cases we should deduplicate
         // messages and also check they are part of our topic sub-set selection before forwarding
         // them on the event stream, or to the remote peer.
+        let mut close_sent = false;
         let mut metrics = LiveModeMetrics::default();
-        if let Some(mut live_mode_rx) = self.live_mode_rx {
-            self.event_tx
-                .send(TopicLogSyncEvent::LiveModeStarted)
-                .map_err(TopicSyncChannelError::EventSend)?;
-            loop {
-                tokio::select! {
-                    biased;
-                    Some(message) = live_mode_rx.next() => {
-                        match message {
-                            ToSync::Payload(operation) => {
-                                if !dedup.insert(operation.hash) {
-                                    continue;
-                                }
+        self.event_tx
+            .send(TopicLogSyncEvent::LiveModeStarted)
+            .map_err(TopicSyncChannelError::EventSend)?;
 
-                                metrics.bytes_sent += operation.header.to_bytes().len()  as u64 + operation.header.payload_size;
-                                metrics.operations_sent += 1;
-
-                                sink.send(TopicLogSyncMessage::Live(operation.header.clone(), operation.body.clone()))
-                                    .await
-                                    .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+        let result = loop {
+            tokio::select! {
+                biased;
+                Some(message) = live_mode_rx.next() => {
+                    match message {
+                        ToSync::Payload(operation) => {
+                            if !dedup.insert(operation.hash) {
+                                continue;
                             }
-                            ToSync::Close => {
-                                // We send the close and wait for the remote to close the
-                                // connection.
-                                sink.send(TopicLogSyncMessage::Close).await.map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
-                            },
-                        };
-                    }
-                    message = stream.next() => {
-                        let Some(message) = message else {
-                            debug!("remote closed the stream");
-                            break;
-                        };
 
-                        match message {
-                            Ok(message) => {
-                                if let TopicLogSyncMessage::Close = message {
-                                    // We received the remotes close message and should close the
-                                    // connection ourselves.
-                                    debug!("received close message from remote");
-                                    break;
-                                };
+                            metrics.bytes_sent += operation.header.to_bytes().len()  as u64 + operation.header.payload_size;
+                            metrics.operations_sent += 1;
 
-                                let TopicLogSyncMessage::Live(header, body) = message else {
-                                    return Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
-                                };
+                            let result = sink.send(TopicLogSyncMessage::Live(operation.header.clone(), operation.body.clone()))
+                                .await
+                                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
 
-                                // @TODO: check that this message is a part of our topic T set.
-
-                                // Insert operation hash into deduplication buffer and if it was
-                                // previously present do not forward the operation to the application layer.
-                                if !dedup.insert(header.hash()) {
-                                    continue;
-                                }
-
-                                metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
-                                metrics.operations_received += 1;
-                                self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
-                            },
-                            Err(err) => {
-                                warn!("error in live-mode: {err:#?}");
-                            },
+                            if result.is_err() {
+                                break result;
+                            };
                         }
+                        ToSync::Close => {
+                            // We send the close and wait for the remote to close the
+                            // connection.
+                            let result = sink.send(TopicLogSyncMessage::Close).await.map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
+                            if result.is_err() {
+                                break result;
+                            };
+                            close_sent = true;
+                        },
+                    };
+                }
+                message = stream.next() => {
+                    let Some(message) = message else {
+                        debug!("remote closed the stream unexpectedly");
+                        if close_sent {
+                            debug!("remote closed the stream after we sent a close message");
+                            break Ok(());
+                        }
+                        break Err(TopicLogSyncError::UnexpectedStreamClosure);
+                    };
 
+                    match message {
+                        Ok(message) => {
+                            if let TopicLogSyncMessage::Close = message {
+                                // We received the remotes close message and should close the
+                                // connection ourselves.
+                                debug!("received close message from remote");
+                                break Ok(());
+                            };
+
+                            let TopicLogSyncMessage::Live(header, body) = message else {
+                                break Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
+                            };
+
+                            // @TODO: check that this message is a part of our topic T set.
+
+                            // Insert operation hash into deduplication buffer and if it was
+                            // previously present do not forward the operation to the application layer.
+                            if !dedup.insert(header.hash()) {
+                                continue;
+                            }
+
+                            metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
+                            metrics.operations_received += 1;
+                            self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
+                        },
+                        Err(err) => {
+                            if close_sent {
+                                debug!("remote closed the stream after we sent a close message");
+                                break Ok(());
+                            }
+                            warn!("error in live-mode: {err:#?}");
+                            break Err(TopicLogSyncError::DecodeMessage(format!("{err:?}")));
+                        },
                     }
+
                 }
             }
+        };
 
-            self.event_tx
-                .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-                .map_err(TopicSyncChannelError::EventSend)?;
-        }
+        self.event_tx
+            .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
+            .map_err(TopicSyncChannelError::EventSend)?;
 
         sink.close()
             .await
             .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
 
+        let final_event = match result.as_ref() {
+            Ok(_) => TopicLogSyncEvent::Success,
+            Err(err) => TopicLogSyncEvent::Failed {
+                error: err.to_string(),
+            },
+        };
+
         self.event_tx
-            .send(TopicLogSyncEvent::Closed)
+            .send(final_event)
             .map_err(TopicSyncChannelError::EventSend)?;
 
-        Ok(())
+        result
     }
 }
 
@@ -272,6 +326,12 @@ pub enum TopicLogSyncError<L, E> {
 
     #[error(transparent)]
     Channel(#[from] TopicSyncChannelError<E>),
+
+    #[error("remote unexpectedly closed stream in live-mode")]
+    UnexpectedStreamClosure,
+
+    #[error("{0}")]
+    DecodeMessage(String),
 }
 
 /// Sync metrics emitted in event messages.
@@ -288,14 +348,11 @@ pub enum TopicLogSyncEvent<E> {
     SyncStarted(LogSyncMetrics),
     SyncStatus(LogSyncMetrics),
     SyncFinished(LogSyncMetrics),
-    SyncFailed {
-        error: String,
-        metrics: LogSyncMetrics,
-    },
     LiveModeStarted,
     LiveModeFinished(LiveModeMetrics),
     Operation(Box<Operation<E>>),
-    Closed,
+    Success,
+    Failed { error: String },
 }
 
 impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
@@ -305,13 +362,6 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
                 StatusEvent::Started { metrics } => TopicLogSyncEvent::SyncStarted(metrics),
                 StatusEvent::Progress { metrics } => TopicLogSyncEvent::SyncStatus(metrics),
                 StatusEvent::Completed { metrics } => TopicLogSyncEvent::SyncFinished(metrics),
-                StatusEvent::Failed {
-                    error_message,
-                    metrics,
-                } => TopicLogSyncEvent::SyncFailed {
-                    error: error_message,
-                    metrics,
-                },
             },
             LogSyncEvent::Data(operation) => TopicLogSyncEvent::Operation(operation),
         }
@@ -373,15 +423,17 @@ pub mod tests {
     use std::collections::HashMap;
 
     use assert_matches::assert_matches;
+    use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
     use crate::ToSync;
-    use crate::log_sync::LogSyncMessage;
+    use crate::log_sync::{LogSyncError, LogSyncMessage};
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
-    use crate::topic_log_sync::LiveModeMetrics;
+    use crate::topic_log_sync::{LiveModeMetrics, TopicLogSyncError, TopicLogSyncEvent};
+    use crate::traits::Protocol;
 
     #[tokio::test]
     async fn sync_session_no_operations() {
@@ -417,7 +469,7 @@ pub mod tests {
             events_rx.recv().await.unwrap(),
             TestTopicSyncEvent::SyncFinished(_)
         );
-        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Closed);
+        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 2);
@@ -478,7 +530,7 @@ pub mod tests {
             events_rx.recv().await.unwrap(),
             TestTopicSyncEvent::SyncFinished(_)
         );
-        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Closed);
+        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 6);
@@ -583,7 +635,7 @@ pub mod tests {
         );
         assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Closed
+            TestTopicSyncEvent::Success
         );
 
         // Assert peer b events.
@@ -623,7 +675,7 @@ pub mod tests {
         );
         assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Closed
+            TestTopicSyncEvent::Success
         );
     }
 
@@ -722,7 +774,7 @@ pub mod tests {
                     assert_eq!(bytes_sent, expected_live_mode_bytes_sent);
                 }
                 8 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
+                    assert_matches!(event, TestTopicSyncEvent::Success)
                 }
                 _ => panic!(),
             };
@@ -862,7 +914,7 @@ pub mod tests {
                     assert_eq!(bytes_sent, expected_live_mode_bytes_sent);
                 }
                 8 => {
-                    assert_matches!(event, TestTopicSyncEvent::Closed)
+                    assert_matches!(event, TestTopicSyncEvent::Success)
                 }
                 _ => panic!(),
             };
@@ -886,6 +938,94 @@ pub mod tests {
                 }
                 _ => panic!(),
             };
+        }
+    }
+
+    #[tokio::test]
+    async fn unexpected_stream_closure_sync() {
+        let topic = TestTopic::new("messages");
+        let mut peer = Peer::new(0);
+        peer.insert_topic(&topic, &Default::default());
+
+        let (session, mut events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
+
+        let messages = [TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![]))];
+
+        let (mut local_message_tx, _remote_message_rx) = mpsc::channel(128);
+        let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
+        let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
+
+        for message in messages {
+            remote_message_tx.send(message.to_owned()).await.unwrap();
+        }
+
+        let handle = tokio::spawn(async move {
+            session
+                .run(&mut local_message_tx, &mut local_message_rx)
+                .await
+                .expect_err("expected unexpected stream closure")
+        });
+
+        drop(remote_message_tx);
+
+        let err = handle.await.unwrap();
+        assert_matches!(
+            err,
+            TopicLogSyncError::Sync(LogSyncError::UnexpectedStreamClosure)
+        );
+
+        while let Ok(event) = events_rx.recv().await {
+            if let TopicLogSyncEvent::Failed { error } = event {
+                assert_eq!(
+                    error,
+                    "remote unexpectedly closed stream during initial sync".to_string()
+                );
+                break;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn unexpected_stream_closure_live_mode() {
+        let topic = TestTopic::new("messages");
+        let mut peer = Peer::new(0);
+        peer.insert_topic(&topic, &Default::default());
+
+        let (session, mut events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
+
+        let messages = [
+            TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+            TestTopicSyncMessage::Sync(LogSyncMessage::Done),
+        ];
+
+        let (mut local_message_tx, _remote_message_rx) = mpsc::channel(128);
+        let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
+        let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
+
+        for message in messages {
+            remote_message_tx.send(message.to_owned()).await.unwrap();
+        }
+
+        let handle = tokio::spawn(async move {
+            session
+                .run(&mut local_message_tx, &mut local_message_rx)
+                .await
+                .expect_err("expected unexpected stream closure")
+        });
+
+        drop(remote_message_tx);
+
+        let err = handle.await.unwrap();
+        assert_matches!(err, TopicLogSyncError::UnexpectedStreamClosure);
+
+        while let Ok(event) = events_rx.recv().await {
+            if let TopicLogSyncEvent::Failed { error } = event {
+                assert_eq!(
+                    error,
+                    "remote unexpectedly closed stream in live-mode".to_string()
+                );
+                break;
+            }
         }
     }
 }

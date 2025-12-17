@@ -466,19 +466,9 @@ pub struct LogSyncMetrics {
 /// Sync status variants sent on log sync events.
 #[derive(Clone, Debug, PartialEq)]
 pub enum StatusEvent {
-    Started {
-        metrics: LogSyncMetrics,
-    },
-    Progress {
-        metrics: LogSyncMetrics,
-    },
-    Completed {
-        metrics: LogSyncMetrics,
-    },
-    Failed {
-        error_message: String,
-        metrics: LogSyncMetrics,
-    },
+    Started { metrics: LogSyncMetrics },
+    Progress { metrics: LogSyncMetrics },
+    Completed { metrics: LogSyncMetrics },
 }
 
 /// Protocol error types.
@@ -502,7 +492,7 @@ pub enum LogSyncError<L, Evt> {
     #[error("log sync error receiving from message stream: {0}")]
     MessageStream(String),
 
-    #[error("log sync stream ended before protocol completion")]
+    #[error("remote unexpectedly closed stream during initial sync")]
     UnexpectedStreamClosure,
 
     #[error("log sync received unexpected protocol message: {0}")]
