@@ -24,6 +24,9 @@ use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessag
 use crate::addrs::NodeId;
 use crate::utils::ShortFormat;
 
+const MAX_RETRY_ATTEMPTS: u8 = 3;
+const RETRY_RATE_SECS: u64 = 5;
+
 type SessionSink<M> = Pin<
     Box<
         dyn Sink<
@@ -70,6 +73,7 @@ where
     manager: M,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
+    retry_attempts: HashMap<NodeId, u8>,
     next_session_id: SyncSessionId,
     sync_poller_actor: ActorRef<ToSyncPoller>,
     pool: ThreadLocalActorSpawner,
@@ -132,6 +136,7 @@ where
             manager,
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
+            retry_attempts: HashMap::default(),
             next_session_id: 0,
             sync_poller_actor,
             pool,
@@ -251,6 +256,7 @@ where
                     let _ = handle.send(ToSync::Close).await;
                     Self::drop_session(state, id);
                 }
+                state.retry_attempts.drain();
             }
             ToSyncManager::Close { node_id, topic } => {
                 // Close a sync session with a specific remote and topic.
@@ -272,6 +278,7 @@ where
                         Self::drop_session(state, *id);
                     }
                 };
+                state.retry_attempts.remove(&node_id);
             }
         }
         Ok(())
@@ -320,17 +327,43 @@ where
                     // Clear up any state from the failed session.
                     Self::drop_session(state, name.session_id);
 
+                    let mut retry_attempts = state
+                        .retry_attempts
+                        .remove(&remote_node_id)
+                        .unwrap_or_default();
+
+                    if retry_attempts >= MAX_RETRY_ATTEMPTS {
+                        warn!(
+                            topic = state.topic.fmt_short(),
+                            "retry attempts limit reached with {}",
+                            remote_node_id.fmt_short()
+                        );
+                        return Ok(());
+                    }
+
+                    retry_attempts += 1;
+                    state.retry_attempts.insert(remote_node_id, retry_attempts);
+
                     // @TODO: check how many sessions with this node are remaining, we should set
                     // a maximum limit.
 
                     // Send a message to initiate a new session with the remote node.
-                    debug!(%name.session_id, topic = state.topic.fmt_short(), "restart failed sync session: {}", err);
-                    let _ = myself.cast(ToSyncManager::Initiate {
-                        node_id: remote_node_id,
-                        topic: state.topic,
-                        // @TODO: for now we default to live-mode is true but we should rather
-                        // retrieve this state from the failed sync session.
-                        live_mode: true,
+                    debug!(
+                        remote = remote_node_id.fmt_short(),
+                        topic = state.topic.fmt_short(),
+                        retry = retry_attempts,
+                        "re-initiate sync after failed session: {}",
+                        err
+                    );
+                    let topic = state.topic;
+                    let _ = myself.send_after(Duration::from_secs(RETRY_RATE_SECS), move || {
+                        ToSyncManager::Initiate {
+                            node_id: remote_node_id,
+                            topic,
+                            // @TODO: for now we default to live-mode is true but we should rather
+                            // retrieve this state from the failed sync session.
+                            live_mode: true,
+                        }
                     });
                 } else {
                     let actor_id = actor.get_id();
