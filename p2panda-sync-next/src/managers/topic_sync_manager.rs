@@ -534,7 +534,7 @@ mod tests {
                 7 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Closed,
+                        event: TopicLogSyncEvent::Success,
                         ..
                     }
                 ),
@@ -603,7 +603,7 @@ mod tests {
                 8 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Closed,
+                        event: TopicLogSyncEvent::Success,
                         ..
                     }
                 ),
@@ -902,7 +902,7 @@ mod tests {
                 8 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Closed,
+                        event: TopicLogSyncEvent::Success,
                         ..
                     }
                 ),
