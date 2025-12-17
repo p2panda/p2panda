@@ -16,6 +16,7 @@ use p2panda_sync::traits::{Protocol, SyncManager};
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
+use rand::random;
 use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
@@ -490,11 +491,11 @@ async fn e2e_topic_log_sync_three_party() {
 
     // Setup Bob's node.
     let mut bob: TestNode<TestTopicSyncManager> =
-        TestNode::spawn([14; 32], vec![], bob_app.sync_config()).await;
+        TestNode::spawn([30; 32], vec![], bob_app.sync_config()).await;
 
     // Setup Alice's node.
     let mut alice: TestNode<TestTopicSyncManager> = TestNode::spawn(
-        [15; 32],
+        [31; 32],
         vec![generate_node_info(&mut bob.args)],
         alice_app.sync_config(),
     )
@@ -502,7 +503,7 @@ async fn e2e_topic_log_sync_three_party() {
 
     // Setup Alice's node.
     let carol: TestNode<TestTopicSyncManager> = TestNode::spawn(
-        [16; 32],
+        [32; 32],
         vec![generate_node_info(&mut alice.args)],
         carol_app.sync_config(),
     )
@@ -874,12 +875,12 @@ async fn failed_sync_session_retry() {
     {
         let (bob_sync_config, _bob_rx) = FailingSyncConfig::new(bob_behavior);
         let mut bob: TestNode<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>> =
-            TestNode::spawn([100 + index as u8; 32], vec![], bob_sync_config).await;
+            TestNode::spawn(random(), vec![], bob_sync_config).await;
 
         let (alice_sync_config, _alice_rx) = FailingSyncConfig::new(alice_behavior);
         let alice: TestNode<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>> =
             TestNode::spawn(
-                [200 + index as u8; 32],
+                random(),
                 vec![generate_node_info(&mut bob.args)],
                 alice_sync_config,
             )
@@ -981,10 +982,10 @@ async fn topic_log_sync_failure_and_retry() {
     // We need Bob to also have registered alice's node info in this test so we generate their
     // deterministic application arguments and use them here before the Alice test node is
     // actually instantiated.
-    let alice_seed = [12; 32];
+    let alice_seed = [16; 32];
     let (mut alice_args, _, _) = test_args_from_seed(alice_seed);
     let mut bob: TestNode<TestTopicSyncManager> = TestNode::spawn(
-        [13; 32],
+        [15; 32],
         vec![generate_node_info(&mut alice_args)],
         bob_app.sync_config(),
     )
