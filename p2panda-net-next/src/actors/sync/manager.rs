@@ -5,7 +5,6 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::thread::current;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
@@ -25,7 +24,6 @@ use crate::actors::sync::session::{SyncSession, SyncSessionId, SyncSessionMessag
 use crate::addrs::NodeId;
 use crate::utils::ShortFormat;
 
-const MAX_RETRY_ATTEMPTS: u8 = 3;
 const RETRY_RATE_SECS: u64 = 5;
 
 type SessionSink<M> = Pin<
@@ -39,7 +37,8 @@ type SessionSink<M> = Pin<
 
 #[derive(Debug)]
 pub enum ToSyncManager<T> {
-    /// Initiate a sync session with this peer over the given topic.
+    /// Initiate a sync session with this peer over the given topic and add them to the active
+    /// sync set.
     Initiate {
         node_id: NodeId,
         topic: TopicId,
@@ -47,6 +46,8 @@ pub enum ToSyncManager<T> {
     },
 
     /// Accept a sync session on this connection.
+    ///
+    /// Do not add the node to our active sync set.
     Accept {
         node_id: NodeId,
         topic: TopicId,
@@ -58,9 +59,13 @@ pub enum ToSyncManager<T> {
     Publish { topic: TopicId, data: T },
 
     /// Close all active sync sessions running over the given topic.
+    ///
+    /// Additionally empty the current active sync set
     CloseAll { topic: TopicId },
 
     /// Close all active sync sessions running with the given node id and topic.
+    ///
+    /// Additionally remove them from the active sync set.
     Close { node_id: NodeId, topic: TopicId },
 }
 
@@ -74,7 +79,7 @@ where
     manager: M,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
-    retry_attempts: HashMap<NodeId, u8>,
+    active_sync_set: HashSet<NodeId>,
     next_session_id: SyncSessionId,
     sync_poller_actor: ActorRef<ToSyncPoller>,
     pool: ThreadLocalActorSpawner,
@@ -137,7 +142,7 @@ where
             manager,
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::default(),
-            retry_attempts: HashMap::default(),
+            active_sync_set: HashSet::default(),
             next_session_id: 0,
             sync_poller_actor,
             pool,
@@ -178,6 +183,7 @@ where
                     "initiate sync session"
                 );
 
+                state.active_sync_set.insert(node_id);
                 let config = SyncSessionConfig {
                     topic,
                     remote: node_id,
@@ -255,12 +261,11 @@ where
                         .sender_mut(id)
                         .expect("session handle exists");
                     let _ = handle.send(ToSync::Close).await;
-                    Self::drop_session(state, id);
                 }
-                state.retry_attempts.drain();
+                state.active_sync_set.drain();
             }
             ToSyncManager::Close { node_id, topic } => {
-                // Close a sync session with a specific remote and topic.
+                state.active_sync_set.remove(&node_id);
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
                 if let Some(node_sessions) = node_sessions {
                     let topic_sessions = state.session_topic_map.sessions(&topic);
@@ -276,10 +281,8 @@ where
                             .expect("session handle exists");
 
                         let _ = handle.send(ToSync::Close).await;
-                        Self::drop_session(state, *id);
                     }
                 };
-                state.retry_attempts.remove(&node_id);
             }
         }
         Ok(())
@@ -296,24 +299,6 @@ where
             SupervisionEvent::ActorTerminated(actor, _, _) => {
                 if let Some(name) = SyncSessionName::from_actor_cell(&actor) {
                     debug!(%name.session_id, topic = state.topic.fmt_short(), "sync session terminated");
-
-                    // Reset retry attempts with this node after this successfully completed sync
-                    // session.
-                    if let Some(remote_node_id) =
-                        state
-                            .node_session_map
-                            .iter()
-                            .find_map(|(node_id, sessions)| {
-                                if sessions.contains(&name.session_id) {
-                                    Some(*node_id)
-                                } else {
-                                    None
-                                }
-                            })
-                    {
-                        state.retry_attempts.remove(&remote_node_id);
-                    }
-
                     Self::drop_session(state, name.session_id);
                 } else {
                     let actor_id = actor.get_id();
@@ -346,15 +331,15 @@ where
                     // Clear up any state from the failed session.
                     Self::drop_session(state, name.session_id);
 
+                    // If this node isn't in our active peer set then don't re-initiate sync.
+                    if !state.active_sync_set.contains(&remote_node_id) {
+                        return Ok(());
+                    }
+
                     let current_sessions = state
                         .node_session_map
                         .get(&remote_node_id)
                         .cloned()
-                        .unwrap_or_default();
-
-                    let mut retry_attempts = state
-                        .retry_attempts
-                        .remove(&remote_node_id)
                         .unwrap_or_default();
 
                     // If there's another session running then we don't need to re-initiate sync.
@@ -362,26 +347,10 @@ where
                         return Ok(());
                     }
 
-                    if retry_attempts >= MAX_RETRY_ATTEMPTS {
-                        warn!(
-                            topic = state.topic.fmt_short(),
-                            "retry attempts limit reached with {}",
-                            remote_node_id.fmt_short()
-                        );
-                        return Ok(());
-                    }
-
-                    retry_attempts += 1;
-                    state.retry_attempts.insert(remote_node_id, retry_attempts);
-
-                    // @TODO: check how many sessions with this node are remaining, we should set
-                    // a maximum limit.
-
                     // Send a message to initiate a new session with the remote node.
                     debug!(
                         remote = remote_node_id.fmt_short(),
                         topic = state.topic.fmt_short(),
-                        retry = retry_attempts,
                         "re-initiate sync after failed session: {}",
                         err
                     );

@@ -452,7 +452,7 @@ async fn e2e_topic_log_sync() {
 }
 
 #[tokio::test]
-async fn e2e_topic_log_sync_three_party() {
+async fn e2e_three_party_sync() {
     setup_logging();
     const TOPIC_ID: [u8; 32] = [0; 32];
     const LOG_ID: u64 = 0;
@@ -863,16 +863,13 @@ async fn failed_sync_session_retry() {
     setup_logging();
     let topic_id = [0; 32];
 
-    for (index, (alice_behavior, bob_behavior)) in [
+    for (alice_behavior, bob_behavior) in [
         (SyncBehaviour::Panic, SyncBehaviour::Wait),
         (SyncBehaviour::Wait, SyncBehaviour::Panic),
         (SyncBehaviour::Error, SyncBehaviour::Wait),
         (SyncBehaviour::Wait, SyncBehaviour::Error),
         (SyncBehaviour::Error, SyncBehaviour::Error),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    ] {
         let (bob_sync_config, _bob_rx) = FailingSyncConfig::new(bob_behavior);
         let mut bob: TestNode<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>> =
             TestNode::spawn(random(), vec![], bob_sync_config).await;
@@ -893,16 +890,15 @@ async fn failed_sync_session_retry() {
             true
         )
         .unwrap();
-        let alice_subscription = alice_stream.subscribe().await.unwrap();
+        let mut alice_subscription = alice_stream.subscribe().await.unwrap();
 
-        let bob_stream = call!(
+        let _bob_stream = call!(
             bob.stream_ref,
             ToEventuallyConsistentStreams::Create,
             topic_id,
             true
         )
         .unwrap();
-        let bob_subscription = bob_stream.subscribe().await.unwrap();
 
         alice
             .stream_ref
@@ -912,37 +908,33 @@ async fn failed_sync_session_retry() {
             ))
             .unwrap();
 
-        for (mut sub, expected_remote) in [
-            (alice_subscription, bob.node_id()),
-            (bob_subscription, alice.node_id()),
-        ] {
-            let event = sub.recv().await.unwrap();
-            assert!(
-                matches!(
-                    event,
-                    FromSync {
-                        session_id: 0,
-                        remote,
-                        event: DummySyncEvent::SessionCreated
-                    } if remote == expected_remote
-                ),
-                "{:#?}",
-                event
-            );
-            let event = sub.recv().await.unwrap();
-            assert!(
-                matches!(
-                    event,
-                    FromSync {
-                        session_id: 1,
-                        remote,
-                        event: DummySyncEvent::SessionCreated
-                    } if remote == expected_remote
-                ),
-                "{:#?}",
-                event
-            );
-        }
+        let event = alice_subscription.recv().await.unwrap();
+        let expected_remote = bob.node_id();
+        assert!(
+            matches!(
+                event,
+                FromSync {
+                    session_id: 0,
+                    remote,
+                    event: DummySyncEvent::SessionCreated
+                } if remote == expected_remote
+            ),
+            "{:#?}",
+            event
+        );
+        let event = alice_subscription.recv().await.unwrap();
+        assert!(
+            matches!(
+                event,
+                FromSync {
+                    session_id: 1,
+                    remote,
+                    event: DummySyncEvent::SessionCreated
+                } if remote == expected_remote
+            ),
+            "{:#?}",
+            event
+        );
 
         alice.shutdown();
         bob.shutdown();
@@ -979,23 +971,15 @@ async fn topic_log_sync_failure_and_retry() {
 
     // Setup Bob's node.
 
-    // We need Bob to also have registered alice's node info in this test so we generate their
-    // deterministic application arguments and use them here before the Alice test node is
-    // actually instantiated.
+    // Setup Alice's node.
     let alice_seed = [16; 32];
-    let (mut alice_args, _, _) = test_args_from_seed(alice_seed);
+    let mut alice: TestNode<TestTopicSyncManager> =
+        TestNode::spawn(alice_seed, vec![], alice_app.sync_config()).await;
+
     let mut bob: TestNode<TestTopicSyncManager> = TestNode::spawn(
         [15; 32],
-        vec![generate_node_info(&mut alice_args)],
+        vec![generate_node_info(&mut alice.args)],
         bob_app.sync_config(),
-    )
-    .await;
-
-    // Setup Alice's node.
-    let alice: TestNode<TestTopicSyncManager> = TestNode::spawn(
-        alice_seed,
-        vec![generate_node_info(&mut bob.args)],
-        alice_app.sync_config(),
     )
     .await;
 
@@ -1021,12 +1005,11 @@ async fn topic_log_sync_failure_and_retry() {
     let mut alice_subscription = alice_stream.subscribe().await.unwrap();
     let mut bob_subscription = bob_stream.subscribe().await.unwrap();
 
-    // Alice initiates sync.
-    alice
-        .stream_ref
+    // Bob initiates sync.
+    bob.stream_ref
         .cast(ToEventuallyConsistentStreams::InitiateSync(
             TOPIC_ID,
-            bob.node_id(),
+            alice.node_id(),
         ))
         .unwrap();
 
