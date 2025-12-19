@@ -11,6 +11,9 @@ mod protocols;
 pub mod streams;
 #[cfg(test)]
 mod test_utils;
+#[cfg(test)]
+mod tests;
+pub mod timestamp;
 mod utils;
 
 pub use addrs::{

@@ -20,6 +20,20 @@ pub async fn address_book_ref(actor_namespace: ActorNamespace) -> Option<ActorRe
         .map(ActorRef::<ToAddressBook>::from)
 }
 
+pub async fn node_info(
+    actor_namespace: ActorNamespace,
+    node_id: NodeId,
+) -> Result<Option<NodeInfo>, AddressBookUtilsError> {
+    let Some(address_book_ref) = address_book_ref(actor_namespace).await else {
+        return Err(AddressBookUtilsError::ActorNotAvailable);
+    };
+
+    let result = call!(address_book_ref, ToAddressBook::NodeInfo, node_id)
+        .map_err(|_| AddressBookUtilsError::ActorFailed)?;
+
+    Ok(result)
+}
+
 pub async fn update_address_book(
     actor_namespace: ActorNamespace,
     node_id: NodeId,
