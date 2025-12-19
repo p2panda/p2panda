@@ -41,9 +41,13 @@ struct TestNode {
 }
 
 impl TestNode {
-    pub fn new(id: TestId, walkers_num: usize, rng: ChaCha20Rng) -> Self {
+    pub async fn new(id: TestId, walkers_num: usize, rng: ChaCha20Rng) -> Self {
         let store = TestStore::new(rng.clone());
-        let subscription = TestSubscription::default();
+
+        let mut subscription = TestSubscription::default();
+        subscription.sync_topics.insert([7; 32]);
+
+        store.set_sync_topics(id, [[7; 32]]).await.unwrap();
 
         // Run multiple random-walkers at the same time.
         let walkers = {
@@ -146,9 +150,9 @@ impl TestNode {
 
 #[tokio::test]
 async fn peer_discovery_in_network() {
-    const NUM_NODES: usize = 2;
-    const NUM_WALKERS: usize = 1;
-    const MAX_RUNS: usize = 1;
+    const NUM_NODES: usize = 10;
+    const NUM_WALKERS: usize = 4;
+    const MAX_RUNS: usize = 130;
 
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
     let local = LocalSet::new();
@@ -160,7 +164,9 @@ async fn peer_discovery_in_network() {
             for id in 0..NUM_NODES {
                 result.insert(
                     id,
-                    Arc::new(RwLock::new(TestNode::new(id, NUM_WALKERS, rng.clone()))),
+                    Arc::new(RwLock::new(
+                        TestNode::new(id, NUM_WALKERS, rng.clone()).await,
+                    )),
                 );
             }
             result
