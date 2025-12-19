@@ -50,19 +50,11 @@ where
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
     /// If enabled the protocol will only share transport infos of nodes which have at least one
     /// common topic with the remote node.
     pub share_nodes_with_common_topics: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            share_nodes_with_common_topics: false,
-        }
-    }
 }
 
 /// Private set intersection (PSI) protocol for topic discovery.
@@ -144,15 +136,14 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
 
             // Always include our own transport info (in case it changed).
             let contains_our_info = result.iter().any(|info| info.id() == self.my_node_id);
-            if !contains_our_info {
-                if let Some(my_node_info) = self
+            if !contains_our_info
+                && let Some(my_node_info) = self
                     .store
                     .node_info(&self.my_node_id)
                     .await
                     .map_err(PsiHashDiscoveryError::Store)?
-                {
-                    result.extend([my_node_info]);
-                }
+            {
+                result.extend([my_node_info]);
             }
 
             result
