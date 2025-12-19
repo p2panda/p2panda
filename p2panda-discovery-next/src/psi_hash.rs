@@ -64,18 +64,71 @@ where
 pub struct PsiHashDiscoveryProtocol<S, P, ID, N> {
     store: S,
     subscription: P,
+    my_node_id: ID,
     remote_node_id: ID,
     _marker: PhantomData<N>,
 }
 
 impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
-    pub fn new(store: S, subscription: P, remote_node_id: ID) -> Self {
+    pub fn new(store: S, subscription: P, my_node_id: ID, remote_node_id: ID) -> Self {
         Self {
             store,
             subscription,
+            my_node_id,
             remote_node_id,
             _marker: PhantomData,
         }
+    }
+
+    /// Gather transport infos of nodes interested in common topics and always include our own.
+    ///
+    /// We don't share any node infos outside of this scope for privacy reasons.
+    async fn gather_transport_infos(
+        &self,
+        sync_topics: Vec<[u8; 32]>,
+        ephemeral_messaging_topics: Vec<[u8; 32]>,
+    ) -> Result<BTreeMap<ID, N::Transports>, PsiHashDiscoveryError<S, P, ID, N>>
+    where
+        S: AddressBookStore<ID, N>,
+        P: LocalTopics,
+        ID: PartialEq + Ord,
+        N: NodeInfo<ID>,
+    {
+        let mut node_infos = self
+            .store
+            .node_infos_by_sync_topics(&sync_topics)
+            .await
+            .map_err(PsiHashDiscoveryError::Store)?;
+
+        let ephemeral_node_infos = self
+            .store
+            .node_infos_by_ephemeral_messaging_topics(&ephemeral_messaging_topics)
+            .await
+            .map_err(PsiHashDiscoveryError::Store)?;
+
+        node_infos.extend(ephemeral_node_infos);
+
+        // Always include our own transport info (in case it changed).
+        let contains_our_info = node_infos.iter().any(|info| info.id() == self.my_node_id);
+        if !contains_our_info {
+            if let Some(my_node_info) = self
+                .store
+                .node_info(&self.my_node_id)
+                .await
+                .map_err(PsiHashDiscoveryError::Store)?
+            {
+                node_infos.extend([my_node_info]);
+            }
+        }
+
+        // Assemble transport info results.
+        let mut map = BTreeMap::new();
+        for node_info in node_infos {
+            if let Some(transport_info) = node_info.transports() {
+                map.insert(node_info.id(), transport_info);
+            }
+        }
+        Ok(map)
     }
 }
 
@@ -172,39 +225,19 @@ where
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
 
-        // Gather node infos of nodes interested in Bob's topics. We don't share any node infos
-        // outside of this scope for privacy reasons.
-        let mut node_infos = self
-            .store
-            .node_infos_by_sync_topics(
-                &sync_topics_intersection.iter().cloned().collect::<Vec<_>>(),
-            )
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        let ephemeral_node_infos = self
-            .store
-            .node_infos_by_ephemeral_messaging_topics(
-                &ephemeral_messaging_topics_intersection
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        node_infos.extend(ephemeral_node_infos);
-
         tx.send(PsiHashDiscoveryMessage::Nodes {
-            transport_infos: {
-                let mut map = BTreeMap::new();
-                for node_info in node_infos {
-                    if let Some(transport_info) = node_info.transports() {
-                        map.insert(node_info.id(), transport_info);
-                    }
-                }
-                map
-            },
+            transport_infos: self
+                .gather_transport_infos(
+                    sync_topics_intersection
+                        .clone()
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                    ephemeral_messaging_topics_intersection
+                        .clone()
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                )
+                .await?,
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
@@ -284,39 +317,19 @@ where
             &alice_final_salt,
         )?;
 
-        // Gather node infos of nodes interested in Alice's topics. We don't share any node infos
-        // outside of this scope for privacy reasons.
-        let mut node_infos = self
-            .store
-            .node_infos_by_sync_topics(
-                &sync_topics_intersection.iter().cloned().collect::<Vec<_>>(),
-            )
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        let ephemeral_node_infos = self
-            .store
-            .node_infos_by_ephemeral_messaging_topics(
-                &ephemeral_messaging_topics_intersection
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        node_infos.extend(ephemeral_node_infos);
-
         tx.send(PsiHashDiscoveryMessage::Nodes {
-            transport_infos: {
-                let mut map = BTreeMap::new();
-                for node_info in node_infos {
-                    if let Some(transport_info) = node_info.transports() {
-                        map.insert(node_info.id(), transport_info);
-                    }
-                }
-                map
-            },
+            transport_infos: self
+                .gather_transport_infos(
+                    sync_topics_intersection
+                        .clone()
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                    ephemeral_messaging_topics_intersection
+                        .clone()
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                )
+                .await?,
         })
         .await
         .map_err(|_| PsiHashDiscoveryError::Sink)?;
@@ -339,7 +352,7 @@ where
 }
 
 /// Compute intersection between our vector of topics and a hashed set from the peer as a set.
-pub fn compute_intersection(
+fn compute_intersection(
     local_topics: &[[u8; 32]],
     remote_hashes: &HashSet<[u8; 32]>,
     salt: &[u8; 65],
@@ -360,7 +373,7 @@ fn hash_vector(topics: &[[u8; 32]], salt: &[u8; 65]) -> Result<Vec<[u8; 32]>, st
 }
 
 /// Hash a topic with a salt using blake3.
-pub fn hash(data: &[u8; 32], salt: &[u8; 65]) -> Result<[u8; 32], std::io::Error> {
+fn hash(data: &[u8; 32], salt: &[u8; 65]) -> Result<[u8; 32], std::io::Error> {
     let mut hash = blake3::Hasher::new();
     hash.write_all(data)?;
     hash.write_all(salt)?;
@@ -368,7 +381,7 @@ pub fn hash(data: &[u8; 32], salt: &[u8; 65]) -> Result<[u8; 32], std::io::Error
 }
 
 /// Generate a random 32 byte array.
-pub fn generate_salt_half() -> [u8; 32] {
+fn generate_salt_half() -> [u8; 32] {
     let mut generator = rng();
     let mut random_bytes: [u8; 32] = [0; 32];
     generator.fill_bytes(&mut random_bytes);
@@ -381,11 +394,7 @@ pub fn generate_salt_half() -> [u8; 32] {
 /// We use [ALICE_SALT_BYTE] or [BOB_SALT_BYTE] to make the hashing unique in both directions. If
 /// alice and bob used the exact same salt bob could fool alice by simply replaying alices hashes
 /// back to her.
-pub fn combine_salt(
-    alice_salt_half: &[u8; 32],
-    bob_salt_half: &[u8; 32],
-    pair_byte: &u8,
-) -> [u8; 65] {
+fn combine_salt(alice_salt_half: &[u8; 32], bob_salt_half: &[u8; 32], pair_byte: &u8) -> [u8; 65] {
     let mut output: [u8; 65] = [0; 65];
     output[0..32].copy_from_slice(alice_salt_half);
     output[32..64].copy_from_slice(bob_salt_half);
@@ -464,8 +473,8 @@ mod tests {
             .insert([100; 32]);
         let bob_store = TestStore::new(rng.clone());
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0);
+        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
+        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1, 0);
 
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -509,7 +518,7 @@ mod tests {
             .insert([99; 32]);
         let alice_store = TestStore::new(rng.clone());
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
+        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
 
         let (mut alice_tx, _alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -540,7 +549,7 @@ mod tests {
         bob_subscription.ephemeral_messaging_topics.insert([99; 32]);
         let bob_store = TestStore::new(rng.clone());
 
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1);
+        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0, 1);
 
         let (mut bob_tx, _) = mpsc::channel(16);
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
@@ -617,8 +626,8 @@ mod tests {
             .unwrap();
         bob_store.set_sync_topics(3, [[2; 32]]).await.unwrap();
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0);
+        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
+        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1, 0);
 
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);

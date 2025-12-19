@@ -222,13 +222,15 @@ async fn peer_discovery_in_network() {
                             let alice_protocol = PsiHashDiscoveryProtocol::new(
                                 my_node.store.clone(),
                                 my_node.subscription.clone(),
+                                my_id,
                                 remote_id,
                             );
 
                             let bob_protocol = PsiHashDiscoveryProtocol::new(
                                 remote_node.store.clone(),
                                 remote_node.subscription.clone(),
-                                my_id,
+                                remote_node.id,
+                                my_node.id,
                             );
 
                             my_node
