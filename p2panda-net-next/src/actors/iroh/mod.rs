@@ -20,6 +20,7 @@ use crate::actors::address_book::{ADDRESS_BOOK, ToAddressBook};
 use crate::actors::iroh::connection::ConnectionActorError;
 use crate::actors::{ActorNamespace, with_namespace};
 use crate::addrs::NodeId;
+use crate::utils::connectivity_status;
 
 pub use endpoint::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 #[cfg(feature = "mdns")]
@@ -120,8 +121,26 @@ pub enum ConnectionOutcome {
     Failed,
 }
 
+impl ConnectionOutcome {
+    pub fn is_failed(&self) -> bool {
+        match self {
+            ConnectionOutcome::Successful => false,
+            ConnectionOutcome::Failed => true,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ConnectionRole {
-    Connect,
+    Connect {
+        #[allow(unused)]
+        remote_address: iroh::EndpointAddr,
+    },
     Accept,
+}
+
+/// Returns true if endpoint is globally reachable.
+pub fn is_globally_reachable_endpoint(addr: iroh::EndpointAddr) -> bool {
+    addr.ip_addrs()
+        .any(|addr| connectivity_status(addr).is_global())
 }
