@@ -289,6 +289,10 @@ impl ThreadLocalActor for IrohEndpoint {
                 //
                 // In these cases we _don't_ want to report failed connections, as we could have
                 // never reached them.
+                //
+                // TODO: We could check if both endpoints are only locally reachable, then this
+                // failure report would be legit. For now we're considering this an edge case and
+                // also ignore it.
                 if let ConnectionRole::Connect { .. } = role
                     && outcome.is_failed()
                     && !is_globally_reachable_endpoint(state.endpoint.as_ref().expect(
