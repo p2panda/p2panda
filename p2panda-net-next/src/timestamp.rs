@@ -175,7 +175,8 @@ pub enum HybridTimestampError {
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, time::Duration};
+    use std::str::FromStr;
+    use std::time::Duration;
 
     use mock_instant::thread_local::MockClock;
 
