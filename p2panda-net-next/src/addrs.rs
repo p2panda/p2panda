@@ -414,7 +414,7 @@ impl UnsignedTransportInfo {
     }
 
     /// Increment logical timestamp based on previous clock state (if given).
-    pub fn increment_timestamp(mut self, previous: Option<AuthenticatedTransportInfo>) -> Self {
+    pub fn increment_timestamp(mut self, previous: Option<&AuthenticatedTransportInfo>) -> Self {
         match previous {
             Some(previous) => {
                 // The underlying "hybrid" timestamp implementation guarantees to _always_ be

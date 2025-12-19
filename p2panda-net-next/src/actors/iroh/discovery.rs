@@ -11,11 +11,11 @@ use tokio::sync::Semaphore;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, error, info_span, trace, warn};
 
-use crate::UnsignedTransportInfo;
 use crate::actors::address_book::{node_info, update_address_book, watch_node_info};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::args::ApplicationArguments;
 use crate::utils::{from_public_key, to_public_key};
+use crate::{NodeTransportInfo, UnsignedTransportInfo};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
 /// implements iroh's `Discovery` trait.
@@ -77,11 +77,18 @@ impl Discovery for AddressBookDiscovery {
             } else {
                 UnsignedTransportInfo::new()
             }
-            .increment_timestamp(previous_transport_info)
+            .increment_timestamp(previous_transport_info.as_ref())
             .sign(&private_key) else {
                 error!("failed signing own transport info");
                 return;
             };
+
+            // Ignore endpoint data from iroh if nothing has changed.
+            if let Some(previous) = previous_transport_info
+                && transport_info.addresses() == previous.addresses()
+            {
+                return;
+            }
 
             // Update entry about ourselves in address book to allow this information to propagate
             // in other discovery mechanisms or side-channels outside of iroh.
