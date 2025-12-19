@@ -12,7 +12,7 @@ use tokio::task::{JoinSet, LocalSet};
 
 use crate::DiscoveryResult;
 use crate::address_book::AddressBookStore;
-use crate::naive::NaiveDiscoveryProtocol;
+use crate::psi_hash::PsiHashDiscoveryProtocol;
 use crate::random_walk::RandomWalker;
 use crate::test_utils::{TestId, TestInfo, TestStore, TestSubscription, TestTransportInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
@@ -41,9 +41,13 @@ struct TestNode {
 }
 
 impl TestNode {
-    pub fn new(id: TestId, walkers_num: usize, rng: ChaCha20Rng) -> Self {
+    pub async fn new(id: TestId, walkers_num: usize, rng: ChaCha20Rng) -> Self {
         let store = TestStore::new(rng.clone());
-        let subscription = TestSubscription::default();
+
+        let mut subscription = TestSubscription::default();
+        subscription.sync_topics.insert([7; 32]);
+
+        store.set_sync_topics(id, [[7; 32]]).await.unwrap();
 
         // Run multiple random-walkers at the same time.
         let walkers = {
@@ -145,10 +149,10 @@ impl TestNode {
 }
 
 #[tokio::test]
-async fn naive_protocol() {
+async fn peer_discovery_in_network() {
     const NUM_NODES: usize = 10;
     const NUM_WALKERS: usize = 4;
-    const MAX_RUNS: usize = 10;
+    const MAX_RUNS: usize = 130;
 
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
     let local = LocalSet::new();
@@ -160,7 +164,9 @@ async fn naive_protocol() {
             for id in 0..NUM_NODES {
                 result.insert(
                     id,
-                    Arc::new(RwLock::new(TestNode::new(id, NUM_WALKERS, rng.clone()))),
+                    Arc::new(RwLock::new(
+                        TestNode::new(id, NUM_WALKERS, rng.clone()).await,
+                    )),
                 );
             }
             result
@@ -213,16 +219,18 @@ async fn naive_protocol() {
 
                             let remote_node = nodes.get(&remote_id).unwrap().read().await;
 
-                            let alice_protocol = NaiveDiscoveryProtocol::new(
+                            let alice_protocol = PsiHashDiscoveryProtocol::new(
                                 my_node.store.clone(),
                                 my_node.subscription.clone(),
+                                my_id,
                                 remote_id,
                             );
 
-                            let bob_protocol = NaiveDiscoveryProtocol::new(
+                            let bob_protocol = PsiHashDiscoveryProtocol::new(
                                 remote_node.store.clone(),
                                 remote_node.subscription.clone(),
-                                my_id,
+                                remote_node.id,
+                                my_node.id,
                             );
 
                             my_node
