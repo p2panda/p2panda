@@ -21,11 +21,6 @@ use crate::utils::{from_public_key, to_public_key};
 /// The endpoint can "resolve" node ids to iroh's endpoint addresses and inform the address book
 /// about our own, changed address (for example if the home relay changed or we got an direct IP
 /// address, etc., in iroh this is called "publish").
-//
-// NOTE: Strictly speaking we only need the "resolver" part for iroh-gossip right now, as our own
-// protocols call the `connect` helper method which takes an endpoint address from the address book
-// and returns an error if there's no information given (so we _never_ call an iroh endpoint with
-// only the endpoint id).
 #[derive(Debug)]
 pub struct AddressBookDiscovery {
     actor_namespace: ActorNamespace,
