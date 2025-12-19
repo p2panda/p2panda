@@ -193,7 +193,7 @@ mod tests {
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::FramedRead;
 
-    use crate::utils::current_timestamp;
+    use crate::timestamp::Timestamp;
 
     use super::{CborCodec, into_cbor_sink, into_cbor_stream};
 
@@ -278,7 +278,7 @@ mod tests {
                 signature: None,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
-                timestamp: current_timestamp(),
+                timestamp: Timestamp::now().into(),
                 seq_num,
                 backlink,
                 previous: vec![],

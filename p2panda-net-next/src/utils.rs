@@ -2,19 +2,6 @@
 
 use crate::NodeId;
 
-/// Returns current UNIX timestamp from local system time.
-pub fn current_timestamp() -> u64 {
-    #[cfg(test)]
-    use mock_instant::thread_local::{SystemTime, UNIX_EPOCH};
-    #[cfg(not(test))]
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock moved backwards")
-        .as_secs()
-}
-
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {
     p2panda_core::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")

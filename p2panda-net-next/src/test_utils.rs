@@ -362,7 +362,7 @@ pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
         None,
         [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
     )]);
-    transport_info.timestamp = args.rng.random::<u32>() as u64;
+    transport_info.timestamp = (args.rng.random::<u32>() as u64).into();
     let transport_info = transport_info.sign(&args.private_key).unwrap();
     NodeInfo {
         node_id: args.public_key,

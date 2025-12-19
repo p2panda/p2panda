@@ -34,9 +34,9 @@ tokio-util = { version = "0.7.16", features = ["codec", "compat"] }
 tracing = "0.1.41"
 
 [dev-dependencies]
-tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-p2panda-store = { path = "../p2panda-store", package = "p2panda-store", version = "0.4.0" }
 assert_matches = "1.5.0"
 mock_instant = "0.6.0"
+p2panda-store = { path = "../p2panda-store", package = "p2panda-store", version = "0.4.0" }
 thiserror = "2.0.17"
+tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
