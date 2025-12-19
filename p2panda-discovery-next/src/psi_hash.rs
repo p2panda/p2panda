@@ -50,6 +50,21 @@ where
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct Config {
+    /// If enabled the protocol will only share transport infos of nodes which have at least one
+    /// common topic with the remote node.
+    pub share_nodes_with_common_topics: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            share_nodes_with_common_topics: false,
+        }
+    }
+}
+
 /// Private set intersection (PSI) protocol for topic discovery.
 ///
 /// PSI is a method for determining commonly held information between parties without revealing the
@@ -66,16 +81,34 @@ pub struct PsiHashDiscoveryProtocol<S, P, ID, N> {
     subscription: P,
     my_node_id: ID,
     remote_node_id: ID,
+    config: Config,
     _marker: PhantomData<N>,
 }
 
 impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
     pub fn new(store: S, subscription: P, my_node_id: ID, remote_node_id: ID) -> Self {
+        Self::with_config(
+            store,
+            subscription,
+            my_node_id,
+            remote_node_id,
+            Config::default(),
+        )
+    }
+
+    pub fn with_config(
+        store: S,
+        subscription: P,
+        my_node_id: ID,
+        remote_node_id: ID,
+        config: Config,
+    ) -> Self {
         Self {
             store,
             subscription,
             my_node_id,
             remote_node_id,
+            config,
             _marker: PhantomData,
         }
     }
@@ -94,32 +127,41 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
         ID: PartialEq + Ord,
         N: NodeInfo<ID>,
     {
-        let mut node_infos = self
-            .store
-            .node_infos_by_sync_topics(&sync_topics)
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        let ephemeral_node_infos = self
-            .store
-            .node_infos_by_ephemeral_messaging_topics(&ephemeral_messaging_topics)
-            .await
-            .map_err(PsiHashDiscoveryError::Store)?;
-
-        node_infos.extend(ephemeral_node_infos);
-
-        // Always include our own transport info (in case it changed).
-        let contains_our_info = node_infos.iter().any(|info| info.id() == self.my_node_id);
-        if !contains_our_info {
-            if let Some(my_node_info) = self
+        let node_infos = if self.config.share_nodes_with_common_topics {
+            let mut result = self
                 .store
-                .node_info(&self.my_node_id)
+                .node_infos_by_sync_topics(&sync_topics)
+                .await
+                .map_err(PsiHashDiscoveryError::Store)?;
+
+            let ephemeral_node_infos = self
+                .store
+                .node_infos_by_ephemeral_messaging_topics(&ephemeral_messaging_topics)
+                .await
+                .map_err(PsiHashDiscoveryError::Store)?;
+
+            result.extend(ephemeral_node_infos);
+
+            // Always include our own transport info (in case it changed).
+            let contains_our_info = result.iter().any(|info| info.id() == self.my_node_id);
+            if !contains_our_info {
+                if let Some(my_node_info) = self
+                    .store
+                    .node_info(&self.my_node_id)
+                    .await
+                    .map_err(PsiHashDiscoveryError::Store)?
+                {
+                    result.extend([my_node_info]);
+                }
+            }
+
+            result
+        } else {
+            self.store
+                .all_node_infos()
                 .await
                 .map_err(PsiHashDiscoveryError::Store)?
-            {
-                node_infos.extend([my_node_info]);
-            }
-        }
+        };
 
         // Assemble transport info results.
         let mut map = BTreeMap::new();
@@ -443,11 +485,10 @@ mod tests {
     use rand_chacha::ChaCha20Rng;
 
     use crate::address_book::AddressBookStore;
-    use crate::psi_hash::{
-        PsiHashDiscoveryError, PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol,
-    };
     use crate::test_utils::{TestInfo, TestStore, TestSubscription};
     use crate::traits::DiscoveryProtocol;
+
+    use super::{Config, PsiHashDiscoveryError, PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
 
     #[tokio::test]
     async fn topic_discovery() {
@@ -626,8 +667,19 @@ mod tests {
             .unwrap();
         bob_store.set_sync_topics(3, [[2; 32]]).await.unwrap();
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1, 0);
+        let config = Config {
+            share_nodes_with_common_topics: true,
+        };
+
+        let alice_protocol = PsiHashDiscoveryProtocol::with_config(
+            alice_store,
+            alice_subscription,
+            0,
+            1,
+            config.clone(),
+        );
+        let bob_protocol =
+            PsiHashDiscoveryProtocol::with_config(bob_store, bob_subscription, 1, 0, config);
 
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
