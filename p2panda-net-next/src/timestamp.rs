@@ -108,9 +108,9 @@ impl From<u64> for LamportTimestamp {
 /// ordering:
 ///
 /// * If we lost the state of our logical clock we will still be _after_ previous timestamps, as
-/// the global UNIX time advanced (given that no OS clock was faulty).
+///   the global UNIX time advanced (given that no OS clock was faulty).
 /// * If the UNIX timestamp is the same we know which item came after because of the logical clock
-/// and don't need to rely on more "random" tie-breakers, like a hashing digest.
+///   and don't need to rely on more "random" tie-breakers, like a hashing digest.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
 pub struct HybridTimestamp(Timestamp, LamportTimestamp);
 

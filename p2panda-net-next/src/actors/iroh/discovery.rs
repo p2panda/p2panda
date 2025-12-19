@@ -47,7 +47,7 @@ impl Discovery for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
         let actor_namespace = self.actor_namespace.clone();
         let private_key = self.args.private_key.clone();
-        let public_key = self.args.public_key.clone();
+        let public_key = self.args.public_key;
         let data = data.to_owned();
         let semaphore = self.semaphore.clone();
 
@@ -63,7 +63,7 @@ impl Discovery for AddressBookDiscovery {
                 error!("failed getting own transport info from address book");
                 return;
             };
-            let previous_transport_info = node_info.map(|info| info.transports()).flatten();
+            let previous_transport_info = node_info.and_then(|info| info.transports());
 
             // Create transport info with iroh endpoint addresses if given. If no address exists
             // (because we are not reachable) we're explicitly making the address array empty to inform
