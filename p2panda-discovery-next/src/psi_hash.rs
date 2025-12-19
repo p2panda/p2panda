@@ -172,11 +172,28 @@ where
             return Err(PsiHashDiscoveryError::UnexpectedMessage);
         };
 
-        let node_infos = self
+        // Gather node infos of nodes interested in Bob's topics. We don't share any node infos
+        // outside of this scope for privacy reasons.
+        let mut node_infos = self
             .store
-            .all_node_infos()
+            .node_infos_by_sync_topics(
+                &sync_topics_intersection.iter().cloned().collect::<Vec<_>>(),
+            )
             .await
             .map_err(PsiHashDiscoveryError::Store)?;
+
+        let ephemeral_node_infos = self
+            .store
+            .node_infos_by_ephemeral_messaging_topics(
+                &ephemeral_messaging_topics_intersection
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .map_err(PsiHashDiscoveryError::Store)?;
+
+        node_infos.extend(ephemeral_node_infos);
 
         tx.send(PsiHashDiscoveryMessage::Nodes {
             transport_infos: {
@@ -261,18 +278,34 @@ where
         let sync_topics_intersection =
             compute_intersection(&my_sync_topics, &sync_topics_for_bob, &alice_final_salt)?;
 
-        let ephemeral_topics_intersection = compute_intersection(
+        let ephemeral_messaging_topics_intersection = compute_intersection(
             &my_ephemeral_topics,
             &ephemeral_messaging_topics_for_bob,
             &alice_final_salt,
         )?;
 
-        // Send Alice our nodes we know about.
-        let node_infos = self
+        // Gather node infos of nodes interested in Alice's topics. We don't share any node infos
+        // outside of this scope for privacy reasons.
+        let mut node_infos = self
             .store
-            .all_node_infos()
+            .node_infos_by_sync_topics(
+                &sync_topics_intersection.iter().cloned().collect::<Vec<_>>(),
+            )
             .await
             .map_err(PsiHashDiscoveryError::Store)?;
+
+        let ephemeral_node_infos = self
+            .store
+            .node_infos_by_ephemeral_messaging_topics(
+                &ephemeral_messaging_topics_intersection
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .map_err(PsiHashDiscoveryError::Store)?;
+
+        node_infos.extend(ephemeral_node_infos);
 
         tx.send(PsiHashDiscoveryMessage::Nodes {
             transport_infos: {
@@ -300,7 +333,7 @@ where
             remote_node_id: self.remote_node_id.clone(),
             node_transport_infos: transport_infos,
             sync_topics: sync_topics_intersection,
-            ephemeral_messaging_topics: ephemeral_topics_intersection,
+            ephemeral_messaging_topics: ephemeral_messaging_topics_intersection,
         })
     }
 }
@@ -400,10 +433,11 @@ mod tests {
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
+    use crate::address_book::AddressBookStore;
     use crate::psi_hash::{
         PsiHashDiscoveryError, PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol,
     };
-    use crate::test_utils::{TestStore, TestSubscription, pad_to_32_bytes};
+    use crate::test_utils::{TestInfo, TestStore, TestSubscription};
     use crate::traits::DiscoveryProtocol;
 
     #[tokio::test]
@@ -411,25 +445,23 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.sync_topics.insert(pad_to_32_bytes(1));
-        alice_subscription.sync_topics.insert(pad_to_32_bytes(2));
+        alice_subscription.sync_topics.insert([1; 32]);
+        alice_subscription.sync_topics.insert([2; 32]);
         alice_subscription
             .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(98));
+            .insert([98; 32]);
         alice_subscription
             .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(99));
+            .insert([99; 32]);
         let alice_store = TestStore::new(rng.clone());
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.sync_topics.insert(pad_to_32_bytes(2));
-        bob_subscription.sync_topics.insert(pad_to_32_bytes(3));
+        bob_subscription.sync_topics.insert([2; 32]);
+        bob_subscription.sync_topics.insert([3; 32]);
+        bob_subscription.ephemeral_messaging_topics.insert([99; 32]);
         bob_subscription
             .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(99));
-        bob_subscription
-            .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(100));
+            .insert([100; 32]);
         let bob_store = TestStore::new(rng.clone());
 
         let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
@@ -456,12 +488,12 @@ mod tests {
         let bob_result = bob_handle.await.expect("local task failure");
 
         let mut expected = HashSet::new();
-        expected.insert(pad_to_32_bytes(2));
+        expected.insert([2; 32]);
         assert_eq!(alice_result.sync_topics, expected);
         assert_eq!(bob_result.sync_topics, expected);
 
         let mut expected = HashSet::new();
-        expected.insert(pad_to_32_bytes(99));
+        expected.insert([99; 32]);
         assert_eq!(alice_result.ephemeral_messaging_topics, expected);
         assert_eq!(bob_result.ephemeral_messaging_topics, expected);
     }
@@ -471,10 +503,10 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.sync_topics.insert(pad_to_32_bytes(1));
+        alice_subscription.sync_topics.insert([1; 32]);
         alice_subscription
             .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(99));
+            .insert([99; 32]);
         let alice_store = TestStore::new(rng.clone());
 
         let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
@@ -485,7 +517,7 @@ mod tests {
         let bob_handle = tokio::task::spawn(async move {
             let _result = bob_tx
                 .send(PsiHashDiscoveryMessage::AliceSaltHalf {
-                    alice_salt_half: pad_to_32_bytes(0),
+                    alice_salt_half: [0; 32],
                 })
                 .await;
         });
@@ -504,10 +536,8 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.sync_topics.insert(pad_to_32_bytes(1));
-        bob_subscription
-            .ephemeral_messaging_topics
-            .insert(pad_to_32_bytes(99));
+        bob_subscription.sync_topics.insert([1; 32]);
+        bob_subscription.ephemeral_messaging_topics.insert([99; 32]);
         let bob_store = TestStore::new(rng.clone());
 
         let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1);
@@ -530,5 +560,95 @@ mod tests {
             bob_result,
             Err(PsiHashDiscoveryError::UnexpectedMessage)
         ));
+    }
+
+    #[tokio::test]
+    async fn transport_info() {
+        let mut rng = ChaCha20Rng::from_seed([1; 32]);
+
+        // Alice, Bob and Charlie share the same topic [1; 32] while only Bob and Daphne share
+        // topic [2; 32]. Alice should _not_ learn transport info about Daphne and only about
+        // Charlie.
+        //
+        // 0: Alice:   [1; 32]
+        // 1: Bob:     [1; 32] [2; 32]
+        // 2: Charlie: [1; 32]
+        // 3: Daphne:          [2; 32]
+
+        // Prepare Alice.
+        let mut alice_subscription = TestSubscription::default();
+        alice_subscription.sync_topics.insert([1; 32]);
+
+        let alice_store = TestStore::new(rng.clone());
+
+        alice_store
+            .insert_node_info(TestInfo::new(0).with_random_address(&mut rng))
+            .await
+            .unwrap();
+        alice_store.set_sync_topics(0, [[1; 32]]).await.unwrap();
+
+        // Prepare Bob.
+        let mut bob_subscription = TestSubscription::default();
+        bob_subscription.sync_topics.insert([1; 32]);
+        bob_subscription.sync_topics.insert([2; 32]);
+
+        let bob_store = TestStore::new(rng.clone());
+
+        bob_store
+            .insert_node_info(TestInfo::new(1).with_random_address(&mut rng))
+            .await
+            .unwrap();
+        bob_store
+            .set_sync_topics(1, [[1; 32], [2; 32]])
+            .await
+            .unwrap();
+
+        // "Charlie"
+        bob_store
+            .insert_node_info(TestInfo::new(2).with_random_address(&mut rng))
+            .await
+            .unwrap();
+        bob_store.set_sync_topics(2, [[1; 32]]).await.unwrap();
+
+        // "Daphne"
+        bob_store
+            .insert_node_info(TestInfo::new(3).with_random_address(&mut rng))
+            .await
+            .unwrap();
+        bob_store.set_sync_topics(3, [[2; 32]]).await.unwrap();
+
+        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 1);
+        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0);
+
+        let (mut alice_tx, alice_rx) = mpsc::channel(16);
+        let (mut bob_tx, bob_rx) = mpsc::channel(16);
+
+        let bob_handle = tokio::task::spawn(async move {
+            let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
+            let Ok(result) = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await else {
+                panic!("running bob protocol failed");
+            };
+            result
+        });
+
+        let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
+        let Ok(alice_result) = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await else {
+            panic!("running alice protocol failed");
+        };
+
+        // Wait until Bob has finished.
+        let bob_result = bob_handle.await.expect("local task failure");
+
+        // Alice learned about Charlie.
+        assert!(alice_result.node_transport_infos.contains_key(&1)); // Bob
+        assert!(alice_result.node_transport_infos.contains_key(&2)); // Charlie
+        assert_eq!(alice_result.node_transport_infos.len(), 2);
+
+        // Alice did _not_ learn about Daphne.
+        assert!(!alice_result.node_transport_infos.contains_key(&3));
+
+        // Bob only got the info of Alice.
+        assert!(bob_result.node_transport_infos.contains_key(&0)); // Alice
+        assert_eq!(bob_result.node_transport_infos.len(), 1);
     }
 }
