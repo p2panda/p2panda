@@ -140,7 +140,12 @@ impl address_book::NodeInfo<NodeId> for NodeInfo {
     }
 
     fn is_stale(&self) -> bool {
-        self.metrics.is_stale()
+        if self.bootstrap {
+            // Bootstrap nodes can never be marked as stale.
+            false
+        } else {
+            self.metrics.is_stale()
+        }
     }
 
     fn transports(&self) -> Option<Self::Transports> {
