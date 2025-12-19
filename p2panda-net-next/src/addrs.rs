@@ -12,9 +12,10 @@ use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::timestamp::{HybridTimestamp, Timestamp};
 #[cfg(test)]
 use crate::utils::from_public_key;
-use crate::utils::{current_timestamp, to_public_key};
+use crate::utils::to_public_key;
 
 pub type NodeId = p2panda_core::PublicKey;
 
@@ -31,10 +32,6 @@ pub struct NodeInfo {
     ///
     /// This is a local configuration and is not exchanged during discovery. Every node can decide
     /// themselves which other node they consider a bootstrap or not.
-    //
-    // @TODO(adz): Ideally we want to rely on connection metrics / behaviour etc. to "rate" a node
-    // and this should become another factor to prioritize some nodes over others (at least for
-    // initial discovery).
     pub bootstrap: bool,
 
     /// Records of successful or failed connection attempts with this node.
@@ -160,8 +157,8 @@ impl address_book::NodeInfo<NodeId> for NodeInfo {
 }
 
 pub trait NodeTransportInfo {
-    /// Returns UNIX timestamp from when this information was created.
-    fn timestamp(&self) -> u64;
+    /// Returns logical timestamp from when this information was created.
+    fn timestamp(&self) -> HybridTimestamp;
 
     /// Returns all associated transport addresses.
     fn addresses(&self) -> Vec<TransportAddress>;
@@ -203,7 +200,7 @@ impl TransportInfo {
 }
 
 impl NodeTransportInfo for TransportInfo {
-    fn timestamp(&self) -> u64 {
+    fn timestamp(&self) -> HybridTimestamp {
         match self {
             TransportInfo::Trusted(info) => info.timestamp(),
             TransportInfo::Authenticated(info) => info.timestamp(),
@@ -270,10 +267,10 @@ impl From<TrustedTransportInfo> for TransportInfo {
 /// services and "untrusted" intermediaries since the original author is verifiable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticatedTransportInfo {
-    /// UNIX timestamp from when this transport information was published.
+    /// Logical timestamp from when this transport information was published.
     ///
     /// This can be used to find out which information is the "latest".
-    pub timestamp: u64,
+    pub timestamp: HybridTimestamp,
 
     /// Signature to prove authenticity of this transport information.
     ///
@@ -302,7 +299,7 @@ impl AuthenticatedTransportInfo {
 }
 
 impl NodeTransportInfo for AuthenticatedTransportInfo {
-    fn timestamp(&self) -> u64 {
+    fn timestamp(&self) -> HybridTimestamp {
         self.timestamp
     }
 
@@ -347,10 +344,10 @@ impl Display for AuthenticatedTransportInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UnsignedTransportInfo {
-    /// UNIX timestamp from when this transport information was published.
+    /// Logical timestamp from when this transport information was published.
     ///
     /// This can be used to find out which information is the "latest".
-    pub timestamp: u64,
+    pub timestamp: HybridTimestamp,
 
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
@@ -365,7 +362,7 @@ impl Default for UnsignedTransportInfo {
 impl UnsignedTransportInfo {
     pub fn new() -> Self {
         Self {
-            timestamp: current_timestamp(),
+            timestamp: HybridTimestamp::now(),
             addresses: vec![],
         }
     }
@@ -416,6 +413,22 @@ impl UnsignedTransportInfo {
         self.addresses.is_empty()
     }
 
+    /// Increment logical timestamp based on previous clock state (if given).
+    pub fn increment_timestamp(mut self, previous: Option<&AuthenticatedTransportInfo>) -> Self {
+        match previous {
+            Some(previous) => {
+                // The underlying "hybrid" timestamp implementation guarantees to _always_ be
+                // larger than the previous one.
+                //
+                // This is a locally created event and we want to make sure it is _after_ anything
+                // which happened before.
+                self.timestamp = previous.timestamp.increment();
+                self
+            }
+            None => self,
+        }
+    }
+
     /// Authenticate transport info by signining it with our secret key.
     pub fn sign(
         self,
@@ -446,10 +459,10 @@ impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
 /// distributed.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct TrustedTransportInfo {
-    /// UNIX timestamp from when this transport information was published.
+    /// Logical timestamp from when this transport information was published.
     ///
     /// This can be used to find out which information is the "latest".
-    pub timestamp: u64,
+    pub timestamp: HybridTimestamp,
 
     /// Associated transport addresses to aid establishing a connection to this node.
     pub addresses: Vec<TransportAddress>,
@@ -464,7 +477,7 @@ impl Default for TrustedTransportInfo {
 impl TrustedTransportInfo {
     pub fn new() -> Self {
         Self {
-            timestamp: current_timestamp(),
+            timestamp: HybridTimestamp::now(),
             addresses: vec![],
         }
     }
@@ -503,7 +516,7 @@ impl TrustedTransportInfo {
 }
 
 impl NodeTransportInfo for TrustedTransportInfo {
-    fn timestamp(&self) -> u64 {
+    fn timestamp(&self) -> HybridTimestamp {
         self.timestamp
     }
 
@@ -616,21 +629,21 @@ impl Display for TransportAddress {
 pub struct NodeMetrics {
     failed_connections: usize,
     successful_connections: usize,
-    last_failed_at: Option<u64>,
-    last_succeeded_at: Option<u64>,
+    last_failed_at: Option<Timestamp>,
+    last_succeeded_at: Option<Timestamp>,
 }
 
 impl NodeMetrics {
     /// Records failed connection attempt (both incoming or outgoing).
     pub fn report_failed_connection(&mut self) {
         self.failed_connections += 1;
-        self.last_failed_at = Some(current_timestamp());
+        self.last_failed_at = Some(Timestamp::now());
     }
 
     /// Records successful connection attempt (both incoming or outgoing).
     pub fn report_successful_connection(&mut self) {
         self.successful_connections += 1;
-        self.last_succeeded_at = Some(current_timestamp());
+        self.last_succeeded_at = Some(Timestamp::now());
     }
 
     /// Returns true if last known connection attempt failed.
@@ -756,7 +769,7 @@ mod tests {
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            unsigned.timestamp = 2; // Force "newer" timestamp.
+            unsigned.timestamp = 2.into(); // Force "newer" timestamp.
             unsigned.sign(&signing_key_1).unwrap()
         };
 
@@ -768,7 +781,7 @@ mod tests {
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            unsigned.timestamp = 1; // Force "older" timestamp.
+            unsigned.timestamp = 1.into(); // Force "older" timestamp.
             unsigned.sign(&signing_key_1).unwrap()
         };
 
@@ -785,7 +798,7 @@ mod tests {
 
         // The "newer" transport info is the only one registered.
         assert_eq!(node_info.transports.as_ref().unwrap().len(), 1);
-        assert_eq!(node_info.transports.unwrap().timestamp(), 2);
+        assert_eq!(node_info.transports.unwrap().timestamp(), 2.into());
     }
 
     #[test]

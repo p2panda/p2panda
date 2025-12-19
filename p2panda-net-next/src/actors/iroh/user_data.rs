@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::num::ParseIntError;
 use std::str::FromStr;
 
 use iroh::discovery::UserData;
@@ -9,6 +8,7 @@ use p2panda_core::{IdentityError, Signature};
 use thiserror::Error;
 
 use crate::AuthenticatedTransportInfo;
+use crate::timestamp::{HybridTimestamp, HybridTimestampError};
 
 /// Helper to bring additional transport info (signature and timestamp) into iroh's user data
 /// struct.
@@ -17,7 +17,7 @@ use crate::AuthenticatedTransportInfo;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserDataTransportInfo {
     pub signature: Signature,
-    pub timestamp: u64,
+    pub timestamp: HybridTimestamp,
 }
 
 impl UserDataTransportInfo {
@@ -74,7 +74,7 @@ impl TryFrom<UserData> for UserDataTransportInfo {
 
         // Try to parse halfs into signature and timestamp.
         let signature = Signature::from_str(signature_str)?;
-        let timestamp = u64::from_str(timestamp_str)?;
+        let timestamp = HybridTimestamp::from_str(timestamp_str)?;
 
         Ok(Self {
             signature,
@@ -92,7 +92,7 @@ pub enum UserDataInfoError {
     Signature(#[from] IdentityError),
 
     #[error(transparent)]
-    Timestamp(#[from] ParseIntError),
+    Timestamp(#[from] HybridTimestampError),
 }
 
 #[cfg(test)]

@@ -257,11 +257,12 @@ where
                 }
 
                 // Is there already an existing entry? Only replace it when information is newer
-                // (it's a simple "last write wins" principle based on a UNIX timestamp) handled
+                // (it's a simple "last write wins" CRDT based on a logical timestamp) handled
                 // inside of `update_transports`.
                 //
                 // If a node info already exists, only update the "transports" aspect of it and
-                // keep any other "local" configuration, otherwise create a new "default" node info.
+                // keep any other "local" configuration, otherwise create a new "default" node
+                // info.
                 let mut node_info = match state.store.node_info(&node_id).await? {
                     Some(current) => current,
                     None => NodeInfo::new(node_id),
@@ -671,7 +672,7 @@ mod tests {
                         [],
                     ));
                     let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
-                    transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
+                    transport_info.timestamp = 1234.into(); // Manipulate timestamp to make signature invalid
                     transport_info.into()
                 }),
                 metrics: NodeMetrics::default(),
@@ -723,7 +724,7 @@ mod tests {
                 [],
             ));
             let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
-            transport_info.timestamp = 1234; // Manipulate timestamp to make signature invalid
+            transport_info.timestamp = 1234.into(); // Manipulate timestamp to make signature invalid
             transport_info
         };
         assert!(transport_info.verify(&args.public_key).is_err());

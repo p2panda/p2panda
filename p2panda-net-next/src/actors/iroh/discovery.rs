@@ -2,18 +2,20 @@
 
 use std::collections::BTreeSet;
 use std::pin::Pin;
+use std::sync::Arc;
 
 use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::discovery::{Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo};
-use p2panda_discovery::address_book::NodeInfo;
+use p2panda_discovery::address_book::NodeInfo as _;
+use tokio::sync::Semaphore;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, error, info_span, trace, warn};
 
-use crate::UnsignedTransportInfo;
-use crate::actors::address_book::{update_address_book, watch_node_info};
+use crate::actors::address_book::{node_info, update_address_book, watch_node_info};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::args::ApplicationArguments;
 use crate::utils::{from_public_key, to_public_key};
+use crate::{NodeTransportInfo, UnsignedTransportInfo};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
 /// implements iroh's `Discovery` trait.
@@ -21,13 +23,9 @@ use crate::utils::{from_public_key, to_public_key};
 /// The endpoint can "resolve" node ids to iroh's endpoint addresses and inform the address book
 /// about our own, changed address (for example if the home relay changed or we got an direct IP
 /// address, etc., in iroh this is called "publish").
-//
-// NOTE: Strictly speaking we only need the "resolver" part for iroh-gossip right now, as our own
-// protocols call the `connect` helper method which takes an endpoint address from the address book
-// and returns an error if there's no information given (so we _never_ call an iroh endpoint with
-// only the endpoint id).
 #[derive(Debug)]
 pub struct AddressBookDiscovery {
+    semaphore: Arc<Semaphore>,
     actor_namespace: ActorNamespace,
     args: ApplicationArguments,
 }
@@ -38,6 +36,7 @@ const PROVENANCE: &str = "address book";
 impl AddressBookDiscovery {
     pub fn new(args: ApplicationArguments) -> Self {
         Self {
+            semaphore: Arc::new(Semaphore::new(1)),
             actor_namespace: generate_actor_namespace(&args.public_key),
             args,
         }
@@ -46,27 +45,51 @@ impl AddressBookDiscovery {
 
 impl Discovery for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
-        // Create a new transport info with iroh addresses if given. If no iroh address exists
-        // (because we are not reachable) we're explicitly making the address array empty to inform
-        // other nodes about this.
-        let Ok(transport_info) = if data.has_addrs() {
-            UnsignedTransportInfo::from_addrs([iroh::EndpointAddr {
-                id: from_public_key(self.args.public_key),
-                addrs: BTreeSet::from_iter(data.addrs().cloned()),
-            }
-            .into()])
-        } else {
-            UnsignedTransportInfo::new()
-        }
-        .sign(&self.args.private_key) else {
-            error!("failed signing own transport info");
-            return;
-        };
-
         let actor_namespace = self.actor_namespace.clone();
+        let private_key = self.args.private_key.clone();
         let public_key = self.args.public_key;
+        let data = data.to_owned();
+        let semaphore = self.semaphore.clone();
 
         tokio::task::spawn(async move {
+            // Get current transport info state and strictly serialize reading it to avoid race
+            // conditions where multiple spawned "publish" tasks race against each other.
+            let Ok(_permit) = semaphore.acquire().await else {
+                error!("failed acquiring semaphore permit");
+                return;
+            };
+
+            let Ok(node_info) = node_info(actor_namespace.clone(), public_key).await else {
+                error!("failed getting own transport info from address book");
+                return;
+            };
+            let previous_transport_info = node_info.and_then(|info| info.transports());
+
+            // Create transport info with iroh endpoint addresses if given. If no address exists
+            // (because we are not reachable) we're explicitly making the address array empty to inform
+            // other nodes about this.
+            let Ok(transport_info) = if data.has_addrs() {
+                UnsignedTransportInfo::from_addrs([iroh::EndpointAddr {
+                    id: from_public_key(public_key),
+                    addrs: BTreeSet::from_iter(data.addrs().cloned()),
+                }
+                .into()])
+            } else {
+                UnsignedTransportInfo::new()
+            }
+            .increment_timestamp(previous_transport_info.as_ref())
+            .sign(&private_key) else {
+                error!("failed signing own transport info");
+                return;
+            };
+
+            // Ignore endpoint data from iroh if nothing has changed.
+            if let Some(previous) = previous_transport_info
+                && transport_info.addresses() == previous.addresses()
+            {
+                return;
+            }
+
             // Update entry about ourselves in address book to allow this information to propagate
             // in other discovery mechanisms or side-channels outside of iroh.
             if let Err(err) =
