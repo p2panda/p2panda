@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use iroh::endpoint::TransportConfig;
 use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_discovery::naive::{NaiveDiscoveryMessage, NaiveDiscoveryProtocol};
+use p2panda_discovery::psi_hash::{PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
@@ -134,25 +134,26 @@ where
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<NaiveDiscoveryMessage<NodeId, NodeInfo>, _>(tx);
-        let mut rx = into_cbor_stream::<NaiveDiscoveryMessage<NodeId, NodeInfo>, _>(rx);
+        let mut tx = into_cbor_sink::<PsiHashDiscoveryMessage<NodeId, NodeInfo>, _>(tx);
+        let mut rx = into_cbor_stream::<PsiHashDiscoveryMessage<NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
         // @TODO: Have a timeout to cancel session if it's running overtime.
-        let protocol = NaiveDiscoveryProtocol::<S, _, NodeId, NodeInfo>::new(
+        let protocol = PsiHashDiscoveryProtocol::<S, _, NodeId, NodeInfo>::new(
             store.clone(),
             LocalTopicsProvider { store, my_node_id },
+            my_node_id,
             remote_node_id,
         );
         let result = match role {
             Role::Alice => {
                 let result = protocol.alice(&mut tx, &mut rx).await?;
-                connection.close(0u32.into(), b"done");
+                connection.closed().await;
                 result
             }
             Role::Bob => {
                 let result = protocol.bob(&mut tx, &mut rx).await?;
-                connection.closed().await;
+                connection.close(0u32.into(), b"done");
                 result
             }
         };

@@ -100,10 +100,11 @@ async fn session_ended_handle(actor_ref: &ActorRef<ToDiscoveryManager>) -> JoinH
 
     tokio::spawn(async move {
         loop {
+            let event = events.recv().await.unwrap();
             if let DiscoveryEvent::SessionEnded {
                 role: SessionRole::Initiated,
                 ..
-            } = events.recv().await.unwrap()
+            } = event
             {
                 break;
             }
