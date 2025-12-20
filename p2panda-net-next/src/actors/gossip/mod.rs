@@ -120,6 +120,7 @@ struct Sessions {
 }
 
 pub struct GossipState {
+    args: ApplicationArguments,
     gossip: IrohGossip,
     sessions: Sessions,
     neighbours: HashMap<TopicId, HashSet<PublicKey>>,
@@ -182,6 +183,7 @@ where
         let gossip_thread_pool = ThreadLocalActorSpawner::new();
 
         Ok(GossipState {
+            args,
             gossip,
             sessions,
             neighbours,
@@ -251,7 +253,7 @@ where
                 let (gossip_session_actor, _) = GossipSession::spawn_linked(
                     None,
                     (
-                        state.actor_namespace.clone(),
+                        state.args.clone(),
                         topic,
                         subscription,
                         to_gossip_rx,
