@@ -83,7 +83,8 @@ impl ThreadLocalActor for GossipHealer {
         match message {
             ToGossipHealer::SubscribeToAddressBook(topic) => {
                 // Watch for changes in the set of interested nodes for this topic.
-                let topic_watcher = watch_topic(state.actor_namespace.clone(), topic, true).await?;
+                let topic_watcher =
+                    watch_topic(state.actor_namespace.clone(), topic, false).await?;
                 state.topic_watcher = Some(topic_watcher);
 
                 // Watch for changes of our own transport info to react to connectivity changes.
