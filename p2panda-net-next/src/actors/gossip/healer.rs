@@ -8,10 +8,11 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tracing::trace;
 
-use crate::actors::ActorNamespace;
 use crate::actors::address_book::watchers::WatcherReceiver;
 use crate::actors::address_book::{watch_node_info, watch_topic};
 use crate::actors::gossip::session::ToGossipSession;
+use crate::actors::{ActorNamespace, generate_actor_namespace};
+use crate::args::ApplicationArguments;
 use crate::utils::from_public_key;
 use crate::{NodeId, NodeInfo, TopicId};
 
@@ -25,7 +26,7 @@ pub enum ToGossipHealer {
 
 pub struct GossipHealerState {
     actor_namespace: ActorNamespace,
-    my_node_id: NodeId,
+    args: ApplicationArguments,
     topic_endpoint_ids: Vec<iroh::EndpointId>,
     topic_watcher: Option<WatcherReceiver<HashSet<NodeId>>>,
     node_watcher: Option<WatcherReceiver<Option<NodeInfo>>>,
@@ -37,22 +38,25 @@ pub struct GossipHealer;
 
 impl ThreadLocalActor for GossipHealer {
     type State = GossipHealerState;
+
     type Msg = ToGossipHealer;
-    type Arguments = (ActorNamespace, NodeId, TopicId, ActorRef<ToGossipSession>);
+
+    type Arguments = (ApplicationArguments, TopicId, ActorRef<ToGossipSession>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, my_node_id, topic, gossip_session_ref) = args;
+        let (args, topic, gossip_session_ref) = args;
+        let actor_namespace = generate_actor_namespace(&args.public_key);
 
         // Invoke the handler to subscribe to address book events.
         let _ = myself.cast(ToGossipHealer::SubscribeToAddressBook(topic));
 
         Ok(GossipHealerState {
             actor_namespace,
-            my_node_id,
+            args,
             topic_endpoint_ids: Vec::new(),
             topic_watcher: None,
             node_watcher: None,
@@ -84,7 +88,8 @@ impl ThreadLocalActor for GossipHealer {
 
                 // Watch for changes of our own transport info to react to connectivity changes.
                 let node_watcher =
-                    watch_node_info(state.actor_namespace.clone(), state.my_node_id, true).await?;
+                    watch_node_info(state.actor_namespace.clone(), state.args.public_key, true)
+                        .await?;
                 state.node_watcher = Some(node_watcher);
 
                 let _ = myself.cast(ToGossipHealer::WaitForEvent);
