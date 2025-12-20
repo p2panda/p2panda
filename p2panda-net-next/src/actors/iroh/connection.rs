@@ -110,7 +110,7 @@ async fn establish_connection(
             }
 
             let connecting = endpoint
-                .connect_with_opts(endpoint_addr, &alpn, connect_options)
+                .connect_with_opts(endpoint_addr.clone(), &alpn, connect_options)
                 .await
                 .map_err(|err| ConnectionActorError::Iroh(err.into()));
 
@@ -127,7 +127,9 @@ async fn establish_connection(
 
                     let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
                         remote_node_id,
-                        role: ConnectionRole::Connect,
+                        role: ConnectionRole::Connect {
+                            remote_address: endpoint_addr,
+                        },
                         outcome: ConnectionOutcome::Successful,
                     });
 
@@ -139,7 +141,9 @@ async fn establish_connection(
 
                     let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
                         remote_node_id,
-                        role: ConnectionRole::Connect,
+                        role: ConnectionRole::Connect {
+                            remote_address: endpoint_addr,
+                        },
                         outcome: ConnectionOutcome::Failed,
                     });
 
