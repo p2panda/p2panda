@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
         let endpoint_addr = iroh::EndpointAddr::new(from_public_key(id));
         let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
         address_book
-            .insert_node_info(NodeInfo::from(endpoint_addr))
+            .insert_node_info(NodeInfo::from(endpoint_addr).bootstrap())
             .await?;
     }
 
