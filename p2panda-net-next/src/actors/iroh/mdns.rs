@@ -192,9 +192,19 @@ impl ThreadLocalActor for Mdns {
                         let transport_info = AuthenticatedTransportInfo {
                             timestamp: txt.timestamp,
                             signature: txt.signature,
-                            addresses: endpoint_addr
-                                .map(|addr| vec![addr.into()])
-                                .unwrap_or(vec![]),
+                            addresses: {
+                                endpoint_addr
+                                    .clone()
+                                    .map(|mut addr| {
+                                        // Optionally add relay url if it was delivered via user
+                                        // data as well.
+                                        if let Some(relay_url) = txt.relay_url {
+                                            addr = addr.with_relay_url(relay_url);
+                                        }
+                                        vec![addr.into()]
+                                    })
+                                    .unwrap_or(vec![])
+                            },
                         };
 
                         // Check authenticity.
