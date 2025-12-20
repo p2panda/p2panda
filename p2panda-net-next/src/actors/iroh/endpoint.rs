@@ -19,7 +19,7 @@ use crate::NodeId;
 use crate::actors::address_book::{ToAddressBook, address_book_ref};
 use crate::actors::iroh::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
 use crate::actors::iroh::discovery::AddressBookDiscovery;
-use crate::actors::iroh::{ConnectionOutcome, ConnectionRole};
+use crate::actors::iroh::{ConnectionOutcome, ConnectionRole, is_globally_reachable_endpoint};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
@@ -77,7 +77,6 @@ pub enum ToIrohEndpoint {
     /// us now.
     Report {
         remote_node_id: NodeId,
-        #[allow(unused)]
         role: ConnectionRole,
         outcome: ConnectionOutcome,
     },
@@ -280,8 +279,27 @@ impl ThreadLocalActor for IrohEndpoint {
             ToIrohEndpoint::Report {
                 remote_node_id,
                 outcome,
+                role,
                 ..
             } => {
+                // Sometimes we try to connect to another node while our own node has limited
+                // connectivity, for example if we don't have a connection to the internet and only
+                // to other devices on the local network, or even worse, only to other processes
+                // via the loopback interface.
+                //
+                // In these cases we _don't_ want to report failed connections, as we could have
+                // never reached them.
+                //
+                // TODO: We could check if both endpoints are only locally reachable, then this
+                // failure report would be legit. For now we're considering this an edge case and
+                // also ignore it.
+                if let ConnectionRole::Connect { .. } = role
+                    && outcome.is_failed()
+                    && !is_globally_reachable_endpoint(state.endpoint.as_ref().expect(
+                            "bind always takes place first, an endpoint must exist after this point").addr()) {
+                        return Ok(());
+                    }
+
                 // @TODO(adz): We want to use an events API here instead where the address book
                 // subscribes to the endpoint rather than pushing the data from here.
                 let Some(address_book) = address_book_ref(state.actor_namespace.clone()).await
