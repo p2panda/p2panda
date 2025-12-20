@@ -9,11 +9,11 @@ use ractor::{ActorProcessingErr, ActorRef};
 use tracing::trace;
 
 use crate::actors::ActorNamespace;
-use crate::actors::address_book::watch_topic;
 use crate::actors::address_book::watchers::WatcherReceiver;
+use crate::actors::address_book::{watch_node_info, watch_topic};
 use crate::actors::gossip::session::ToGossipSession;
 use crate::utils::from_public_key;
-use crate::{NodeId, TopicId};
+use crate::{NodeId, NodeInfo, TopicId};
 
 pub enum ToGossipHealer {
     /// Subscribe to changes regarding nodes for our topics of interest.
@@ -25,7 +25,10 @@ pub enum ToGossipHealer {
 
 pub struct GossipHealerState {
     actor_namespace: ActorNamespace,
-    receiver: Option<WatcherReceiver<HashSet<NodeId>>>,
+    my_node_id: NodeId,
+    topic_endpoint_ids: Vec<iroh::EndpointId>,
+    topic_watcher: Option<WatcherReceiver<HashSet<NodeId>>>,
+    node_watcher: Option<WatcherReceiver<Option<NodeInfo>>>,
     gossip_session_ref: ActorRef<ToGossipSession>,
 }
 
@@ -35,21 +38,24 @@ pub struct GossipHealer;
 impl ThreadLocalActor for GossipHealer {
     type State = GossipHealerState;
     type Msg = ToGossipHealer;
-    type Arguments = (ActorNamespace, TopicId, ActorRef<ToGossipSession>);
+    type Arguments = (ActorNamespace, NodeId, TopicId, ActorRef<ToGossipSession>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (actor_namespace, topic, gossip_session_ref) = args;
+        let (actor_namespace, my_node_id, topic, gossip_session_ref) = args;
 
         // Invoke the handler to subscribe to address book events.
         let _ = myself.cast(ToGossipHealer::SubscribeToAddressBook(topic));
 
         Ok(GossipHealerState {
             actor_namespace,
-            receiver: None,
+            my_node_id,
+            topic_endpoint_ids: Vec::new(),
+            topic_watcher: None,
+            node_watcher: None,
             gossip_session_ref,
         })
     }
@@ -59,7 +65,8 @@ impl ThreadLocalActor for GossipHealer {
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        drop(state.receiver.take());
+        state.topic_watcher.take();
+        state.node_watcher.take();
         Ok(())
     }
 
@@ -71,35 +78,59 @@ impl ThreadLocalActor for GossipHealer {
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToGossipHealer::SubscribeToAddressBook(topic) => {
-                let receiver = watch_topic(state.actor_namespace.clone(), topic, true).await?;
-                state.receiver = Some(receiver);
+                // Watch for changes in the set of interested nodes for this topic.
+                let topic_watcher = watch_topic(state.actor_namespace.clone(), topic, true).await?;
+                state.topic_watcher = Some(topic_watcher);
 
-                // Invoke the handler to wait for the first event on the receiver.
+                // Watch for changes of our own transport info to react to connectivity changes.
+                let node_watcher =
+                    watch_node_info(state.actor_namespace.clone(), state.my_node_id, true).await?;
+                state.node_watcher = Some(node_watcher);
+
                 let _ = myself.cast(ToGossipHealer::WaitForEvent);
             }
             ToGossipHealer::WaitForEvent => {
-                if let Some(receiver) = &mut state.receiver {
-                    match receiver.recv().await {
-                        Some(event) => {
-                            let node_ids =
-                                Vec::from_iter(event.value.into_iter().map(from_public_key));
+                let topic_watcher = state
+                    .topic_watcher
+                    .as_mut()
+                    .expect("was initialised before");
+                let node_watcher = state.node_watcher.as_mut().expect("was initialised before");
 
-                            // Send the join signal to the gossip session actor.
+                tokio::select! {
+                    Some(event) = topic_watcher.recv() => {
+                        // Re-join the gossip overlay when the set of interested nodes changed.
+                        //
+                        // We receive this set from the address book / discovery layer and utilise
+                        // this information coming from an external source to "heal" potential
+                        // network fragmentations caused by nodes going offline.
+                        //
+                        // HyParView can't automatically recover from these fragmentations, this
+                        // approach makes it possible & gossipping more robust.
+                        state.topic_endpoint_ids = Vec::from_iter(event.value.into_iter().map(from_public_key));
+                        state
+                            .gossip_session_ref
+                            .send_message(ToGossipSession::JoinPeers(state.topic_endpoint_ids.clone()))?;
+                    },
+                    Some(_) = node_watcher.recv() => {
+                        // Re-join the gossip overlay when we've changed our transport info.
+                        //
+                        // This accommodates for scenarios where our node went offline / into a
+                        // degraded connectivity state and then back online again.
+                        if !state.topic_endpoint_ids.is_empty() {
                             state
                                 .gossip_session_ref
-                                .send_message(ToGossipSession::JoinPeers(node_ids))?;
-
-                            // Invoke the handler to wait for the next event on the receiver.
-                            let _ = myself.cast(ToGossipHealer::WaitForEvent);
+                                .send_message(ToGossipSession::JoinPeers(state.topic_endpoint_ids.clone()))?;
                         }
-                        None => {
-                            trace!(
-                                "gossip healer actor: address book dropped broadcast tx - channel closed"
-                            );
-                            myself.stop(Some("receiver channel closed".to_string()));
-                        }
+                    },
+                    else => {
+                        trace!(
+                            "gossip healer actor: address book dropped broadcast tx - channel closed"
+                        );
+                        myself.stop(Some("topic_watcher channel closed".to_string()));
                     }
                 }
+
+                let _ = myself.cast(ToGossipHealer::WaitForEvent);
             }
         }
 
