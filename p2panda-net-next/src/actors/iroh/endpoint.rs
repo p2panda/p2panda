@@ -130,8 +130,12 @@ impl ThreadLocalActor for IrohEndpoint {
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        if let Some(endpoint) = &state.endpoint {
-            endpoint.close().await;
+        if let Some(endpoint) = state.endpoint.take() {
+            // Make sure the endpoint has all the time it needs to gracefully shut down while other
+            // processes might already drop the whole actor.
+            tokio::task::spawn(async move {
+                endpoint.close().await;
+            });
         }
 
         if let Some(watch_addr_handle) = &state.watch_addr_handle {

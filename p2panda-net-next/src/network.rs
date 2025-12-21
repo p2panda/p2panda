@@ -139,11 +139,12 @@ impl NetworkBuilder {
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub struct Network<M> {
     actor_namespace: ActorNamespace,
     supervisor_actor: ActorRef<()>,
+    #[allow(unused)]
     supervisor_actor_handle: JoinHandle<()>,
+    #[allow(unused)]
     root_thread_pool: ThreadLocalActorSpawner,
     _marker: PhantomData<M>,
 }

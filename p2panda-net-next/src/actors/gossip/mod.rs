@@ -46,12 +46,6 @@ pub enum ToGossip {
     /// Accept incoming "gossip protocol" connection requests.
     RegisterProtocol,
 
-    /// Return a handle to the iroh gossip actor.
-    ///
-    /// This is required when registering the gossip ALPN with the router.
-    #[allow(unused)]
-    Handle(RpcReplyPort<IrohGossip>),
-
     /// Subscribe to the given topic, using the given peers as gossip bootstrap nodes.
     ///
     /// Two senders are returned: 1) a sender _into_ the gossip overlay, 2) a sender _out of_ the
@@ -104,6 +98,12 @@ pub enum ToGossip {
     /// Returns current actor's state for testing purposes.
     #[cfg(test)]
     DebugState(RpcReplyPort<tests::DebugState>),
+
+    /// Return a handle to the iroh gossip actor.
+    ///
+    /// This is required when registering the gossip ALPN with the router.
+    #[cfg(test)]
+    Handle(RpcReplyPort<IrohGossip>),
 }
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
@@ -121,7 +121,7 @@ struct Sessions {
 
 pub struct GossipState {
     args: ApplicationArguments,
-    gossip: IrohGossip,
+    gossip: Option<IrohGossip>,
     sessions: Sessions,
     neighbours: HashMap<TopicId, HashSet<PublicKey>>,
     topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
@@ -184,7 +184,7 @@ where
 
         Ok(GossipState {
             args,
-            gossip,
+            gossip: Some(gossip),
             sessions,
             neighbours,
             topic_delivery_scopes,
@@ -200,7 +200,15 @@ where
     ) -> Result<(), ActorProcessingErr> {
         // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state and
         // connections.
-        state.gossip.shutdown().await?;
+        if let Some(gossip) = state.gossip.take() {
+            // Make sure the endpoint has all the time it needs to gracefully shut down while other
+            // processes might already drop the whole actor.
+            tokio::task::spawn(async move {
+                if let Err(err) = gossip.shutdown().await {
+                    warn!("gossip failed during shutdown: {err:?}");
+                }
+            });
+        }
 
         Ok(())
     }
@@ -215,15 +223,23 @@ where
             ToGossip::RegisterProtocol => {
                 register_protocol(
                     iroh_gossip::ALPN,
-                    state.gossip.clone(),
+                    state
+                        .gossip
+                        .as_ref()
+                        .expect("gossip was initialised when actor started")
+                        .clone(),
                     state.actor_namespace.clone(),
                 )?;
                 Ok(())
             }
+            #[cfg(test)]
             ToGossip::Handle(reply) => {
-                let gossip = state.gossip.clone();
+                let gossip = state
+                    .gossip
+                    .as_ref()
+                    .expect("gossip was initialised when actor started")
+                    .clone();
                 let _ = reply.send(gossip);
-
                 Ok(())
             }
             ToGossip::Subscribe(topic, peers, reply) => {
@@ -247,7 +263,12 @@ where
                     .collect();
 
                 // Subscribe to the gossip topic (without waiting for a connection).
-                let subscription = state.gossip.subscribe(topic.into(), peers).await?;
+                let subscription = state
+                    .gossip
+                    .as_ref()
+                    .expect("gossip was initialised when actor started")
+                    .subscribe(topic.into(), peers)
+                    .await?;
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = GossipSession::spawn_linked(
