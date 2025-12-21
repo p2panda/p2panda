@@ -5,7 +5,7 @@ mod endpoint;
 #[cfg(feature = "iroh_mdns")]
 mod mdns;
 
-pub use endpoint::{IrohEndpoint, ToIrohEndpoint};
+pub use endpoint::{ConnectError, IrohEndpoint, ToIrohEndpoint};
 
 /// Returns true if endpoint is globally reachable.
 pub(crate) fn is_globally_reachable_endpoint(addr: iroh::EndpointAddr) -> bool {

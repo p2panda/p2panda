@@ -11,12 +11,11 @@ use tracing::{Instrument, debug, info_span, warn};
 
 use crate::NodeId;
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
-use crate::iroh::actors::endpoint::{ProtocolMap, ToIrohEndpoint};
+use crate::iroh::actors::endpoint::{ConnectError, ProtocolMap, ToIrohEndpoint};
 use crate::protocols::ProtocolId;
 use crate::utils::{ShortFormat, to_public_key};
 
-pub type ConnectionReplyPort =
-    RpcReplyPort<Result<iroh::endpoint::Connection, ConnectionActorError>>;
+pub type ConnectReplyPort = RpcReplyPort<Result<iroh::endpoint::Connection, ConnectError>>;
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -26,7 +25,7 @@ pub enum IrohConnectionArgs {
         endpoint_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
         transport_config: Option<Arc<TransportConfig>>,
-        reply: ConnectionReplyPort,
+        reply: ConnectReplyPort,
     },
     Accept {
         incoming: iroh::endpoint::Incoming,
@@ -151,7 +150,7 @@ async fn establish_connection(
                     // Since the error types do not implement `Clone` we're helping ourselves with
                     // an own type holding the string representation.
                     let reason = err.to_string();
-                    let _ = reply.send(Err(err));
+                    let _ = reply.send(Err(err.into()));
                     return Err(ConnectionActorError::ConnectionAttemptFailed(reason));
                 }
             }

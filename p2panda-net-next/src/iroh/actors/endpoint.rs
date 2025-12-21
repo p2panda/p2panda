@@ -12,21 +12,22 @@ use iroh::protocol::DynProtocolHandler;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::address_book::AddressBook;
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
+use crate::address_book::{AddressBook, AddressBookError};
 use crate::config::IrohConfig;
-use crate::iroh::actors::connection::{ConnectionReplyPort, IrohConnection, IrohConnectionArgs};
+use crate::iroh::actors::connection::{
+    ConnectReplyPort, ConnectionActorError, IrohConnection, IrohConnectionArgs,
+};
 use crate::iroh::actors::is_globally_reachable_endpoint;
 use crate::iroh::discovery::AddressBookDiscovery;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};
 use crate::{NetworkId, NodeId};
-
-pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";
 
 /// Period of inactivity before sending a keep-alive packet.
 ///
@@ -46,7 +47,7 @@ pub enum ToIrohEndpoint {
     Bind,
 
     /// Return the internal iroh endpoint instance (used by iroh-gossip).
-    Endpoint(RpcReplyPort<iroh::endpoint::Endpoint>),
+    Endpoint(RpcReplyPort<iroh::Endpoint>),
 
     /// Register protocol handler for a given ALPN (protocol identifier).
     RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
@@ -54,18 +55,14 @@ pub enum ToIrohEndpoint {
     /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
     /// awaited for establishing the final connection.
     ///
-    /// The `NodeAddr` must contain the `NodeId` to dial and may also contain a `RelayUrl` and
-    /// direct addresses. If direct addresses are provided, they will be used to try and establish
-    /// a direct connection without involving a relay server.
-    ///
     /// The ALPN byte string, or application-level protocol identifier, is also required. The
     /// remote endpoint must support this alpn, otherwise the connection attempt will fail with an
     /// error.
     Connect(
-        iroh::EndpointAddr,
+        NodeId,
         ProtocolId,
         Option<Arc<TransportConfig>>,
-        ConnectionReplyPort,
+        ConnectReplyPort,
     ),
 
     /// We've received a connection attempt from a remote iroh endpoint.
@@ -229,8 +226,28 @@ impl ThreadLocalActor for IrohEndpoint {
                     )
                     .set_alpns(protocols.keys().cloned().collect());
             }
-            ToIrohEndpoint::Connect(endpoint_addr, alpn, transport_config, reply) => {
+            ToIrohEndpoint::Connect(node_id, alpn, transport_config, reply) => {
                 let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, &state.network_id);
+
+                // Ask address book for available node information.
+                let result = match state.address_book.node_info(node_id).await {
+                    Ok(result) => result,
+                    Err(err) => {
+                        let _ = reply.send(Err(err.into()));
+                        return Ok(());
+                    }
+                };
+
+                let Some(node_info) = result else {
+                    let _ = reply.send(Err(ConnectError::TransportInfoMissing(node_id)));
+                    return Ok(());
+                };
+
+                // Check if node info contains address information for iroh transport.
+                let Ok(endpoint_addr) = iroh::EndpointAddr::try_from(node_info) else {
+                    let _ = reply.send(Err(ConnectError::TransportInfoMissing(node_id)));
+                    return Ok(());
+                };
 
                 // This actor will shut down immediately after the connection was established. The
                 // responsibility to handle the connection object is shifted to the caller from
@@ -334,4 +351,16 @@ impl ThreadLocalActor for IrohEndpoint {
         // termination of any child actor would cause the endpoint to go down as well otherwise.
         Ok(())
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ConnectError {
+    #[error(transparent)]
+    AddressBook(#[from] AddressBookError),
+
+    #[error("address book does not have any iroh address info for node id {0}")]
+    TransportInfoMissing(NodeId),
+
+    #[error(transparent)]
+    Connection(#[from] ConnectionActorError),
 }

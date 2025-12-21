@@ -2,13 +2,16 @@
 
 use std::sync::Arc;
 
-use ractor::ActorRef;
+use iroh::protocol::ProtocolHandler;
+use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::iroh::Builder;
-use crate::iroh::actors::ToIrohEndpoint;
+use crate::iroh::actors::{ConnectError, ToIrohEndpoint};
+use crate::protocols::ProtocolId;
 
 #[derive(Clone)]
 pub struct Endpoint {
@@ -18,6 +21,58 @@ pub struct Endpoint {
 impl Endpoint {
     pub fn builder(address_book: AddressBook) -> Builder {
         Builder::new(address_book)
+    }
+
+    /// Return the internal iroh endpoint instance.
+    pub async fn endpoint(&self) -> Result<iroh::Endpoint, EndpointError> {
+        let actor_ref = self.actor_ref.read().await;
+        let result = call!(actor_ref, ToIrohEndpoint::Endpoint)?;
+        Ok(result)
+    }
+
+    /// Register protocol handler for a given ALPN (protocol identifier).
+    pub async fn register_protocol<P: ProtocolHandler>(
+        &self,
+        protocol_id: ProtocolId,
+        protocol_handler: P,
+    ) -> Result<(), EndpointError> {
+        let actor_ref = self.actor_ref.read().await;
+        cast!(
+            actor_ref,
+            ToIrohEndpoint::RegisterProtocol(protocol_id, Box::new(protocol_handler))
+        )?;
+        Ok(())
+    }
+
+    /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
+    /// awaited for establishing the final connection.
+    ///
+    /// The ALPN byte string, or application-level protocol identifier, is also required. The
+    /// remote endpoint must support this alpn, otherwise the connection attempt will fail with an
+    /// error.
+    pub async fn connect(
+        &self,
+        node_id: NodeId,
+        protocol_id: ProtocolId,
+    ) -> Result<iroh::endpoint::Connection, EndpointError> {
+        self.connect_with_config(node_id, protocol_id, None).await
+    }
+
+    pub async fn connect_with_config(
+        &self,
+        node_id: NodeId,
+        protocol_id: ProtocolId,
+        transport_config: Option<Arc<iroh::endpoint::TransportConfig>>,
+    ) -> Result<iroh::endpoint::Connection, EndpointError> {
+        let actor_ref = self.actor_ref.read().await;
+        let result = call!(
+            actor_ref,
+            ToIrohEndpoint::Connect,
+            node_id,
+            protocol_id,
+            transport_config
+        )??;
+        Ok(result)
     }
 }
 
@@ -30,4 +85,7 @@ pub enum EndpointError {
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
     ActorRpc(#[from] ractor::RactorErr<ToIrohEndpoint>),
+
+    #[error(transparent)]
+    Connect(#[from] ConnectError),
 }
