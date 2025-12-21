@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use futures_channel::mpsc;
@@ -47,7 +47,10 @@ impl TestNode {
         let mut subscription = TestSubscription::default();
         subscription.sync_topics.insert([7; 32]);
 
-        store.set_sync_topics(id, [[7; 32]]).await.unwrap();
+        store
+            .set_sync_topics(id, HashSet::from_iter([[7; 32]]))
+            .await
+            .unwrap();
 
         // Run multiple random-walkers at the same time.
         let walkers = {

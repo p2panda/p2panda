@@ -17,6 +17,7 @@ use crate::addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, Transport
 use crate::utils::ShortFormat;
 use crate::watchers::{UpdatesOnly, WatcherReceiver, WatcherSet};
 
+// TODO: Clean up unused methods.
 pub enum ToAddressBookActor {
     /// Returns information about a node.
     ///
@@ -431,9 +432,10 @@ mod tests {
 
         let spawner = ThreadLocalActorSpawner::new();
 
-        let (actor, _handle) = AddressBookActor::spawn(None, (args.public_key, store), spawner)
-            .await
-            .unwrap();
+        let (actor, _handle) =
+            AddressBookActor::spawn(None, (args.public_key, Box::new(store)), spawner)
+                .await
+                .unwrap();
 
         // Insert new node info.
         let node_info = NodeInfo::new(args.public_key.clone());

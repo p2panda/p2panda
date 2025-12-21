@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
-use std::error::Error as StdError;
 use std::sync::Arc;
 
+use p2panda_discovery::address_book::BoxedError;
 use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -127,8 +127,8 @@ pub enum AddressBookError {
     ActorRpc(#[from] ractor::RactorErr<ToAddressBookActor>),
 
     /// Address book store failed.
-    #[error("{0}")]
-    Store(Box<dyn StdError>),
+    #[error(transparent)]
+    Store(#[from] BoxedError),
 
     /// Invalid node info provided.
     #[error(transparent)]

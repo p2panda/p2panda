@@ -626,7 +626,10 @@ mod tests {
             .insert_node_info(TestInfo::new(0).with_random_address(&mut rng))
             .await
             .unwrap();
-        alice_store.set_sync_topics(0, [[1; 32]]).await.unwrap();
+        alice_store
+            .set_sync_topics(0, HashSet::from_iter([[1; 32]]))
+            .await
+            .unwrap();
 
         // Prepare Bob.
         let mut bob_subscription = TestSubscription::default();
@@ -640,7 +643,7 @@ mod tests {
             .await
             .unwrap();
         bob_store
-            .set_sync_topics(1, [[1; 32], [2; 32]])
+            .set_sync_topics(1, HashSet::from_iter([[1; 32], [2; 32]]))
             .await
             .unwrap();
 
@@ -649,14 +652,20 @@ mod tests {
             .insert_node_info(TestInfo::new(2).with_random_address(&mut rng))
             .await
             .unwrap();
-        bob_store.set_sync_topics(2, [[1; 32]]).await.unwrap();
+        bob_store
+            .set_sync_topics(2, HashSet::from_iter([[1; 32]]))
+            .await
+            .unwrap();
 
         // "Daphne"
         bob_store
             .insert_node_info(TestInfo::new(3).with_random_address(&mut rng))
             .await
             .unwrap();
-        bob_store.set_sync_topics(3, [[2; 32]]).await.unwrap();
+        bob_store
+            .set_sync_topics(3, HashSet::from_iter([[2; 32]]))
+            .await
+            .unwrap();
 
         let config = Config {
             share_nodes_with_common_topics: true,

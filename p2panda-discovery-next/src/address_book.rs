@@ -321,7 +321,12 @@ where
         &self,
         ids: &[ID],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
-        todo!()
+        let ids = ids.to_vec();
+        Box::pin(async move {
+            self.selected_node_infos(&ids)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn set_sync_topics(
@@ -329,7 +334,11 @@ where
         id: ID,
         topics: HashSet<[u8; 32]>,
     ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>> {
-        todo!()
+        Box::pin(async move {
+            self.set_sync_topics(id, topics)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn set_ephemeral_messaging_topics(
@@ -337,31 +346,53 @@ where
         id: ID,
         topics: HashSet<[u8; 32]>,
     ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>> {
-        todo!()
+        Box::pin(async move {
+            self.set_ephemeral_messaging_topics(id, topics)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn node_infos_by_sync_topics(
         &self,
         topics: &[[u8; 32]],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
-        todo!()
+        let topics = topics.to_vec();
+        Box::pin(async move {
+            self.node_infos_by_sync_topics(&topics)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn node_infos_by_ephemeral_messaging_topics(
         &self,
         topics: &[[u8; 32]],
     ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
-        todo!()
+        let topics = topics.to_vec();
+        Box::pin(async move {
+            self.node_infos_by_ephemeral_messaging_topics(&topics)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn random_node(&self) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>> {
-        todo!()
+        Box::pin(async move {
+            self.random_node()
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 
     fn random_bootstrap_node(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>> {
-        todo!()
+        Box::pin(async move {
+            self.random_bootstrap_node()
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
     }
 }
 
