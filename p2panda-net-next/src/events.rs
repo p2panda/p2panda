@@ -2,8 +2,8 @@
 
 use tokio::sync::broadcast;
 
-use crate::NodeInfo;
 use crate::actors::discovery::DiscoveryEvent;
+use crate::addrs::NodeInfo;
 
 pub type EventsReceiver = broadcast::Receiver<NetworkEvent>;
 

@@ -9,15 +9,14 @@ use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::{debug, warn};
 
-use crate::TopicId;
 use crate::address_book::builder::BoxedAddressBookStore;
 use crate::address_book::report::ConnectionOutcome;
 use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
-use crate::addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
+use crate::addrs::{NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
 use crate::utils::ShortFormat;
 use crate::watchers::{UpdatesOnly, WatcherReceiver, WatcherSet};
+use crate::{NodeId, TopicId};
 
-// TODO: Clean up unused methods.
 pub enum ToAddressBookActor {
     /// Returns information about a node.
     ///

@@ -11,10 +11,11 @@ use tracing::trace;
 use crate::actors::address_book::{watch_node_info, watch_topic};
 use crate::actors::gossip::session::ToGossipSession;
 use crate::actors::{ActorNamespace, generate_actor_namespace};
+use crate::addrs::NodeInfo;
 use crate::args::ApplicationArguments;
 use crate::utils::from_public_key;
 use crate::watchers::WatcherReceiver;
-use crate::{NodeId, NodeInfo, TopicId};
+use crate::{NodeId, TopicId};
 
 pub enum ToGossipHealer {
     /// Subscribe to changes regarding nodes for our topics of interest.

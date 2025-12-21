@@ -15,13 +15,13 @@ use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
-use crate::NodeInfo;
 use crate::actors::address_book::watch_node_info;
 use crate::actors::discovery::{DISCOVERY_MANAGER, DiscoveryEvent, ToDiscoveryManager};
 use crate::actors::events::discovery_receiver::{
     DISCOVERY_EVENTS_RECEIVER, DiscoveryEventsReceiver,
 };
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
+use crate::addrs::NodeInfo;
 use crate::args::ApplicationArguments;
 use crate::events::{EventsReceiver, EventsSender, NetworkEvent, RelayStatus};
 

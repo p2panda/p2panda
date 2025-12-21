@@ -8,11 +8,11 @@ use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
-use crate::actors::address_book::{update_address_book, watch_node_info};
-use crate::actors::{ActorNamespace, generate_actor_namespace};
-use crate::addrs::{AuthenticatedTransportInfo, NodeInfo, NodeTransportInfo, TransportInfo};
-use crate::args::ApplicationArguments;
-use crate::config::MdnsDiscoveryMode;
+use crate::address_book::AddressBook;
+use crate::addrs::{
+    AuthenticatedTransportInfo, NodeId, NodeInfo, NodeTransportInfo, TransportInfo,
+};
+use crate::config::{IrohConfig, MdnsDiscoveryMode};
 use crate::iroh::user_data::UserDataTransportInfo;
 use crate::utils::{from_public_key, to_public_key};
 
@@ -40,8 +40,8 @@ pub enum ToMdns {
 }
 
 pub struct MdnsState {
-    actor_namespace: ActorNamespace,
-    args: ApplicationArguments,
+    my_id: NodeId,
+    address_book: AddressBook,
     service: Option<MdnsDiscovery>,
     handle: Option<JoinHandle<()>>,
 }
@@ -54,24 +54,24 @@ impl ThreadLocalActor for Mdns {
 
     type State = MdnsState;
 
-    type Arguments = ApplicationArguments;
+    type Arguments = (NodeId, IrohConfig, AddressBook);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let actor_namespace = generate_actor_namespace(&args.public_key);
+        let (my_id, iroh_config, address_book) = args;
 
         // Automatically initialise mDNS service after starting actor.
         myself.send_message(ToMdns::Initialise(
-            from_public_key(args.public_key),
-            args.iroh_config.mdns_discovery_mode.clone(),
+            from_public_key(my_id),
+            iroh_config.mdns_discovery_mode,
         ))?;
 
         Ok(MdnsState {
-            actor_namespace,
-            args,
+            my_id,
+            address_book,
             service: None,
             handle: None,
         })
@@ -120,14 +120,15 @@ impl ThreadLocalActor for Mdns {
                     let mut stream = mdns.subscribe().await;
 
                     // Subscribe to address book to listen to changes of our own node info.
-                    let mut rx = watch_node_info(
-                        state.actor_namespace.clone(),
-                        state.args.public_key,
-                        // Disable "updates only" to inform mdns about our current transport info
-                        // as soon as possible.
-                        false,
-                    )
-                    .await?;
+                    let mut rx = state
+                        .address_book
+                        .watch_node_info(
+                            state.my_id,
+                            // Disable "updates only" to inform mdns about our current transport
+                            // info as soon as possible.
+                            false,
+                        )
+                        .await?;
 
                     tokio::task::spawn(async move {
                         loop {
@@ -217,12 +218,13 @@ impl ThreadLocalActor for Mdns {
 
                         trace!(%endpoint_id, "discovered new transport info");
 
-                        if let Err(err) = update_address_book(
-                            state.actor_namespace.clone(),
-                            to_public_key(endpoint_id),
-                            transport_info.into(),
-                        )
-                        .await
+                        if let Err(err) = state
+                            .address_book
+                            .insert_transport_info(
+                                to_public_key(endpoint_id),
+                                transport_info.into(),
+                            )
+                            .await
                         {
                             warn!(
                                 %endpoint_id,

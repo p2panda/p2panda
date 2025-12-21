@@ -11,11 +11,11 @@ use tokio::sync::RwLock;
 use crate::address_book::Builder;
 use crate::address_book::actor::ToAddressBookActor;
 use crate::address_book::report::ConnectionOutcome;
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::{NodeInfo, NodeInfoError, TransportInfo};
 use crate::watchers::{UpdatesOnly, WatcherReceiver};
-use crate::{NodeInfoError, TopicId};
+use crate::{NodeId, TopicId};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AddressBook {
     pub(crate) actor_ref: Arc<RwLock<ActorRef<ToAddressBookActor>>>,
 }
@@ -24,7 +24,7 @@ impl AddressBook {
     // TODO(adz): Can we remove the node id argument here? We need it in the address book only to
     // remove ourselves from some results, but maybe that can be handled somewhere else?
     pub fn builder(my_id: NodeId) -> Builder {
-        Builder { my_id, store: None }
+        Builder::new(my_id)
     }
 
     /// Returns information about a node.
@@ -38,7 +38,7 @@ impl AddressBook {
 
     /// Inserts or updates node information into address book.
     ///
-    /// Use this method if adding node information from a local configuration, trusted, external
+    /// Use this method if adding node information from a local configuration or trusted, external
     /// source, etc.
     ///
     /// Returns `true` if entry got newly inserted or `false` if existing entry was updated.
@@ -47,6 +47,33 @@ impl AddressBook {
     pub async fn insert_node_info(&self, node_info: NodeInfo) -> Result<bool, AddressBookError> {
         let actor_ref = self.actor_ref.read().await;
         let result = call!(actor_ref, ToAddressBookActor::InsertNodeInfo, node_info)??;
+        Ok(result)
+    }
+
+    /// Inserts or updates attached transport info for a node. Use this method if adding transport
+    /// information from an untrusted source.
+    ///
+    /// Transport information is usually exchanged as part of a discovery protocol and should be
+    /// considered untrusted.
+    ///
+    /// This method checks if the given information is authentic and uses a timestamp to apply a
+    /// "last write wins" rule. It retuns `true` if the given entry overwritten the previous one or
+    /// `false` if the previous entry is already the latest.
+    ///
+    /// Local data of the node information stay untouched if they already exist, only the
+    /// "transports" aspect gets inserted / updated.
+    pub async fn insert_transport_info(
+        &self,
+        node_id: NodeId,
+        transport_info: TransportInfo,
+    ) -> Result<bool, AddressBookError> {
+        let actor_ref = self.actor_ref.read().await;
+        let result = call!(
+            actor_ref,
+            ToAddressBookActor::InsertTransportInfo,
+            node_id,
+            transport_info
+        )??;
         Ok(result)
     }
 

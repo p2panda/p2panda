@@ -21,6 +21,10 @@ pub struct Builder {
 }
 
 impl Builder {
+    pub fn new(my_id: NodeId) -> Self {
+        Self { my_id, store: None }
+    }
+
     pub fn store<S>(mut self, store: S) -> Self
     where
         S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,

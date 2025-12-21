@@ -12,10 +12,11 @@ use std::time::Duration;
 use p2panda_discovery::DiscoveryResult;
 use ractor::{ActorCell, ActorRef};
 
+use crate::NodeId;
 use crate::actors::discovery::session::{DISCOVERY_SESSION, DiscoverySessionId};
 use crate::actors::discovery::walker::DISCOVERY_WALKER;
 use crate::actors::{ActorNamespace, with_namespace, without_namespace};
-use crate::{NodeId, NodeInfo};
+use crate::addrs::NodeInfo;
 
 pub use manager::{DISCOVERY_MANAGER, DiscoveryManager, ToDiscoveryManager};
 

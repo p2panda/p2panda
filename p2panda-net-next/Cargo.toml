@@ -9,9 +9,22 @@ workspace = true
 [features]
 default = [
   "address_book",
+  "iroh",
   "mdns",
 ]
 address_book = []
+iroh = [
+  "address_book",
+  # TODO: Make iroh dependencies optional.
+  # "dep:iroh",
+  # "dep:iroh-base",
+  # "dep:iroh-gossip",
+]
+iroh_mdns = [
+  "iroh",
+  "iroh/discovery-local-network",
+]
+# TODO: Remove this. We'll use iroh_mdns instead.
 mdns = [
   "iroh/discovery-local-network",
 ]

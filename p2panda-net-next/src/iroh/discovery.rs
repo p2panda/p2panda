@@ -6,15 +6,14 @@ use std::sync::Arc;
 
 use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::discovery::{Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo};
+use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::NodeInfo as _;
 use tokio::sync::Semaphore;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, error, info_span, trace, warn};
 
-use crate::actors::address_book::{node_info, update_address_book, watch_node_info};
-use crate::actors::{ActorNamespace, generate_actor_namespace};
+use crate::address_book::AddressBook;
 use crate::addrs::{NodeTransportInfo, UnsignedTransportInfo};
-use crate::args::ApplicationArguments;
 use crate::utils::{from_public_key, to_public_key};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
@@ -25,31 +24,31 @@ use crate::utils::{from_public_key, to_public_key};
 /// address, etc., in iroh this is called "publish").
 #[derive(Debug)]
 pub struct AddressBookDiscovery {
+    private_key: PrivateKey,
+    address_book: AddressBook,
     semaphore: Arc<Semaphore>,
-    actor_namespace: ActorNamespace,
-    args: ApplicationArguments,
 }
 
 /// Identifies source of discovered item.
 const PROVENANCE: &str = "address book";
 
 impl AddressBookDiscovery {
-    pub fn new(args: ApplicationArguments) -> Self {
+    pub fn new(private_key: PrivateKey, address_book: AddressBook) -> Self {
         Self {
+            private_key,
+            address_book,
             semaphore: Arc::new(Semaphore::new(1)),
-            actor_namespace: generate_actor_namespace(&args.public_key),
-            args,
         }
     }
 }
 
 impl Discovery for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
-        let actor_namespace = self.actor_namespace.clone();
-        let private_key = self.args.private_key.clone();
-        let public_key = self.args.public_key;
+        let private_key = self.private_key.clone();
+        let public_key = private_key.public_key();
         let data = data.to_owned();
         let semaphore = self.semaphore.clone();
+        let address_book = self.address_book.clone();
 
         tokio::task::spawn(async move {
             // Get current transport info state and strictly serialize reading it to avoid race
@@ -59,7 +58,7 @@ impl Discovery for AddressBookDiscovery {
                 return;
             };
 
-            let Ok(node_info) = node_info(actor_namespace.clone(), public_key).await else {
+            let Ok(node_info) = address_book.node_info(public_key).await else {
                 error!("failed getting own transport info from address book");
                 return;
             };
@@ -92,9 +91,9 @@ impl Discovery for AddressBookDiscovery {
 
             // Update entry about ourselves in address book to allow this information to propagate
             // in other discovery mechanisms or side-channels outside of iroh.
-            if let Err(err) =
-                update_address_book(actor_namespace, public_key, transport_info.clone().into())
-                    .await
+            if let Err(err) = address_book
+                .insert_transport_info(public_key, transport_info.clone().into())
+                .await
             {
                 warn!("could not update address book with own transport info: {err:#?}");
             }
@@ -105,13 +104,14 @@ impl Discovery for AddressBookDiscovery {
         &self,
         endpoint_id: iroh::EndpointId,
     ) -> Option<BoxStream<Result<DiscoveryItem, DiscoveryError>>> {
-        let actor_namespace = self.actor_namespace.clone();
-
         let span = info_span!("resolve", endpoint_id = %endpoint_id.fmt_short());
         trace!(parent: &span, "try to resolve endpoint id");
 
+        let address_book = self.address_book.clone();
+
         let stream = async move {
-            let subscription = watch_node_info(actor_namespace, to_public_key(endpoint_id), false)
+            let subscription = address_book
+                .watch_node_info(to_public_key(endpoint_id), false)
                 .await
                 .map_err(|_| {
                     DiscoveryError::from_err_any(

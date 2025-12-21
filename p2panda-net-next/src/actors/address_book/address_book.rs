@@ -14,13 +14,13 @@ use thiserror::Error;
 use tracing::{debug, warn};
 
 use crate::address_book::report::ConnectionOutcome;
-use crate::addrs::NodeTransportInfo;
+use crate::addrs::{NodeInfo, NodeTransportInfo, TransportInfo};
 use crate::args::ApplicationArguments;
 use crate::utils::ShortFormat;
 use crate::watchers::{
     UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
 };
-use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
+use crate::{NodeId, TopicId};
 
 /// Address book actor name.
 pub const ADDRESS_BOOK: &str = "net.address_book";

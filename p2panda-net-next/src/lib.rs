@@ -3,11 +3,13 @@
 mod actors;
 #[cfg(feature = "address_book")]
 pub mod address_book;
-mod addrs;
+pub mod addrs;
 mod args;
 mod cbor;
 mod config;
 pub mod events;
+#[cfg(feature = "iroh")]
+pub mod iroh;
 mod protocols;
 pub mod streams;
 #[cfg(test)]
@@ -16,10 +18,7 @@ pub mod timestamp;
 mod utils;
 pub mod watchers;
 
-pub use addrs::{
-    AuthenticatedTransportInfo, NodeId, NodeInfo, NodeInfoError, NodeTransportInfo,
-    TransportAddress, TransportInfo, TrustedTransportInfo, UnsignedTransportInfo,
-};
+pub use addrs::NodeId;
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;
 
