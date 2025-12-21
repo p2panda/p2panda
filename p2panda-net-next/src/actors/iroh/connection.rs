@@ -10,8 +10,9 @@ use tracing::field::Empty;
 use tracing::{Instrument, debug, info_span, warn};
 
 use crate::NodeId;
+use crate::actors::iroh::ToIrohEndpoint;
 use crate::actors::iroh::endpoint::ProtocolMap;
-use crate::actors::iroh::{ConnectionOutcome, ConnectionRole, ToIrohEndpoint};
+use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::protocols::ProtocolId;
 use crate::utils::{ShortFormat, to_public_key};
 

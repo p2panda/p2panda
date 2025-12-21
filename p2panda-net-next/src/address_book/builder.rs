@@ -1,37 +1,51 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_discovery::address_book::AddressBookStore;
+use p2panda_discovery::address_book::{AddressBookStore, DynAddressBookStore};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
 
 use crate::address_book::actor::AddressBookActor;
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::addrs::{NodeId, NodeInfo};
 
-pub struct Builder<S> {
+pub type BoxedAddressBookStore = Box<dyn DynAddressBookStore<NodeId, NodeInfo> + Send + 'static>;
+
+pub struct Builder {
     pub(crate) my_id: NodeId,
-    pub(crate) store: S,
+    pub(crate) store: Option<BoxedAddressBookStore>,
 }
 
-impl<S> Builder<S>
-where
-    S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
-    S::Error: StdError + Send + Sync + 'static,
-{
-    pub async fn spawn(self) -> Result<AddressBook<S>, AddressBookError<S>> {
+impl Builder {
+    pub fn store<S>(mut self, store: S) -> Self
+    where
+        S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
+        S::Error: StdError + Send + Sync + 'static,
+    {
+        self.store = Some(Box::new(store));
+        self
+    }
+
+    pub async fn spawn(self) -> Result<AddressBook, AddressBookError> {
+        // Use in-memory address book store by default.
+        let store = self.store.unwrap_or_else(|| {
+            let rng = ChaCha20Rng::from_os_rng();
+            let store = p2panda_discovery::address_book::memory::MemoryStore::new(rng);
+            Box::new(store)
+        });
+
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
-            let args = (self.my_id, self.store);
-            AddressBookActor::<S>::spawn(None, args, thread_pool).await?
+            let args = (self.my_id, store);
+            AddressBookActor::spawn(None, args, thread_pool).await?
         };
 
         Ok(AddressBook {
             actor_ref: Arc::new(RwLock::new(actor_ref)),
-            _marker: PhantomData,
         })
     }
 }

@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
-use std::error::Error as StdError;
-use std::marker::PhantomData;
 use std::time::Duration;
 
 // TODO: This will come from `p2panda-store` eventually.
-use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
+use p2panda_discovery::address_book::{BoxedError, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::{debug, warn};
 
 use crate::TopicId;
+use crate::address_book::builder::BoxedAddressBookStore;
 use crate::address_book::report::ConnectionOutcome;
 use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
 use crate::addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
@@ -114,22 +113,19 @@ pub enum ToAddressBookActor {
     Report(NodeId, ConnectionOutcome),
 }
 
-pub struct AddressBookState<S> {
+pub struct AddressBookState {
     my_id: NodeId,
-    store: S,
+    store: BoxedAddressBookStore,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
     node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
 }
 
-impl<S> AddressBookState<S>
-where
-    S: AddressBookStore<NodeId, NodeInfo>,
-{
+impl AddressBookState {
     async fn node_infos_by_sync_topics(
         &self,
         topics: Vec<TopicId>,
-    ) -> Result<Vec<NodeInfo>, S::Error> {
+    ) -> Result<Vec<NodeInfo>, BoxedError> {
         let result = self.store.node_infos_by_sync_topics(&topics).await?;
 
         // Remove ourselves.
@@ -144,7 +140,7 @@ where
     async fn node_infos_by_ephemeral_messaging_topics(
         &self,
         topics: Vec<TopicId>,
-    ) -> Result<Vec<NodeInfo>, S::Error> {
+    ) -> Result<Vec<NodeInfo>, BoxedError> {
         let result = self
             .store
             .node_infos_by_ephemeral_messaging_topics(&topics)
@@ -159,7 +155,7 @@ where
         Ok(result)
     }
 
-    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, S::Error> {
+    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, BoxedError> {
         let ephemeral_topics = self.store.node_ephemeral_messaging_topics(node_id).await?;
         let mut topics = self.store.node_sync_topics(node_id).await?;
         topics.extend(ephemeral_topics);
@@ -167,28 +163,15 @@ where
     }
 }
 
-pub struct AddressBookActor<S> {
-    _marker: PhantomData<S>,
-}
+#[derive(Default)]
+pub struct AddressBookActor;
 
-impl<S> Default for AddressBookActor<S> {
-    fn default() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<S> ThreadLocalActor for AddressBookActor<S>
-where
-    S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
-    S::Error: StdError + Send + Sync + 'static,
-{
-    type State = AddressBookState<S>;
+impl ThreadLocalActor for AddressBookActor {
+    type State = AddressBookState;
 
     type Msg = ToAddressBookActor;
 
-    type Arguments = (NodeId, S);
+    type Arguments = (NodeId, BoxedAddressBookStore);
 
     async fn pre_start(
         &self,

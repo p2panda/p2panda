@@ -13,7 +13,7 @@ use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::actors::iroh::ConnectionOutcome;
+use crate::address_book::report::ConnectionOutcome;
 use crate::addrs::NodeTransportInfo;
 use crate::args::ApplicationArguments;
 use crate::utils::ShortFormat;

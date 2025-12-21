@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
+use std::error::Error as StdError;
+use std::pin::Pin;
 use std::time::Duration;
 
 /// Node informations which can be stored in an address book, aiding discovery, sync, peer sampling
@@ -97,7 +99,7 @@ pub trait AddressBookStore<ID, N> {
     fn set_sync_topics(
         &self,
         id: ID,
-        topics: impl IntoIterator<Item = [u8; 32]>,
+        topics: HashSet<[u8; 32]>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Sets the list of "topics" for ephemeral messaging this node is "interested" in.
@@ -108,7 +110,7 @@ pub trait AddressBookStore<ID, N> {
     fn set_ephemeral_messaging_topics(
         &self,
         id: ID,
-        topics: impl IntoIterator<Item = [u8; 32]>,
+        topics: HashSet<[u8; 32]>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
@@ -135,6 +137,232 @@ pub trait AddressBookStore<ID, N> {
     /// Nodes can be "marked" as bootstraps and discovery protocols can use that flag to prioritize
     /// them in their process.
     fn random_bootstrap_node(&self) -> impl Future<Output = Result<Option<N>, Self::Error>>;
+}
+
+pub type BoxedError = Box<dyn StdError + Send + Sync + 'static>;
+
+pub trait DynAddressBookStore<ID, N> {
+    fn insert_node_info(
+        &self,
+        info: N,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, BoxedError>> + '_>>;
+
+    fn remove_node_info(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, BoxedError>> + '_>>;
+
+    fn remove_older_than(
+        &self,
+        duration: Duration,
+    ) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>>;
+
+    fn node_info(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>>;
+
+    fn node_sync_topics(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<[u8; 32]>, BoxedError>> + '_>>;
+
+    fn node_ephemeral_messaging_topics(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<[u8; 32]>, BoxedError>> + '_>>;
+
+    fn all_node_infos(&self) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>>;
+
+    fn all_nodes_len(&self) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>>;
+
+    fn all_bootstrap_nodes_len(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>>;
+
+    fn selected_node_infos(
+        &self,
+        ids: &[ID],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>>;
+
+    fn set_sync_topics(
+        &self,
+        id: ID,
+        topics: HashSet<[u8; 32]>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>>;
+
+    fn set_ephemeral_messaging_topics(
+        &self,
+        id: ID,
+        topics: HashSet<[u8; 32]>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>>;
+
+    fn node_infos_by_sync_topics(
+        &self,
+        topics: &[[u8; 32]],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>>;
+
+    fn node_infos_by_ephemeral_messaging_topics(
+        &self,
+        topics: &[[u8; 32]],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>>;
+
+    fn random_node(&self) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>>;
+
+    fn random_bootstrap_node(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>>;
+}
+
+impl<ID, N, T> DynAddressBookStore<ID, N> for T
+where
+    ID: Clone + 'static,
+    N: 'static,
+    T: AddressBookStore<ID, N>,
+    T::Error: StdError + Send + Sync + 'static,
+{
+    fn insert_node_info(
+        &self,
+        info: N,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, BoxedError>> + '_>> {
+        Box::pin(async move {
+            self.insert_node_info(info)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn remove_node_info(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, BoxedError>> + '_>> {
+        let id = id.clone();
+        Box::pin(async move {
+            self.remove_node_info(&id)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn remove_older_than(
+        &self,
+        duration: Duration,
+    ) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>> {
+        Box::pin(async move {
+            self.remove_older_than(duration)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn node_info(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>> {
+        let id = id.clone();
+        Box::pin(async move {
+            self.node_info(&id)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn node_sync_topics(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<[u8; 32]>, BoxedError>> + '_>> {
+        let id = id.clone();
+        Box::pin(async move {
+            self.node_sync_topics(&id)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn node_ephemeral_messaging_topics(
+        &self,
+        id: &ID,
+    ) -> Pin<Box<dyn Future<Output = Result<HashSet<[u8; 32]>, BoxedError>> + '_>> {
+        let id = id.clone();
+        Box::pin(async move {
+            self.node_ephemeral_messaging_topics(&id)
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn all_node_infos(&self) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
+        Box::pin(async move {
+            self.all_node_infos()
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn all_nodes_len(&self) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>> {
+        Box::pin(async move {
+            self.all_nodes_len()
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn all_bootstrap_nodes_len(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<usize, BoxedError>> + '_>> {
+        Box::pin(async move {
+            self.all_bootstrap_nodes_len()
+                .await
+                .map_err(|err| Box::new(err) as BoxedError)
+        })
+    }
+
+    fn selected_node_infos(
+        &self,
+        ids: &[ID],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn set_sync_topics(
+        &self,
+        id: ID,
+        topics: HashSet<[u8; 32]>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn set_ephemeral_messaging_topics(
+        &self,
+        id: ID,
+        topics: HashSet<[u8; 32]>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn node_infos_by_sync_topics(
+        &self,
+        topics: &[[u8; 32]],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn node_infos_by_ephemeral_messaging_topics(
+        &self,
+        topics: &[[u8; 32]],
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<N>, BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn random_node(&self) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>> {
+        todo!()
+    }
+
+    fn random_bootstrap_node(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>> {
+        todo!()
+    }
 }
 
 #[cfg(any(test, feature = "test_utils"))]
@@ -273,7 +501,7 @@ pub mod memory {
         async fn set_sync_topics(
             &self,
             id: ID,
-            topics: impl IntoIterator<Item = [u8; 32]>,
+            topics: HashSet<[u8; 32]>,
         ) -> Result<(), Self::Error> {
             let mut node_topics = self.sync_topics.write().await;
             self.update_last_changed(id.clone()).await;
@@ -284,7 +512,7 @@ pub mod memory {
         async fn set_ephemeral_messaging_topics(
             &self,
             id: ID,
-            topics: impl IntoIterator<Item = [u8; 32]>,
+            topics: HashSet<[u8; 32]>,
         ) -> Result<(), Self::Error> {
             let mut node_topics = self.ephemeral_messaging_topics.write().await;
             self.update_last_changed(id.clone()).await;
@@ -386,6 +614,7 @@ pub mod memory {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::time::Duration;
 
     use rand_chacha::ChaCha20Rng;
@@ -424,13 +653,22 @@ mod tests {
         let trains = [200; 32];
 
         store.insert_node_info(TestInfo::new(1)).await.unwrap();
-        store.set_sync_topics(1, [cats, dogs, rain]).await.unwrap();
+        store
+            .set_sync_topics(1, HashSet::from_iter([cats, dogs, rain]))
+            .await
+            .unwrap();
 
         store.insert_node_info(TestInfo::new(2)).await.unwrap();
-        store.set_sync_topics(2, [rain]).await.unwrap();
+        store
+            .set_sync_topics(2, HashSet::from_iter([rain]))
+            .await
+            .unwrap();
 
         store.insert_node_info(TestInfo::new(3)).await.unwrap();
-        store.set_sync_topics(3, [dogs, frogs]).await.unwrap();
+        store
+            .set_sync_topics(3, HashSet::from_iter([dogs, frogs]))
+            .await
+            .unwrap();
 
         assert_eq!(
             store
