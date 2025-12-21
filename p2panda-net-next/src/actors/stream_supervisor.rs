@@ -36,7 +36,6 @@ use crate::actors::streams::eventually_consistent::{
 };
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
 use crate::args::ApplicationArguments;
-use crate::utils::to_public_key;
 
 pub struct StreamSupervisorState<M>
 where
@@ -44,7 +43,7 @@ where
 {
     args: ApplicationArguments,
     sync_config: M::Config,
-    endpoint: iroh::Endpoint,
+    endpoint: Option<iroh::Endpoint>,
     gossip_actor: ActorRef<ToGossip>,
     gossip_actor_failures: u16,
     eventually_consistent_streams_actor: ActorRef<ToEventuallyConsistentStreams<M>>,
@@ -133,7 +132,7 @@ where
         let state = StreamSupervisorState {
             args,
             sync_config,
-            endpoint,
+            endpoint: Some(endpoint),
             gossip_actor,
             gossip_actor_failures: 0,
             eventually_consistent_streams_actor,
@@ -143,6 +142,24 @@ where
         };
 
         Ok(state)
+    }
+
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        trace!("stream supervisor shutting down");
+
+        if let Some(endpoint) = state.endpoint.take() {
+            // Make sure the endpoint has all the time it needs to gracefully shut down while other
+            // processes might already drop the whole actor.
+            tokio::task::spawn(async move {
+                endpoint.close().await;
+            });
+        }
+
+        Ok(())
     }
 
     async fn handle_supervisor_evt(
@@ -161,7 +178,7 @@ where
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
-                let actor_namespace = generate_actor_namespace(&to_public_key(state.endpoint.id()));
+                let actor_namespace = generate_actor_namespace(&state.args.public_key);
 
                 if let Some(name) = actor.get_name().as_deref() {
                     if name == with_namespace(GOSSIP, &actor_namespace) {
@@ -173,7 +190,14 @@ where
                         // Respawn the gossip actor.
                         let (gossip_actor, _) = Gossip::<M>::spawn_linked(
                             Some(with_namespace(GOSSIP, &actor_namespace)),
-                            (state.args.clone(), state.endpoint.clone()),
+                            (
+                                state.args.clone(),
+                                state
+                                    .endpoint
+                                    .as_ref()
+                                    .expect("endpoint was initialised when actor started")
+                                    .clone(),
+                            ),
                             myself.clone().into(),
                             state.args.root_thread_pool.clone(),
                         )

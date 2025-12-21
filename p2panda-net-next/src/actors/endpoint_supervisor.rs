@@ -202,12 +202,19 @@ where
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
+        trace!("endpoint supervisor shutting down");
         let reason = Some("endpoint supervisor is shutting down".to_string());
 
         // Stop all the actors which are directly supervised by this actor.
-        state.iroh_endpoint_actor.stop(reason.clone());
-        state.discovery_manager_actor.stop(reason.clone());
-        state.stream_supervisor.stop(reason);
+        state
+            .iroh_endpoint_actor
+            .stop_and_wait(reason.clone(), None)
+            .await?;
+        state
+            .discovery_manager_actor
+            .stop_and_wait(reason.clone(), None)
+            .await?;
+        state.stream_supervisor.stop_and_wait(reason, None).await?;
 
         Ok(())
     }
