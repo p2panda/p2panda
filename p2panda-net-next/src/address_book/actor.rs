@@ -1,31 +1,24 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-// @TODO: This will come from `p2panda-store` eventually.
+// TODO: This will come from `p2panda-store` eventually.
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
-use thiserror::Error;
 use tracing::{debug, warn};
 
-use crate::actors::iroh::ConnectionOutcome;
-use crate::addrs::NodeTransportInfo;
-use crate::args::ApplicationArguments;
+use crate::TopicId;
+use crate::address_book::report::ConnectionOutcome;
+use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
+use crate::addrs::{NodeId, NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
 use crate::utils::ShortFormat;
-use crate::watchers::{
-    UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,
-};
-use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
+use crate::watchers::{UpdatesOnly, WatcherReceiver, WatcherSet};
 
-/// Address book actor name.
-pub const ADDRESS_BOOK: &str = "net.address_book";
-
-pub enum ToAddressBook {
+pub enum ToAddressBookActor {
     /// Returns information about a node.
     ///
     /// Returns `None` if no information was found for this node.
@@ -33,7 +26,6 @@ pub enum ToAddressBook {
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
-    #[allow(unused)]
     NodeInfosBySyncTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
@@ -46,8 +38,7 @@ pub enum ToAddressBook {
     /// Returns `true` if entry got newly inserted or `false` if existing entry was updated.
     /// Previous entries are simply overwritten. Entries with attached transport information get
     /// checked against authenticity and throw an error otherwise.
-    #[allow(unused)]
-    InsertNodeInfo(NodeInfo, RpcReplyPort<Result<bool, AddressBookError>>),
+    InsertNodeInfo(NodeInfo, RpcReplyPort<Result<bool, NodeInfoError>>),
 
     /// Inserts or updates attached transport info for a node. Use this method if adding transport
     /// information from an untrusted source.
@@ -64,7 +55,7 @@ pub enum ToAddressBook {
     InsertTransportInfo(
         NodeId,
         TransportInfo,
-        RpcReplyPort<Result<bool, AddressBookError>>,
+        RpcReplyPort<Result<bool, NodeInfoError>>,
     ),
 
     /// Sets the list of "topics" for eventually consistent sync this node is "interested" in.
@@ -82,7 +73,6 @@ pub enum ToAddressBook {
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
     /// exist.
-    #[allow(unused)]
     RemoveNodeInfo(NodeId, RpcReplyPort<bool>),
 
     /// Remove all node informations which are older than the given duration (from now). Returns
@@ -96,7 +86,6 @@ pub enum ToAddressBook {
     /// Please note that a _local_ timestamp is used to determine the age of the information.
     /// Entries will be removed if they haven't been updated in our _local_ database since the
     /// given duration, _not_ when they have been created by the original author.
-    #[allow(unused)]
     RemoveOlderThan(Duration, RpcReplyPort<usize>),
 
     /// Subscribes to channel informing us about node info changes for a specific node.
@@ -121,13 +110,12 @@ pub enum ToAddressBook {
         RpcReplyPort<WatcherReceiver<HashSet<TopicId>>>,
     ),
 
-    // @TODO(adz): We want to use an events API here instead where the address book subscribes to
-    // the endpoint rather than pushing the data from there.
+    /// Report outcomes of incoming or outgoing connections.
     Report(NodeId, ConnectionOutcome),
 }
 
 pub struct AddressBookState<S> {
-    args: ApplicationArguments,
+    my_id: NodeId,
     store: S,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
@@ -147,7 +135,7 @@ where
         // Remove ourselves.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key)
+            .filter(|info| info.id() != self.my_id)
             .collect();
 
         Ok(result)
@@ -165,7 +153,7 @@ where
         // Remove ourselves.
         let result = result
             .into_iter()
-            .filter(|info| info.id() != self.args.public_key)
+            .filter(|info| info.id() != self.my_id)
             .collect();
 
         Ok(result)
@@ -179,11 +167,11 @@ where
     }
 }
 
-pub struct AddressBook<S> {
+pub struct AddressBookActor<S> {
     _marker: PhantomData<S>,
 }
 
-impl<S> Default for AddressBook<S> {
+impl<S> Default for AddressBookActor<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -191,27 +179,25 @@ impl<S> Default for AddressBook<S> {
     }
 }
 
-impl<S> ThreadLocalActor for AddressBook<S>
+impl<S> ThreadLocalActor for AddressBookActor<S>
 where
     S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
     S::Error: StdError + Send + Sync + 'static,
 {
     type State = AddressBookState<S>;
 
-    type Msg = ToAddressBook;
+    type Msg = ToAddressBookActor;
 
-    // @TODO: For now we leave out the concept of a `NetworkId` but we may want some way to slice
-    // address subsets in the future.
-    type Arguments = (ApplicationArguments, S);
+    type Arguments = (NodeId, S);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, store) = args;
+        let (my_id, store) = args;
         Ok(AddressBookState {
-            args,
+            my_id,
             store,
             node_watchers: WatcherSet::new(),
             topic_watchers: WatcherSet::new(),
@@ -228,9 +214,9 @@ where
         // Note that critical storage failures will return an `ActorProcessingErr` and cause this
         // actor to restart when supervised.
         match message {
-            ToAddressBook::InsertNodeInfo(node_info, reply) => {
+            ToAddressBookActor::InsertNodeInfo(node_info, reply) => {
                 // Check signature of information. Is it authentic?
-                if let Err(err) = node_info.verify().map_err(AddressBookError::NodeInfo) {
+                if let Err(err) = node_info.verify() {
                     let _ = reply.send(Err(err));
                     return Ok(());
                 }
@@ -246,12 +232,9 @@ where
 
                 let _ = reply.send(Ok(result));
             }
-            ToAddressBook::InsertTransportInfo(node_id, transport_info, reply) => {
+            ToAddressBookActor::InsertTransportInfo(node_id, transport_info, reply) => {
                 // Check signature of information. Is it authentic?
-                if let Err(err) = transport_info
-                    .verify(&node_id)
-                    .map_err(AddressBookError::NodeInfo)
-                {
+                if let Err(err) = transport_info.verify(&node_id) {
                     let _ = reply.send(Err(err));
                     return Ok(());
                 }
@@ -274,7 +257,7 @@ where
                         let _ = reply.send(Ok(is_newer));
                     }
                     Err(err) => {
-                        let _ = reply.send(Err(AddressBookError::NodeInfo(err)));
+                        let _ = reply.send(Err(err));
                     }
                 }
 
@@ -284,7 +267,7 @@ where
                     .node_watchers
                     .update(&node_info.node_id, Some(node_info.clone()));
             }
-            ToAddressBook::WatchNodeInfo(node_id, updates_only, reply) => {
+            ToAddressBookActor::WatchNodeInfo(node_id, updates_only, reply) => {
                 let node_info = state.store.node_info(&node_id).await?;
                 let rx = state.node_watchers.subscribe(
                     node_id,
@@ -293,7 +276,7 @@ where
                 );
                 let _ = reply.send(rx);
             }
-            ToAddressBook::WatchTopic(topic, updates_only, reply) => {
+            ToAddressBookActor::WatchTopic(topic, updates_only, reply) => {
                 // Since we don't know where this topic belongs to we need to check both stream
                 // types.
                 let sync_node_ids: HashSet<NodeId> = state
@@ -332,7 +315,7 @@ where
                 );
                 let _ = reply.send(rx);
             }
-            ToAddressBook::WatchNodeTopics(node_id, updates_only, reply) => {
+            ToAddressBookActor::WatchNodeTopics(node_id, updates_only, reply) => {
                 let topics = state.topics_for_node(&node_id).await?;
                 let rx = state.node_topics_watchers.subscribe(
                     node_id,
@@ -341,7 +324,7 @@ where
                 );
                 let _ = reply.send(rx);
             }
-            ToAddressBook::Report(remote_node_id, outcome) => {
+            ToAddressBookActor::Report(remote_node_id, outcome) => {
                 let Some(mut node_info) = state.store.node_info(&remote_node_id).await? else {
                     return Ok(());
                 };
@@ -376,21 +359,21 @@ where
             }
 
             // Mostly a wrapper around the store.
-            ToAddressBook::NodeInfo(node_id, reply) => {
+            ToAddressBookActor::NodeInfo(node_id, reply) => {
                 let result = state.store.node_info(&node_id).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::NodeInfosBySyncTopics(topics, reply) => {
+            ToAddressBookActor::NodeInfosBySyncTopics(topics, reply) => {
                 let result = state.node_infos_by_sync_topics(topics).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
+            ToAddressBookActor::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
                 let result = state
                     .node_infos_by_ephemeral_messaging_topics(topics)
                     .await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::SetSyncTopics(node_id, topics) => {
+            ToAddressBookActor::SetSyncTopics(node_id, topics) => {
                 state.store.set_sync_topics(node_id, topics.clone()).await?;
 
                 // Inform subscribers about potential change in set of interested nodes.
@@ -409,7 +392,7 @@ where
                 let topics = state.topics_for_node(&node_id).await?;
                 state.node_topics_watchers.update(&node_id, topics);
             }
-            ToAddressBook::SetEphemeralMessagingTopics(node_id, topics) => {
+            ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics) => {
                 state
                     .store
                     .set_ephemeral_messaging_topics(node_id, topics.clone())
@@ -431,181 +414,17 @@ where
                 let topics = state.topics_for_node(&node_id).await?;
                 state.node_topics_watchers.update(&node_id, topics);
             }
-            ToAddressBook::RemoveNodeInfo(node_id, reply) => {
+            ToAddressBookActor::RemoveNodeInfo(node_id, reply) => {
                 let result = state.store.remove_node_info(&node_id).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBook::RemoveOlderThan(duration, reply) => {
+            ToAddressBookActor::RemoveOlderThan(duration, reply) => {
                 let result = state.store.remove_older_than(duration).await?;
                 let _ = reply.send(result);
             }
         }
 
         Ok(())
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum AddressBookError {
-    #[error(transparent)]
-    NodeInfo(crate::addrs::NodeInfoError),
-}
-
-/// Watch for changes of a node's info.
-#[derive(Default)]
-pub struct WatchedNodeInfo(RefCell<Option<NodeInfo>>);
-
-impl WatchedNodeInfo {
-    pub fn from_node_info(node_info: Option<NodeInfo>) -> Self {
-        Self(RefCell::new(node_info))
-    }
-}
-
-impl Watched for WatchedNodeInfo {
-    type Value = Option<NodeInfo>;
-
-    fn current(&self) -> Self::Value {
-        self.0.borrow().clone()
-    }
-
-    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
-        if !self.0.borrow().eq(cmp) {
-            if let Some(info) = cmp {
-                let transports = info
-                    .transports
-                    .as_ref()
-                    .map(|info| info.to_string())
-                    .unwrap_or("none".to_string());
-                debug!(
-                    node_id = info.node_id.fmt_short(),
-                    %transports,
-                    "node info changed"
-                );
-            }
-
-            self.0.replace(cmp.to_owned());
-
-            UpdateResult::Changed(WatchedValue {
-                difference: None,
-                value: cmp.to_owned(),
-            })
-        } else {
-            UpdateResult::Unchanged
-        }
-    }
-}
-
-/// Watch for changes of nodes being interested in a topic.
-pub struct WatchedTopic {
-    topic: TopicId,
-    node_ids: RefCell<HashSet<NodeId>>,
-}
-
-impl WatchedTopic {
-    pub fn from_node_ids(topic: TopicId, node_ids: HashSet<NodeId>) -> Self {
-        Self {
-            topic,
-            node_ids: RefCell::new(node_ids),
-        }
-    }
-}
-
-impl Watched for WatchedTopic {
-    type Value = HashSet<NodeId>;
-
-    fn current(&self) -> Self::Value {
-        self.node_ids.borrow().clone()
-    }
-
-    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
-        let difference: HashSet<NodeId> = self
-            .node_ids
-            .borrow()
-            .symmetric_difference(cmp)
-            .cloned()
-            .collect();
-
-        if difference.is_empty() {
-            UpdateResult::Unchanged
-        } else {
-            self.node_ids.replace(cmp.to_owned());
-
-            {
-                let node_ids: Vec<String> = self
-                    .node_ids
-                    .borrow()
-                    .iter()
-                    .map(|id| id.fmt_short())
-                    .collect();
-                debug!(
-                    topic = self.topic.fmt_short(),
-                    node_ids = ?node_ids,
-                    "interested nodes for topic changed"
-                );
-            }
-
-            UpdateResult::Changed(WatchedValue {
-                difference: Some(difference),
-                value: cmp.to_owned(),
-            })
-        }
-    }
-}
-
-/// Watch for changes of topics for a node.
-pub struct WatchedNodeTopics {
-    node_id: NodeId,
-    topic_ids: RefCell<HashSet<TopicId>>,
-}
-
-impl WatchedNodeTopics {
-    pub fn from_topics(node_id: NodeId, topic_ids: HashSet<TopicId>) -> Self {
-        Self {
-            node_id,
-            topic_ids: RefCell::new(topic_ids),
-        }
-    }
-}
-
-impl Watched for WatchedNodeTopics {
-    type Value = HashSet<TopicId>;
-
-    fn current(&self) -> Self::Value {
-        self.topic_ids.borrow().clone()
-    }
-
-    fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
-        let difference: HashSet<TopicId> = self
-            .topic_ids
-            .borrow()
-            .symmetric_difference(cmp)
-            .cloned()
-            .collect();
-
-        if difference.is_empty() {
-            UpdateResult::Unchanged
-        } else {
-            self.topic_ids.replace(cmp.to_owned());
-
-            {
-                let topic_ids: Vec<String> = self
-                    .topic_ids
-                    .borrow()
-                    .iter()
-                    .map(|id| id.fmt_short())
-                    .collect();
-                debug!(
-                    node_id = self.node_id.fmt_short(),
-                    topic_ids = ?topic_ids,
-                    "topics for node changed"
-                );
-            }
-
-            UpdateResult::Changed(WatchedValue {
-                difference: Some(difference),
-                value: cmp.to_owned(),
-            })
-        }
     }
 }
 
@@ -616,44 +435,38 @@ mod tests {
     use ractor::call;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
-    use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::addrs::{
         NodeInfo, NodeMetrics, NodeTransportInfo, TransportAddress, UnsignedTransportInfo,
     };
     use crate::test_utils::test_args;
 
-    use super::{ADDRESS_BOOK, AddressBook, ToAddressBook};
+    use super::{AddressBookActor, ToAddressBookActor};
 
     #[tokio::test]
     async fn insert_node_and_transport_info() {
         let (args, store, _) = test_args();
 
-        let actor_namespace = generate_actor_namespace(&args.public_key);
         let spawner = ThreadLocalActorSpawner::new();
 
-        let (actor, _handle) = AddressBook::spawn(
-            Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
-            (args.clone(), store),
-            spawner,
-        )
-        .await
-        .unwrap();
+        let (actor, _handle) = AddressBookActor::spawn(None, (args.public_key, store), spawner)
+            .await
+            .unwrap();
 
         // Insert new node info.
         let node_info = NodeInfo::new(args.public_key.clone());
-        let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
+        let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(result.unwrap());
 
         // Overwriting node info should return "false".
         let mut node_info = NodeInfo::new(args.public_key.clone());
         node_info.bootstrap = true;
-        let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
+        let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(!result.unwrap());
 
         // Bootstrap should be set to "true", as node info was still overwritten.
-        let result = call!(actor, ToAddressBook::NodeInfo, args.public_key.clone())
+        let result = call!(actor, ToAddressBookActor::NodeInfo, args.public_key.clone())
             .unwrap()
             .expect("node info exists in store");
         assert!(result.bootstrap);
@@ -679,13 +492,13 @@ mod tests {
             }
         };
         assert!(node_info.verify().is_err());
-        let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
+        let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_err());
 
         // Inserting transport info should not overwrite "local" data.
         let mut node_info = NodeInfo::new(args.public_key.clone());
         node_info.bootstrap = true;
-        let result = call!(actor, ToAddressBook::InsertNodeInfo, node_info).unwrap();
+        let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
 
         let transport_info = {
@@ -699,7 +512,7 @@ mod tests {
         };
         let result = call!(
             actor,
-            ToAddressBook::InsertTransportInfo,
+            ToAddressBookActor::InsertTransportInfo,
             args.public_key.clone(),
             transport_info.into()
         )
@@ -707,7 +520,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Even after insertion of new transport info, the "local" bootstrap config is still true.
-        let result = call!(actor, ToAddressBook::NodeInfo, args.public_key.clone())
+        let result = call!(actor, ToAddressBookActor::NodeInfo, args.public_key.clone())
             .unwrap()
             .expect("node info exists in store");
         assert!(result.bootstrap);
@@ -730,7 +543,7 @@ mod tests {
         assert!(transport_info.verify(&args.public_key).is_err());
         let result = call!(
             actor,
-            ToAddressBook::InsertTransportInfo,
+            ToAddressBookActor::InsertTransportInfo,
             args.public_key.clone(),
             transport_info.into()
         )
@@ -751,14 +564,14 @@ mod tests {
         };
         let result = call!(
             actor,
-            ToAddressBook::InsertTransportInfo,
+            ToAddressBookActor::InsertTransportInfo,
             public_key,
             transport_info.into()
         )
         .unwrap();
         assert!(result.is_ok());
 
-        let result = call!(actor, ToAddressBook::NodeInfo, public_key)
+        let result = call!(actor, ToAddressBookActor::NodeInfo, public_key)
             .unwrap()
             .expect("node info exists in store");
         assert!(!result.bootstrap);

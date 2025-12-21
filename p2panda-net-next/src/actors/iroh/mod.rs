@@ -115,30 +115,6 @@ pub enum ConnectError {
     ConnectionActor(#[from] ConnectionActorError),
 }
 
-#[derive(Debug)]
-pub enum ConnectionOutcome {
-    Successful,
-    Failed,
-}
-
-impl ConnectionOutcome {
-    pub fn is_failed(&self) -> bool {
-        match self {
-            ConnectionOutcome::Successful => false,
-            ConnectionOutcome::Failed => true,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum ConnectionRole {
-    Connect {
-        #[allow(unused)]
-        remote_address: iroh::EndpointAddr,
-    },
-    Accept,
-}
-
 /// Returns true if endpoint is globally reachable.
 pub fn is_globally_reachable_endpoint(addr: iroh::EndpointAddr) -> bool {
     addr.ip_addrs()

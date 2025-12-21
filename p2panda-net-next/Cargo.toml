@@ -7,7 +7,11 @@ edition = "2024"
 workspace = true
 
 [features]
-default = ["mdns"]
+default = [
+  "address_book",
+  "mdns",
+]
+address_book = []
 mdns = [
   "iroh/discovery-local-network",
 ]

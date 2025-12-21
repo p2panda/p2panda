@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod actors;
+#[cfg(feature = "address_book")]
+pub mod address_book;
 mod addrs;
 mod args;
 mod cbor;
 mod config;
 pub mod events;
-mod network;
 mod protocols;
 pub mod streams;
 #[cfg(test)]
 mod test_utils;
-#[cfg(test)]
-mod tests;
 pub mod timestamp;
 mod utils;
+pub mod watchers;
 
 pub use addrs::{
     AuthenticatedTransportInfo, NodeId, NodeInfo, NodeInfoError, NodeTransportInfo,
@@ -22,7 +22,6 @@ pub use addrs::{
 };
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;
-pub use network::{Network, NetworkBuilder, NetworkError};
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///

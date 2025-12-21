@@ -9,8 +9,8 @@ use std::collections::HashSet;
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
 
-use crate::actors::address_book::watchers::{UpdatesOnly, WatcherReceiver};
 use crate::actors::{ActorNamespace, with_namespace};
+use crate::watchers::{UpdatesOnly, WatcherReceiver};
 use crate::{NodeId, NodeInfo, TopicId, TransportInfo};
 
 pub use address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
