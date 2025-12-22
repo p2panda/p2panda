@@ -2,6 +2,7 @@
 
 use p2panda_core::PrivateKey;
 use p2panda_net_next::address_book::AddressBook;
+use p2panda_net_next::discovery::Discovery;
 use p2panda_net_next::iroh::Endpoint;
 
 #[tokio::test]
@@ -11,8 +12,13 @@ async fn modular_api() {
 
     let address_book = AddressBook::builder(public_key).spawn().await.unwrap();
 
-    let _endpoint = Endpoint::builder(address_book)
+    let endpoint = Endpoint::builder(address_book.clone())
         .private_key(private_key)
+        .spawn()
+        .await
+        .unwrap();
+
+    let _discovery = Discovery::builder(public_key, address_book, endpoint)
         .spawn()
         .await
         .unwrap();
