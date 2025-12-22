@@ -22,10 +22,12 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::addrs::{NodeId, NodeInfo, NodeMetrics};
+use crate::addrs::{
+    NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo, UnsignedTransportInfo,
+};
 use crate::args::{ApplicationArguments, ArgsBuilder};
 use crate::config::IrohConfig;
-use crate::{NetworkId, TopicId, TransportAddress, TrustedTransportInfo, UnsignedTransportInfo};
+use crate::{NetworkId, NodeId, TopicId};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 

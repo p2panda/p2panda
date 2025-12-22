@@ -11,7 +11,6 @@ use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::iroh::Builder;
 use crate::iroh::actors::{ConnectError, ToIrohEndpoint};
-use crate::protocols::ProtocolId;
 
 #[derive(Clone)]
 pub struct Endpoint {
@@ -31,11 +30,12 @@ impl Endpoint {
     }
 
     /// Register protocol handler for a given ALPN (protocol identifier).
-    pub async fn register_protocol<P: ProtocolHandler>(
+    pub async fn accept<P: ProtocolHandler>(
         &self,
-        protocol_id: ProtocolId,
+        protocol_id: impl AsRef<[u8]>,
         protocol_handler: P,
     ) -> Result<(), EndpointError> {
+        let protocol_id = protocol_id.as_ref().to_vec();
         let actor_ref = self.actor_ref.read().await;
         cast!(
             actor_ref,
@@ -53,7 +53,7 @@ impl Endpoint {
     pub async fn connect(
         &self,
         node_id: NodeId,
-        protocol_id: ProtocolId,
+        protocol_id: impl AsRef<[u8]>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
         self.connect_with_config(node_id, protocol_id, None).await
     }
@@ -61,9 +61,10 @@ impl Endpoint {
     pub async fn connect_with_config(
         &self,
         node_id: NodeId,
-        protocol_id: ProtocolId,
+        protocol_id: impl AsRef<[u8]>,
         transport_config: Option<Arc<iroh::endpoint::TransportConfig>>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
+        let protocol_id = protocol_id.as_ref().to_vec();
         let actor_ref = self.actor_ref.read().await;
         let result = call!(
             actor_ref,

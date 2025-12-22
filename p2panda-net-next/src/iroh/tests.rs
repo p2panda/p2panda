@@ -3,16 +3,12 @@
 use std::time::Duration;
 
 use iroh::protocol::ProtocolHandler;
-use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{call, cast};
 use tokio::time::sleep;
 
 use crate::MdnsDiscoveryMode;
-use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
-use crate::actors::iroh::{IrohEndpoint, Mdns, ToIrohEndpoint};
-use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::test_utils::{setup_logging, test_args_from_seed};
-use crate::utils::from_public_key;
+use crate::address_book::AddressBook;
+use crate::iroh::Endpoint;
+use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args_from_seed};
 
 const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 
@@ -40,48 +36,54 @@ impl ProtocolHandler for EchoProtocol {
 async fn establish_connection() {
     setup_logging();
 
-    let (args_alice, _, _) = test_args_from_seed([1; 32]);
-    let (args_bob, _, _) = test_args_from_seed([2; 32]);
+    let (mut alice_args, _, _) = test_args_from_seed([1; 32]);
+    let (bob_args, _, _) = test_args_from_seed([2; 32]);
 
-    let thread_pool = ThreadLocalActorSpawner::new();
+    // Spawn address book (it's a dependency) for both.
+    let alice_address_book = AddressBook::builder(alice_args.public_key)
+        .spawn()
+        .await
+        .unwrap();
+    let bob_address_book = AddressBook::builder(alice_args.public_key)
+        .spawn()
+        .await
+        .unwrap();
 
     // Spawn both endpoint actors.
-    let (alice_ref, _) = IrohEndpoint::spawn(None, args_alice.clone(), thread_pool.clone())
+    let alice_endpoint = Endpoint::builder(alice_address_book)
+        .config(alice_args.iroh_config.clone())
+        .private_key(alice_args.private_key.clone())
+        .spawn()
         .await
-        .expect("actor spawns successfully");
-    let (bob_ref, _) = IrohEndpoint::spawn(None, args_bob.clone(), thread_pool.clone())
+        .unwrap();
+
+    let bob_endpoint = Endpoint::builder(bob_address_book.clone())
+        .config(bob_args.iroh_config.clone())
+        .private_key(bob_args.private_key.clone())
+        .spawn()
         .await
-        .expect("actor spawns successfully");
+        .unwrap();
 
     // Wait for endpoints to bind.
     sleep(Duration::from_millis(50)).await;
 
     // Alice registers the "echo" protocol to accept incoming connections for it.
-    cast!(
-        alice_ref,
-        ToIrohEndpoint::RegisterProtocol(ECHO_PROTOCOL_ID.to_vec(), Box::new(EchoProtocol))
-    )
-    .expect("calling actor should not fail");
+    alice_endpoint
+        .accept(ECHO_PROTOCOL_ID, EchoProtocol)
+        .await
+        .unwrap();
 
-    // Create an iroh endpoint address of Alice, so Bob can connect.
-    let alice_addr = iroh::EndpointAddr::new(from_public_key(args_alice.public_key)).with_ip_addr(
-        (
-            args_alice.iroh_config.bind_ip_v4,
-            args_alice.iroh_config.bind_port_v4,
-        )
-            .into(),
-    );
+    // Register iroh endpoint address of Alice, so Bob can connect.
+    bob_address_book
+        .insert_node_info(generate_trusted_node_info(&mut alice_args))
+        .await
+        .unwrap();
 
     // Bob connects to Alice using the "echo" protocol.
-    let connection = call!(
-        bob_ref,
-        ToIrohEndpoint::Connect,
-        alice_addr,
-        ECHO_PROTOCOL_ID.to_vec(),
-        None
-    )
-    .expect("calling actor should not fail")
-    .expect("connection establishment should not fail");
+    let connection = bob_endpoint
+        .connect(alice_args.public_key, ECHO_PROTOCOL_ID)
+        .await
+        .expect("connection establishment should not fail");
 
     // Send something to Alice.
     let (mut tx, mut rx) = connection.open_bi().await.expect("establish bi-di stream");
@@ -94,84 +96,57 @@ async fn establish_connection() {
 
     // Shut down connection and actors.
     connection.close(0u32.into(), b"bye!");
-    bob_ref.stop(None);
-    alice_ref.stop(None);
 }
 
 #[tokio::test]
 async fn mdns_discovery() {
     setup_logging();
 
-    let (mut args_alice, store_alice, _) = test_args_from_seed([100; 32]);
-    let (mut args_bob, store_bob, _) = test_args_from_seed([200; 32]);
+    let (mut alice_args, _, _) = test_args_from_seed([100; 32]);
+    let (mut bob_args, _, _) = test_args_from_seed([200; 32]);
 
     // Enable active discovery mode, otherwise they'll not find each other.
-    args_alice.iroh_config.mdns_discovery_mode = MdnsDiscoveryMode::Active;
-    args_bob.iroh_config.mdns_discovery_mode = MdnsDiscoveryMode::Active;
-
-    let alice_namespace = generate_actor_namespace(&args_alice.public_key);
-    let bob_namespace = generate_actor_namespace(&args_bob.public_key);
-
-    let thread_pool = ThreadLocalActorSpawner::new();
+    alice_args.iroh_config.mdns_discovery_mode = MdnsDiscoveryMode::Active;
+    bob_args.iroh_config.mdns_discovery_mode = MdnsDiscoveryMode::Active;
 
     // Spawn address book (it's a dependency) for both.
-    let (address_book_alice_ref, _) = AddressBook::spawn(
-        Some(with_namespace(ADDRESS_BOOK, &alice_namespace)),
-        (args_alice.clone(), store_alice),
-        thread_pool.clone(),
-    )
-    .await
-    .unwrap();
-    let (address_book_bob_ref, _) = AddressBook::spawn(
-        Some(with_namespace(ADDRESS_BOOK, &bob_namespace)),
-        (args_bob.clone(), store_bob),
-        thread_pool.clone(),
-    )
-    .await
-    .unwrap();
-
-    // Spawn mdns services for both.
-    let (alice_ref, _) = Mdns::spawn(None, args_alice.clone(), thread_pool.clone())
+    let alice_address_book = AddressBook::builder(alice_args.public_key)
+        .spawn()
         .await
         .unwrap();
-    let (bob_ref, _) = Mdns::spawn(None, args_bob.clone(), thread_pool.clone())
+    let bob_address_book = AddressBook::builder(alice_args.public_key)
+        .spawn()
         .await
         .unwrap();
 
     // Spawn both endpoint actors, it will populate the address books with the address info.
-    let (endpoint_alice_ref, _) =
-        IrohEndpoint::spawn(None, args_alice.clone(), thread_pool.clone())
-            .await
-            .expect("actor spawns successfully");
-    let (endpoint_bob_ref, _) = IrohEndpoint::spawn(None, args_bob.clone(), thread_pool.clone())
+    let _alice_endpoint = Endpoint::builder(alice_address_book.clone())
+        .config(alice_args.iroh_config.clone())
+        .private_key(alice_args.private_key.clone())
+        .spawn()
         .await
-        .expect("actor spawns successfully");
+        .unwrap();
+
+    let _bob_endpoint = Endpoint::builder(bob_address_book.clone())
+        .config(bob_args.iroh_config.clone())
+        .private_key(bob_args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
 
     // Wait until they find each other and exchange transport infos.
     sleep(Duration::from_millis(1000)).await;
 
     // Alice should be in Bob's address book and vice-versa.
-    let result = call!(
-        address_book_bob_ref,
-        ToAddressBook::NodeInfo,
-        args_alice.public_key
-    )
-    .unwrap();
+    let result = bob_address_book
+        .node_info(alice_args.public_key)
+        .await
+        .unwrap();
     assert!(result.is_some());
 
-    let result = call!(
-        address_book_alice_ref,
-        ToAddressBook::NodeInfo,
-        args_bob.public_key
-    )
-    .unwrap();
+    let result = alice_address_book
+        .node_info(bob_args.public_key)
+        .await
+        .unwrap();
     assert!(result.is_some());
-
-    // Shut down all actors since they're not supervised.
-    address_book_alice_ref.stop(None);
-    address_book_bob_ref.stop(None);
-    bob_ref.stop(None);
-    alice_ref.stop(None);
-    endpoint_alice_ref.stop(None);
-    endpoint_bob_ref.stop(None);
 }

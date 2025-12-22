@@ -4,6 +4,7 @@ mod actors;
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;
+// TODO: Move args into test_utils.
 mod args;
 mod cbor;
 mod config;
@@ -21,6 +22,7 @@ pub mod watchers;
 pub use addrs::NodeId;
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;
+pub use protocols::ProtocolId;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///
