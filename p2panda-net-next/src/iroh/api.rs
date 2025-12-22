@@ -55,23 +55,28 @@ impl Endpoint {
         node_id: NodeId,
         protocol_id: impl AsRef<[u8]>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
-        self.connect_with_config(node_id, protocol_id, None).await
+        let result = call!(
+            self.actor_ref.read().await,
+            ToIrohEndpoint::Connect,
+            node_id,
+            protocol_id.as_ref().to_vec(),
+            None
+        )??;
+        Ok(result)
     }
 
     pub async fn connect_with_config(
         &self,
         node_id: NodeId,
         protocol_id: impl AsRef<[u8]>,
-        transport_config: Option<Arc<iroh::endpoint::TransportConfig>>,
+        transport_config: Arc<iroh::endpoint::TransportConfig>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
-        let protocol_id = protocol_id.as_ref().to_vec();
-        let actor_ref = self.actor_ref.read().await;
         let result = call!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToIrohEndpoint::Connect,
             node_id,
-            protocol_id,
-            transport_config
+            protocol_id.as_ref().to_vec(),
+            Some(transport_config)
         )??;
         Ok(result)
     }

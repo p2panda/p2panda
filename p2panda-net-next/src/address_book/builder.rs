@@ -3,7 +3,7 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use p2panda_discovery::address_book::{AddressBookStore, DynAddressBookStore};
+use p2panda_discovery::address_book::{AddressBookStore, BoxedAddressBookStore};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
@@ -13,11 +13,9 @@ use crate::address_book::actor::AddressBookActor;
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::addrs::{NodeId, NodeInfo};
 
-pub type BoxedAddressBookStore = Box<dyn DynAddressBookStore<NodeId, NodeInfo> + Send + 'static>;
-
 pub struct Builder {
     pub(crate) my_id: NodeId,
-    pub(crate) store: Option<BoxedAddressBookStore>,
+    pub(crate) store: Option<BoxedAddressBookStore<NodeId, NodeInfo>>,
 }
 
 impl Builder {
@@ -27,7 +25,7 @@ impl Builder {
 
     pub fn store<S>(mut self, store: S) -> Self
     where
-        S: AddressBookStore<NodeId, NodeInfo> + Send + 'static,
+        S: Clone + AddressBookStore<NodeId, NodeInfo> + Send + 'static,
         S::Error: StdError + Send + Sync + 'static,
     {
         self.store = Some(Box::new(store));

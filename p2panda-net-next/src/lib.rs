@@ -8,8 +8,10 @@ pub mod addrs;
 mod args;
 mod cbor;
 mod config;
+#[cfg(feature = "random_walk_discovery")]
+pub mod discovery;
 pub mod events;
-#[cfg(feature = "iroh")]
+#[cfg(feature = "iroh_endpoint")]
 pub mod iroh;
 mod protocols;
 pub mod streams;
@@ -22,7 +24,6 @@ pub mod watchers;
 pub use addrs::NodeId;
 #[cfg(feature = "mdns")]
 pub use config::MdnsDiscoveryMode;
-pub use protocols::ProtocolId;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///

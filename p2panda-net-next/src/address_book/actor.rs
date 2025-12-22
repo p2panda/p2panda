@@ -4,12 +4,11 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 // TODO: This will come from `p2panda-store` eventually.
-use p2panda_discovery::address_book::{BoxedError, NodeInfo as _};
+use p2panda_discovery::address_book::{BoxedAddressBookStore, BoxedError, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::{debug, warn};
 
-use crate::address_book::builder::BoxedAddressBookStore;
 use crate::address_book::report::ConnectionOutcome;
 use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
 use crate::addrs::{NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
@@ -111,11 +110,14 @@ pub enum ToAddressBookActor {
 
     /// Report outcomes of incoming or outgoing connections.
     Report(NodeId, ConnectionOutcome),
+
+    /// Returns internal address book store.
+    Store(RpcReplyPort<BoxedAddressBookStore<NodeId, NodeInfo>>),
 }
 
 pub struct AddressBookState {
     my_id: NodeId,
-    store: BoxedAddressBookStore,
+    store: BoxedAddressBookStore<NodeId, NodeInfo>,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
     node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
@@ -171,7 +173,7 @@ impl ThreadLocalActor for AddressBookActor {
 
     type Msg = ToAddressBookActor;
 
-    type Arguments = (NodeId, BoxedAddressBookStore);
+    type Arguments = (NodeId, BoxedAddressBookStore<NodeId, NodeInfo>);
 
     async fn pre_start(
         &self,
@@ -340,8 +342,6 @@ impl ThreadLocalActor for AddressBookActor {
 
                 state.store.insert_node_info(node_info).await?;
             }
-
-            // Mostly a wrapper around the store.
             ToAddressBookActor::NodeInfo(node_id, reply) => {
                 let result = state.store.node_info(&node_id).await?;
                 let _ = reply.send(result);
@@ -404,6 +404,9 @@ impl ThreadLocalActor for AddressBookActor {
             ToAddressBookActor::RemoveOlderThan(duration, reply) => {
                 let result = state.store.remove_older_than(duration).await?;
                 let _ = reply.send(result);
+            }
+            ToAddressBookActor::Store(reply) => {
+                let _ = reply.send(state.store.clone_box());
             }
         }
 

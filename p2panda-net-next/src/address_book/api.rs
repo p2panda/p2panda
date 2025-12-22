@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use p2panda_discovery::address_book::BoxedError;
+use p2panda_discovery::address_book::{BoxedAddressBookStore, BoxedError};
 use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -67,14 +67,37 @@ impl AddressBook {
         node_id: NodeId,
         transport_info: TransportInfo,
     ) -> Result<bool, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
         let result = call!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToAddressBookActor::InsertTransportInfo,
             node_id,
             transport_info
         )??;
         Ok(result)
+    }
+
+    pub async fn set_sync_topics(
+        &self,
+        node_id: NodeId,
+        topics: impl IntoIterator<Item = TopicId>,
+    ) -> Result<(), AddressBookError> {
+        cast!(
+            self.actor_ref.read().await,
+            ToAddressBookActor::SetSyncTopics(node_id, topics.into_iter().collect())
+        )?;
+        Ok(())
+    }
+
+    pub async fn set_ephemeral_messaging_topics(
+        &self,
+        node_id: NodeId,
+        topics: impl IntoIterator<Item = TopicId>,
+    ) -> Result<(), AddressBookError> {
+        cast!(
+            self.actor_ref.read().await,
+            ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics.into_iter().collect())
+        )?;
+        Ok(())
     }
 
     /// Subscribes to channel informing us about node info changes for a specific node.
@@ -83,9 +106,8 @@ impl AddressBook {
         node_id: NodeId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<Option<NodeInfo>>, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
         let result = call!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToAddressBookActor::WatchNodeInfo,
             node_id,
             updates_only
@@ -100,9 +122,8 @@ impl AddressBook {
         topic_id: TopicId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<HashSet<NodeId>>, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
         let result = call!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToAddressBookActor::WatchTopic,
             topic_id,
             updates_only
@@ -116,9 +137,8 @@ impl AddressBook {
         node_id: NodeId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<HashSet<TopicId>>, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
         let result = call!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToAddressBookActor::WatchNodeTopics,
             node_id,
             updates_only
@@ -134,12 +154,16 @@ impl AddressBook {
         node_id: NodeId,
         connection_outcome: ConnectionOutcome,
     ) -> Result<(), AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
         cast!(
-            actor_ref,
+            self.actor_ref.read().await,
             ToAddressBookActor::Report(node_id, connection_outcome)
         )?;
         Ok(())
+    }
+
+    pub async fn store(&self) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
+        let result = call!(self.actor_ref.read().await, ToAddressBookActor::Store)?;
+        Ok(result)
     }
 }
 

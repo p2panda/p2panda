@@ -142,6 +142,8 @@ pub trait AddressBookStore<ID, N> {
 pub type BoxedError = Box<dyn StdError + Send + Sync + 'static>;
 
 pub trait DynAddressBookStore<ID, N> {
+    fn clone_box(&self) -> Box<dyn DynAddressBookStore<ID, N> + Send + 'static>;
+
     fn insert_node_info(
         &self,
         info: N,
@@ -214,13 +216,19 @@ pub trait DynAddressBookStore<ID, N> {
     ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>>;
 }
 
+pub type BoxedAddressBookStore<ID, N> = Box<dyn DynAddressBookStore<ID, N> + Send + 'static>;
+
 impl<ID, N, T> DynAddressBookStore<ID, N> for T
 where
     ID: Clone + 'static,
     N: 'static,
-    T: AddressBookStore<ID, N>,
+    T: Clone + AddressBookStore<ID, N> + Send + 'static,
     T::Error: StdError + Send + Sync + 'static,
 {
+    fn clone_box(&self) -> BoxedAddressBookStore<ID, N> {
+        Box::new(self.clone())
+    }
+
     fn insert_node_info(
         &self,
         info: N,
@@ -393,6 +401,104 @@ where
                 .await
                 .map_err(|err| Box::new(err) as BoxedError)
         })
+    }
+}
+
+pub struct WrappedAddressBookStore<ID, N>(BoxedAddressBookStore<ID, N>);
+
+impl<ID, N> From<BoxedAddressBookStore<ID, N>> for WrappedAddressBookStore<ID, N> {
+    fn from(value: BoxedAddressBookStore<ID, N>) -> Self {
+        Self(value)
+    }
+}
+
+impl<ID, N> AddressBookStore<ID, N> for WrappedAddressBookStore<ID, N> {
+    type Error = BoxedError;
+
+    async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
+        self.0.as_ref().insert_node_info(info).await
+    }
+
+    async fn remove_node_info(&self, id: &ID) -> Result<bool, Self::Error> {
+        self.0.as_ref().remove_node_info(id).await
+    }
+
+    async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
+        self.0.as_ref().remove_older_than(duration).await
+    }
+
+    async fn node_info(&self, id: &ID) -> Result<Option<N>, Self::Error> {
+        self.0.as_ref().node_info(id).await
+    }
+
+    async fn node_sync_topics(&self, id: &ID) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        self.0.as_ref().node_sync_topics(id).await
+    }
+
+    async fn node_ephemeral_messaging_topics(
+        &self,
+        id: &ID,
+    ) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        self.0.as_ref().node_ephemeral_messaging_topics(id).await
+    }
+
+    async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
+        self.0.as_ref().all_node_infos().await
+    }
+
+    async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
+        self.0.as_ref().all_nodes_len().await
+    }
+
+    async fn all_bootstrap_nodes_len(&self) -> Result<usize, Self::Error> {
+        self.0.as_ref().all_bootstrap_nodes_len().await
+    }
+
+    async fn selected_node_infos(&self, ids: &[ID]) -> Result<Vec<N>, Self::Error> {
+        self.0.as_ref().selected_node_infos(ids).await
+    }
+
+    async fn set_sync_topics(&self, id: ID, topics: HashSet<[u8; 32]>) -> Result<(), Self::Error> {
+        self.0.as_ref().set_sync_topics(id, topics).await
+    }
+
+    async fn set_ephemeral_messaging_topics(
+        &self,
+        id: ID,
+        topics: HashSet<[u8; 32]>,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .as_ref()
+            .set_ephemeral_messaging_topics(id, topics)
+            .await
+    }
+
+    async fn node_infos_by_sync_topics(&self, topics: &[[u8; 32]]) -> Result<Vec<N>, Self::Error> {
+        self.0.as_ref().node_infos_by_sync_topics(topics).await
+    }
+
+    async fn node_infos_by_ephemeral_messaging_topics(
+        &self,
+        topics: &[[u8; 32]],
+    ) -> Result<Vec<N>, Self::Error> {
+        self.0
+            .as_ref()
+            .node_infos_by_ephemeral_messaging_topics(topics)
+            .await
+    }
+
+    async fn random_node(&self) -> Result<Option<N>, Self::Error> {
+        self.0.as_ref().random_node().await
+    }
+
+    async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
+        self.0.as_ref().random_bootstrap_node().await
+    }
+}
+
+impl<ID, N> std::fmt::Debug for WrappedAddressBookStore<ID, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("WrappedAddressBookStore").finish()
     }
 }
 
