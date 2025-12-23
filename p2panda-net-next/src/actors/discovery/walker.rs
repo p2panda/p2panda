@@ -18,7 +18,7 @@ use tracing::trace;
 use crate::actors::discovery::backoff::{Backoff, Config as BackoffConfig};
 use crate::actors::discovery::{DISCOVERY_MANAGER, ToDiscoveryManager};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 
 /// Actor name prefix for a walker.
 pub const DISCOVERY_WALKER: &str = "net.discovery.walker";

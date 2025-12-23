@@ -22,8 +22,8 @@ use crate::actors::iroh::discovery::AddressBookDiscovery;
 use crate::actors::iroh::is_globally_reachable_endpoint;
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
-use crate::args::ApplicationArguments;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{ShortFormat, from_private_key};
 
 pub const IROH_ENDPOINT: &str = "net.iroh.endpoint";

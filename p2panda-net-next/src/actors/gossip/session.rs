@@ -24,7 +24,7 @@ use crate::actors::gossip::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::actors::gossip::listener::GossipListener;
 use crate::actors::gossip::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::actors::gossip::sender::{GossipSender, ToGossipSender};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 
 pub enum ToGossipSession {

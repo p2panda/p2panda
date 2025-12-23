@@ -13,8 +13,9 @@ use crate::actors::discovery::{
 use crate::actors::iroh::{IROH_ENDPOINT, IrohEndpoint, ToIrohEndpoint};
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
-use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args_from_seed};
+use crate::test_utils::{
+    ApplicationArguments, generate_trusted_node_info, setup_logging, test_args_from_seed,
+};
 
 use super::DiscoveryActorName;
 

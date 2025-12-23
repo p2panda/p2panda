@@ -27,10 +27,9 @@ use tracing::{trace, warn};
 
 use crate::actors::address_book::{ADDRESS_BOOK, AddressBook, ToAddressBook};
 use crate::actors::endpoint_supervisor::{ENDPOINT_SUPERVISOR, EndpointSupervisor};
-use crate::actors::events::{EVENTS, Events, ToEvents};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::addrs::NodeInfo;
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::{NodeId, TopicId};
 
 /// Supervisor actor name.
@@ -41,8 +40,6 @@ pub struct SupervisorState<S, C> {
     args: ApplicationArguments,
     store: S,
     sync_config: C,
-    events_actor: ActorRef<ToEvents>,
-    events_actor_failures: u16,
     address_book_actor: ActorRef<ToAddressBook>,
     address_book_actor_failures: u16,
     endpoint_supervisor: ActorRef<()>,
@@ -81,15 +78,6 @@ where
         let (args, store, sync_config) = args;
         let actor_namespace = generate_actor_namespace(&args.public_key);
 
-        // Spawn the events actor.
-        let (events_actor, _) = Events::spawn_linked(
-            Some(with_namespace(EVENTS, &actor_namespace)),
-            args.clone(),
-            myself.clone().into(),
-            args.root_thread_pool.clone(),
-        )
-        .await?;
-
         // Spawn the address book actor.
         let (address_book_actor, _) = AddressBook::spawn_linked(
             Some(with_namespace(ADDRESS_BOOK, &actor_namespace)),
@@ -113,8 +101,6 @@ where
             args,
             store,
             sync_config,
-            events_actor,
-            events_actor_failures: 0,
             address_book_actor,
             address_book_actor_failures: 0,
             endpoint_supervisor,
@@ -132,10 +118,6 @@ where
         let reason = Some("network system is shutting down".to_string());
 
         // Stop all the actors which are directly supervised by this actor.
-        state
-            .events_actor
-            .stop_and_wait(reason.clone(), None)
-            .await?;
         state
             .address_book_actor
             .stop_and_wait(reason.clone(), None)
@@ -165,20 +147,7 @@ where
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
                 if let Some(name) = actor.get_name().as_deref() {
-                    if name == with_namespace(EVENTS, &state.actor_namespace) {
-                        warn!("{SUPERVISOR} actor: {EVENTS} actor failed: {}", panic_msg);
-
-                        let (events_actor, _) = Events::spawn_linked(
-                            Some(with_namespace(EVENTS, &state.actor_namespace)),
-                            state.args.clone(),
-                            myself.clone().into(),
-                            state.args.root_thread_pool.clone(),
-                        )
-                        .await?;
-
-                        state.events_actor_failures += 1;
-                        state.events_actor = events_actor;
-                    } else if name == with_namespace(ADDRESS_BOOK, &state.actor_namespace) {
+                    if name == with_namespace(ADDRESS_BOOK, &state.actor_namespace) {
                         warn!(
                             "{SUPERVISOR} actor: {ADDRESS_BOOK} actor failed: {}",
                             panic_msg
@@ -242,7 +211,6 @@ mod tests {
 
     use crate::actors::address_book::ADDRESS_BOOK;
     use crate::actors::endpoint_supervisor::ENDPOINT_SUPERVISOR;
-    use crate::actors::events::EVENTS;
     use crate::actors::{generate_actor_namespace, with_namespace};
     use crate::test_utils::{DummySyncManager, test_args};
 
@@ -263,11 +231,6 @@ mod tests {
 
         // Sleep briefly to allow time for all actors to be ready.
         sleep(Duration::from_millis(50)).await;
-
-        // Ensure all actors spawned directly by the supervisor are running.
-        let events_actor = registry::where_is(with_namespace(EVENTS, &actor_namespace));
-        assert!(events_actor.is_some());
-        assert_eq!(events_actor.unwrap().get_status(), ActorStatus::Running);
 
         let address_book_actor = registry::where_is(with_namespace(ADDRESS_BOOK, &actor_namespace));
         assert!(address_book_actor.is_some());

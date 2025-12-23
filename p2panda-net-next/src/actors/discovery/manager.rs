@@ -31,7 +31,7 @@ use crate::actors::discovery::{
 use crate::actors::iroh::register_protocol;
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 
 pub const DISCOVERY_MANAGER: &str = "net.discovery.manager";

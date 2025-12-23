@@ -30,10 +30,9 @@ use crate::actors::streams::eventually_consistent::{
 };
 use crate::actors::{generate_actor_namespace, with_namespace};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
 use crate::test_utils::{
-    App, DummySyncConfig, DummySyncEvent, DummySyncManager, DummySyncMessage, TestTopicSyncManager,
-    generate_node_info, setup_logging, test_args_from_seed,
+    App, ApplicationArguments, DummySyncConfig, DummySyncEvent, DummySyncManager, DummySyncMessage,
+    TestTopicSyncManager, generate_node_info, setup_logging, test_args_from_seed,
 };
 
 struct TestNode<M>

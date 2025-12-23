@@ -16,8 +16,6 @@ use crate::config::{IrohConfig, MdnsDiscoveryMode};
 use crate::iroh::user_data::UserDataTransportInfo;
 use crate::utils::{from_public_key, to_public_key};
 
-pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";
-
 const MDNS_SERVICE_NAME: &str = "p2pandav1";
 
 #[allow(clippy::large_enum_variant)]
@@ -271,6 +269,7 @@ impl ThreadLocalActor for Mdns {
                 }
             }
         }
+
         Ok(())
     }
 }

@@ -35,8 +35,8 @@ use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
 };
 use crate::actors::{generate_actor_namespace, with_namespace};
-use crate::args::ApplicationArguments;
 use crate::protocols::hash_protocol_id_with_network_id;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{ShortFormat, from_public_key, to_public_key};
 
 /// Gossip actor name.

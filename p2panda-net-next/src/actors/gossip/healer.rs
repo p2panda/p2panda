@@ -12,7 +12,7 @@ use crate::actors::address_book::{watch_node_info, watch_topic};
 use crate::actors::gossip::session::ToGossipSession;
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::addrs::NodeInfo;
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::from_public_key;
 use crate::watchers::WatcherReceiver;
 use crate::{NodeId, TopicId};

@@ -33,9 +33,9 @@ use crate::actors::iroh::register_protocol;
 use crate::actors::streams::ephemeral::{EPHEMERAL_STREAMS, ToEphemeralStreams};
 use crate::actors::sync::{SYNC_PROTOCOL_ID, SyncManager, ToSyncManager};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace};
-use crate::args::ApplicationArguments;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::streams::{EventuallyConsistentStream, EventuallyConsistentSubscription};
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{ShortFormat, to_public_key};
 use crate::{NodeId, TopicId};
 

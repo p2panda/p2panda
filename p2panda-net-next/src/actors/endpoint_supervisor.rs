@@ -34,7 +34,7 @@ use crate::actors::iroh::{MDNS_DISCOVERY, Mdns, ToMdns};
 use crate::actors::stream_supervisor::{STREAM_SUPERVISOR, StreamSupervisor};
 use crate::actors::{ActorNamespace, generate_actor_namespace, with_namespace, without_namespace};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 
 /// Endpoint supervisor actor name.
 pub const ENDPOINT_SUPERVISOR: &str = "net.endpoint_supervisor";

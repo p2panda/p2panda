@@ -72,7 +72,6 @@ pub enum ToDiscoveryManager {
 
 pub struct DiscoveryManagerState {
     my_node_id: NodeId,
-    config: DiscoveryConfig,
     address_book: AddressBook,
     endpoint: Endpoint,
     pool: ThreadLocalActorSpawner,
@@ -160,8 +159,10 @@ pub enum DiscoverySessionInfo {
         walker_ref: ActorRef<ToDiscoveryWalker>,
         session_ref: ActorRef<ToDiscoverySession>,
         started_at: Instant,
+        #[allow(unused)]
         handle: JoinHandle<()>,
     },
+    #[allow(unused)]
     Accepted {
         remote_node_id: NodeId,
         session_id: DiscoverySessionId,
@@ -202,9 +203,11 @@ impl DiscoverySessionInfo {
 }
 
 pub struct WalkerInfo {
+    #[allow(unused)]
     walker_id: usize,
     last_result: Option<DiscoveryResult<NodeId, NodeInfo>>,
     walker_ref: ActorRef<ToDiscoveryWalker>,
+    #[allow(unused)]
     handle: JoinHandle<()>,
 }
 
@@ -275,7 +278,6 @@ impl ThreadLocalActor for DiscoveryManager {
 
         Ok(DiscoveryManagerState {
             my_node_id,
-            config,
             address_book,
             endpoint,
             pool,

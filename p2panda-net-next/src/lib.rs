@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+// TODO: Move actors into regarding modules.
+#[cfg(test)]
 mod actors;
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;
-// TODO: Move args into test_utils.
-mod args;
 mod cbor;
+// TODO: Move configs into regarding modules.
 mod config;
 #[cfg(feature = "random_walk_discovery")]
 pub mod discovery;
-pub mod events;
 #[cfg(feature = "iroh_endpoint")]
 pub mod iroh;
 mod protocols;
+// TODO: Move streams into regarding modules.
+#[cfg(test)]
 pub mod streams;
 #[cfg(test)]
 mod test_utils;

@@ -14,7 +14,7 @@ use tracing::{Instrument, error, info_span, trace, warn};
 use crate::actors::address_book::{node_info, update_address_book, watch_node_info};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::addrs::{NodeTransportInfo, UnsignedTransportInfo};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{from_public_key, to_public_key};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This

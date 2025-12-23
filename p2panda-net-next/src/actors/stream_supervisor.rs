@@ -35,7 +35,7 @@ use crate::actors::streams::eventually_consistent::{
     EVENTUALLY_CONSISTENT_STREAMS, EventuallyConsistentStreams, ToEventuallyConsistentStreams,
 };
 use crate::actors::{generate_actor_namespace, with_namespace, without_namespace};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 
 pub struct StreamSupervisorState<M>
 where

@@ -15,7 +15,7 @@ use tracing::{debug, warn};
 
 use crate::address_book::report::ConnectionOutcome;
 use crate::addrs::{NodeInfo, NodeTransportInfo, TransportInfo};
-use crate::args::ApplicationArguments;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::ShortFormat;
 use crate::watchers::{
     UpdateResult, UpdatesOnly, Watched, WatchedValue, WatcherReceiver, WatcherSet,

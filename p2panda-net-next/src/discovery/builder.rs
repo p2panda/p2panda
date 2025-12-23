@@ -38,8 +38,9 @@ impl Builder {
         self
     }
 
-    pub fn rng_seed(mut self, seed: [u8; 32]) -> Self {
-        self.rng = Some(ChaCha20Rng::from_seed(seed));
+    #[cfg(test)]
+    pub fn rng(mut self, rng: ChaCha20Rng) -> Self {
+        self.rng = Some(rng);
         self
     }
 

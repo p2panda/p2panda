@@ -11,9 +11,9 @@ use tracing::{debug, trace, warn};
 use crate::actors::address_book::{update_address_book, watch_node_info};
 use crate::actors::{ActorNamespace, generate_actor_namespace};
 use crate::addrs::{AuthenticatedTransportInfo, NodeInfo, NodeTransportInfo, TransportInfo};
-use crate::args::ApplicationArguments;
 use crate::config::MdnsDiscoveryMode;
 use crate::iroh::user_data::UserDataTransportInfo;
+use crate::test_utils::ApplicationArguments;
 use crate::utils::{from_public_key, to_public_key};
 
 pub const MDNS_DISCOVERY: &str = "net.iroh.mdns";

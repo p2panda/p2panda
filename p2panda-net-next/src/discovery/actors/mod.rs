@@ -4,6 +4,6 @@ mod manager;
 mod session;
 mod walker;
 
-pub use manager::{DiscoveryManager, ToDiscoveryManager};
+pub use manager::{DiscoveryManager, DiscoveryMetrics, ToDiscoveryManager};
 
 pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
