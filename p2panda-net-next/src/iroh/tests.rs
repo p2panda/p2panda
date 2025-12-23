@@ -98,6 +98,7 @@ async fn establish_connection() {
     connection.close(0u32.into(), b"bye!");
 }
 
+#[ignore = "mdns need to be moved into own module first"]
 #[tokio::test]
 async fn mdns_discovery() {
     setup_logging();

@@ -2,7 +2,6 @@
 
 #[allow(clippy::module_inception)]
 mod address_book;
-pub mod watchers;
 
 use std::collections::HashSet;
 

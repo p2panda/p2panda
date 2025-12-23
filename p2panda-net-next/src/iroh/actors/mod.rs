@@ -3,6 +3,8 @@
 mod connection;
 mod endpoint;
 #[cfg(feature = "iroh_mdns")]
+// TODO: mDNS needs to be an own module.
+#[allow(unused)]
 mod mdns;
 
 pub use endpoint::{ConnectError, IrohEndpoint, ToIrohEndpoint};
