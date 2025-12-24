@@ -40,14 +40,8 @@ async fn establish_connection() {
     let (bob_args, _, _) = test_args_from_seed([2; 32]);
 
     // Spawn address book (it's a dependency) for both.
-    let alice_address_book = AddressBook::builder(alice_args.public_key)
-        .spawn()
-        .await
-        .unwrap();
-    let bob_address_book = AddressBook::builder(alice_args.public_key)
-        .spawn()
-        .await
-        .unwrap();
+    let alice_address_book = AddressBook::builder().spawn().await.unwrap();
+    let bob_address_book = AddressBook::builder().spawn().await.unwrap();
 
     // Spawn both endpoint actors.
     let alice_endpoint = Endpoint::builder(alice_address_book)
@@ -111,14 +105,8 @@ async fn mdns_discovery() {
     bob_args.iroh_config.mdns_discovery_mode = MdnsDiscoveryMode::Active;
 
     // Spawn address book (it's a dependency) for both.
-    let alice_address_book = AddressBook::builder(alice_args.public_key)
-        .spawn()
-        .await
-        .unwrap();
-    let bob_address_book = AddressBook::builder(alice_args.public_key)
-        .spawn()
-        .await
-        .unwrap();
+    let alice_address_book = AddressBook::builder().spawn().await.unwrap();
+    let bob_address_book = AddressBook::builder().spawn().await.unwrap();
 
     // Spawn both endpoint actors, it will populate the address books with the address info.
     let _alice_endpoint = Endpoint::builder(alice_address_book.clone())

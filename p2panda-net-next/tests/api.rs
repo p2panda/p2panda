@@ -8,17 +8,17 @@ use p2panda_net_next::iroh::Endpoint;
 #[tokio::test]
 async fn modular_api() {
     let private_key = PrivateKey::new();
-    let public_key = private_key.public_key();
 
-    let address_book = AddressBook::builder(public_key).spawn().await.unwrap();
+    let address_book = AddressBook::builder().spawn().await.unwrap();
 
     let endpoint = Endpoint::builder(address_book.clone())
         .private_key(private_key)
+        .network_id([42; 32])
         .spawn()
         .await
         .unwrap();
 
-    let _discovery = Discovery::builder(public_key, address_book, endpoint)
+    let _discovery = Discovery::builder(address_book, endpoint)
         .spawn()
         .await
         .unwrap();

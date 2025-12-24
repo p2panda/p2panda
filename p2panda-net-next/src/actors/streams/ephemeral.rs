@@ -137,11 +137,13 @@ impl ThreadLocalActor for EphemeralStreams {
                 let node_ids = node_infos.iter().map(|node_info| node_info.id()).collect();
 
                 // Check if we're already subscribed.
-                let stream = if let Some((to_gossip_tx, _)) = state.gossip_senders.get(&topic) {
+                let stream = if let Some((to_gossip_tx, from_gossip_tx)) =
+                    state.gossip_senders.get(&topic)
+                {
                     // Inform the gossip actor about the latest set of nodes for this topic.
                     cast!(state.gossip_actor, ToGossip::JoinPeers(topic, node_ids))?;
 
-                    EphemeralStream::new(topic, to_gossip_tx.clone(), state.actor_namespace.clone())
+                    EphemeralStream::new(topic, to_gossip_tx.clone(), from_gossip_tx.clone())
                 } else {
                     // Register a new session with the gossip actor.
                     let (to_gossip_tx, from_gossip_tx) =
@@ -153,10 +155,10 @@ impl ThreadLocalActor for EphemeralStreams {
                     // `subscribe()` on `EphemeralStream`.
                     state
                         .gossip_senders
-                        .insert(topic, (to_gossip_tx.clone(), from_gossip_tx));
+                        .insert(topic, (to_gossip_tx.clone(), from_gossip_tx.clone()));
                     state.add_topic(topic);
 
-                    EphemeralStream::new(topic, to_gossip_tx, state.actor_namespace.clone())
+                    EphemeralStream::new(topic, to_gossip_tx, from_gossip_tx)
                 };
 
                 // Ignore any potential send error; it's not a concern of this actor.

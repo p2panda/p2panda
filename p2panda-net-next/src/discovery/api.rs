@@ -6,7 +6,6 @@ use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::{RwLock, broadcast};
 
-use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::discovery::actors::ToDiscoveryManager;
 use crate::discovery::events::DiscoveryEvent;
@@ -19,8 +18,8 @@ pub struct Discovery {
 }
 
 impl Discovery {
-    pub fn builder(my_node_id: NodeId, address_book: AddressBook, endpoint: Endpoint) -> Builder {
-        Builder::new(my_node_id, address_book, endpoint)
+    pub fn builder(address_book: AddressBook, endpoint: Endpoint) -> Builder {
+        Builder::new(address_book, endpoint)
     }
 
     /// Subscribe to system events.

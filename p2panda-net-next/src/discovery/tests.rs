@@ -22,11 +22,7 @@ impl TestNode {
     pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
         let (args, store, _) = test_args_from_seed(seed);
 
-        let address_book = AddressBook::builder(args.public_key)
-            .store(store)
-            .spawn()
-            .await
-            .unwrap();
+        let address_book = AddressBook::builder().store(store).spawn().await.unwrap();
 
         // Pre-populate the address book with known addresses.
         for info in node_infos {
@@ -40,7 +36,7 @@ impl TestNode {
             .await
             .unwrap();
 
-        let discovery = Discovery::builder(args.public_key, address_book.clone(), endpoint.clone())
+        let discovery = Discovery::builder(address_book.clone(), endpoint.clone())
             .config(args.discovery_config.clone())
             .rng(args.rng.clone())
             .spawn()

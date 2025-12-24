@@ -116,7 +116,6 @@ pub enum ToAddressBookActor {
 }
 
 pub struct AddressBookState {
-    my_id: NodeId,
     store: BoxedAddressBookStore<NodeId, NodeInfo>,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
@@ -130,11 +129,12 @@ impl AddressBookState {
     ) -> Result<Vec<NodeInfo>, BoxedError> {
         let result = self.store.node_infos_by_sync_topics(&topics).await?;
 
+        // TODO
         // Remove ourselves.
-        let result = result
-            .into_iter()
-            .filter(|info| info.id() != self.my_id)
-            .collect();
+        // let result = result
+        //     .into_iter()
+        //     .filter(|info| info.id() != self.my_id)
+        //     .collect();
 
         Ok(result)
     }
@@ -148,11 +148,12 @@ impl AddressBookState {
             .node_infos_by_ephemeral_messaging_topics(&topics)
             .await?;
 
+        // TODO
         // Remove ourselves.
-        let result = result
-            .into_iter()
-            .filter(|info| info.id() != self.my_id)
-            .collect();
+        // let result = result
+        //     .into_iter()
+        //     .filter(|info| info.id() != self.my_id)
+        //     .collect();
 
         Ok(result)
     }
@@ -173,16 +174,15 @@ impl ThreadLocalActor for AddressBookActor {
 
     type Msg = ToAddressBookActor;
 
-    type Arguments = (NodeId, BoxedAddressBookStore<NodeId, NodeInfo>);
+    type Arguments = (BoxedAddressBookStore<NodeId, NodeInfo>,);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (my_id, store) = args;
+        let (store,) = args;
         Ok(AddressBookState {
-            my_id,
             store,
             node_watchers: WatcherSet::new(),
             topic_watchers: WatcherSet::new(),
@@ -434,10 +434,9 @@ mod tests {
 
         let spawner = ThreadLocalActorSpawner::new();
 
-        let (actor, _handle) =
-            AddressBookActor::spawn(None, (args.public_key, Box::new(store)), spawner)
-                .await
-                .unwrap();
+        let (actor, _handle) = AddressBookActor::spawn(None, (Box::new(store),), spawner)
+            .await
+            .unwrap();
 
         // Insert new node info.
         let node_info = NodeInfo::new(args.public_key.clone());

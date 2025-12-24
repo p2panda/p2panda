@@ -21,10 +21,8 @@ pub struct AddressBook {
 }
 
 impl AddressBook {
-    // TODO(adz): Can we remove the node id argument here? We need it in the address book only to
-    // remove ourselves from some results, but maybe that can be handled somewhere else?
-    pub fn builder(my_id: NodeId) -> Builder {
-        Builder::new(my_id)
+    pub fn builder() -> Builder {
+        Builder::new()
     }
 
     /// Returns information about a node.
@@ -73,6 +71,30 @@ impl AddressBook {
             node_id,
             transport_info
         )??;
+        Ok(result)
+    }
+
+    pub async fn node_infos_by_sync_topics(
+        &self,
+        topics: impl IntoIterator<Item = TopicId>,
+    ) -> Result<Vec<NodeInfo>, AddressBookError> {
+        let result = call!(
+            self.actor_ref.read().await,
+            ToAddressBookActor::NodeInfosBySyncTopics,
+            topics.into_iter().collect()
+        )?;
+        Ok(result)
+    }
+
+    pub async fn node_infos_by_ephemeral_messaging_topics(
+        &self,
+        topics: impl IntoIterator<Item = TopicId>,
+    ) -> Result<Vec<NodeInfo>, AddressBookError> {
+        let result = call!(
+            self.actor_ref.read().await,
+            ToAddressBookActor::NodeInfosByEphemeralMessagingTopics,
+            topics.into_iter().collect()
+        )?;
         Ok(result)
     }
 

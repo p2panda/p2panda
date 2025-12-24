@@ -210,7 +210,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 state.accept_handle = Some(accept_handle);
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
-                let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, &state.network_id);
+                let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, state.network_id);
                 debug!(alpn = %mixed_protocol_id.fmt_short(), "register protocol");
 
                 // Register protocol in our own map to accept it in the future.
@@ -227,7 +227,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     .set_alpns(protocols.keys().cloned().collect());
             }
             ToIrohEndpoint::Connect(node_id, alpn, transport_config, reply) => {
-                let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, &state.network_id);
+                let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, state.network_id);
 
                 // Ask address book for available node information.
                 let result = match state.address_book.node_info(node_id).await {

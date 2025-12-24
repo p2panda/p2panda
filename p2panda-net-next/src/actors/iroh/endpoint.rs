@@ -208,7 +208,7 @@ impl ThreadLocalActor for IrohEndpoint {
             }
             ToIrohEndpoint::RegisterProtocol(alpn, protocol_handler) => {
                 let mixed_protocol_id =
-                    hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+                    hash_protocol_id_with_network_id(&alpn, state.args.network_id);
                 debug!(alpn = %mixed_protocol_id.fmt_short(), "register protocol");
 
                 // Register protocol in our own map to accept it in the future.
@@ -226,7 +226,7 @@ impl ThreadLocalActor for IrohEndpoint {
             }
             ToIrohEndpoint::Connect(endpoint_addr, alpn, transport_config, reply) => {
                 let mixed_protocol_id =
-                    hash_protocol_id_with_network_id(&alpn, &state.args.network_id);
+                    hash_protocol_id_with_network_id(&alpn, state.args.network_id);
 
                 // This actor will shut down immediately after the connection was established. The
                 // responsibility to handle the connection object is shifted to the caller from

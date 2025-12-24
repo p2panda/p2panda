@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Join a set of nodes on a gossip topic.
-use iroh::EndpointId;
 use iroh_gossip::api::GossipSender as IrohGossipSender;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 
 pub enum ToGossipJoiner {
     /// Join the given set of nodes.
-    JoinPeers(Vec<EndpointId>),
+    JoinNodes(Vec<iroh::EndpointId>),
 }
 
 pub struct GossipJoinerState {
@@ -49,7 +48,7 @@ impl ThreadLocalActor for GossipJoiner {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToGossipJoiner::JoinPeers(nodes) => {
+            ToGossipJoiner::JoinNodes(nodes) => {
                 if let Some(sender) = &mut state.sender {
                     sender.join_peers(nodes).await?;
                 }

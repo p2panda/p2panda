@@ -7,13 +7,15 @@ use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::iroh::Builder;
 use crate::iroh::actors::{ConnectError, ToIrohEndpoint};
+use crate::{NetworkId, NodeId};
 
 #[derive(Clone)]
 pub struct Endpoint {
+    pub(crate) network_id: NetworkId,
+    pub(crate) my_node_id: NodeId,
     pub(crate) actor_ref: Arc<RwLock<ActorRef<ToIrohEndpoint>>>,
 }
 
@@ -27,6 +29,14 @@ impl Endpoint {
         let actor_ref = self.actor_ref.read().await;
         let result = call!(actor_ref, ToIrohEndpoint::Endpoint)?;
         Ok(result)
+    }
+
+    pub fn network_id(&self) -> NetworkId {
+        self.network_id
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.my_node_id
     }
 
     /// Register protocol handler for a given ALPN (protocol identifier).

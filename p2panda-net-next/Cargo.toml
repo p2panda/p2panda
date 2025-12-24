@@ -9,15 +9,16 @@ workspace = true
 [features]
 default = [
   "address_book",
-  "random_walk_discovery",
   "iroh_endpoint",
   "iroh_mdns",
+  "random_walk_discovery",
+  "gossip",
   "mdns",
 ]
 address_book = []
 iroh_endpoint = [
   "address_book",
-  # TODO: Make iroh dependencies optional.
+  # TODO: Make dependencies optional.
   # "dep:iroh",
   # "dep:iroh-base",
   # "dep:iroh-gossip",
@@ -29,8 +30,14 @@ iroh_mdns = [
 random_walk_discovery = [
   "address_book",
   "iroh_endpoint",
-  # TODO: Make iroh dependencies optional.
+  # TODO: Make dependencies optional.
   # "dep:p2panda-discovery",
+]
+gossip = [
+  "address_book",
+  "iroh_endpoint",
+  # TODO: Make dependencies optional.
+  # "dep:iroh-gossip",
 ]
 # TODO: Remove this. We'll use iroh_mdns instead.
 mdns = [

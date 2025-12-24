@@ -62,7 +62,7 @@ async fn correct_termination_state() {
     let (bat_args, bat_store, _) = test_args();
     let (cat_args, cat_store, _) = test_args();
 
-    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &ant_args.network_id);
+    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, ant_args.network_id);
 
     // Create topic.
     let topic = [3; 32];
@@ -224,7 +224,7 @@ async fn two_peer_gossip() {
     let (ant_args, ant_store, _) = test_args();
     let (bat_args, bat_store, _) = test_args();
 
-    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &ant_args.network_id);
+    let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, ant_args.network_id);
 
     let topic = [7; 32];
 
@@ -369,7 +369,7 @@ async fn third_peer_joins_non_bootstrap() {
     let (bat_args, bat_store, _) = test_args();
     let (cat_args, cat_store, _) = test_args();
 
-    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &ant_args.network_id);
+    let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, ant_args.network_id);
 
     let topic = [11; 32];
 
@@ -571,7 +571,7 @@ async fn three_peer_gossip_with_rejoin() {
     let (bat_args, bat_store, _) = test_args();
     let (cat_args, cat_store, _) = test_args();
 
-    let mixed_alpn = hash_protocol_id_with_network_id(&iroh_gossip::ALPN, &ant_args.network_id);
+    let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, ant_args.network_id);
 
     let topic = [9; 32];
 

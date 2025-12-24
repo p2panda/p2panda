@@ -18,9 +18,9 @@ pub type ProtocolId = Vec<u8>;
 /// Hash the concatenation of the given protocol- and network identifiers.
 pub fn hash_protocol_id_with_network_id(
     protocol_id: impl AsRef<[u8]>,
-    network_id: &NetworkId,
+    network_id: NetworkId,
 ) -> Vec<u8> {
-    Hash::new([protocol_id.as_ref(), network_id].concat())
+    Hash::new([protocol_id.as_ref(), &network_id].concat())
         .as_bytes()
         .to_vec()
 }
@@ -35,7 +35,7 @@ mod tests {
         let network_id = [1; 32];
         assert_ne!(
             protocol_id.to_vec(),
-            hash_protocol_id_with_network_id(protocol_id, &network_id),
+            hash_protocol_id_with_network_id(protocol_id, network_id),
         );
     }
 }

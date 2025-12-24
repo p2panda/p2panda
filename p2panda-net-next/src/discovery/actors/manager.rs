@@ -219,15 +219,16 @@ impl ThreadLocalActor for DiscoveryManager {
 
     type Msg = ToDiscoveryManager;
 
-    type Arguments = (NodeId, DiscoveryConfig, ChaCha20Rng, AddressBook, Endpoint);
+    type Arguments = (DiscoveryConfig, ChaCha20Rng, AddressBook, Endpoint);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (my_node_id, config, rng, address_book, endpoint) = args;
+        let (config, rng, address_book, endpoint) = args;
         let pool = ThreadLocalActorSpawner::new();
+        let my_node_id = endpoint.node_id();
 
         // Spawn random walkers. They automatically initiate discovery sessions.
         let mut walkers = HashMap::new();

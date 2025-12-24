@@ -14,13 +14,12 @@ use crate::address_book::{AddressBook, AddressBookError};
 use crate::addrs::{NodeId, NodeInfo};
 
 pub struct Builder {
-    pub(crate) my_id: NodeId,
     pub(crate) store: Option<BoxedAddressBookStore<NodeId, NodeInfo>>,
 }
 
 impl Builder {
-    pub fn new(my_id: NodeId) -> Self {
-        Self { my_id, store: None }
+    pub fn new() -> Self {
+        Self { store: None }
     }
 
     pub fn store<S>(mut self, store: S) -> Self
@@ -42,7 +41,7 @@ impl Builder {
 
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
-            let args = (self.my_id, store);
+            let args = (store,);
             AddressBookActor::spawn(None, args, thread_pool).await?
         };
 

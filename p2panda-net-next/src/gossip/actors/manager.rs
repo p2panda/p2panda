@@ -1,86 +1,63 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! An `iroh`-specific gossip actor for message broadcast.
-mod healer;
-mod joiner;
-mod listener;
-mod receiver;
-mod sender;
-mod session;
-#[cfg(test)]
-mod tests;
-
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::marker::PhantomData;
 
-use iroh::Endpoint as IrohEndpoint;
-use iroh::EndpointId;
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
-use p2panda_core::PublicKey;
-use p2panda_sync::traits::SyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, registry};
+use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::broadcast::{self, Sender as BroadcastSender};
 use tokio::sync::mpsc::{self, Sender};
 use tokio::sync::oneshot::{self, Sender as OneshotSender};
 use tracing::{debug, warn};
 
-use crate::TopicId;
-use crate::actors::ActorNamespace;
-use crate::actors::gossip::session::{GossipSession, ToGossipSession};
-use crate::actors::iroh::register_protocol;
-use crate::actors::streams::eventually_consistent::{
-    EVENTUALLY_CONSISTENT_STREAMS, ToEventuallyConsistentStreams,
-};
-use crate::actors::{generate_actor_namespace, with_namespace};
+use crate::address_book::AddressBook;
+use crate::gossip::actors::session::{GossipSession, ToGossipSession};
+use crate::gossip::events::GossipEvent;
+use crate::iroh::Endpoint;
 use crate::protocols::hash_protocol_id_with_network_id;
-use crate::test_utils::ApplicationArguments;
-use crate::utils::{ShortFormat, from_public_key, to_public_key};
+use crate::utils::{ShortFormat, from_public_key};
+use crate::{NodeId, TopicId};
 
-/// Gossip actor name.
-pub const GOSSIP: &str = "net.gossip";
-
-pub enum ToGossip {
+pub enum ToGossipManager {
     /// Accept incoming "gossip protocol" connection requests.
     RegisterProtocol,
 
-    /// Subscribe to the given topic, using the given peers as gossip bootstrap nodes.
+    /// Subscribe to the given topic, using the given nodes as gossip bootstrap nodes.
     ///
     /// Two senders are returned: 1) a sender _into_ the gossip overlay, 2) a sender _out of_ the
     /// gossip overlay. The reason we return the second sender is because it's a broadcast channel
     /// and we need the sender in order to produce receivers by calling `.subscribe()`.
     Subscribe(
         TopicId,
-        Vec<PublicKey>,
+        Vec<NodeId>,
         #[allow(clippy::type_complexity)] RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>,
     ),
 
     /// Unsubscribe from the given topic.
     Unsubscribe(TopicId),
 
-    /// Join a set of peers on the given gossip topic.
+    /// Join a set of nodes on the given gossip topic.
     ///
     /// This event requires a prior subscription to the topic via the `ToGossip::Subscribe`.
-    JoinPeers(TopicId, Vec<PublicKey>),
+    JoinNodes(TopicId, Vec<NodeId>),
 
-    /// Joined a topic by connecting to the given peers.
+    /// Joined a topic by connecting to the given nodes.
     Joined {
         topic: TopicId,
-        peers: Vec<PublicKey>,
+        nodes: Vec<NodeId>,
         session_id: ActorId,
     },
 
     /// Gained a new, direct neighbor in the gossip overlay.
     NeighborUp {
-        node_id: PublicKey,
+        node_id: NodeId,
         session_id: ActorId,
     },
 
     /// Lost a direct neighbor in the gossip overlay.
     NeighborDown {
-        node_id: PublicKey,
+        node_id: NodeId,
         session_id: ActorId,
     },
 
@@ -88,16 +65,19 @@ pub enum ToGossip {
     ReceivedMessage {
         bytes: Vec<u8>,
         #[allow(unused)]
-        delivered_from: PublicKey,
+        delivered_from: NodeId,
         delivery_scope: IrohDeliveryScope,
         topic: TopicId,
         #[allow(unused)]
         session_id: ActorId,
     },
 
+    /// Subscribe to system events.
+    Events(RpcReplyPort<broadcast::Receiver<GossipEvent>>),
+
     /// Returns current actor's state for testing purposes.
     #[cfg(test)]
-    DebugState(RpcReplyPort<tests::DebugState>),
+    DebugState(RpcReplyPort<crate::gossip::tests::DebugState>),
 
     /// Return a handle to the iroh gossip actor.
     ///
@@ -112,24 +92,25 @@ type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>
 
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
-struct Sessions {
-    sessions_by_actor_id: HashMap<ActorId, TopicId>,
-    sessions_by_topic: HashMap<TopicId, ActorRef<ToGossipSession>>,
-    gossip_senders: GossipSenders,
-    gossip_joined_senders: HashMap<ActorId, OneshotSender<u8>>,
+pub struct Sessions {
+    pub sessions_by_actor_id: HashMap<ActorId, TopicId>,
+    pub sessions_by_topic: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    pub gossip_senders: GossipSenders,
+    pub gossip_joined_senders: HashMap<ActorId, OneshotSender<()>>,
 }
 
-pub struct GossipState {
-    args: ApplicationArguments,
+pub struct GossipManagerState {
+    my_node_id: NodeId,
+    address_book: AddressBook,
+    endpoint: Endpoint,
+    pool: ThreadLocalActorSpawner,
     gossip: Option<IrohGossip>,
-    sessions: Sessions,
-    neighbours: HashMap<TopicId, HashSet<PublicKey>>,
-    topic_delivery_scopes: HashMap<TopicId, Vec<IrohDeliveryScope>>,
-    gossip_thread_pool: ThreadLocalActorSpawner,
-    actor_namespace: ActorNamespace,
+    pub(crate) sessions: Sessions,
+    pub(crate) neighbours: HashMap<TopicId, HashSet<NodeId>>,
+    events_tx: broadcast::Sender<GossipEvent>,
 }
 
-impl GossipState {
+impl GossipManagerState {
     fn drop_topic_state(&mut self, actor_id: &ActorId, topic: &TopicId) {
         self.sessions.sessions_by_topic.remove(topic);
         self.sessions.gossip_senders.remove(topic);
@@ -138,58 +119,52 @@ impl GossipState {
     }
 }
 
-pub struct Gossip<M> {
-    _phantom: PhantomData<M>,
-}
+#[derive(Default)]
+pub struct GossipManager;
 
-impl<M> Default for Gossip<M> {
-    fn default() -> Self {
-        Self {
-            _phantom: Default::default(),
-        }
-    }
-}
+impl ThreadLocalActor for GossipManager {
+    type State = GossipManagerState;
 
-impl<M> ThreadLocalActor for Gossip<M>
-where
-    M: SyncManager<TopicId> + Debug + Send + 'static,
-{
-    type State = GossipState;
-    type Msg = ToGossip;
-    type Arguments = (ApplicationArguments, IrohEndpoint);
+    type Msg = ToGossipManager;
+
+    type Arguments = (AddressBook, Endpoint);
 
     async fn pre_start(
         &self,
         _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (args, endpoint) = args;
-        let config = IrohGossipConfig::default();
+        let (address_book, endpoint) = args;
+        let my_node_id = endpoint.node_id();
 
-        let actor_namespace = generate_actor_namespace(&to_public_key(endpoint.id()));
-        let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, args.network_id);
+        // TODO: Allow configuration for users.
+        let config = IrohGossipConfig::default();
+        let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, endpoint.network_id());
+
         let gossip = IrohGossip::builder()
             .alpn(mixed_alpn)
             .max_message_size(config.max_message_size)
             .membership_config(config.membership)
             .broadcast_config(config.broadcast)
-            .spawn(endpoint);
+            .spawn(endpoint.endpoint().await?);
 
         let sessions = Sessions::default();
         let neighbours = HashMap::new();
-        let topic_delivery_scopes = HashMap::new();
 
         // Gossip "worker" actors are all spawned in a dedicated thread.
-        let gossip_thread_pool = ThreadLocalActorSpawner::new();
+        let pool = ThreadLocalActorSpawner::new();
 
-        Ok(GossipState {
-            args,
+        let (events_tx, _) = broadcast::channel(64);
+
+        Ok(GossipManagerState {
+            my_node_id,
+            address_book,
+            endpoint,
+            pool,
             gossip: Some(gossip),
             sessions,
             neighbours,
-            topic_delivery_scopes,
-            gossip_thread_pool,
-            actor_namespace,
+            events_tx,
         })
     }
 
@@ -198,7 +173,7 @@ where
         _myself: ActorRef<Self::Msg>,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
-        // Leave all subscribed topics, send `Disconnect` messages to peers and drop all state and
+        // Leave all subscribed topics, send `Disconnect` messages to nodes and drop all state and
         // connections.
         if let Some(gossip) = state.gossip.take() {
             // Make sure the endpoint has all the time it needs to gracefully shut down while other
@@ -220,36 +195,27 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToGossip::RegisterProtocol => {
-                register_protocol(
-                    iroh_gossip::ALPN,
-                    state
-                        .gossip
-                        .as_ref()
-                        .expect("gossip was initialised when actor started")
-                        .clone(),
-                    state.actor_namespace.clone(),
-                )?;
-                Ok(())
+            ToGossipManager::RegisterProtocol => {
+                state
+                    .endpoint
+                    .accept(
+                        iroh_gossip::ALPN,
+                        state
+                            .gossip
+                            .as_ref()
+                            .expect("gossip was initialised when actor started")
+                            .clone(),
+                    )
+                    .await?;
             }
-            #[cfg(test)]
-            ToGossip::Handle(reply) => {
-                let gossip = state
-                    .gossip
-                    .as_ref()
-                    .expect("gossip was initialised when actor started")
-                    .clone();
-                let _ = reply.send(gossip);
-                Ok(())
-            }
-            ToGossip::Subscribe(topic, peers, reply) => {
+            ToGossipManager::Subscribe(topic, nodes, reply) => {
                 // Channel to receive messages from the user (to the gossip overlay).
                 let (to_gossip_tx, to_gossip_rx) = mpsc::channel(128);
 
                 // Channel to receive messages from the gossip overlay (to the user).
                 //
-                // NOTE: We ignore `from_gossip_rx` because it will be created in the
-                // subscription actor as required by calling `.subscribe()` on the sender.
+                // NOTE: We ignore `from_gossip_rx` because it will be created in the subscription
+                // actor as required by calling `.subscribe()` on the sender.
                 let (from_gossip_tx, _from_gossip_rx) = broadcast::channel(128);
 
                 // Oneshot channel to notify the session sender(s) that the overlay has been
@@ -257,9 +223,9 @@ where
                 let (gossip_joined_tx, gossip_joined_rx) = oneshot::channel();
 
                 // Convert p2panda public keys to iroh endpoint ids.
-                let peers = peers
+                let nodes = nodes
                     .iter()
-                    .map(|key: &PublicKey| from_public_key(*key))
+                    .map(|key: &NodeId| from_public_key(*key))
                     .collect();
 
                 // Subscribe to the gossip topic (without waiting for a connection).
@@ -267,23 +233,24 @@ where
                     .gossip
                     .as_ref()
                     .expect("gossip was initialised when actor started")
-                    .subscribe(topic.into(), peers)
+                    .subscribe(topic.into(), nodes)
                     .await?;
 
                 // Spawn the session actor with the gossip topic subscription.
                 let (gossip_session_actor, _) = GossipSession::spawn_linked(
                     None,
                     (
-                        state.args.clone(),
+                        state.my_node_id,
+                        state.address_book.clone(),
                         topic,
                         subscription,
                         to_gossip_rx,
                         gossip_joined_rx,
                         myself.clone(),
-                        state.gossip_thread_pool.clone(),
+                        state.pool.clone(),
                     ),
                     myself.clone().into(),
-                    state.gossip_thread_pool.clone(),
+                    state.pool.clone(),
                 )
                 .await?;
 
@@ -314,10 +281,8 @@ where
 
                 // Return sender / receiver pair to the user.
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
-
-                Ok(())
             }
-            ToGossip::Unsubscribe(topic) => {
+            ToGossipManager::Unsubscribe(topic) => {
                 // Stop the session associated with this topic.
                 if let Some(actor) = state.sessions.sessions_by_topic.remove(&topic) {
                     let actor_id = actor.get_id();
@@ -330,132 +295,100 @@ where
                 // Drop all associated state.
                 state.sessions.gossip_senders.remove(&topic);
                 state.neighbours.remove(&topic);
-                state.topic_delivery_scopes.remove(&topic);
-
-                Ok(())
             }
-            ToGossip::JoinPeers(topic, peers) => {
+            ToGossipManager::JoinNodes(topic, nodes) => {
                 // Convert p2panda public keys to iroh endpoint ids.
-                let peers: Vec<EndpointId> = peers
+                let nodes: Vec<iroh::EndpointId> = nodes
                     .iter()
-                    .map(|key: &PublicKey| from_public_key(*key))
+                    .map(|key: &NodeId| from_public_key(*key))
                     .collect();
 
                 if let Some(session) = state.sessions.sessions_by_topic.get(&topic) {
-                    let _ = session.cast(ToGossipSession::JoinPeers(peers.clone()));
+                    let _ = session.cast(ToGossipSession::JoinNodes(nodes.clone()));
                 }
-
-                Ok(())
             }
-            ToGossip::ReceivedMessage {
-                bytes,
-                delivered_from: _,
-                delivery_scope,
-                topic,
-                session_id: _,
-            } => {
-                // Store the delivery scope of the received message.
-                state
-                    .topic_delivery_scopes
-                    .entry(topic)
-                    .or_default()
-                    .push(delivery_scope);
-
-                // Write the received bytes to all subscribers for the associated topic.
+            ToGossipManager::ReceivedMessage { bytes, topic, .. } => {
                 if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic) {
                     let _number_of_subscribers = from_gossip_tx.send(bytes)?;
                 }
-
-                Ok(())
             }
-            ToGossip::Joined {
+            ToGossipManager::Joined {
                 topic,
-                peers,
+                nodes,
                 session_id,
             } => {
-                debug!(topic = %topic.fmt_short(), peers = %peers.fmt_short(), "joined topic");
+                debug!(topic = %topic.fmt_short(), nodes = %nodes.fmt_short(), "joined topic");
 
                 // Inform the gossip sender actor that the overlay has been joined.
                 if let Some(gossip_joined_tx) =
                     state.sessions.gossip_joined_senders.remove(&session_id)
-                    && gossip_joined_tx.send(1).is_err()
+                    && gossip_joined_tx.send(()).is_err()
                 {
                     warn!("oneshot gossip joined receiver dropped")
                 }
 
-                // Generate an empty set of neighbours.
-                // This will be populated with joined peers in the `NeighborUp` event handler.
-                let peer_set = HashSet::new();
-                state.neighbours.insert(topic, peer_set);
+                let nodes = HashSet::from_iter(nodes.into_iter());
+                state.neighbours.insert(topic, nodes.clone());
 
-                // Generate `NeighborUp` events. These are required to initiate sync.
-                peers.iter().for_each(|peer| {
-                    let _ = myself.cast(ToGossip::NeighborUp {
-                        node_id: *peer,
-                        session_id,
-                    });
+                let _ = state.events_tx.send(GossipEvent::Joined { topic, nodes });
+            }
+            ToGossipManager::NeighborUp {
+                node_id,
+                session_id,
+            } => {
+                let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id) else {
+                    return Ok(());
+                };
+
+                let Some(neighbors) = state.neighbours.get_mut(topic) else {
+                    return Ok(());
+                };
+
+                let _ = state.events_tx.send(GossipEvent::NeighbourUp {
+                    topic: *topic,
+                    node: node_id,
                 });
 
-                Ok(())
+                neighbors.insert(node_id);
             }
-            ToGossip::NeighborUp {
+            ToGossipManager::NeighborDown {
                 node_id,
                 session_id,
             } => {
-                // Insert the node into the set of neighbours.
-                if let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(neighbours) = state.neighbours.get_mut(topic)
-                {
-                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
-                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
-                    ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
-                            eventually_consistent_streams_actor.into();
+                let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id) else {
+                    return Ok(());
+                };
 
-                        // Ask the eventually consistent streams actor to initiate a sync session
-                        // for this topic.
-                        actor.send_message(ToEventuallyConsistentStreams::InitiateSync(
-                            *topic, node_id,
-                        ))?;
-                    }
+                let Some(neighbors) = state.neighbours.get_mut(topic) else {
+                    return Ok(());
+                };
 
-                    neighbours.insert(node_id);
-                }
+                let _ = state.events_tx.send(GossipEvent::NeighbourDown {
+                    topic: *topic,
+                    node: node_id,
+                });
 
-                Ok(())
+                neighbors.remove(&node_id);
             }
-            ToGossip::NeighborDown {
-                node_id,
-                session_id,
-            } => {
-                // Remove the peer from the set of neighbours.
-                if let Some(topic) = state.sessions.sessions_by_actor_id.get(&session_id)
-                    && let Some(neighbours) = state.neighbours.get_mut(topic)
-                {
-                    if let Some(eventually_consistent_streams_actor) = registry::where_is(
-                        with_namespace(EVENTUALLY_CONSISTENT_STREAMS, &state.actor_namespace),
-                    ) {
-                        let actor: ActorRef<ToEventuallyConsistentStreams<M>> =
-                            eventually_consistent_streams_actor.into();
-
-                        // Ask the eventually consistent streams actor to end any sync sessions
-                        // for this topic.
-                        actor.send_message(ToEventuallyConsistentStreams::EndSync(
-                            *topic, node_id,
-                        ))?;
-                    }
-
-                    neighbours.remove(&node_id);
-                }
-
-                Ok(())
+            ToGossipManager::Events(reply) => {
+                let _ = reply.send(state.events_tx.subscribe());
             }
             #[cfg(test)]
-            ToGossip::DebugState(reply) => {
+            ToGossipManager::DebugState(reply) => {
                 let _ = reply.send(state.into());
-                Ok(())
+            }
+            #[cfg(test)]
+            ToGossipManager::Handle(reply) => {
+                let gossip = state
+                    .gossip
+                    .as_ref()
+                    .expect("gossip was initialised when actor started")
+                    .clone();
+                let _ = reply.send(gossip);
             }
         }
+
+        Ok(())
     }
 
     async fn handle_supervisor_evt(

@@ -50,19 +50,22 @@ impl Builder {
     }
 
     pub async fn spawn(self) -> Result<Endpoint, EndpointError> {
+        let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
+        let private_key = self.private_key.unwrap_or_default();
+        let my_node_id = private_key.public_key();
+
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
 
-            let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
-            let private_key = self.private_key.unwrap_or_default();
             let config = self.config.unwrap_or_default();
-
             let args = (network_id, private_key, config, self.address_book);
 
             IrohEndpoint::spawn(None, args, thread_pool).await?
         };
 
         Ok(Endpoint {
+            network_id,
+            my_node_id,
             actor_ref: Arc::new(RwLock::new(actor_ref)),
         })
     }
