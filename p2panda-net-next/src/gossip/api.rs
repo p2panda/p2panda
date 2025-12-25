@@ -60,7 +60,18 @@ impl Gossip {
                     .address_book
                     .node_infos_by_ephemeral_messaging_topics([topic])
                     .await?;
-                node_infos.iter().map(|info| info.id()).collect()
+                node_infos
+                    .iter()
+                    .filter_map(|info| {
+                        // Remove ourselves from list.
+                        let node_id = info.id();
+                        if node_id != self.my_node_id {
+                            Some(node_id)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
             };
 
             // Register a new session with the gossip actor.

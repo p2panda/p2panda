@@ -23,9 +23,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::addrs::{
-    NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo, UnsignedTransportInfo,
-};
+use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
 use crate::config::{DiscoveryConfig, IrohConfig};
 use crate::{NetworkId, NodeId, TopicId};
 
@@ -426,22 +424,6 @@ impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtoco
         let stream = BroadcastStream::new(self.event_tx.subscribe())
             .filter_map(|event| async { event.ok() });
         Box::pin(stream)
-    }
-}
-
-pub fn generate_node_info(args: &mut ApplicationArguments) -> NodeInfo {
-    let mut transport_info = UnsignedTransportInfo::from_addrs([TransportAddress::from_iroh(
-        args.public_key,
-        None,
-        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
-    )]);
-    transport_info.timestamp = (args.rng.random::<u32>() as u64).into();
-    let transport_info = transport_info.sign(&args.private_key).unwrap();
-    NodeInfo {
-        node_id: args.public_key,
-        bootstrap: false,
-        transports: Some(transport_info.into()),
-        metrics: NodeMetrics::default(),
     }
 }
 

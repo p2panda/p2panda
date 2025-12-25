@@ -173,8 +173,10 @@ impl ThreadLocalActor for IrohEndpoint {
                 ));
 
                 // Register list of possible "home relays" for this node.
-                let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
-                let relay_mode = iroh::RelayMode::Custom(relay_map);
+                let relay_mode = {
+                    let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
+                    iroh::RelayMode::Custom(relay_map)
+                };
 
                 // Connect iroh's endpoint with our own address book to "publish" our changed iroh
                 // address directly and "resolve" endpoint id's.

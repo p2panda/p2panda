@@ -6,9 +6,7 @@ use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
-use tokio::sync::broadcast::{self, Sender as BroadcastSender};
-use tokio::sync::mpsc::{self, Sender};
-use tokio::sync::oneshot::{self, Sender as OneshotSender};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, warn};
 
 use crate::address_book::AddressBook;
@@ -31,7 +29,8 @@ pub enum ToGossipManager {
     Subscribe(
         TopicId,
         Vec<NodeId>,
-        #[allow(clippy::type_complexity)] RpcReplyPort<(Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>,
+        #[allow(clippy::type_complexity)]
+        RpcReplyPort<(mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>)>,
     ),
 
     /// Unsubscribe from the given topic.
@@ -74,21 +73,11 @@ pub enum ToGossipManager {
 
     /// Subscribe to system events.
     Events(RpcReplyPort<broadcast::Receiver<GossipEvent>>),
-
-    /// Returns current actor's state for testing purposes.
-    #[cfg(test)]
-    DebugState(RpcReplyPort<crate::gossip::tests::DebugState>),
-
-    /// Return a handle to the iroh gossip actor.
-    ///
-    /// This is required when registering the gossip ALPN with the router.
-    #[cfg(test)]
-    Handle(RpcReplyPort<IrohGossip>),
 }
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
-type GossipSenders = HashMap<TopicId, (Sender<Vec<u8>>, BroadcastSender<Vec<u8>>)>;
+type GossipSenders = HashMap<TopicId, (mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>)>;
 
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
@@ -96,7 +85,7 @@ pub struct Sessions {
     pub sessions_by_actor_id: HashMap<ActorId, TopicId>,
     pub sessions_by_topic: HashMap<TopicId, ActorRef<ToGossipSession>>,
     pub gossip_senders: GossipSenders,
-    pub gossip_joined_senders: HashMap<ActorId, OneshotSender<()>>,
+    pub gossip_joined_senders: HashMap<ActorId, oneshot::Sender<()>>,
 }
 
 pub struct GossipManagerState {
@@ -131,7 +120,7 @@ impl ThreadLocalActor for GossipManager {
 
     async fn pre_start(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
         let (address_book, endpoint) = args;
@@ -150,11 +139,13 @@ impl ThreadLocalActor for GossipManager {
 
         let sessions = Sessions::default();
         let neighbours = HashMap::new();
+        let (events_tx, _) = broadcast::channel(64);
 
         // Gossip "worker" actors are all spawned in a dedicated thread.
         let pool = ThreadLocalActorSpawner::new();
 
-        let (events_tx, _) = broadcast::channel(64);
+        // Automatically register gossip ALPN after actor started.
+        myself.send_message(ToGossipManager::RegisterProtocol)?;
 
         Ok(GossipManagerState {
             my_node_id,
@@ -372,19 +363,6 @@ impl ThreadLocalActor for GossipManager {
             }
             ToGossipManager::Events(reply) => {
                 let _ = reply.send(state.events_tx.subscribe());
-            }
-            #[cfg(test)]
-            ToGossipManager::DebugState(reply) => {
-                let _ = reply.send(state.into());
-            }
-            #[cfg(test)]
-            ToGossipManager::Handle(reply) => {
-                let gossip = state
-                    .gossip
-                    .as_ref()
-                    .expect("gossip was initialised when actor started")
-                    .clone();
-                let _ = reply.send(gossip);
             }
         }
 

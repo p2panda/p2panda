@@ -30,7 +30,7 @@ pub struct AddressBookDiscovery {
 }
 
 /// Identifies source of discovered item.
-const PROVENANCE: &str = "address book";
+const PROVENANCE: &str = "address_book";
 
 impl AddressBookDiscovery {
     pub fn new(private_key: PrivateKey, address_book: AddressBook) -> Self {

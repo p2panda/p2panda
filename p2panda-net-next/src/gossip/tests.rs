@@ -13,6 +13,7 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
+use tracing::info;
 
 use crate::TopicId;
 use crate::address_book::AddressBook;
@@ -20,7 +21,7 @@ use crate::gossip::{Gossip, GossipEvent, GossipManagerState, ToGossipSession};
 use crate::iroh::Endpoint;
 use crate::protocols::hash_protocol_id_with_network_id;
 use crate::test_utils::{
-    generate_node_info, generate_trusted_node_info, setup_logging, test_args, test_args_from_seed,
+    generate_trusted_node_info, setup_logging, test_args, test_args_from_seed,
 };
 use crate::utils::from_private_key;
 
@@ -56,11 +57,11 @@ async fn correct_termination_state() {
     // - Assert: Ant's gossip actor state maps the subscribed topic to the public keys of
     //           bat and cat (neighbours)
 
-    let (mut ant_args, _, _) = test_args();
-    let (bat_args, _, _) = test_args();
-    let (cat_args, _, _) = test_args();
+    let (mut ant_args, _, _) = test_args_from_seed([1; 32]);
+    let (bat_args, _, _) = test_args_from_seed([2; 32]);
+    let (cat_args, _, _) = test_args_from_seed([3; 32]);
 
-    let topic = [3; 32];
+    let topic = [101; 32];
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();

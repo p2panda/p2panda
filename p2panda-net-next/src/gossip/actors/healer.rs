@@ -110,7 +110,14 @@ impl ThreadLocalActor for GossipHealer {
                         //
                         // HyParView can't automatically recover from these fragmentations, this
                         // approach makes it possible & gossipping more robust.
-                        state.topic_endpoint_ids = Vec::from_iter(event.value.into_iter().map(from_public_key));
+                        state.topic_endpoint_ids = Vec::from_iter(event.value.into_iter().filter_map(|node_id| {
+                            // Remove ourselves from list.
+                            if node_id != state.my_node_id {
+                                Some(from_public_key(node_id))
+                            } else {
+                                None
+                            }
+                        }));
                         state
                             .gossip_session_ref
                             .send_message(ToGossipSession::JoinNodes(state.topic_endpoint_ids.clone()))?;

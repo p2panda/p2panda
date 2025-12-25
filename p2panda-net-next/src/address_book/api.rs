@@ -183,7 +183,9 @@ impl AddressBook {
         Ok(())
     }
 
-    pub async fn store(&self) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
+    pub(crate) async fn store(
+        &self,
+    ) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
         let result = call!(self.actor_ref.read().await, ToAddressBookActor::Store)?;
         Ok(result)
     }
