@@ -7,8 +7,6 @@ mod events;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-pub use actors::{GossipManagerState, ToGossipSession};
 pub use api::{EphemeralStream, EphemeralStreamError, EphemeralSubscription, Gossip, GossipError};
 pub use builder::Builder;
 pub use events::GossipEvent;

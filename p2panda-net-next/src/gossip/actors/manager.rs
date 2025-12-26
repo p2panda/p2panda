@@ -94,8 +94,8 @@ pub struct GossipManagerState {
     endpoint: Endpoint,
     pool: ThreadLocalActorSpawner,
     gossip: Option<IrohGossip>,
-    pub(crate) sessions: Sessions,
-    pub(crate) neighbours: HashMap<TopicId, HashSet<NodeId>>,
+    sessions: Sessions,
+    neighbours: HashMap<TopicId, HashSet<NodeId>>,
     events_tx: broadcast::Sender<GossipEvent>,
 }
 

@@ -15,53 +15,30 @@ use tokio::sync::broadcast::error::TryRecvError;
 use tokio::time::sleep;
 use tracing::info;
 
-use crate::TopicId;
 use crate::address_book::AddressBook;
-use crate::gossip::{Gossip, GossipEvent, GossipManagerState, ToGossipSession};
+use crate::gossip::{Gossip, GossipEvent};
 use crate::iroh::Endpoint;
-use crate::protocols::hash_protocol_id_with_network_id;
-use crate::test_utils::{
-    generate_trusted_node_info, setup_logging, test_args, test_args_from_seed,
-};
-use crate::utils::from_private_key;
-
-// Use this internal type to introspect the actor's current state.
-pub struct DebugState {
-    neighbours: HashMap<TopicId, HashSet<PublicKey>>,
-    sessions_by_topic: HashMap<TopicId, ActorRef<ToGossipSession>>,
-}
-
-impl From<&mut GossipManagerState> for DebugState {
-    fn from(state: &mut GossipManagerState) -> Self {
-        Self {
-            neighbours: state.neighbours.clone(),
-            sessions_by_topic: state.sessions.sessions_by_topic.clone(),
-        }
-    }
-}
+use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args};
 
 #[tokio::test]
-async fn correct_termination_state() {
+async fn join_without_bootstrap() {
     setup_logging();
 
-    // This test asserts that the state of `sessions_by_topic` and `neighbours_by_topic` is
-    // correctly updated within the `Gossip` actor.
-    //
     // Scenario:
     //
     // - Ant joins the gossip topic
-    // - Bat joins the gossip topic using ant as bootstrap peer
-    // - Cat joins the gossip topic using ant as bootstrap peer
-    // - Terminate ant's gossip actor
-    // - Assert: Ant's gossip actor state includes the topic that was subscribed to
-    // - Assert: Ant's gossip actor state maps the subscribed topic to the public keys of
+    // - Bat joins the gossip topic using ant as bootstrap node
+    // - Cat joins the gossip topic using ant as bootstrap node
+    //
+    // - Assert: Ant's gossip state includes the topic that was subscribed to
+    // - Assert: Ant's gossip state maps the subscribed topic to the public keys of
     //           bat and cat (neighbours)
 
-    let (mut ant_args, _, _) = test_args_from_seed([1; 32]);
-    let (bat_args, _, _) = test_args_from_seed([2; 32]);
-    let (cat_args, _, _) = test_args_from_seed([3; 32]);
+    let (mut ant_args, _, _) = test_args();
+    let (bat_args, _, _) = test_args();
+    let (cat_args, _, _) = test_args();
 
-    let topic = [101; 32];
+    let topic = [1; 32];
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -71,16 +48,19 @@ async fn correct_termination_state() {
     // Create endpoints.
     let ant_endpoint = Endpoint::builder(ant_address_book.clone())
         .private_key(ant_args.private_key.clone())
+        .config(ant_args.iroh_config.clone())
         .spawn()
         .await
         .unwrap();
     let bat_endpoint = Endpoint::builder(bat_address_book.clone())
         .private_key(bat_args.private_key.clone())
+        .config(bat_args.iroh_config.clone())
         .spawn()
         .await
         .unwrap();
     let cat_endpoint = Endpoint::builder(cat_address_book.clone())
         .private_key(cat_args.private_key.clone())
+        .config(cat_args.iroh_config.clone())
         .spawn()
         .await
         .unwrap();
@@ -88,7 +68,8 @@ async fn correct_termination_state() {
     // Obtain ant's node information including direct addresses.
     let ant_info = generate_trusted_node_info(&mut ant_args).bootstrap();
 
-    // Bat & Cat discovers ant through some out-of-band process.
+    // Bat & Cat discovers ant through some out-of-band process. Note that Ant does _not_ have a
+    // bootstrap specified.
     bat_address_book
         .insert_node_info(ant_info.clone())
         .await
@@ -125,30 +106,22 @@ async fn correct_termination_state() {
     let _bat_to_gossip = bat_gossip.stream(topic).await.unwrap();
     let _cat_to_gossip = cat_gossip.stream(topic).await.unwrap();
 
-    // Ensure state expectations are correct for ant's gossip actor.
-    let mut events = ant_gossip.events().await.unwrap();
-    assert_eq!(
-        events.recv().await.unwrap(),
-        GossipEvent::Joined {
-            topic,
-            nodes: HashSet::from([])
-        }
-    );
-
+    // Ant should have joined the overlay and learned about two more nodes.
     let mut neighbours = HashSet::new();
+    let mut events = ant_gossip.events().await.unwrap();
 
-    if let GossipEvent::NeighbourUp {
-        node,
+    if let GossipEvent::Joined {
         topic: event_topic,
+        nodes,
     } = events.recv().await.unwrap()
     {
         assert_eq!(event_topic, topic);
-        neighbours.insert(node);
+        neighbours.extend(nodes);
     }
 
     if let GossipEvent::NeighbourUp {
-        node,
         topic: event_topic,
+        node,
     } = events.recv().await.unwrap()
     {
         assert_eq!(event_topic, topic);
@@ -166,7 +139,7 @@ async fn correct_termination_state() {
 //     // Scenario:
 //     //
 //     // - Ant joins the gossip topic
-//     // - Bat joins the gossip topic using ant as bootstrap peer
+//     // - Bat joins the gossip topic using ant as bootstrap node
 //     // - Assert: Ant and bat can exchange messages
 //
 //     let (ant_args, ant_store, _) = test_args();
@@ -207,7 +180,7 @@ async fn correct_termination_state() {
 //
 //     let thread_pool = ThreadLocalActorSpawner::new();
 //
-//     // Spawn one address book for each peer.
+//     // Spawn one address book for each node.
 //     let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
 //     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
 //
@@ -309,8 +282,8 @@ async fn correct_termination_state() {
 //     // Scenario:
 //     //
 //     // - Ant joins the gossip topic
-//     // - Bat joins the gossip topic using ant as bootstrap peer
-//     // - Cat joins the gossip topic using bat as bootstrap peer
+//     // - Bat joins the gossip topic using ant as bootstrap node
+//     // - Cat joins the gossip topic using bat as bootstrap node
 //     // - Assert: Ant, bat and cat can exchange messages
 //
 //     let (ant_args, ant_store, _) = test_args();
@@ -506,10 +479,10 @@ async fn correct_termination_state() {
 //     // Scenario:
 //     //
 //     // - Ant joins the gossip topic
-//     // - Bat joins the gossip topic using ant as bootstrap peer
+//     // - Bat joins the gossip topic using ant as bootstrap node
 //     // - Assert: Ant and bat can exchange messages
 //     // - Ant goes offline
-//     // - Cat joins the gossip topic using ant as bootstrap peer
+//     // - Cat joins the gossip topic using ant as bootstrap node
 //     // - Assert: Bat and cat can't exchange messages (proof of partition)
 //     // - Cat learns about bat through out-of-band discovery process
 //     // - Cat joins bat on established gossip topic
@@ -564,7 +537,7 @@ async fn correct_termination_state() {
 //
 //     let thread_pool = ThreadLocalActorSpawner::new();
 //
-//     // Spawn one address book for each peer.
+//     // Spawn one address book for each node.
 //     let ant_actor_namespace = generate_actor_namespace(&ant_args.public_key);
 //     let bat_actor_namespace = generate_actor_namespace(&bat_args.public_key);
 //     let cat_actor_namespace = generate_actor_namespace(&cat_args.public_key);
