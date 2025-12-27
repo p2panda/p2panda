@@ -17,8 +17,9 @@ use rand_chacha::ChaCha20Rng;
 use tokio::sync::{Notify, broadcast};
 use tracing::{debug, warn};
 
+use crate::NodeId;
 use crate::address_book::{AddressBook, AddressBookError};
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::NodeInfo;
 use crate::discovery::DiscoveryConfig;
 use crate::discovery::actors::DISCOVERY_PROTOCOL_ID;
 use crate::discovery::actors::session::{
@@ -27,8 +28,8 @@ use crate::discovery::actors::session::{
 };
 use crate::discovery::actors::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkFromHere};
 use crate::discovery::events::{DiscoveryEvent, SessionRole};
-use crate::iroh::Endpoint;
-use crate::utils::{ShortFormat, to_public_key};
+use crate::iroh_endpoint::{Endpoint, to_public_key};
+use crate::utils::ShortFormat;
 
 /// Maximum duration of inactivity to accept before timing out the connection.
 pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);

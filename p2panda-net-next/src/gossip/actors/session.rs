@@ -21,7 +21,8 @@ use crate::gossip::actors::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::gossip::actors::listener::GossipListener;
 use crate::gossip::actors::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::gossip::actors::sender::{GossipSender, ToGossipSender};
-use crate::utils::{ShortFormat, to_public_key};
+use crate::iroh_endpoint::to_public_key;
+use crate::utils::ShortFormat;
 use crate::{NodeId, TopicId};
 
 pub enum ToGossipSession {

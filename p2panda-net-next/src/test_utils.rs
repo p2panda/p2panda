@@ -26,7 +26,8 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
 use crate::discovery::DiscoveryConfig;
-use crate::iroh::IrohConfig;
+use crate::iroh_endpoint::IrohConfig;
+use crate::iroh_mdns::MdnsDiscoveryMode;
 use crate::{NetworkId, NodeId, TopicId};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];
@@ -39,6 +40,7 @@ pub struct ApplicationArguments {
     pub public_key: PublicKey,
     pub iroh_config: IrohConfig,
     pub discovery_config: DiscoveryConfig,
+    pub mdns_mode: MdnsDiscoveryMode,
     pub root_thread_pool: ThreadLocalActorSpawner,
 }
 
@@ -48,6 +50,7 @@ pub struct ArgsBuilder {
     private_key: Option<PrivateKey>,
     iroh_config: Option<IrohConfig>,
     discovery_config: Option<DiscoveryConfig>,
+    mdns_mode: Option<MdnsDiscoveryMode>,
 }
 
 impl ArgsBuilder {
@@ -58,6 +61,7 @@ impl ArgsBuilder {
             private_key: None,
             iroh_config: None,
             discovery_config: None,
+            mdns_mode: None,
         }
     }
 
@@ -74,6 +78,11 @@ impl ArgsBuilder {
 
     pub fn with_iroh_config(mut self, config: IrohConfig) -> Self {
         self.iroh_config = Some(config);
+        self
+    }
+
+    pub fn with_mdns_mode(mut self, mode: MdnsDiscoveryMode) -> Self {
+        self.mdns_mode = Some(mode);
         self
     }
 
@@ -97,6 +106,7 @@ impl ArgsBuilder {
             private_key,
             iroh_config: self.iroh_config.unwrap_or_default(),
             discovery_config: self.discovery_config.unwrap_or_default(),
+            mdns_mode: self.mdns_mode.unwrap_or_default(),
             root_thread_pool: ThreadLocalActorSpawner::new(),
         }
     }

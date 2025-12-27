@@ -6,7 +6,7 @@ use crate::address_book::AddressBook;
 use crate::gossip::GossipConfig;
 use crate::gossip::actors::GossipManager;
 use crate::gossip::api::{Gossip, GossipError};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 
 pub struct Builder {
     address_book: AddressBook,

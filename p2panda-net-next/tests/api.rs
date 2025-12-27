@@ -3,7 +3,7 @@
 use p2panda_core::PrivateKey;
 use p2panda_net_next::address_book::AddressBook;
 use p2panda_net_next::discovery::Discovery;
-use p2panda_net_next::iroh::Endpoint;
+use p2panda_net_next::iroh_endpoint::Endpoint;
 
 #[tokio::test]
 async fn modular_api() {

@@ -7,7 +7,7 @@ use tokio::time::sleep;
 
 use crate::address_book::AddressBook;
 use crate::gossip::{Gossip, GossipEvent};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args};
 
 #[tokio::test]

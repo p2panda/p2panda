@@ -2,10 +2,11 @@
 
 use tokio::task::JoinHandle;
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::NodeInfo;
 use crate::discovery::{Discovery, DiscoveryEvent, SessionRole};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 use crate::test_utils::{
     ApplicationArguments, generate_trusted_node_info, setup_logging, test_args_from_seed,
 };

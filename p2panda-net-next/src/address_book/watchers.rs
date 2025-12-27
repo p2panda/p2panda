@@ -5,10 +5,10 @@ use std::collections::HashSet;
 
 use tracing::debug;
 
-use crate::TopicId;
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::NodeInfo;
 use crate::utils::ShortFormat;
 use crate::watchers::{UpdateResult, Watched, WatchedValue};
+use crate::{NodeId, TopicId};
 
 /// Watch for changes of a node's info.
 #[derive(Default)]

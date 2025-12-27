@@ -13,7 +13,8 @@ use tokio::sync::Notify;
 use tokio::time;
 use tracing::trace;
 
-use crate::addrs::{NodeId, NodeInfo};
+use crate::NodeId;
+use crate::addrs::NodeInfo;
 use crate::discovery::DiscoveryConfig;
 use crate::discovery::actors::ToDiscoveryManager;
 use crate::discovery::backoff::{Backoff, Config as BackoffConfig};

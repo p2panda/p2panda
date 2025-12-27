@@ -12,7 +12,7 @@ use crate::address_book::{AddressBook, AddressBookError};
 use crate::gossip::actors::ToGossipManager;
 use crate::gossip::builder::Builder;
 use crate::gossip::events::GossipEvent;
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 use crate::{NodeId, TopicId};
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the

@@ -13,9 +13,9 @@ use crate::address_book::AddressBook;
 use crate::gossip::GossipConfig;
 use crate::gossip::actors::session::{GossipSession, ToGossipSession};
 use crate::gossip::events::GossipEvent;
-use crate::iroh::Endpoint;
-use crate::protocols::hash_protocol_id_with_network_id;
-use crate::utils::{ShortFormat, from_public_key};
+use crate::hash_protocol_id_with_network_id;
+use crate::iroh_endpoint::{Endpoint, from_public_key};
+use crate::utils::ShortFormat;
 use crate::{NodeId, TopicId};
 
 pub enum ToGossipManager {

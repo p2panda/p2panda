@@ -8,8 +8,8 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::address_book::AddressBook;
-use crate::iroh::Builder;
-use crate::iroh::actors::{ConnectError, ToIrohEndpoint};
+use crate::iroh_endpoint::Builder;
+use crate::iroh_endpoint::actors::{ConnectError, ToIrohEndpoint};
 use crate::{NetworkId, NodeId};
 
 #[derive(Clone)]

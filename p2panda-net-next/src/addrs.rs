@@ -12,12 +12,12 @@ use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::timestamp::{HybridTimestamp, Timestamp};
+use crate::NodeId;
 #[cfg(test)]
-use crate::utils::from_public_key;
-use crate::utils::to_public_key;
-
-pub type NodeId = p2panda_core::PublicKey;
+use crate::iroh_endpoint::from_public_key;
+#[cfg(feature = "iroh_endpoint")]
+use crate::iroh_endpoint::to_public_key;
+use crate::timestamp::{HybridTimestamp, Timestamp};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeInfo {
@@ -93,6 +93,7 @@ impl NodeInfo {
     }
 }
 
+#[cfg(feature = "iroh_endpoint")]
 impl TryFrom<NodeInfo> for iroh::EndpointAddr {
     type Error = NodeInfoError;
 
@@ -114,6 +115,7 @@ impl TryFrom<NodeInfo> for iroh::EndpointAddr {
     }
 }
 
+#[cfg(feature = "iroh_endpoint")]
 impl From<iroh::EndpointAddr> for NodeInfo {
     fn from(addr: iroh::EndpointAddr) -> Self {
         let node_id = to_public_key(addr.id);
@@ -450,6 +452,7 @@ impl UnsignedTransportInfo {
     }
 }
 
+#[cfg(feature = "iroh_endpoint")]
 impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
     fn from(addr: iroh::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
@@ -546,6 +549,7 @@ impl NodeTransportInfo for TrustedTransportInfo {
     }
 }
 
+#[cfg(feature = "iroh_endpoint")]
 impl From<iroh::EndpointAddr> for TrustedTransportInfo {
     fn from(addr: iroh::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
@@ -579,6 +583,7 @@ pub enum TransportAddress {
     /// To connect to another node either their "home relay" URL needs to be known (to coordinate
     /// holepunching or relayed connection fallback) or at least one reachable "direct address"
     /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
+    #[cfg(feature = "iroh_endpoint")]
     Iroh(iroh::EndpointAddr),
 }
 
@@ -604,6 +609,7 @@ impl TransportAddress {
     pub fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
         // Make sure the given address matches the node id.
         #[allow(irrefutable_let_patterns)]
+        #[cfg(feature = "iroh_endpoint")]
         if let TransportAddress::Iroh(endpoint_addr) = self
             && &to_public_key(endpoint_addr.id) != node_id
         {
@@ -614,6 +620,7 @@ impl TransportAddress {
     }
 }
 
+#[cfg(feature = "iroh_endpoint")]
 impl From<iroh::EndpointAddr> for TransportAddress {
     fn from(addr: iroh::EndpointAddr) -> Self {
         Self::Iroh(addr)
@@ -623,6 +630,7 @@ impl From<iroh::EndpointAddr> for TransportAddress {
 impl Display for TransportAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(feature = "iroh_endpoint")]
             TransportAddress::Iroh(endpoint_addr) => {
                 write!(f, "[iroh] {:?}", endpoint_addr.addrs)
             }

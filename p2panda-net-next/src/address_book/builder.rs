@@ -9,9 +9,10 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
 
+use crate::NodeId;
 use crate::address_book::actor::AddressBookActor;
 use crate::address_book::{AddressBook, AddressBookError};
-use crate::addrs::{NodeId, NodeInfo};
+use crate::addrs::NodeInfo;
 
 pub struct Builder {
     pub(crate) store: Option<BoxedAddressBookStore<NodeId, NodeInfo>>,

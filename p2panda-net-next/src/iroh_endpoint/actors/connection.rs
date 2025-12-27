@@ -9,11 +9,11 @@ use thiserror::Error;
 use tracing::field::Empty;
 use tracing::{Instrument, debug, info_span, warn};
 
-use crate::NodeId;
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
-use crate::iroh::actors::endpoint::{ConnectError, ProtocolMap, ToIrohEndpoint};
-use crate::protocols::ProtocolId;
-use crate::utils::{ShortFormat, to_public_key};
+use crate::iroh_endpoint::actors::endpoint::{ConnectError, ProtocolMap, ToIrohEndpoint};
+use crate::iroh_endpoint::to_public_key;
+use crate::utils::ShortFormat;
+use crate::{NodeId, ProtocolId};
 
 pub type ConnectReplyPort = RpcReplyPort<Result<iroh::endpoint::Connection, ConnectError>>;
 

@@ -16,7 +16,7 @@ use ractor::{ActorProcessingErr, ActorRef};
 use crate::addrs::NodeInfo;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::discovery::actors::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 use crate::{NodeId, TopicId};
 
 pub type DiscoverySessionId = u64;

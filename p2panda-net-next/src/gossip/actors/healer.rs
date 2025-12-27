@@ -11,7 +11,7 @@ use tracing::trace;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::actors::session::ToGossipSession;
-use crate::utils::from_public_key;
+use crate::iroh_endpoint::from_public_key;
 use crate::watchers::WatcherReceiver;
 use crate::{NodeId, TopicId};
 

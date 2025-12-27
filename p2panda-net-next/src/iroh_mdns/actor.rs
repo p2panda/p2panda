@@ -8,13 +8,12 @@ use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
-use crate::addrs::{
-    AuthenticatedTransportInfo, NodeId, NodeInfo, NodeTransportInfo, TransportInfo,
-};
-use crate::iroh::config::{IrohConfig, MdnsDiscoveryMode};
-use crate::iroh::user_data::UserDataTransportInfo;
-use crate::utils::{from_public_key, to_public_key};
+use crate::addrs::{AuthenticatedTransportInfo, NodeInfo, NodeTransportInfo, TransportInfo};
+use crate::iroh_endpoint::user_data::UserDataTransportInfo;
+use crate::iroh_endpoint::{Endpoint, from_public_key, to_public_key};
+use crate::iroh_mdns::MdnsDiscoveryMode;
 
 const MDNS_SERVICE_NAME: &str = "p2pandav1";
 
@@ -38,37 +37,35 @@ pub enum ToMdns {
 }
 
 pub struct MdnsState {
-    my_id: NodeId,
+    my_node_id: NodeId,
     address_book: AddressBook,
     service: Option<MdnsDiscovery>,
     handle: Option<JoinHandle<()>>,
 }
 
 #[derive(Default)]
-pub struct Mdns;
+pub struct MdnsActor;
 
-impl ThreadLocalActor for Mdns {
+impl ThreadLocalActor for MdnsActor {
     type Msg = ToMdns;
 
     type State = MdnsState;
 
-    type Arguments = (NodeId, IrohConfig, AddressBook);
+    type Arguments = (MdnsDiscoveryMode, AddressBook, Endpoint);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (my_id, iroh_config, address_book) = args;
+        let (mode, address_book, endpoint) = args;
+        let my_node_id = endpoint.node_id();
 
         // Automatically initialise mDNS service after starting actor.
-        myself.send_message(ToMdns::Initialise(
-            from_public_key(my_id),
-            iroh_config.mdns_discovery_mode,
-        ))?;
+        myself.send_message(ToMdns::Initialise(from_public_key(my_node_id), mode))?;
 
         Ok(MdnsState {
-            my_id,
+            my_node_id,
             address_book,
             service: None,
             handle: None,
@@ -121,7 +118,7 @@ impl ThreadLocalActor for Mdns {
                     let mut rx = state
                         .address_book
                         .watch_node_info(
-                            state.my_id,
+                            state.my_node_id,
                             // Disable "updates only" to inform mdns about our current transport
                             // info as soon as possible.
                             false,

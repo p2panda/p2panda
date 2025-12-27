@@ -19,15 +19,15 @@ use tracing::{debug, warn};
 
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::address_book::{AddressBook, AddressBookError};
-use crate::iroh::actors::connection::{
+use crate::iroh_endpoint::actors::connection::{
     ConnectReplyPort, ConnectionActorError, IrohConnection, IrohConnectionArgs,
 };
-use crate::iroh::actors::is_globally_reachable_endpoint;
-use crate::iroh::config::IrohConfig;
-use crate::iroh::discovery::AddressBookDiscovery;
-use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
-use crate::utils::{ShortFormat, from_private_key};
-use crate::{NetworkId, NodeId};
+use crate::iroh_endpoint::actors::is_globally_reachable_endpoint;
+use crate::iroh_endpoint::config::IrohConfig;
+use crate::iroh_endpoint::discovery::AddressBookDiscovery;
+use crate::iroh_endpoint::from_private_key;
+use crate::utils::ShortFormat;
+use crate::{NetworkId, NodeId, ProtocolId, hash_protocol_id_with_network_id};
 
 /// Period of inactivity before sending a keep-alive packet.
 ///

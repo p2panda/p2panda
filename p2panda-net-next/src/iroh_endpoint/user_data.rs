@@ -125,7 +125,7 @@ mod tests {
     use iroh::discovery::UserData;
     use p2panda_core::PrivateKey;
 
-    use crate::utils::from_public_key;
+    use crate::iroh_endpoint::from_public_key;
 
     use super::{AuthenticatedTransportInfo, UserDataTransportInfo};
 

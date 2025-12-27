@@ -11,7 +11,7 @@ use crate::address_book::AddressBook;
 use crate::discovery::actors::DiscoveryManager;
 use crate::discovery::config::DiscoveryConfig;
 use crate::discovery::{Discovery, DiscoveryError};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 
 pub struct Builder {
     config: Option<DiscoveryConfig>,

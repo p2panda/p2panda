@@ -8,9 +8,9 @@ use tokio::sync::RwLock;
 
 use crate::NetworkId;
 use crate::address_book::AddressBook;
-use crate::iroh::actors::IrohEndpoint;
-use crate::iroh::api::{Endpoint, EndpointError};
-use crate::iroh::config::IrohConfig;
+use crate::iroh_endpoint::actors::IrohEndpoint;
+use crate::iroh_endpoint::api::{Endpoint, EndpointError};
+use crate::iroh_endpoint::config::IrohConfig;
 
 pub const DEFAULT_NETWORK_ID: NetworkId = [
     247, 69, 248, 242, 132, 120, 159, 230, 98, 100, 214, 200, 78, 40, 79, 94, 174, 8, 12, 27, 84,

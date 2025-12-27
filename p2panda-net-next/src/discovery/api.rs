@@ -10,7 +10,7 @@ use crate::address_book::AddressBook;
 use crate::discovery::actors::ToDiscoveryManager;
 use crate::discovery::events::DiscoveryEvent;
 use crate::discovery::{Builder, DiscoveryMetrics};
-use crate::iroh::Endpoint;
+use crate::iroh_endpoint::Endpoint;
 
 #[derive(Clone, Debug)]
 pub struct Discovery {

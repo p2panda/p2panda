@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-// TODO: Move actors into regarding modules.
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;
-mod cbor;
-#[cfg(feature = "random_walk_discovery")]
+pub mod cbor;
+#[cfg(feature = "confidential_discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]
 pub mod gossip;
 #[cfg(feature = "iroh_endpoint")]
-pub mod iroh;
-mod protocols;
+pub mod iroh_endpoint;
+#[cfg(feature = "iroh_mdns")]
+pub mod iroh_mdns;
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 pub mod timestamp;
-mod utils;
+pub mod utils;
 pub mod watchers;
 
-pub use addrs::NodeId;
+pub type NodeId = p2panda_core::PublicKey;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///
@@ -40,3 +40,24 @@ pub type TopicId = [u8; 32];
 /// protocols, any communication attempts will fail if they are not using the same network
 /// identifier.
 pub type NetworkId = [u8; 32];
+
+/// Unique byte identifier for a network protocol.
+///
+/// The protocol identifier is supplied along with a protocol handler when registering a network
+/// protocol.
+///
+/// A hash function is performed against each network protocol identifier which is registered with
+/// `p2panda-net`. Even if two instances of `p2panda-net` are created with the same network
+/// protocols, any communication attempts will fail if they are not using the same network
+/// identifier.
+pub type ProtocolId = Vec<u8>;
+
+/// Hash the concatenation of the given protocol- and network identifiers.
+fn hash_protocol_id_with_network_id(
+    protocol_id: impl AsRef<[u8]>,
+    network_id: NetworkId,
+) -> Vec<u8> {
+    p2panda_core::Hash::new([protocol_id.as_ref(), &network_id].concat())
+        .as_bytes()
+        .to_vec()
+}
