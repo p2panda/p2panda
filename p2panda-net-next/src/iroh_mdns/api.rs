@@ -13,6 +13,7 @@ use crate::iroh_mdns::actor::ToMdns;
 
 #[derive(Clone)]
 pub struct MdnsDiscovery {
+    #[allow(unused)]
     pub(crate) actor_ref: Arc<RwLock<ActorRef<ToMdns>>>,
 }
 
