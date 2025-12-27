@@ -12,7 +12,9 @@ pub mod gossip;
 pub mod iroh_endpoint;
 #[cfg(feature = "iroh_mdns")]
 pub mod iroh_mdns;
-#[cfg(test)]
+#[cfg(feature = "log_sync")]
+pub mod log_sync;
+#[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod timestamp;
 pub mod utils;

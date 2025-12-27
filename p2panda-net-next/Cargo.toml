@@ -13,14 +13,13 @@ default = [
   "iroh_mdns",
   "confidential_discovery",
   "gossip",
+  "log_sync",
 ]
 address_book = []
 iroh_endpoint = [
   "address_book",
-  # TODO: Make dependencies optional.
-  # "dep:iroh",
-  # "dep:iroh-base",
-  # "dep:iroh-gossip",
+  "dep:iroh",
+  "dep:iroh-base",
 ]
 iroh_mdns = [
   "iroh_endpoint",
@@ -29,28 +28,33 @@ iroh_mdns = [
 confidential_discovery = [
   "address_book",
   "iroh_endpoint",
-  # TODO: Make dependencies optional.
-  # "dep:p2panda-discovery",
+  "dep:p2panda-discovery",
 ]
 gossip = [
   "address_book",
   "iroh_endpoint",
-  # TODO: Make dependencies optional.
-  # "dep:iroh-gossip",
+  "dep:iroh-gossip",
 ]
+log_sync = [
+  "address_book",
+  "iroh_endpoint",
+  "gossip",
+  "dep:p2panda-sync",
+]
+test_utils = []
 
 [dependencies]
 ciborium = "0.2.2"
 futures-channel = "0.3.31"
 futures-util = "0.3.31"
 hex = "0.4.3"
-iroh = { version = "0.95.1", default-features = false }
-iroh-base = "0.95.1"
+iroh = { version = "0.95.1", default-features = false, optional = true }
+iroh-base = { version = "0.95.1", optional = true }
 # TODO: Temporary fix. See related issue: https://github.com/n0-computer/iroh-gossip/pull/117
-iroh-gossip = { git = "https://github.com/p2panda/iroh-gossip", rev = "6fad0f740c031876dbb412c7b8237776314d763e" }
+iroh-gossip = { git = "https://github.com/p2panda/iroh-gossip", rev = "6fad0f740c031876dbb412c7b8237776314d763e", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
-p2panda-discovery = { path = "../p2panda-discovery-next", package = "p2panda-discovery-next", version = "0.4.0", features = ["test_utils"] }
-p2panda-sync = { path = "../p2panda-sync-next", package = "p2panda-sync-next", version = "0.4.0" }
+p2panda-discovery = { path = "../p2panda-discovery-next", package = "p2panda-discovery-next", version = "0.4.0", features = ["test_utils"], optional = true }
+p2panda-sync = { path = "../p2panda-sync-next", package = "p2panda-sync-next", version = "0.4.0", optional = true }
 ractor = "0.15.8"
 rand = "0.9.2"
 rand_chacha = "0.9.0"
