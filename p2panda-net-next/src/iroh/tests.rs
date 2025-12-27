@@ -60,9 +60,6 @@ async fn establish_connection() {
         .await
         .unwrap();
 
-    // Wait for endpoints to bind.
-    sleep(Duration::from_millis(50)).await;
-
     // Alice registers the "echo" protocol to accept incoming connections for it.
     alice_endpoint
         .accept(ECHO_PROTOCOL_ID, EchoProtocol)
