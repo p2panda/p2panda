@@ -8,8 +8,8 @@ use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
 
 use crate::address_book::AddressBook;
-use crate::config::DiscoveryConfig;
 use crate::discovery::actors::DiscoveryManager;
+use crate::discovery::config::DiscoveryConfig;
 use crate::discovery::{Discovery, DiscoveryError};
 use crate::iroh::Endpoint;
 

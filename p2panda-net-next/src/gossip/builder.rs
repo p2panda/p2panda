@@ -3,6 +3,7 @@
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
 use crate::address_book::AddressBook;
+use crate::gossip::GossipConfig;
 use crate::gossip::actors::GossipManager;
 use crate::gossip::api::{Gossip, GossipError};
 use crate::iroh::Endpoint;
@@ -10,6 +11,7 @@ use crate::iroh::Endpoint;
 pub struct Builder {
     address_book: AddressBook,
     endpoint: Endpoint,
+    config: Option<GossipConfig>,
 }
 
 impl Builder {
@@ -17,7 +19,13 @@ impl Builder {
         Self {
             address_book,
             endpoint,
+            config: None,
         }
+    }
+
+    pub fn config(mut self, config: GossipConfig) -> Self {
+        self.config = Some(config);
+        self
     }
 
     pub async fn spawn(self) -> Result<Gossip, GossipError> {
@@ -25,7 +33,10 @@ impl Builder {
 
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
-            let args = (self.address_book.clone(), self.endpoint);
+
+            let config = self.config.unwrap_or_default();
+            let args = (config, self.address_book.clone(), self.endpoint);
+
             GossipManager::spawn(None, args, thread_pool).await?
         };
 

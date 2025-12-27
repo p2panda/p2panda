@@ -3,13 +3,14 @@
 use std::collections::{HashMap, HashSet};
 
 use iroh_gossip::net::Gossip as IrohGossip;
-use iroh_gossip::proto::{Config as IrohGossipConfig, DeliveryScope as IrohDeliveryScope};
+use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, warn};
 
 use crate::address_book::AddressBook;
+use crate::gossip::GossipConfig;
 use crate::gossip::actors::session::{GossipSession, ToGossipSession};
 use crate::gossip::events::GossipEvent;
 use crate::iroh::Endpoint;
@@ -116,18 +117,16 @@ impl ThreadLocalActor for GossipManager {
 
     type Msg = ToGossipManager;
 
-    type Arguments = (AddressBook, Endpoint);
+    type Arguments = (GossipConfig, AddressBook, Endpoint);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (address_book, endpoint) = args;
+        let (config, address_book, endpoint) = args;
         let my_node_id = endpoint.node_id();
 
-        // TODO: Allow configuration for users.
-        let config = IrohGossipConfig::default();
         let mixed_alpn = hash_protocol_id_with_network_id(iroh_gossip::ALPN, endpoint.network_id());
 
         let gossip = IrohGossip::builder()

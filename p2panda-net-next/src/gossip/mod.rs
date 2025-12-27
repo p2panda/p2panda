@@ -3,10 +3,12 @@
 mod actors;
 mod api;
 mod builder;
+mod config;
 mod events;
 #[cfg(test)]
 mod tests;
 
 pub use api::{EphemeralStream, EphemeralStreamError, EphemeralSubscription, Gossip, GossipError};
 pub use builder::Builder;
+pub use config::{DEFAULT_MAX_MESSAGE_SIZE, GossipConfig, HyParViewConfig, PlumTreeConfig};
 pub use events::GossipEvent;

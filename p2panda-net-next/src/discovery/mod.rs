@@ -4,6 +4,7 @@ mod actors;
 mod api;
 mod backoff;
 mod builder;
+mod config;
 mod events;
 #[cfg(test)]
 mod tests;
@@ -11,4 +12,5 @@ mod tests;
 pub use actors::DiscoveryMetrics;
 pub use api::{Discovery, DiscoveryError};
 pub use builder::Builder;
+pub use config::DiscoveryConfig;
 pub use events::{DiscoveryEvent, SessionRole};

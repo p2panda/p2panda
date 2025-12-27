@@ -5,8 +5,6 @@
 pub mod address_book;
 pub mod addrs;
 mod cbor;
-// TODO: Move configs into regarding modules.
-mod config;
 #[cfg(feature = "random_walk_discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]
@@ -21,8 +19,6 @@ mod utils;
 pub mod watchers;
 
 pub use addrs::NodeId;
-#[cfg(feature = "mdns")]
-pub use config::MdnsDiscoveryMode;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
 ///

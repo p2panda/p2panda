@@ -12,7 +12,7 @@ use crate::address_book::AddressBook;
 use crate::addrs::{
     AuthenticatedTransportInfo, NodeId, NodeInfo, NodeTransportInfo, TransportInfo,
 };
-use crate::config::{IrohConfig, MdnsDiscoveryMode};
+use crate::iroh::config::{IrohConfig, MdnsDiscoveryMode};
 use crate::iroh::user_data::UserDataTransportInfo;
 use crate::utils::{from_public_key, to_public_key};
 

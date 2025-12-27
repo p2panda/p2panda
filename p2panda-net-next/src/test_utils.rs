@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(unused)]
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::marker::PhantomData;
@@ -24,7 +25,8 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
-use crate::config::{DiscoveryConfig, IrohConfig};
+use crate::discovery::DiscoveryConfig;
+use crate::iroh::IrohConfig;
 use crate::{NetworkId, NodeId, TopicId};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];

@@ -19,7 +19,7 @@ use tracing::{debug, warn};
 
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::addrs::{NodeId, NodeInfo};
-use crate::config::DiscoveryConfig;
+use crate::discovery::DiscoveryConfig;
 use crate::discovery::actors::DISCOVERY_PROTOCOL_ID;
 use crate::discovery::actors::session::{
     DiscoverySession, DiscoverySessionArguments, DiscoverySessionId, DiscoverySessionRole,

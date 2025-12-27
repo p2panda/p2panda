@@ -19,11 +19,11 @@ use tracing::{debug, warn};
 
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::address_book::{AddressBook, AddressBookError};
-use crate::config::IrohConfig;
 use crate::iroh::actors::connection::{
     ConnectReplyPort, ConnectionActorError, IrohConnection, IrohConnectionArgs,
 };
 use crate::iroh::actors::is_globally_reachable_endpoint;
+use crate::iroh::config::IrohConfig;
 use crate::iroh::discovery::AddressBookDiscovery;
 use crate::protocols::{ProtocolId, hash_protocol_id_with_network_id};
 use crate::utils::{ShortFormat, from_private_key};

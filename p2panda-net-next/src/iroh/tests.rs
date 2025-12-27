@@ -5,9 +5,8 @@ use std::time::Duration;
 use iroh::protocol::ProtocolHandler;
 use tokio::time::sleep;
 
-use crate::MdnsDiscoveryMode;
 use crate::address_book::AddressBook;
-use crate::iroh::Endpoint;
+use crate::iroh::{Endpoint, MdnsDiscoveryMode};
 use crate::test_utils::{
     generate_trusted_node_info, setup_logging, test_args, test_args_from_seed,
 };

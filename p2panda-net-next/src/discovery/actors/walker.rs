@@ -14,7 +14,7 @@ use tokio::time;
 use tracing::trace;
 
 use crate::addrs::{NodeId, NodeInfo};
-use crate::config::DiscoveryConfig;
+use crate::discovery::DiscoveryConfig;
 use crate::discovery::actors::ToDiscoveryManager;
 use crate::discovery::backoff::{Backoff, Config as BackoffConfig};
 
