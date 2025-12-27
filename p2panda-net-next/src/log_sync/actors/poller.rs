@@ -9,49 +9,46 @@ use p2panda_sync::FromSync;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::broadcast;
-use tracing::trace;
-
-use crate::actors::ActorNamespace;
 
 pub enum ToSyncPoller {
     /// Wait for an event from the sync manager.
     WaitForEvent,
 }
 
-pub struct SyncPollerState<S, E> {
-    stream: S,
-    sender: broadcast::Sender<FromSync<E>>,
+pub struct SyncPollerState<St, Ev> {
+    stream: St,
+    sender: broadcast::Sender<FromSync<Ev>>,
 }
 
-pub struct SyncPoller<S, E> {
-    _phantom: PhantomData<(S, E)>,
+pub struct SyncPoller<S, Ev> {
+    _marker: PhantomData<(S, Ev)>,
 }
 
-impl<S, E> Default for SyncPoller<S, E> {
+impl<St, Ev> Default for SyncPoller<St, Ev> {
     fn default() -> Self {
         Self {
-            _phantom: Default::default(),
+            _marker: Default::default(),
         }
     }
 }
 
-impl<S, E> ThreadLocalActor for SyncPoller<S, E>
+impl<St, Ev> ThreadLocalActor for SyncPoller<St, Ev>
 where
-    S: Stream<Item = FromSync<E>> + Send + Unpin + 'static,
-    E: Debug + Send + Sync + 'static,
+    St: Stream<Item = FromSync<Ev>> + Send + Unpin + 'static,
+    Ev: Debug + Send + Sync + 'static,
 {
-    type State = SyncPollerState<S, E>;
+    type State = SyncPollerState<St, Ev>;
 
     type Msg = ToSyncPoller;
 
-    type Arguments = (ActorNamespace, S, broadcast::Sender<FromSync<E>>);
+    type Arguments = (St, broadcast::Sender<FromSync<Ev>>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (_, stream, sender) = args;
+        let (stream, sender) = args;
 
         // Invoke the handler to wait for the first stream event.
         let _ = myself.cast(ToSyncPoller::WaitForEvent);
@@ -69,7 +66,6 @@ where
         // return events coming from running sync sessions. We then forward these events onto all
         // subscribers.
         while let Some(event) = state.stream.next().await {
-            trace!("from sync: {:?}", event);
             state.sender.send(event)?;
         }
 

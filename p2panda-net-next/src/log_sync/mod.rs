@@ -5,3 +5,6 @@ mod api;
 mod builder;
 #[cfg(test)]
 mod tests;
+
+pub use api::{LogSync, LogSyncError};
+pub use builder::Builder;

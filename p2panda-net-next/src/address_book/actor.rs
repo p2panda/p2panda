@@ -128,14 +128,6 @@ impl AddressBookState {
         topics: Vec<TopicId>,
     ) -> Result<Vec<NodeInfo>, BoxedError> {
         let result = self.store.node_infos_by_sync_topics(&topics).await?;
-
-        // TODO
-        // Remove ourselves.
-        // let result = result
-        //     .into_iter()
-        //     .filter(|info| info.id() != self.my_id)
-        //     .collect();
-
         Ok(result)
     }
 
@@ -147,14 +139,6 @@ impl AddressBookState {
             .store
             .node_infos_by_ephemeral_messaging_topics(&topics)
             .await?;
-
-        // TODO
-        // Remove ourselves.
-        // let result = result
-        //     .into_iter()
-        //     .filter(|info| info.id() != self.my_id)
-        //     .collect();
-
         Ok(result)
     }
 

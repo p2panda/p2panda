@@ -6,4 +6,4 @@ mod walker;
 
 pub use manager::{DiscoveryManager, DiscoveryMetrics, ToDiscoveryManager};
 
-pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/discovery/v1";
+pub const DISCOVERY_PROTOCOL_ID: &[u8] = b"p2panda/confidential_discovery/v1";
