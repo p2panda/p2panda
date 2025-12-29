@@ -177,10 +177,10 @@ pub enum RelayMode {
 /// topic where they'll send and receive data.
 #[derive(Debug)]
 pub struct NetworkBuilder<T> {
-    bind_ip_v4: Option<Ipv4Addr>,
-    bind_port_v4: Option<u16>,
-    bind_ip_v6: Option<Ipv6Addr>,
-    bind_port_v6: Option<u16>,
+    bind_ip_v4: Ipv4Addr,
+    bind_port_v4: u16,
+    bind_ip_v6: Ipv6Addr,
+    bind_port_v6: u16,
     bootstrap: bool,
     direct_node_addresses: Vec<NodeAddress>,
     discovery: DiscoveryMap,
@@ -202,10 +202,10 @@ where
     /// data.
     pub fn new(network_id: NetworkId) -> Self {
         Self {
-            bind_ip_v4: None,
-            bind_port_v4: None,
-            bind_ip_v6: None,
-            bind_port_v6: None,
+            bind_ip_v4: Ipv4Addr::UNSPECIFIED,
+            bind_port_v4: DEFAULT_BIND_PORT,
+            bind_ip_v6: Ipv6Addr::UNSPECIFIED,
+            bind_port_v6: DEFAULT_BIND_PORT_V6,
             bootstrap: false,
             direct_node_addresses: Vec::new(),
             discovery: DiscoveryMap::default(),
@@ -246,7 +246,7 @@ where
     ///
     /// Default is 0.0.0.0 (`UNSPECIFIED`).
     pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
-        self.bind_ip_v4.replace(ip);
+        self.bind_ip_v4 = ip;
         self
     }
 
@@ -254,7 +254,7 @@ where
     ///
     /// Default is 2022.
     pub fn bind_port_v4(mut self, port: u16) -> Self {
-        self.bind_port_v4.replace(port);
+        self.bind_port_v4 = port;
         self
     }
 
@@ -262,7 +262,7 @@ where
     ///
     /// Default is :: (`UNSPECIFIED`).
     pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
-        self.bind_ip_v6.replace(ip);
+        self.bind_ip_v6 = ip;
         self
     }
 
@@ -270,7 +270,7 @@ where
     ///
     /// Default is 2023.
     pub fn bind_port_v6(mut self, port: u16) -> Self {
-        self.bind_port_v6.replace(port);
+        self.bind_port_v6 = port;
         self
     }
 
@@ -404,12 +404,8 @@ where
                 ),
             };
 
-            let bind_ip_v4 = self.bind_ip_v4.unwrap_or(Ipv4Addr::UNSPECIFIED);
-            let bind_port_v4 = self.bind_port_v4.unwrap_or(DEFAULT_BIND_PORT);
-            let bind_ip_v6 = self.bind_ip_v6.unwrap_or(Ipv6Addr::UNSPECIFIED);
-            let bind_port_v6 = self.bind_port_v6.unwrap_or(DEFAULT_BIND_PORT + 1);
-            let socket_address_v4 = SocketAddrV4::new(bind_ip_v4, bind_port_v4);
-            let socket_address_v6 = SocketAddrV6::new(bind_ip_v6, bind_port_v6, 0, 0);
+            let socket_address_v4 = SocketAddrV4::new(self.bind_ip_v4, self.bind_port_v4);
+            let socket_address_v6 = SocketAddrV6::new(self.bind_ip_v6, self.bind_port_v6, 0, 0);
 
             Endpoint::builder()
                 .transport_config(transport_config)

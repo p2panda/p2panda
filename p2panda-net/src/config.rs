@@ -16,6 +16,7 @@ use crate::{NetworkId, NodeAddress, RelayUrl};
 
 /// Default port of a node socket.
 pub const DEFAULT_BIND_PORT: u16 = 2022;
+pub const DEFAULT_BIND_PORT_V6: u16 = 2023;
 
 /// Default network id.
 pub const DEFAULT_NETWORK_ID: NetworkId = [
