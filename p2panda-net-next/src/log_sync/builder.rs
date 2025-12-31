@@ -37,7 +37,16 @@ where
     }
 
     pub async fn spawn(self) -> Result<LogSync<S, L, E>, LogSyncError<E>> {
+        let (actor_ref, _) = {
+            let thread_pool = ThreadLocalActorSpawner::new();
+            let config = self.config.unwrap_or_default();
+            let rng = self.rng.unwrap_or(ChaCha20Rng::from_os_rng());
+            let args = (config, rng, self.address_book, self.endpoint);
+            DiscoveryManager::spawn(None, args, thread_pool).await?
+        };
+
         Ok(LogSync {
+            actor_ref: Arc::new(RwLock::new(actor_ref)),
             address_book: self.address_book,
             endpoint: self.endpoint,
             store: self.store,

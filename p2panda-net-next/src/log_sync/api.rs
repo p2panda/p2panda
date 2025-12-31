@@ -9,6 +9,7 @@ use ractor::ActorRef;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use crate::TopicId;
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
 use crate::log_sync::Builder;
@@ -22,6 +23,7 @@ where
     // TODO: Extensions should be generic over a stream handle, not over this struct.
     E: Extensions + Send + 'static,
 {
+    pub(crate) actor_ref: Arc<RwLock<ActorRef<ToGossipManager>>>,
     pub(crate) address_book: AddressBook,
     pub(crate) endpoint: Endpoint,
     pub(crate) store: S,
