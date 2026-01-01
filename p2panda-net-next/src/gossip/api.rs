@@ -134,7 +134,6 @@ pub struct EphemeralStream {
 
 // TODO: Implement `Sink` for `EphemeralStream`.
 impl EphemeralStream {
-    /// Returns a handle to an ephemeral messaging stream.
     pub(crate) fn new(
         topic: TopicId,
         to_topic_tx: mpsc::Sender<Vec<u8>>,
