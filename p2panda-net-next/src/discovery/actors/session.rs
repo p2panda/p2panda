@@ -115,7 +115,7 @@ impl ThreadLocalActor for DiscoverySession {
         let mut rx = into_cbor_stream::<PsiHashDiscoveryMessage<NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
-        // @TODO: Have a timeout to cancel session if it's running overtime.
+        // TODO: Have a timeout to cancel session if it's running overtime.
         let protocol = PsiHashDiscoveryProtocol::<
             WrappedAddressBookStore<NodeId, NodeInfo>,
             _,

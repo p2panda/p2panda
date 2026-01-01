@@ -32,7 +32,7 @@ use crate::{NodeId, TopicId};
 
 type IsLiveModeEnabled = bool;
 
-pub enum ToLogSyncStream<M>
+pub enum ToSyncStream<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
@@ -84,7 +84,7 @@ impl<T> Default for SyncManagers<T> {
     }
 }
 
-pub struct LogSyncStreamState<M>
+pub struct SyncStreamState<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
@@ -98,7 +98,7 @@ where
     stream_thread_pool: ThreadLocalActorSpawner,
 }
 
-impl<M> LogSyncStreamState<M>
+impl<M> SyncStreamState<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
@@ -114,7 +114,7 @@ where
         // TODO
         self.address_book
             .set_ephemeral_messaging_topics(
-                self.endpoint.my_node_id,
+                self.endpoint.node_id(),
                 self.gossip_handles.keys().cloned(),
             )
             .await?;
@@ -122,11 +122,11 @@ where
     }
 }
 
-pub struct LogSyncStream<M> {
+pub struct SyncStream<M> {
     _phantom: PhantomData<M>,
 }
 
-impl<M> Default for LogSyncStream<M> {
+impl<M> Default for SyncStream<M> {
     fn default() -> Self {
         Self {
             _phantom: Default::default(),
@@ -134,13 +134,13 @@ impl<M> Default for LogSyncStream<M> {
     }
 }
 
-impl<M> ThreadLocalActor for LogSyncStream<M>
+impl<M> ThreadLocalActor for SyncStream<M>
 where
     M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
-    type State = LogSyncStreamState<M>;
+    type State = SyncStreamState<M>;
 
-    type Msg = ToLogSyncStream<M>;
+    type Msg = ToSyncStream<M>;
 
     type Arguments = (M::Config, AddressBook, Endpoint, Gossip);
 
@@ -159,9 +159,9 @@ where
         let stream_thread_pool = ThreadLocalActorSpawner::new();
 
         // Send message to inbox which triggers registering of connection handler.
-        let _ = myself.cast(ToLogSyncStream::RegisterProtocol);
+        let _ = myself.cast(ToSyncStream::RegisterProtocol);
 
-        Ok(LogSyncStreamState {
+        Ok(SyncStreamState {
             address_book,
             endpoint,
             gossip,
@@ -193,7 +193,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToLogSyncStream::RegisterProtocol => {
+            ToSyncStream::RegisterProtocol => {
                 state
                     .endpoint
                     .accept(
@@ -204,7 +204,7 @@ where
                     )
                     .await?;
             }
-            ToLogSyncStream::Create(topic, live_mode, reply) => {
+            ToSyncStream::Create(topic, live_mode, reply) => {
                 // Check if we're already subscribed.
                 let sync_manager_ref = if let Some((sync_manager_ref, _)) =
                     state.sync_managers.topic_manager_map.get(&topic)
@@ -257,7 +257,7 @@ where
 
                 let _ = reply.send(sync_manager_ref);
             }
-            ToLogSyncStream::Subscribe(topic, reply) => {
+            ToSyncStream::Subscribe(topic, reply) => {
                 if let Some(from_sync_rx) = state.sync_receivers.get(&topic) {
                     let subscription = from_sync_rx.resubscribe();
                     let _ = reply.send(Some(subscription));
@@ -265,7 +265,7 @@ where
                     let _ = reply.send(None);
                 }
             }
-            ToLogSyncStream::Close(topic) => {
+            ToSyncStream::Close(topic) => {
                 // Close all sync sessions running over this topic.
                 if let Some((actor, _)) = state.sync_managers.topic_manager_map.get(&topic) {
                     actor.send_message(ToSyncManager::CloseAll { topic })?;
@@ -291,7 +291,7 @@ where
                     sync_manager.drain()?;
                 }
             }
-            ToLogSyncStream::InitiateSync(topic, node_id) => {
+            ToSyncStream::InitiateSync(topic, node_id) => {
                 if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
@@ -302,7 +302,7 @@ where
                     })?;
                 }
             }
-            ToLogSyncStream::Accept(node_id, topic, connection) => {
+            ToSyncStream::Accept(node_id, topic, connection) => {
                 if let Some((sync_manager_actor, live_mode)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
@@ -314,7 +314,7 @@ where
                     })?;
                 }
             }
-            ToLogSyncStream::EndSync(topic, node_id) => {
+            ToSyncStream::EndSync(topic, node_id) => {
                 if let Some((sync_manager_actor, _)) =
                     state.sync_managers.topic_manager_map.get(&topic)
                 {
@@ -385,7 +385,7 @@ struct SyncProtocolHandler<M>
 where
     M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
-    stream_ref: ActorRef<ToLogSyncStream<M>>,
+    stream_ref: ActorRef<ToSyncStream<M>>,
 }
 
 impl<M> ProtocolHandler for SyncProtocolHandler<M>
@@ -424,7 +424,7 @@ where
         // We know the topic now and send an accept message to the stream actor where it will then
         // be routed to the correct sync manager.
         self.stream_ref
-            .send_message(ToLogSyncStream::Accept(node_id, topic, connection))
+            .send_message(ToSyncStream::Accept(node_id, topic, connection))
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
         Ok(())

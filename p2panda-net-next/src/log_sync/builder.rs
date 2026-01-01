@@ -2,7 +2,6 @@
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use p2panda_core::Extensions;
 use p2panda_store::{LogId, LogStore, OperationStore};
@@ -11,13 +10,12 @@ use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::TopicLogMap;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
 use crate::TopicId;
 use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::LogSyncStream;
+use crate::log_sync::actors::SyncStream;
 use crate::log_sync::{LogSync, LogSyncError};
 
 pub struct Builder<S, L, E, TM>
@@ -69,14 +67,13 @@ where
                 store: self.store,
                 topic_map: self.topic_map,
             };
+
             let args = (config, self.address_book, self.endpoint, self.gossip);
 
-            LogSyncStream::<TopicSyncManager<TopicId, S, TM, L, E>>::spawn(None, args, thread_pool)
+            SyncStream::<TopicSyncManager<TopicId, S, TM, L, E>>::spawn(None, args, thread_pool)
                 .await?
         };
 
-        Ok(LogSync {
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
-        })
+        Ok(LogSync::new(actor_ref))
     }
 }

@@ -262,7 +262,7 @@ impl ThreadLocalActor for AddressBookActor {
                     .map(|info| info.id())
                     .collect();
 
-                // @TODO: Topic re-use across stream types should be prohibited on our high-level
+                // TODO: Topic re-use across stream types should be prohibited on our high-level
                 // API and discovery protocol.
                 if !sync_node_ids.is_empty() && !ephemeral_node_ids.is_empty() {
                     warn!(
@@ -414,7 +414,7 @@ mod tests {
 
     #[tokio::test]
     async fn insert_node_and_transport_info() {
-        let (args, store, _) = test_args();
+        let (args, store) = test_args();
 
         let spawner = ThreadLocalActorSpawner::new();
 

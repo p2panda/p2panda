@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
-
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use tokio::sync::RwLock;
 
 use crate::NetworkId;
 use crate::address_book::AddressBook;
@@ -63,10 +60,6 @@ impl Builder {
             IrohEndpoint::spawn(None, args, thread_pool).await?
         };
 
-        Ok(Endpoint {
-            network_id,
-            my_node_id,
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
-        })
+        Ok(Endpoint::new(network_id, my_node_id, actor_ref))
     }
 }

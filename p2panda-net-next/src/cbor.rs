@@ -12,8 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::bytes::{Buf, BytesMut};
-use tokio_util::codec::{Decoder, Encoder};
-use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 
 /// Implementation of the tokio codec traits to encode- and decode CBOR data as a stream.
 ///

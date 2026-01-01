@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
-
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use tokio::sync::RwLock;
 
 use crate::address_book::AddressBook;
 use crate::discovery::actors::DiscoveryManager;
@@ -50,8 +47,6 @@ impl Builder {
             DiscoveryManager::spawn(None, args, thread_pool).await?
         };
 
-        Ok(Discovery {
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
-        })
+        Ok(Discovery::new(actor_ref))
     }
 }

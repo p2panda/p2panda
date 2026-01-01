@@ -14,20 +14,37 @@ use crate::{NetworkId, NodeId};
 
 #[derive(Clone)]
 pub struct Endpoint {
-    pub(crate) network_id: NetworkId,
-    pub(crate) my_node_id: NodeId,
-    pub(crate) actor_ref: Arc<RwLock<ActorRef<ToIrohEndpoint>>>,
+    network_id: NetworkId,
+    my_node_id: NodeId,
+    inner: Arc<RwLock<Inner>>,
+}
+
+#[derive(Clone)]
+struct Inner {
+    actor_ref: ActorRef<ToIrohEndpoint>,
 }
 
 impl Endpoint {
+    pub(crate) fn new(
+        network_id: NetworkId,
+        my_node_id: NodeId,
+        actor_ref: ActorRef<ToIrohEndpoint>,
+    ) -> Self {
+        Self {
+            network_id,
+            my_node_id,
+            inner: Arc::new(RwLock::new(Inner { actor_ref })),
+        }
+    }
+
     pub fn builder(address_book: AddressBook) -> Builder {
         Builder::new(address_book)
     }
 
     /// Return the internal iroh endpoint instance.
     pub async fn endpoint(&self) -> Result<iroh::Endpoint, EndpointError> {
-        let actor_ref = self.actor_ref.read().await;
-        let result = call!(actor_ref, ToIrohEndpoint::Endpoint)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToIrohEndpoint::Endpoint)?;
         Ok(result)
     }
 
@@ -46,9 +63,9 @@ impl Endpoint {
         protocol_handler: P,
     ) -> Result<(), EndpointError> {
         let protocol_id = protocol_id.as_ref().to_vec();
-        let actor_ref = self.actor_ref.read().await;
+        let inner = self.inner.read().await;
         cast!(
-            actor_ref,
+            inner.actor_ref,
             ToIrohEndpoint::RegisterProtocol(protocol_id, Box::new(protocol_handler))
         )?;
         Ok(())
@@ -65,8 +82,9 @@ impl Endpoint {
         node_id: NodeId,
         protocol_id: impl AsRef<[u8]>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToIrohEndpoint::Connect,
             node_id,
             protocol_id.as_ref().to_vec(),
@@ -81,8 +99,9 @@ impl Endpoint {
         protocol_id: impl AsRef<[u8]>,
         transport_config: Arc<iroh::endpoint::TransportConfig>,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToIrohEndpoint::Connect,
             node_id,
             protocol_id.as_ref().to_vec(),
@@ -104,4 +123,10 @@ pub enum EndpointError {
 
     #[error(transparent)]
     Connect(#[from] ConnectError),
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
+    }
 }

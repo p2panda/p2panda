@@ -14,12 +14,29 @@ use crate::iroh_mdns::actor::ToMdns;
 #[derive(Clone)]
 pub struct MdnsDiscovery {
     #[allow(unused)]
-    pub(crate) actor_ref: Arc<RwLock<ActorRef<ToMdns>>>,
+    inner: Arc<RwLock<Inner>>,
+}
+
+#[derive(Clone)]
+struct Inner {
+    actor_ref: ActorRef<ToMdns>,
 }
 
 impl MdnsDiscovery {
+    pub(crate) fn new(actor_ref: ActorRef<ToMdns>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(Inner { actor_ref })),
+        }
+    }
+
     pub fn builder(address_book: AddressBook, endpoint: Endpoint) -> Builder {
         Builder::new(address_book, endpoint)
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
     }
 }
 

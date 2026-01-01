@@ -44,7 +44,9 @@ log_sync = [
   "dep:p2panda-store",
   "dep:p2panda-sync",
 ]
-test_utils = []
+test_utils = [
+  "dep:tracing-subscriber",
+]
 
 [dependencies]
 ciborium = "0.2.2"
@@ -68,10 +70,11 @@ tokio = { version = "1.47.1", features = ["rt", "sync"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 tokio-util = { version = "0.7.16", features = ["codec", "compat"] }
 tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 mock_instant = "0.6.0"
-thiserror = "2.0.17"
+p2panda-net-next = { path = ".", features = ["test_utils"] }
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }

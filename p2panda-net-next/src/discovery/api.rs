@@ -12,26 +12,45 @@ use crate::discovery::events::DiscoveryEvent;
 use crate::discovery::{Builder, DiscoveryMetrics};
 use crate::iroh_endpoint::Endpoint;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Discovery {
-    pub(crate) actor_ref: Arc<RwLock<ActorRef<ToDiscoveryManager>>>,
+    inner: Arc<RwLock<Inner>>,
+}
+
+#[derive(Clone)]
+struct Inner {
+    actor_ref: ActorRef<ToDiscoveryManager>,
 }
 
 impl Discovery {
+    pub(crate) fn new(actor_ref: ActorRef<ToDiscoveryManager>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(Inner { actor_ref })),
+        }
+    }
+
     pub fn builder(address_book: AddressBook, endpoint: Endpoint) -> Builder {
         Builder::new(address_book, endpoint)
     }
 
     /// Subscribe to system events.
     pub async fn events(&self) -> Result<broadcast::Receiver<DiscoveryEvent>, DiscoveryError> {
-        let result = call!(self.actor_ref.read().await, ToDiscoveryManager::Events)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToDiscoveryManager::Events)?;
         Ok(result)
     }
 
     /// Returns current metrics.
     pub async fn metrics(&self) -> Result<DiscoveryMetrics, DiscoveryError> {
-        let result = call!(self.actor_ref.read().await, ToDiscoveryManager::Metrics)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToDiscoveryManager::Metrics)?;
         Ok(result)
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
     }
 }
 

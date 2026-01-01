@@ -24,9 +24,9 @@ async fn join_without_bootstrap() {
     // Assert: Ant's gossip state maps the subscribed topic to the public keys of bat and cat
     // (neighbours)
 
-    let (mut ant_args, _, _) = test_args();
-    let (bat_args, _, _) = test_args();
-    let (cat_args, _, _) = test_args();
+    let (mut ant_args, _) = test_args();
+    let (bat_args, _) = test_args();
+    let (cat_args, _) = test_args();
 
     let topic = [1; 32];
 
@@ -135,8 +135,8 @@ async fn two_peer_gossip() {
     //
     // Assert: Ant and bat can exchange messages
 
-    let (mut ant_args, _, _) = test_args();
-    let (bat_args, _, _) = test_args();
+    let (mut ant_args, _) = test_args();
+    let (bat_args, _) = test_args();
 
     let topic = [7; 32];
 
@@ -219,9 +219,9 @@ async fn third_peer_joins_non_bootstrap() {
     //
     // Assert: Ant, bat and cat can exchange messages
 
-    let (mut ant_args, _, _) = test_args();
-    let (mut bat_args, _, _) = test_args();
-    let (cat_args, _, _) = test_args();
+    let (mut ant_args, _) = test_args();
+    let (mut bat_args, _) = test_args();
+    let (cat_args, _) = test_args();
 
     let topic = [11; 32];
 
@@ -351,9 +351,9 @@ async fn three_peer_gossip_with_rejoin() {
     //
     // Assert: Bat and cat can now exchange messages (proof of healed partition)
 
-    let (mut ant_args, _, _) = test_args();
-    let (mut bat_args, _, _) = test_args();
-    let (cat_args, _, _) = test_args();
+    let (mut ant_args, _) = test_args();
+    let (mut bat_args, _) = test_args();
+    let (cat_args, _) = test_args();
 
     let topic = [9; 32];
 

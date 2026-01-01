@@ -17,10 +17,21 @@ use crate::{NodeId, TopicId};
 
 #[derive(Clone, Debug)]
 pub struct AddressBook {
-    pub(crate) actor_ref: Arc<RwLock<ActorRef<ToAddressBookActor>>>,
+    inner: Arc<RwLock<Inner>>,
+}
+
+#[derive(Clone, Debug)]
+struct Inner {
+    actor_ref: ActorRef<ToAddressBookActor>,
 }
 
 impl AddressBook {
+    pub(crate) fn new(actor_ref: ActorRef<ToAddressBookActor>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(Inner { actor_ref })),
+        }
+    }
+
     pub fn builder() -> Builder {
         Builder::new()
     }
@@ -29,8 +40,8 @@ impl AddressBook {
     ///
     /// Returns `None` if no information was found for this node.
     pub async fn node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
-        let result = call!(actor_ref, ToAddressBookActor::NodeInfo, node_id)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToAddressBookActor::NodeInfo, node_id)?;
         Ok(result)
     }
 
@@ -43,8 +54,12 @@ impl AddressBook {
     /// Previous entries are simply overwritten. Entries with attached transport information get
     /// checked against authenticity and throw an error otherwise.
     pub async fn insert_node_info(&self, node_info: NodeInfo) -> Result<bool, AddressBookError> {
-        let actor_ref = self.actor_ref.read().await;
-        let result = call!(actor_ref, ToAddressBookActor::InsertNodeInfo, node_info)??;
+        let inner = self.inner.read().await;
+        let result = call!(
+            inner.actor_ref,
+            ToAddressBookActor::InsertNodeInfo,
+            node_info
+        )??;
         Ok(result)
     }
 
@@ -65,8 +80,9 @@ impl AddressBook {
         node_id: NodeId,
         transport_info: TransportInfo,
     ) -> Result<bool, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::InsertTransportInfo,
             node_id,
             transport_info
@@ -78,8 +94,9 @@ impl AddressBook {
         &self,
         topics: impl IntoIterator<Item = TopicId>,
     ) -> Result<Vec<NodeInfo>, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::NodeInfosBySyncTopics,
             topics.into_iter().collect()
         )?;
@@ -90,8 +107,9 @@ impl AddressBook {
         &self,
         topics: impl IntoIterator<Item = TopicId>,
     ) -> Result<Vec<NodeInfo>, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::NodeInfosByEphemeralMessagingTopics,
             topics.into_iter().collect()
         )?;
@@ -103,8 +121,9 @@ impl AddressBook {
         node_id: NodeId,
         topics: impl IntoIterator<Item = TopicId>,
     ) -> Result<(), AddressBookError> {
+        let inner = self.inner.read().await;
         cast!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::SetSyncTopics(node_id, topics.into_iter().collect())
         )?;
         Ok(())
@@ -115,8 +134,9 @@ impl AddressBook {
         node_id: NodeId,
         topics: impl IntoIterator<Item = TopicId>,
     ) -> Result<(), AddressBookError> {
+        let inner = self.inner.read().await;
         cast!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics.into_iter().collect())
         )?;
         Ok(())
@@ -128,8 +148,9 @@ impl AddressBook {
         node_id: NodeId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<Option<NodeInfo>>, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::WatchNodeInfo,
             node_id,
             updates_only
@@ -144,8 +165,9 @@ impl AddressBook {
         topic_id: TopicId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<HashSet<NodeId>>, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::WatchTopic,
             topic_id,
             updates_only
@@ -159,8 +181,9 @@ impl AddressBook {
         node_id: NodeId,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<HashSet<TopicId>>, AddressBookError> {
+        let inner = self.inner.read().await;
         let result = call!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::WatchNodeTopics,
             node_id,
             updates_only
@@ -176,8 +199,9 @@ impl AddressBook {
         node_id: NodeId,
         connection_outcome: ConnectionOutcome,
     ) -> Result<(), AddressBookError> {
+        let inner = self.inner.read().await;
         cast!(
-            self.actor_ref.read().await,
+            inner.actor_ref,
             ToAddressBookActor::Report(node_id, connection_outcome)
         )?;
         Ok(())
@@ -186,8 +210,15 @@ impl AddressBook {
     pub(crate) async fn store(
         &self,
     ) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
-        let result = call!(self.actor_ref.read().await, ToAddressBookActor::Store)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToAddressBookActor::Store)?;
         Ok(result)
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
     }
 }
 

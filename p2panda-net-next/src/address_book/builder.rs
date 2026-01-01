@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
-use std::sync::Arc;
 
 use p2panda_discovery::address_book::{AddressBookStore, BoxedAddressBookStore};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use tokio::sync::RwLock;
 
 use crate::NodeId;
 use crate::address_book::actor::AddressBookActor;
@@ -46,8 +44,6 @@ impl Builder {
             AddressBookActor::spawn(None, args, thread_pool).await?
         };
 
-        Ok(AddressBook {
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
-        })
+        Ok(AddressBook::new(actor_ref))
     }
 }

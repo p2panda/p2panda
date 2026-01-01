@@ -13,8 +13,8 @@ use crate::test_utils::{setup_logging, test_args_from_seed};
 async fn mdns_discovery() {
     setup_logging();
 
-    let (alice_args, _, _) = test_args_from_seed([100; 32]);
-    let (bob_args, _, _) = test_args_from_seed([200; 32]);
+    let (alice_args, _) = test_args_from_seed([100; 32]);
+    let (bob_args, _) = test_args_from_seed([200; 32]);
 
     // Spawn address book (it's a dependency) for both.
     let alice_address_book = AddressBook::builder().spawn().await.unwrap();

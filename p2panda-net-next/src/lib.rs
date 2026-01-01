@@ -20,6 +20,19 @@ pub mod timestamp;
 pub mod utils;
 pub mod watchers;
 
+#[cfg(feature = "address_book")]
+pub use address_book::AddressBook;
+#[cfg(feature = "confidential_discovery")]
+pub use discovery::Discovery;
+#[cfg(feature = "gossip")]
+pub use gossip::Gossip;
+#[cfg(feature = "iroh_endpoint")]
+pub use iroh_endpoint::Endpoint;
+#[cfg(feature = "iroh_mdns")]
+pub use iroh_mdns::MdnsDiscovery;
+#[cfg(feature = "log_sync")]
+pub use log_sync::LogSync;
+
 pub type NodeId = p2panda_core::PublicKey;
 
 /// Unique 32 byte identifier for an ephemeral- or eventually-consistent stream topic.
@@ -37,8 +50,8 @@ pub type TopicId = [u8; 32];
 /// It is highly recommended to use a cryptographically secure pseudorandom number generator
 /// (CSPRNG) when generating a network identifier.
 ///
-/// A blake3 hash function is performed against each protocol identifier which is registered
-/// with `p2panda-net`. Even if two instances of `p2panda-net` are created with the same network
+/// A blake3 hash function is performed against each protocol identifier which is registered with
+/// `p2panda-net`. Even if two instances of `p2panda-net` are created with the same network
 /// protocols, any communication attempts will fail if they are not using the same network
 /// identifier.
 pub type NetworkId = [u8; 32];

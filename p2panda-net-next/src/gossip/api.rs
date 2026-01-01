@@ -21,10 +21,14 @@ type GossipSenders = HashMap<TopicId, (mpsc::Sender<Vec<u8>>, broadcast::Sender<
 
 #[derive(Clone)]
 pub struct Gossip {
-    actor_ref: Arc<RwLock<ActorRef<ToGossipManager>>>,
     my_node_id: NodeId,
     address_book: AddressBook,
-    senders: Arc<RwLock<GossipSenders>>,
+    inner: Arc<RwLock<Inner>>,
+}
+
+struct Inner {
+    senders: GossipSenders,
+    actor_ref: ActorRef<ToGossipManager>,
 }
 
 impl Gossip {
@@ -34,10 +38,12 @@ impl Gossip {
         address_book: AddressBook,
     ) -> Self {
         Self {
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
             my_node_id,
             address_book,
-            senders: Arc::new(RwLock::new(HashMap::new())),
+            inner: Arc::new(RwLock::new(Inner {
+                senders: HashMap::new(),
+                actor_ref,
+            })),
         }
     }
 
@@ -46,14 +52,14 @@ impl Gossip {
     }
 
     pub async fn stream(&self, topic: TopicId) -> Result<EphemeralStream, GossipError> {
-        if let Some((to_gossip_tx, from_gossip_tx)) = self.senders.read().await.get(&topic) {
+        if let Some((to_gossip_tx, from_gossip_tx)) = self.inner.read().await.senders.get(&topic) {
             Ok(EphemeralStream::new(
                 topic,
                 to_gossip_tx.clone(),
                 from_gossip_tx.clone(),
             ))
         } else {
-            let actor_ref = self.actor_ref.read().await;
+            let mut inner = self.inner.write().await;
 
             let node_ids = {
                 let node_infos = self
@@ -76,17 +82,18 @@ impl Gossip {
 
             // Register a new session with the gossip actor.
             let (to_gossip_tx, from_gossip_tx) =
-                call!(actor_ref, ToGossipManager::Subscribe, topic, node_ids)?;
+                call!(inner.actor_ref, ToGossipManager::Subscribe, topic, node_ids)?;
 
             // Store the gossip senders.
             //
             // `from_gossip_tx` is used to create a broadcast receiver when the user calls
             // `subscribe()` on `EphemeralStream`.
-            let mut senders = self.senders.write().await;
-            senders.insert(topic, (to_gossip_tx.clone(), from_gossip_tx.clone()));
+            inner
+                .senders
+                .insert(topic, (to_gossip_tx.clone(), from_gossip_tx.clone()));
 
             self.address_book
-                .set_ephemeral_messaging_topics(self.my_node_id, senders.keys().cloned())
+                .set_ephemeral_messaging_topics(self.my_node_id, inner.senders.keys().cloned())
                 .await?;
 
             Ok(EphemeralStream::new(topic, to_gossip_tx, from_gossip_tx))
@@ -95,8 +102,15 @@ impl Gossip {
 
     /// Subscribe to system events.
     pub async fn events(&self) -> Result<broadcast::Receiver<GossipEvent>, GossipError> {
-        let result = call!(self.actor_ref.read().await, ToGossipManager::Events)?;
+        let inner = self.inner.read().await;
+        let result = call!(inner.actor_ref, ToGossipManager::Events)?;
         Ok(result)
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
     }
 }
 

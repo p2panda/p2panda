@@ -32,8 +32,8 @@ impl ProtocolHandler for EchoProtocol {
 async fn establish_connection() {
     setup_logging();
 
-    let (mut alice_args, _, _) = test_args();
-    let (bob_args, _, _) = test_args();
+    let (mut alice_args, _) = test_args();
+    let (bob_args, _) = test_args();
 
     // Spawn address book (it's a dependency) for both.
     let alice_address_book = AddressBook::builder().spawn().await.unwrap();

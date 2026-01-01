@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
-
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use tokio::sync::RwLock;
 
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
@@ -40,8 +37,6 @@ impl Builder {
             MdnsActor::spawn(None, args, thread_pool).await?
         };
 
-        Ok(MdnsDiscovery {
-            actor_ref: Arc::new(RwLock::new(actor_ref)),
-        })
+        Ok(MdnsDiscovery::new(actor_ref))
     }
 }

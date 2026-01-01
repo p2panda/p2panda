@@ -21,7 +21,7 @@ struct TestNode {
 
 impl TestNode {
     pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
-        let (args, store, _) = test_args_from_seed(seed);
+        let (args, store) = test_args_from_seed(seed);
 
         let address_book = AddressBook::builder().store(store).spawn().await.unwrap();
 

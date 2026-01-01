@@ -35,8 +35,9 @@ type SessionSink<M> = Pin<
 
 #[derive(Debug)]
 pub enum ToSyncManager<T> {
-    /// Initiate a sync session with this peer over the given topic and add them to the active
-    /// sync set.
+    /// Initiate a sync session with this peer over the given topic
+    ///
+    /// This adds them to the active sync set.
     Initiate {
         node_id: NodeId,
         topic: TopicId,
@@ -313,8 +314,8 @@ where
                 }
             }
             ToSyncManager::CloseAll { topic } => {
-                // Get a handle onto any sync sessions running over the subscription topic and
-                // send a Close message. The session will send a close message to the remote then
+                // Get a handle onto any sync sessions running over the subscription topic and send
+                // a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
                 let session_ids = state.session_topic_map.sessions(&topic);
                 for id in session_ids {
@@ -373,19 +374,32 @@ where
             SupervisionEvent::ActorTerminated(actor_cell, _, _) => {
                 match state.actor_session_id_map.remove(&actor_cell.get_id()) {
                     Some(session_id) => {
-                        debug!(%session_id, topic = state.topic.fmt_short(), "sync session terminated");
+                        debug!(
+                            %session_id,
+                            topic = state.topic.fmt_short(),
+                            "sync session terminated"
+                        );
+
                         Self::drop_session(state, session_id);
                     }
                     None => {
                         let actor_id = actor_cell.get_id();
-                        debug!(%actor_id, topic = state.topic.fmt_short(), "sync poller terminated");
+                        debug!(
+                            %actor_id,
+                            topic = state.topic.fmt_short(),
+                            "sync poller terminated"
+                        );
                     }
                 }
             }
             SupervisionEvent::ActorFailed(actor_cell, err) => {
                 match state.actor_session_id_map.remove(&actor_cell.get_id()) {
                     Some(session_id) => {
-                        warn!(%session_id, topic = state.topic.fmt_short(), "sync session failed: {}", err);
+                        warn!(
+                            %session_id,
+                            topic = state.topic.fmt_short(),
+                            "sync session failed: {err}"
+                        );
 
                         // Retrieve the node id and current sessions from the node session map.
                         let Some(remote_node_id) =
@@ -400,8 +414,8 @@ where
                                     }
                                 })
                         else {
-                            // If it wasn't present then it means we no longer want to sync with this
-                            // node, clear up any session state and return.
+                            // If it wasn't present then it means we no longer want to sync with
+                            // this node, clear up any session state and return.
                             Self::drop_session(state, session_id);
                             return Ok(());
                         };
@@ -416,6 +430,7 @@ where
                                 topic = state.topic.fmt_short(),
                                 "skip re-initiate sync: node no longer in active set"
                             );
+
                             return Ok(());
                         };
 
@@ -426,8 +441,8 @@ where
                                 ToSyncManager::Retry {
                                     node_id: remote_node_id,
                                     topic,
-                                    // @TODO: for now we default to live-mode is true but we should rather
-                                    // retrieve this state from the failed sync session.
+                                    // TODO: For now we default to live-mode is true but we should
+                                    // rather retrieve this state from the failed sync session.
                                     live_mode: true,
                                 }
                             })
@@ -435,7 +450,11 @@ where
                     }
                     None => {
                         let actor_id = actor_cell.get_id();
-                        warn!(%actor_id, topic = state.topic.fmt_short(), "sync poller failed: {}", err);
+                        warn!(
+                            %actor_id,
+                            topic = state.topic.fmt_short(),
+                            "sync poller failed: {err}"
+                        );
                     }
                 }
             }

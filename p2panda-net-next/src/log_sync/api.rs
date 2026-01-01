@@ -13,24 +13,35 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{RwLock, broadcast};
 
+#[cfg(test)]
+use crate::NodeId;
 use crate::TopicId;
 use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::log_sync::Builder;
-use crate::log_sync::actors::{ToLogSyncStream, ToSyncManager};
+use crate::log_sync::actors::{ToSyncManager, ToSyncStream};
 
 #[derive(Clone)]
 pub struct LogSync<S, L, E, TM>
 where
-    // TODO: Extensions should be generic over a stream handle, not over this struct.
     S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
     E: Extensions + Send + Sync + 'static,
     TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
 {
-    pub(crate) actor_ref:
-        Arc<RwLock<ActorRef<ToLogSyncStream<TopicSyncManager<TopicId, S, TM, L, E>>>>>,
+    inner: Arc<RwLock<Inner<S, L, E, TM>>>,
+}
+
+#[derive(Clone)]
+pub struct Inner<S, L, E, TM>
+where
+    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
+    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+{
+    actor_ref: ActorRef<ToSyncStream<TopicSyncManager<TopicId, S, TM, L, E>>>,
 }
 
 impl<S, L, E, TM> LogSync<S, L, E, TM>
@@ -40,6 +51,14 @@ where
     E: Extensions + Send + Sync + 'static,
     TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
 {
+    pub(crate) fn new(
+        actor_ref: ActorRef<ToSyncStream<TopicSyncManager<TopicId, S, TM, L, E>>>,
+    ) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(Inner { actor_ref })),
+        }
+    }
+
     pub fn builder(
         store: S,
         topic_map: TM,
@@ -50,6 +69,7 @@ where
         Builder::<S, L, E, TM>::new(store, topic_map, address_book, endpoint, gossip)
     }
 
+    // TODO: Extensions should be generic over a stream handle, not over this struct.
     pub async fn stream(
         &self,
         topic: TopicId,
@@ -58,13 +78,25 @@ where
         EventuallyConsistentStream<TopicSyncManager<TopicId, S, TM, L, E>>,
         LogSyncError<TopicSyncManager<TopicId, S, TM, L, E>>,
     > {
-        let actor_ref = self.actor_ref.read().await;
-        let sync_manager_ref = call!(actor_ref, ToLogSyncStream::Create, topic, live_mode)?;
+        let inner = self.inner.read().await;
+        let sync_manager_ref = call!(inner.actor_ref, ToSyncStream::Create, topic, live_mode)?;
         Ok(EventuallyConsistentStream::new(
             topic,
-            actor_ref.clone(),
+            inner.actor_ref.clone(),
             sync_manager_ref,
         ))
+    }
+}
+
+impl<S, L, E, TM> Drop for Inner<S, L, E, TM>
+where
+    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
+    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+{
+    fn drop(&mut self) {
+        self.actor_ref.stop(None);
     }
 }
 
@@ -79,7 +111,7 @@ where
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToLogSyncStream<M>>),
+    ActorRpc(#[from] ractor::RactorErr<ToSyncStream<M>>),
 }
 
 /// A handle to an eventually consistent messaging stream.
@@ -90,7 +122,7 @@ where
     M: SyncManager<TopicId> + Send + 'static,
 {
     topic: TopicId,
-    stream_ref: ActorRef<ToLogSyncStream<M>>,
+    stream_ref: ActorRef<ToSyncStream<M>>,
     manager_ref: ActorRef<ToSyncManager<M::Message>>,
 }
 
@@ -100,7 +132,7 @@ where
 {
     pub(crate) fn new(
         topic: TopicId,
-        stream_ref: ActorRef<ToLogSyncStream<M>>,
+        stream_ref: ActorRef<ToSyncStream<M>>,
         manager_ref: ActorRef<ToSyncManager<M::Message>>,
     ) -> Self {
         Self {
@@ -131,8 +163,8 @@ where
     /// the stream.
     pub async fn subscribe(
         &self,
-    ) -> Result<EventuallyConsistentSubscription<M::Event>, StreamError<()>> {
-        if let Some(stream) = call!(self.stream_ref, ToLogSyncStream::Subscribe, self.topic)
+    ) -> Result<EventuallyConsistentSubscription<M::Event>, StreamError<M::Message>> {
+        if let Some(stream) = call!(self.stream_ref, ToSyncStream::Subscribe, self.topic)
             .map_err(|_| StreamError::Subscribe(self.topic))?
         {
             Ok(EventuallyConsistentSubscription::new(self.topic, stream))
@@ -141,9 +173,29 @@ where
         }
     }
 
+    #[cfg(test)]
+    pub(crate) async fn initiate_session(&self, node_id: NodeId) {
+        self.stream_ref
+            .send_message(ToSyncStream::InitiateSync(self.topic, node_id))
+            .unwrap();
+    }
+
     /// Returns the topic of the stream.
     pub fn topic(&self) -> TopicId {
         self.topic
+    }
+}
+
+impl<M> Drop for EventuallyConsistentStream<M>
+where
+    M: SyncManager<TopicId> + Send + 'static,
+{
+    fn drop(&mut self) {
+        // TODO
+        // Ignore error here as the actor might already be dropped.
+        let _ = self
+            .stream_ref
+            .send_message(ToSyncStream::Close(self.topic));
     }
 }
 

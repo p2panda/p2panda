@@ -6,6 +6,7 @@ use std::convert::Infallible;
 use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::pin::Pin;
+use std::sync::Arc;
 
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -21,7 +22,7 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
@@ -115,7 +116,6 @@ impl ArgsBuilder {
 pub fn test_args() -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-    DummySyncConfig,
 ) {
     test_args_from_seed(rand::random())
 }
@@ -125,12 +125,10 @@ pub fn test_args_from_seed(
 ) -> (
     ApplicationArguments,
     MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-    DummySyncConfig,
 ) {
     let mut rng = ChaCha20Rng::from_seed(seed);
     let store = MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
     let private_key_bytes: [u8; 32] = rng.random();
-    let (sync_config, _) = DummySyncConfig::new();
     (
         ArgsBuilder::new(TEST_NETWORK_ID)
             .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
@@ -144,7 +142,6 @@ pub fn test_args_from_seed(
             .with_rng(rng)
             .build(),
         store,
-        sync_config,
     )
 }
 
@@ -158,63 +155,72 @@ pub fn setup_logging() {
 
 #[test]
 fn deterministic_args() {
-    let (args_1, _, _) = test_args_from_seed([0; 32]);
-    let (args_2, _, _) = test_args_from_seed([0; 32]);
+    let (args_1, _) = test_args_from_seed([0; 32]);
+    let (args_2, _) = test_args_from_seed([0; 32]);
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
 
-// General test types.
-pub type LogId = u64;
-pub type TestMemoryStore = p2panda_store::MemoryStore<LogId, ()>;
-pub type TestSyncConfig = TopicSyncManagerConfig<TestMemoryStore, TestTopicMap>;
-pub type TestTopicSyncManager = TopicSyncManager<TopicId, TestMemoryStore, TestTopicMap, LogId, ()>;
+pub type TestExtensions = ();
 
-/// Peer abstraction used in tests.
+pub type TestLogId = u64;
+
+pub type TestMemoryStore = p2panda_store::MemoryStore<TestLogId, TestExtensions>;
+
+pub type TestSyncConfig = TopicSyncManagerConfig<TestMemoryStore, TestTopicMap>;
+
+pub type TestTopicSyncManager =
+    TopicSyncManager<TopicId, TestMemoryStore, TestTopicMap, TestLogId, TestExtensions>;
+
+/// Client abstraction used in tests.
 ///
 /// Contains a private key, store and topic map, produces sessions for either log or topic sync
 /// protocols.
-pub struct App {
+pub struct TestClient {
     pub store: TestMemoryStore,
     pub private_key: PrivateKey,
     pub topic_map: TestTopicMap,
 }
 
-impl App {
-    pub fn new(id: u64) -> Self {
+impl TestClient {
+    pub fn new(private_key: PrivateKey) -> Self {
         let store = TestMemoryStore::new();
         let topic_map = TestTopicMap::new();
-        let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(id);
-        let private_key = PrivateKey::from_bytes(&rng.random());
+
         Self {
             store,
-            private_key: private_key.clone(),
+            private_key,
             topic_map,
         }
     }
 
-    /// The public key of this peer.
+    /// The public key of this client.
     pub fn id(&self) -> PublicKey {
         self.private_key.public_key()
     }
 
     /// Create and insert an operation to the store.
-    pub async fn create_operation(&mut self, body: &Body, log_id: LogId) -> (Header<()>, Vec<u8>) {
-        let (header, header_bytes) = self.create_operation_no_insert(body, log_id).await;
+    pub async fn create_operation(
+        &mut self,
+        body: &[u8],
+        log_id: TestLogId,
+    ) -> (Header<()>, Vec<u8>, Body) {
+        let (header, header_bytes, body) = self.create_operation_no_insert(body, log_id).await;
 
         self.store
-            .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
+            .insert_operation(header.hash(), &header, Some(&body), &header_bytes, &log_id)
             .await
             .unwrap();
-        (header, header_bytes)
+
+        (header, header_bytes, body)
     }
 
     /// Create an operation but don't insert it in the store.
     pub async fn create_operation_no_insert(
         &mut self,
-        body: &Body,
+        body: &[u8],
         log_id: u64,
-    ) -> (Header<()>, Vec<u8>) {
+    ) -> (Header<()>, Vec<u8>, Body) {
         let (seq_num, backlink) = self
             .store
             .latest_operation(&self.private_key.public_key(), &log_id)
@@ -223,32 +229,31 @@ impl App {
             .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
             .unwrap_or((0, None));
 
-        let (header, header_bytes) =
+        let (header, header_bytes, body) =
             create_operation(&self.private_key, body, seq_num, seq_num, backlink);
 
-        (header, header_bytes)
+        (header, header_bytes, body)
     }
 
-    pub fn insert_topic(&mut self, topic: &TopicId, logs: &HashMap<PublicKey, Vec<u64>>) {
-        self.topic_map.insert(topic, logs.to_owned());
+    pub async fn insert_topic(&mut self, topic: &TopicId, logs: HashMap<PublicKey, Vec<u64>>) {
+        self.topic_map.insert(topic, logs).await;
     }
 
-    pub fn sync_config(&self) -> TestSyncConfig {
-        TestSyncConfig {
-            store: self.store.clone(),
-            topic_map: self.topic_map.clone(),
-        }
+    pub fn sync_config(&self) -> (TestMemoryStore, TestTopicMap) {
+        (self.store.clone(), self.topic_map.clone())
     }
 }
 
 /// Create a single operation.
 pub fn create_operation(
     private_key: &PrivateKey,
-    body: &Body,
+    body: &[u8],
     seq_num: u64,
     timestamp: u64,
     backlink: Option<Hash>,
-) -> (Header<()>, Vec<u8>) {
+) -> (Header<TestExtensions>, Vec<u8>, Body) {
+    let body = Body::new(body);
+
     let mut header = Header::<()> {
         version: 1,
         public_key: private_key.public_key(),
@@ -261,181 +266,41 @@ pub fn create_operation(
         previous: vec![],
         extensions: (),
     };
+
     header.sign(private_key);
     let header_bytes = header.to_bytes();
-    (header, header_bytes)
+
+    (header, header_bytes, body)
 }
 
 /// Test topic map.
 #[derive(Clone, Debug)]
-pub struct TestTopicMap(HashMap<TopicId, HashMap<PublicKey, Vec<LogId>>>);
+pub struct TestTopicMap(Arc<RwLock<HashMap<TopicId, HashMap<PublicKey, Vec<TestLogId>>>>>);
 
 impl TestTopicMap {
     pub fn new() -> Self {
-        TestTopicMap(HashMap::new())
+        Self(Arc::new(RwLock::new(HashMap::new())))
     }
 
-    pub fn insert(
+    pub async fn insert(
         &mut self,
         topic: &TopicId,
-        logs: HashMap<PublicKey, Vec<LogId>>,
-    ) -> Option<HashMap<PublicKey, Vec<LogId>>> {
-        self.0.insert(topic.clone(), logs)
+        logs: HashMap<PublicKey, Vec<TestLogId>>,
+    ) -> Option<HashMap<PublicKey, Vec<TestLogId>>> {
+        let mut map = self.0.write().await;
+        map.insert(topic.clone(), logs)
     }
 }
 
-impl TopicLogMap<TopicId, LogId> for TestTopicMap {
+impl TopicLogMap<TopicId, TestLogId> for TestTopicMap {
     type Error = Infallible;
 
-    async fn get(&self, topic: &TopicId) -> Result<HashMap<PublicKey, Vec<LogId>>, Self::Error> {
-        Ok(self.0.get(topic).cloned().unwrap_or_default())
-    }
-}
-
-#[derive(Debug)]
-pub struct DummySyncProtocol {
-    session_id: u64,
-    config: p2panda_sync::SyncSessionConfig<TopicId>,
-    event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
-}
-
-impl Protocol for DummySyncProtocol {
-    type Output = ();
-    type Error = Infallible;
-    type Message = DummySyncMessage;
-
-    async fn run(
-        self,
-        sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
-        stream: &mut (impl Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin),
-    ) -> Result<Self::Output, Self::Error> {
-        self.event_tx
-            .send(FromSync {
-                session_id: self.session_id,
-                remote: self.config.remote,
-                event: DummySyncEvent::SyncStarted,
-            })
-            .unwrap();
-
-        sink.send(DummySyncMessage::Data).await.unwrap();
-
-        let message = stream.next().await.unwrap().unwrap();
-
-        self.event_tx
-            .send(FromSync {
-                session_id: self.session_id,
-                remote: self.config.remote,
-                event: DummySyncEvent::Received(message),
-            })
-            .unwrap();
-
-        self.event_tx
-            .send(FromSync {
-                session_id: self.session_id,
-                remote: self.config.remote,
-                event: DummySyncEvent::SyncFinished,
-            })
-            .unwrap();
-
-        // Send a close message and wait for the remote to actually close the connection.
-        sink.send(DummySyncMessage::Close).await.unwrap();
-        let message = stream.next().await.unwrap();
-        match message {
-            // We received the remote's close message and so now we close ourselves.
-            Ok(DummySyncMessage::Close) => Ok(()),
-            // The stream was closed by the remote.
-            Err(_) => Ok(()),
-            // Unexpected message.
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum DummySyncEvent {
-    SessionCreated,
-    SyncStarted,
-    Received(DummySyncMessage),
-    SyncFinished,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum DummySyncMessage {
-    Data,
-    Close,
-}
-
-#[derive(Debug)]
-pub struct DummySyncManager<C = DummySyncConfig, P = DummySyncProtocol> {
-    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
-    #[allow(unused)]
-    pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
-    pub config: C,
-    pub _phantom: PhantomData<P>,
-}
-
-#[derive(Clone, Debug)]
-pub struct DummySyncConfig {
-    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
-}
-
-impl DummySyncConfig {
-    pub fn new() -> (Self, broadcast::Receiver<FromSync<DummySyncEvent>>) {
-        let (tx, rx) = broadcast::channel(128);
-        (Self { event_tx: tx }, rx)
-    }
-}
-
-impl SyncManager<TopicId> for DummySyncManager<DummySyncConfig, DummySyncProtocol> {
-    type Protocol = DummySyncProtocol;
-    type Event = DummySyncEvent;
-    type Config = DummySyncConfig;
-    type Message = ();
-    type Error = SendError;
-
-    fn from_config(config: Self::Config) -> Self {
-        let event_rx = config.event_tx.subscribe();
-        DummySyncManager {
-            event_tx: config.event_tx.clone(),
-            event_rx,
-            config,
-            _phantom: PhantomData,
-        }
-    }
-
-    async fn session(
-        &mut self,
-        session_id: u64,
-        config: &p2panda_sync::SyncSessionConfig<TopicId>,
-    ) -> Self::Protocol {
-        self.event_tx
-            .send(FromSync {
-                session_id,
-                remote: config.remote,
-                event: DummySyncEvent::SessionCreated,
-            })
-            .unwrap();
-        DummySyncProtocol {
-            session_id,
-            config: config.clone(),
-            event_tx: self.event_tx.clone(),
-        }
-    }
-
-    async fn session_handle(
+    async fn get(
         &self,
-        _session_id: u64,
-    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>> {
-        // NOTE: just a dummy channel to satisfy the API in testing environment.
-        let (tx, _) = mpsc::channel::<ToSync<Self::Message>>(128);
-        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>;
-        Some(sink)
-    }
-
-    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
-        let stream = BroadcastStream::new(self.event_tx.subscribe())
-            .filter_map(|event| async { event.ok() });
-        Box::pin(stream)
+        topic: &TopicId,
+    ) -> Result<HashMap<PublicKey, Vec<TestLogId>>, Self::Error> {
+        let map = self.0.read().await;
+        Ok(map.get(topic).cloned().unwrap_or_default())
     }
 }
 

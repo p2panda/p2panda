@@ -3,7 +3,7 @@
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 use std::net::SocketAddr;
 
 use p2panda_core::cbor::encode_cbor;
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::NodeId;
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 use crate::iroh_endpoint::from_public_key;
 #[cfg(feature = "iroh_endpoint")]
 use crate::iroh_endpoint::to_public_key;
@@ -588,7 +588,7 @@ pub enum TransportAddress {
 }
 
 impl TransportAddress {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_utils"))]
     pub fn from_iroh(
         node_id: NodeId,
         relay_url: Option<iroh::RelayUrl>,
