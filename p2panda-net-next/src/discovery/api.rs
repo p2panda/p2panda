@@ -36,14 +36,14 @@ impl Discovery {
     /// Subscribe to system events.
     pub async fn events(&self) -> Result<broadcast::Receiver<DiscoveryEvent>, DiscoveryError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToDiscoveryManager::Events)?;
+        let result = call!(inner.actor_ref, ToDiscoveryManager::Events).map_err(Box::new)?;
         Ok(result)
     }
 
     /// Returns current metrics.
     pub async fn metrics(&self) -> Result<DiscoveryMetrics, DiscoveryError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToDiscoveryManager::Metrics)?;
+        let result = call!(inner.actor_ref, ToDiscoveryManager::Metrics).map_err(Box::new)?;
         Ok(result)
     }
 }
@@ -60,9 +60,7 @@ pub enum DiscoveryError {
     #[error(transparent)]
     ActorSpawn(#[from] ractor::SpawnErr),
 
-    // TODO: The error type gets very large due to including the ToDiscoveryManager manager, we
-    // should convert it to types _not_ containing the message itself.
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToDiscoveryManager>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToDiscoveryManager>>),
 }

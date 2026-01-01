@@ -41,6 +41,7 @@ where
     E: Extensions + Send + Sync + 'static,
     TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
 {
+    #[allow(clippy::type_complexity)]
     actor_ref: ActorRef<ToSyncStream<TopicSyncManager<TopicId, S, TM, L, E>>>,
 }
 
@@ -51,6 +52,7 @@ where
     E: Extensions + Send + Sync + 'static,
     TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
 {
+    #[allow(clippy::type_complexity)]
     pub(crate) fn new(
         actor_ref: ActorRef<ToSyncStream<TopicSyncManager<TopicId, S, TM, L, E>>>,
     ) -> Self {
@@ -79,7 +81,8 @@ where
         LogSyncError<TopicSyncManager<TopicId, S, TM, L, E>>,
     > {
         let inner = self.inner.read().await;
-        let sync_manager_ref = call!(inner.actor_ref, ToSyncStream::Create, topic, live_mode)?;
+        let sync_manager_ref =
+            call!(inner.actor_ref, ToSyncStream::Create, topic, live_mode).map_err(Box::new)?;
         Ok(EventuallyConsistentStream::new(
             topic,
             inner.actor_ref.clone(),
@@ -111,7 +114,7 @@ where
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToSyncStream<M>>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToSyncStream<M>>>),
 }
 
 /// A handle to an eventually consistent messaging stream.

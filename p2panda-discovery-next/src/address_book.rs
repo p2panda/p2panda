@@ -164,11 +164,13 @@ pub trait DynAddressBookStore<ID, N> {
         id: &ID,
     ) -> Pin<Box<dyn Future<Output = Result<Option<N>, BoxedError>> + '_>>;
 
+    #[allow(clippy::type_complexity)]
     fn node_sync_topics(
         &self,
         id: &ID,
     ) -> Pin<Box<dyn Future<Output = Result<HashSet<[u8; 32]>, BoxedError>> + '_>>;
 
+    #[allow(clippy::type_complexity)]
     fn node_ephemeral_messaging_topics(
         &self,
         id: &ID,

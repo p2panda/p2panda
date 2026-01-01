@@ -8,5 +8,5 @@ mod config;
 mod tests;
 
 pub use api::{MdnsDiscovery, MdnsDiscoveryError};
-pub use builder::{Builder};
-pub use config::{MdnsDiscoveryMode};
+pub use builder::Builder;
+pub use config::MdnsDiscoveryMode;

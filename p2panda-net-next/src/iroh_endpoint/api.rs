@@ -44,7 +44,7 @@ impl Endpoint {
     /// Return the internal iroh endpoint instance.
     pub async fn endpoint(&self) -> Result<iroh::Endpoint, EndpointError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToIrohEndpoint::Endpoint)?;
+        let result = call!(inner.actor_ref, ToIrohEndpoint::Endpoint).map_err(Box::new)?;
         Ok(result)
     }
 
@@ -67,7 +67,8 @@ impl Endpoint {
         cast!(
             inner.actor_ref,
             ToIrohEndpoint::RegisterProtocol(protocol_id, Box::new(protocol_handler))
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(())
     }
 
@@ -89,7 +90,8 @@ impl Endpoint {
             node_id,
             protocol_id.as_ref().to_vec(),
             None
-        )??;
+        )
+        .map_err(Box::new)??;
         Ok(result)
     }
 
@@ -106,7 +108,8 @@ impl Endpoint {
             node_id,
             protocol_id.as_ref().to_vec(),
             Some(transport_config)
-        )??;
+        )
+        .map_err(Box::new)??;
         Ok(result)
     }
 }
@@ -119,7 +122,7 @@ pub enum EndpointError {
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToIrohEndpoint>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToIrohEndpoint>>),
 
     #[error(transparent)]
     Connect(#[from] ConnectError),

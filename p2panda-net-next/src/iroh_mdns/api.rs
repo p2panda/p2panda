@@ -48,5 +48,5 @@ pub enum MdnsDiscoveryError {
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToMdns>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToMdns>>),
 }

@@ -82,7 +82,8 @@ impl Gossip {
 
             // Register a new session with the gossip actor.
             let (to_gossip_tx, from_gossip_tx) =
-                call!(inner.actor_ref, ToGossipManager::Subscribe, topic, node_ids)?;
+                call!(inner.actor_ref, ToGossipManager::Subscribe, topic, node_ids)
+                    .map_err(Box::new)?;
 
             // Store the gossip senders.
             //
@@ -103,7 +104,7 @@ impl Gossip {
     /// Subscribe to system events.
     pub async fn events(&self) -> Result<broadcast::Receiver<GossipEvent>, GossipError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToGossipManager::Events)?;
+        let result = call!(inner.actor_ref, ToGossipManager::Events).map_err(Box::new)?;
         Ok(result)
     }
 }
@@ -122,7 +123,7 @@ pub enum GossipError {
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToGossipManager>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToGossipManager>>),
 
     #[error(transparent)]
     AddressBook(#[from] AddressBookError),

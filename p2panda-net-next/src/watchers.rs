@@ -116,6 +116,16 @@ where
     watchers: RefCell<HashMap<K, Watcher<T>>>,
 }
 
+impl<K, T> Default for WatcherSet<K, T>
+where
+    K: Eq + StdHash,
+    T: Watched,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K, T> WatcherSet<K, T>
 where
     K: Eq + StdHash,

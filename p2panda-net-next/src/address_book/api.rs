@@ -41,7 +41,8 @@ impl AddressBook {
     /// Returns `None` if no information was found for this node.
     pub async fn node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToAddressBookActor::NodeInfo, node_id)?;
+        let result =
+            call!(inner.actor_ref, ToAddressBookActor::NodeInfo, node_id).map_err(Box::new)?;
         Ok(result)
     }
 
@@ -59,7 +60,8 @@ impl AddressBook {
             inner.actor_ref,
             ToAddressBookActor::InsertNodeInfo,
             node_info
-        )??;
+        )
+        .map_err(Box::new)??;
         Ok(result)
     }
 
@@ -86,7 +88,8 @@ impl AddressBook {
             ToAddressBookActor::InsertTransportInfo,
             node_id,
             transport_info
-        )??;
+        )
+        .map_err(Box::new)??;
         Ok(result)
     }
 
@@ -99,7 +102,8 @@ impl AddressBook {
             inner.actor_ref,
             ToAddressBookActor::NodeInfosBySyncTopics,
             topics.into_iter().collect()
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -112,7 +116,8 @@ impl AddressBook {
             inner.actor_ref,
             ToAddressBookActor::NodeInfosByEphemeralMessagingTopics,
             topics.into_iter().collect()
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -125,7 +130,8 @@ impl AddressBook {
         cast!(
             inner.actor_ref,
             ToAddressBookActor::SetSyncTopics(node_id, topics.into_iter().collect())
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(())
     }
 
@@ -138,7 +144,8 @@ impl AddressBook {
         cast!(
             inner.actor_ref,
             ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics.into_iter().collect())
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(())
     }
 
@@ -154,7 +161,8 @@ impl AddressBook {
             ToAddressBookActor::WatchNodeInfo,
             node_id,
             updates_only
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -171,7 +179,8 @@ impl AddressBook {
             ToAddressBookActor::WatchTopic,
             topic_id,
             updates_only
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -187,7 +196,8 @@ impl AddressBook {
             ToAddressBookActor::WatchNodeTopics,
             node_id,
             updates_only
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -203,7 +213,8 @@ impl AddressBook {
         cast!(
             inner.actor_ref,
             ToAddressBookActor::Report(node_id, connection_outcome)
-        )?;
+        )
+        .map_err(Box::new)?;
         Ok(())
     }
 
@@ -211,7 +222,7 @@ impl AddressBook {
         &self,
     ) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToAddressBookActor::Store)?;
+        let result = call!(inner.actor_ref, ToAddressBookActor::Store).map_err(Box::new)?;
         Ok(result)
     }
 }
@@ -230,7 +241,7 @@ pub enum AddressBookError {
 
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] ractor::RactorErr<ToAddressBookActor>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToAddressBookActor>>),
 
     /// Address book store failed.
     #[error(transparent)]
