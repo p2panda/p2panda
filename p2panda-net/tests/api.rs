@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::PrivateKey;
-use p2panda_net_next::iroh_mdns::MdnsDiscoveryMode;
-use p2panda_net_next::test_utils::{TestMemoryStore, TestTopicMap};
-use p2panda_net_next::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery};
+use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
+use p2panda_net::test_utils::{TestMemoryStore, TestTopicMap};
+use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery};
 
 #[tokio::test]
 async fn modular_api() {
