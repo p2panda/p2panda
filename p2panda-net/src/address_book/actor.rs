@@ -88,8 +88,7 @@ pub enum ToAddressBookActor {
         RpcReplyPort<WatcherReceiver<Option<NodeInfo>>>,
     ),
 
-    /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
-    /// for eventually consistent and ephemeral streams.
+    /// Subscribes to channel informing us about changes of the set of nodes interested in a topic.
     WatchTopic(
         TopicId,
         UpdatesOnly,

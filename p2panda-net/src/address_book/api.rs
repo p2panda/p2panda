@@ -145,7 +145,7 @@ impl AddressBook {
         Ok(())
     }
 
-    /// Subscribes to channel informing us about:node info changes for a specific node.
+    /// Subscribes to channel informing us about node info changes for a specific node.
     pub async fn watch_node_info(
         &self,
         node_id: NodeId,
@@ -162,8 +162,7 @@ impl AddressBook {
         Ok(result)
     }
 
-    /// Subscribes to channel informing us about changes of the set of nodes interested in a topic
-    /// for eventually consistent and ephemeral streams.
+    /// Subscribes to channel informing us about changes of the set of nodes interested in a topic.
     pub async fn watch_topic(
         &self,
         topic_id: TopicId,

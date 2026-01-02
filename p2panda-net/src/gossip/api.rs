@@ -155,18 +155,14 @@ pub enum GossipError {
     AddressBook(#[from] AddressBookError),
 }
 
-/// Ephemeral streams provide an interface for publishing messages into the network and receiving
-/// messages from the network.
+/// Gossip provides an interface for publishing messages into the network and receiving messages
+/// from the network.
 ///
-/// Ephemeral streams are intended to be used for relatively short-lived messages without
-/// persistence and catch-up of past state. In most cases, messages will only be received if they
-/// were published after the subscription was created. The exception to this is if the message was
-/// still propagating through the network at the time of the subscription; then it's possible that
-/// the message is received, even though the publication time was strictly before that of the local
-/// subscription event.
+/// These more, unreliable "ephemeral" streams are intended to be used for relatively short-lived
+/// messages without persistence and catch-up of past state. In most cases, messages will only be
+/// received if they were published after the subscription was created.
 ///
-/// Use the eventually consistent stream if you wish to receive past state and (optionally)
-/// messages representing the latest updates in an ongoing manner.
+/// Use the sync stream if you wish to receive past state for eventual consistency.
 pub struct GossipHandle {
     topic: TopicId,
     to_topic_tx: mpsc::Sender<Vec<u8>>,

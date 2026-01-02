@@ -119,7 +119,7 @@ where
     ActorRpc(#[from] Box<ractor::RactorErr<ToSyncManager<M>>>),
 }
 
-/// A handle to an eventually consistent messaging stream.
+/// Handle to a sync stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
 pub struct LogSyncHandle<M>
@@ -200,7 +200,7 @@ where
     }
 }
 
-/// A handle to an eventually consistent messaging stream subscription.
+/// Handle to a sync subscription.
 ///
 /// The stream can be used to receive messages from the stream.
 pub struct LogSyncSubscription<M>
