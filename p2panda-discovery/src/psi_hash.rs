@@ -303,7 +303,7 @@ where
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
-            transport_infos: transport_infos,
+            transport_infos,
             topics: topics_intersection,
         })
     }
