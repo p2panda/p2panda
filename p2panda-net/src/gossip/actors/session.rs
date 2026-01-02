@@ -137,6 +137,22 @@ impl ThreadLocalActor for GossipSession {
         Ok(state)
     }
 
+    async fn post_stop(
+        &self,
+        _myself: ActorRef<Self::Msg>,
+        state: &mut Self::State,
+    ) -> Result<(), ActorProcessingErr> {
+        state.gossip_healer_actor.stop(None);
+        state.gossip_joiner_actor.stop_and_wait(None, None).await?;
+        state.gossip_sender_actor.stop_and_wait(None, None).await?;
+        state
+            .gossip_receiver_actor
+            .stop_and_wait(None, None)
+            .await?;
+
+        Ok(())
+    }
+
     async fn handle(
         &self,
         myself: ActorRef<Self::Msg>,

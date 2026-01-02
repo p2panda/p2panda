@@ -18,4 +18,7 @@ pub enum GossipEvent {
         node: NodeId,
         topic: TopicId,
     },
+    Left {
+        topic: TopicId,
+    },
 }

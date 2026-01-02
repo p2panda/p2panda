@@ -276,7 +276,6 @@ impl ThreadLocalActor for GossipManager {
                 // Stop the session associated with this topic.
                 if let Some(actor) = state.sessions.sessions_by_topic.remove(&topic) {
                     let actor_id = actor.get_id();
-                    state.sessions.sessions_by_actor_id.remove(&actor_id);
                     state.sessions.gossip_joined_senders.remove(&actor_id);
 
                     actor.stop(Some("received unsubscribe request".to_string()));
@@ -396,6 +395,8 @@ impl ThreadLocalActor for GossipManager {
 
                     // Drop all state associated with the terminated gossip session.
                     state.drop_topic_state(&actor_id, &topic);
+
+                    let _ = state.events_tx.send(GossipEvent::Left { topic });
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {

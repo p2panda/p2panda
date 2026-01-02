@@ -24,7 +24,7 @@ use tracing::{debug, warn};
 
 use crate::address_book::AddressBook;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
-use crate::gossip::{EphemeralStream, Gossip};
+use crate::gossip::{Gossip, GossipHandle};
 use crate::iroh_endpoint::{Endpoint, to_public_key};
 use crate::log_sync::actors::{SYNC_PROTOCOL_ID, SyncManager, ToSyncManager};
 use crate::utils::ShortFormat;
@@ -65,7 +65,7 @@ where
     RegisterProtocol,
 }
 
-type GossipHandles = HashMap<TopicId, EphemeralStream>;
+type GossipHandles = HashMap<TopicId, GossipHandle>;
 
 /// Mapping of topic to the receiver channel from the associated sync manager.
 type SyncReceivers<E> = HashMap<TopicId, broadcast::Receiver<FromSync<E>>>;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use futures_util::StreamExt;
 use p2panda_core::PrivateKey;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::test_utils::{TestMemoryStore, TestTopicMap};
@@ -41,7 +42,7 @@ async fn modular_api() {
     let mut rx = handle.subscribe();
 
     tokio::spawn(async move {
-        while let Ok(_bytes) = rx.recv().await {
+        while let Some(_bytes) = rx.next().await {
             // ...
         }
     });

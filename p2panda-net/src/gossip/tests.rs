@@ -3,7 +3,10 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use futures_test::task::noop_context;
+use futures_util::TryStreamExt;
 use tokio::time::sleep;
+use tokio_stream::StreamExt;
 
 use crate::address_book::AddressBook;
 use crate::gossip::{Gossip, GossipEvent};
@@ -190,7 +193,7 @@ async fn two_peer_gossip() {
 
     // Ensure bat receives the message from ant.
     let mut bat_from_gossip_rx = bat_handle.subscribe();
-    let Ok(msg) = bat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = bat_from_gossip_rx.next().await else {
         panic!("expected msg from ant")
     };
     assert_eq!(msg, b"hi, bat!".to_vec());
@@ -200,7 +203,7 @@ async fn two_peer_gossip() {
 
     // Ensure ant receives the message from bat.
     let mut ant_from_gossip_rx = ant_handle.subscribe();
-    let Ok(msg) = ant_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = ant_from_gossip_rx.next().await else {
         panic!("expected msg from bat")
     };
     assert_eq!(msg, b"oh hey ant!".to_vec());
@@ -310,7 +313,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     // Ensure bat receives cat's message.
-    let Ok(msg) = bat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = bat_from_gossip_rx.next().await else {
         panic!("expected msg from cat")
     };
     assert_eq!(msg, cat_msg_to_ant_and_bat);
@@ -324,7 +327,7 @@ async fn third_peer_joins_non_bootstrap() {
 
     // Ensure cat receives ant's message.
     // NOTE: In this case the message is delivered by bat; not directly from ant.
-    let Ok(msg) = cat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = cat_from_gossip_rx.next().await else {
         panic!("expected msg from ant")
     };
     assert_eq!(msg, ant_msg_to_bat_and_cat);
@@ -421,7 +424,7 @@ async fn three_peer_gossip_with_rejoin() {
     ant_handle.publish(ant_msg_to_bat.clone()).await.unwrap();
 
     // Ensure bat receives the message from ant.
-    let Ok(msg) = bat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = bat_from_gossip_rx.next().await else {
         panic!("expected msg from ant")
     };
     assert_eq!(msg, ant_msg_to_bat);
@@ -431,7 +434,7 @@ async fn three_peer_gossip_with_rejoin() {
     bat_handle.publish(bat_msg_to_ant.clone()).await.unwrap();
 
     // Ensure ant receives the message from bat.
-    let Ok(msg) = ant_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = ant_from_gossip_rx.next().await else {
         panic!("expected msg from bat")
     };
     assert_eq!(msg, bat_msg_to_ant);
@@ -452,7 +455,8 @@ async fn three_peer_gossip_with_rejoin() {
     sleep(Duration::from_millis(50)).await;
 
     // Ensure bat has not received the message from cat.
-    assert!(bat_from_gossip_rx.try_recv().is_err());
+    let mut cx = noop_context();
+    assert!(bat_from_gossip_rx.try_poll_next_unpin(&mut cx).is_pending());
 
     // Send message from bat to cat.
     let bat_msg_to_cat = b"anyone out there?".to_vec();
@@ -462,7 +466,8 @@ async fn three_peer_gossip_with_rejoin() {
     sleep(Duration::from_millis(50)).await;
 
     // Ensure cat has not received the message from bat.
-    assert!(bat_from_gossip_rx.try_recv().is_err());
+    let mut cx = noop_context();
+    assert!(bat_from_gossip_rx.try_poll_next_unpin(&mut cx).is_pending());
 
     // At this point we have proof of partition; bat and cat are subscribed to the same gossip
     // topic but cannot "hear" one another.
@@ -488,7 +493,7 @@ async fn three_peer_gossip_with_rejoin() {
     sleep(Duration::from_millis(50)).await;
 
     // Ensure bat receives the message from cat.
-    let Ok(msg) = bat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = bat_from_gossip_rx.next().await else {
         panic!("expected msg from cat")
     };
 
@@ -502,8 +507,91 @@ async fn three_peer_gossip_with_rejoin() {
     sleep(Duration::from_millis(500)).await;
 
     // Ensure cat receives the message from bat.
-    let Ok(msg) = cat_from_gossip_rx.recv().await else {
+    let Some(Ok(msg)) = cat_from_gossip_rx.next().await else {
         panic!("expected msg from bat")
     };
     assert_eq!(msg, bat_msg_to_cat);
+}
+
+#[tokio::test]
+async fn leave_session() {
+    setup_logging();
+
+    let (ant_args, _) = test_args();
+    let topic = [1; 32];
+
+    let ant_address_book = AddressBook::builder().spawn().await.unwrap();
+    let ant_endpoint = Endpoint::builder(ant_address_book.clone())
+        .config(ant_args.iroh_config.clone())
+        .private_key(ant_args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    // 1. Dropping all instances of Gossip breaks the handles.
+    let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+    let ant_gossip_2 = ant_gossip.clone();
+    let handle = ant_gossip.stream(topic).await.unwrap();
+
+    // Drop first instance and assert if we can still send.
+    drop(ant_gossip_2);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(handle.publish(b"test").await.is_ok());
+
+    drop(ant_gossip);
+
+    // Wait a little bit until actor stopped.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // We should not be able anymore to send any messages into any handles.
+    assert!(handle.publish(b"test").await.is_err());
+
+    // 2. Dropping all handles for the same topic closes the gossip session.
+    let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    // Subscribe to system events.
+    let mut events = ant_gossip.events().await.unwrap();
+
+    // Create multiple handles for the same topic.
+    let handle_1 = ant_gossip.stream(topic).await.unwrap();
+    let handle_2 = ant_gossip.stream(topic).await.unwrap();
+    let handle_3 = ant_gossip.stream(topic).await.unwrap();
+
+    let rx_1 = handle_1.subscribe();
+    let rx_2 = handle_2.subscribe();
+    let rx_3 = handle_2.subscribe();
+    let rx_4 = handle_1.subscribe();
+
+    // Start dropping instances, we should still be able to use the system.
+    drop(handle_2);
+    drop(rx_3);
+    drop(rx_2);
+
+    assert!(handle_1.publish(b"test").await.is_ok());
+
+    // Drop more.
+    drop(rx_1);
+    drop(handle_3);
+    drop(handle_1);
+    drop(rx_4);
+
+    let mut left = false;
+    while let Ok(event) = events.recv().await {
+        if let GossipEvent::Left { topic: event_topic } = event {
+            assert_eq!(topic, event_topic);
+            left = true;
+            break;
+        }
+    }
+    assert!(left, "left the gossip overlay for this topic");
+
+    // 3. Re-joining the same topic should not break anything after leaving.
+    let handle = ant_gossip.stream(topic).await.unwrap();
+    assert!(handle.publish(b"test").await.is_ok());
 }
