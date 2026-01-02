@@ -35,7 +35,7 @@ impl<St, Ev> Default for SyncPoller<St, Ev> {
 impl<St, Ev> ThreadLocalActor for SyncPoller<St, Ev>
 where
     St: Stream<Item = FromSync<Ev>> + Send + Unpin + 'static,
-    Ev: Debug + Send + Sync + 'static,
+    Ev: Debug + Send + 'static,
 {
     type State = SyncPollerState<St, Ev>;
 
@@ -66,7 +66,7 @@ where
         // return events coming from running sync sessions. We then forward these events onto all
         // subscribers.
         while let Some(event) = state.stream.next().await {
-            state.sender.send(event)?;
+            state.sender.send(event).map_err(|err| err.to_string())?;
         }
 
         Ok(())

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_sync::traits::{Protocol, SyncManager};
+use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
@@ -171,7 +171,7 @@ struct DummySyncManager<C, P> {
     pub _marker: PhantomData<P>,
 }
 
-impl SyncManager<TopicId> for DummySyncManager<FailingSyncConfig, FailingSyncProtocol> {
+impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncConfig, FailingSyncProtocol> {
     type Protocol = FailingSyncProtocol;
     type Event = DummySyncEvent;
     type Config = FailingSyncConfig;

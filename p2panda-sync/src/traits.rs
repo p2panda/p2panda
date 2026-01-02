@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{error::Error as StdError, fmt::Debug, pin::Pin};
+use std::error::Error as StdError;
+use std::fmt::Debug;
+use std::pin::Pin;
 
 use futures::Sink;
 use futures_util::Stream;
@@ -24,10 +26,10 @@ pub trait Protocol {
 /// Interface for managing sync sessions and consuming events they emit.
 #[allow(clippy::type_complexity)]
 pub trait SyncManager<T> {
-    type Protocol: Protocol + Send + Sync + 'static;
-    type Config: Clone + Debug + Send + Sync + 'static;
-    type Message: Clone + Debug + Send + Sync + 'static;
-    type Event: Clone + Debug + Send + Sync + 'static;
+    type Protocol: Protocol + Send + 'static;
+    type Config: Clone + Send + 'static;
+    type Message: Clone + Send + 'static;
+    type Event: Clone + Debug + Send + 'static;
     type Error: StdError + Send + Sync + 'static;
 
     fn from_config(config: Self::Config) -> Self;

@@ -44,20 +44,19 @@ impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debu
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
 /// any topic subscriptions in order to understand the correct mappings.  
-#[derive(Debug)]
 #[allow(clippy::type_complexity)]
+#[derive(Debug)]
 pub struct TopicSyncManager<T, S, M, L, E>
 where
     T: Clone,
-    E: Clone,
+    E: Extensions,
 {
-    pub(crate) topic_map: M,
-    pub(crate) store: S,
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
-    pub(crate) from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
-    pub(crate) from_session_rx:
-        HashMap<(u64, PublicKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
-    pub(crate) manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
+    topic_map: M,
+    store: S,
+    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
+    from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
+    from_session_rx: HashMap<(u64, PublicKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
+    manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
     _phantom: PhantomData<L>,
 }
 
@@ -65,7 +64,7 @@ where
 pub struct SessionStream<T, E>
 where
     T: Clone,
-    E: Clone,
+    E: Extensions,
 {
     pub session_id: u64,
     pub topic: T,
@@ -77,7 +76,7 @@ where
 impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
 where
     T: Clone,
-    E: Clone,
+    E: Extensions,
 {
     pub fn new(topic_map: M, store: S) -> Self {
         Self {
@@ -94,17 +93,17 @@ where
 
 impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
-    M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
+    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    M: TopicLogMap<T, L> + Send + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    E: Extensions + Send + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
     type Config = TopicSyncManagerConfig<S, M>;
     type Event = TopicLogSyncEvent<E>;
     type Message = Operation<E>;
-    type Error = TopicSyncManagerError<L, E>;
+    type Error = TopicSyncManagerError;
 
     fn from_config(config: Self::Config) -> Self {
         Self::new(config.topic_map, config.store)
@@ -216,13 +215,11 @@ where
 #[allow(clippy::type_complexity)]
 pub struct ManagerEventStreamState<T, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     E: Extensions + Send + 'static,
 {
     manager_rx: mpsc::Receiver<SessionStream<T, E>>,
-
     session_rx_set: SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
-
     session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
 }
 
@@ -233,7 +230,7 @@ where
 #[allow(clippy::type_complexity)]
 pub struct ManagerEventStream<T, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     E: Extensions + Send + 'static,
 {
     state: Option<ManagerEventStreamState<T, E>>,
@@ -383,9 +380,9 @@ pub struct TopicSyncManagerConfig<S, M> {
 }
 
 #[derive(Debug, Error)]
-pub enum TopicSyncManagerError<L, E> {
+pub enum TopicSyncManagerError {
     #[error(transparent)]
-    TopicLogSync(#[from] TopicLogSyncError<L, E>),
+    TopicLogSync(#[from] TopicLogSyncError),
 
     #[error("received operation before topic agreed")]
     OperationBeforeTopic,

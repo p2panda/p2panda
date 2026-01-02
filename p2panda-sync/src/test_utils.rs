@@ -28,14 +28,14 @@ pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
 pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
-pub type TestLogSyncError = LogSyncError<u64, TestLogSyncEvent>;
+pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
 pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, LogIdExtension>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<LogIdExtension>;
 pub type TestTopicSync =
     TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
-pub type TestTopicSyncError = TopicLogSyncError<u64, LogIdExtension>;
+pub type TestTopicSyncError = TopicLogSyncError;
 
 pub type TestTopicSyncManager =
     TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
@@ -161,7 +161,7 @@ pub fn setup_logging() {
 /// Run a pair of topic sync sessions.
 pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), P::Error>
 where
-    P: Protocol + Send + Sync + 'static,
+    P: Protocol + Send + 'static,
 {
     let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);

@@ -89,12 +89,12 @@ impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
 
 impl<L, E, S, Evt> Protocol for LogSyncProtocol<L, E, S, Evt>
 where
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
-    Evt: From<LogSyncEvent<E>> + Debug + Send + Sync + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    E: Extensions + Send + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
-    type Error = LogSyncError<L, Evt>;
+    type Error = LogSyncError;
     type Output = Dedup<Hash>;
     type Message = LogSyncMessage<L>;
 
@@ -111,12 +111,14 @@ where
             match self.state {
                 State::Start => {
                     let metrics = LogSyncMetrics::default();
-                    self.event_tx.send(
-                        LogSyncEvent::Status(StatusEvent::Started {
-                            metrics: metrics.clone(),
-                        })
-                        .into(),
-                    )?;
+                    self.event_tx
+                        .send(
+                            LogSyncEvent::Status(StatusEvent::Started {
+                                metrics: metrics.clone(),
+                            })
+                            .into(),
+                        )
+                        .map_err(|_| LogSyncError::BroadcastSend)?;
                     self.state = State::SendHave { metrics };
                 }
                 State::SendHave { metrics } => {
@@ -133,7 +135,7 @@ where
                     let message =
                         message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                     let LogSyncMessage::Have(remote_log_heights) = message else {
-                        return Err(LogSyncError::UnexpectedMessage(message));
+                        return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                     };
 
                     let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
@@ -177,12 +179,14 @@ where
                             .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                     }
 
-                    self.event_tx.send(
-                        LogSyncEvent::Status(StatusEvent::Progress {
-                            metrics: metrics.clone(),
-                        })
-                        .into(),
-                    )?;
+                    self.event_tx
+                        .send(
+                            LogSyncEvent::Status(StatusEvent::Progress {
+                                metrics: metrics.clone(),
+                            })
+                            .into(),
+                        )
+                        .map_err(|_| LogSyncError::BroadcastSend)?;
 
                     self.state = State::ReceivePreSyncOrDone {
                         operations,
@@ -211,15 +215,19 @@ where
                             metrics.total_operations_remote = Some(total_operations);
                         }
                         LogSyncMessage::Done => sync_done_received = true,
-                        message => return Err(LogSyncError::UnexpectedMessage(message)),
+                        message => {
+                            return Err(LogSyncError::UnexpectedMessage(message.to_string()));
+                        }
                     }
 
-                    self.event_tx.send(
-                        LogSyncEvent::Status(StatusEvent::Progress {
-                            metrics: metrics.clone(),
-                        })
-                        .into(),
-                    )?;
+                    self.event_tx
+                        .send(
+                            LogSyncEvent::Status(StatusEvent::Progress {
+                                metrics: metrics.clone(),
+                            })
+                            .into(),
+                        )
+                        .map_err(|_| LogSyncError::BroadcastSend)?;
 
                     self.state = State::Sync {
                         operations,
@@ -266,12 +274,12 @@ where
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(LogSyncEvent::Data(Box::new(Operation { hash: header.hash(), header, body })).into())
-                                            ?;
+                                            .map_err(|_| LogSyncError::BroadcastSend)?;
                                     },
                                     LogSyncMessage::Done => {
                                         sync_done_received = true;
                                     },
-                                    message => return Err(LogSyncError::UnexpectedMessage(message))
+                                    message => return Err(LogSyncError::UnexpectedMessage(message.to_string()))
                                 }
                             },
                             Some(hash) = operation_stream.next() => {
@@ -302,12 +310,14 @@ where
                     self.state = State::End { metrics };
                 }
                 State::End { metrics } => {
-                    self.event_tx.send(
-                        LogSyncEvent::Status(StatusEvent::Completed {
-                            metrics: metrics.clone(),
-                        })
-                        .into(),
-                    )?;
+                    self.event_tx
+                        .send(
+                            LogSyncEvent::Status(StatusEvent::Completed {
+                                metrics: metrics.clone(),
+                            })
+                            .into(),
+                        )
+                        .map_err(|_| LogSyncError::BroadcastSend)?;
                     break;
                 }
             }
@@ -318,10 +328,10 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-async fn local_log_heights<L, E, S, Evt>(
+async fn local_log_heights<L, E, S>(
     store: &S,
     logs: &Logs<L>,
-) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError<L, Evt>>
+) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError>
 where
     L: LogId,
     S: LogStore<L, E> + OperationStore<L, E>,
@@ -347,11 +357,11 @@ where
 
 /// Compare the local log heights with the remote log heights for all given logs and return the
 /// hashes of all operations the remote needs, as well as the total bytes.
-async fn operations_needed_by_remote<L, E, S, Evt>(
+async fn operations_needed_by_remote<L, E, S>(
     store: &S,
     logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<Hash>, u64), LogSyncError<L, Evt>>
+) -> Result<(Vec<Hash>, u64), LogSyncError>
 where
     L: LogId,
     E: Extensions,
@@ -428,7 +438,7 @@ pub enum LogSyncMessage<L> {
         total_operations: u64,
         total_bytes: u64,
     },
-    // @TODO: use Header and Body here.
+    // TODO: use Header and Body here.
     Operation(Vec<u8>, Option<Vec<u8>>),
     Done,
 }
@@ -438,8 +448,14 @@ where
     L: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")?;
-        Ok(())
+        let value = match self {
+            LogSyncMessage::Have(_) => "have",
+            LogSyncMessage::PreSync { .. } => "pre_sync",
+            LogSyncMessage::Operation(_, _) => "operation",
+            LogSyncMessage::Done => "done",
+        };
+
+        write!(f, "{value}")
     }
 }
 
@@ -473,7 +489,7 @@ pub enum StatusEvent {
 
 /// Protocol error types.
 #[derive(Debug, Error)]
-pub enum LogSyncError<L, Evt> {
+pub enum LogSyncError {
     #[error(transparent)]
     Decode(#[from] DecodeError),
 
@@ -483,8 +499,8 @@ pub enum LogSyncError<L, Evt> {
     #[error("operation store error: {0}")]
     OperationStore(String),
 
-    #[error(transparent)]
-    BroadcastSend(#[from] broadcast::error::SendError<Evt>),
+    #[error("no active receivers when broadcasting")]
+    BroadcastSend,
 
     #[error("log sync error sending on message sink: {0}")]
     MessageSink(String),
@@ -496,7 +512,7 @@ pub enum LogSyncError<L, Evt> {
     UnexpectedStreamClosure,
 
     #[error("log sync received unexpected protocol message: {0}")]
-    UnexpectedMessage(LogSyncMessage<L>),
+    UnexpectedMessage(String),
 }
 
 #[cfg(test)]
@@ -820,12 +836,7 @@ mod tests {
         ];
 
         let result = run_protocol_uni(session, &messages).await;
-        assert!(matches!(
-            result,
-            Err(LogSyncError::UnexpectedMessage(
-                TestLogSyncMessage::Operation(_, _)
-            ))
-        ));
+        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
@@ -854,12 +865,7 @@ mod tests {
         ];
 
         let result = run_protocol_uni(session, &messages).await;
-        assert!(matches!(
-            result,
-            Err(LogSyncError::UnexpectedMessage(
-                TestLogSyncMessage::PreSync { .. }
-            ))
-        ));
+        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
@@ -873,10 +879,7 @@ mod tests {
         let result = run_protocol_uni(session, &messages).await;
 
         assert!(
-            matches!(
-                result,
-                Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Done))
-            ),
+            matches!(result, Err(LogSyncError::UnexpectedMessage(_))),
             "{:?}",
             result
         );
@@ -904,9 +907,6 @@ mod tests {
         ];
 
         let result = run_protocol_uni(session, &messages).await;
-        assert!(matches!(
-            result,
-            Err(LogSyncError::UnexpectedMessage(TestLogSyncMessage::Have(_)))
-        ));
+        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 }

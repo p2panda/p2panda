@@ -107,7 +107,7 @@ impl<M> Default for TopicManager<M> {
 
 impl<M> ThreadLocalActor for TopicManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     type State = TopicManagerState<M>;
 

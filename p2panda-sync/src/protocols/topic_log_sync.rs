@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::future::ready;
 use std::hash::Hash as StdHash;
@@ -33,16 +34,18 @@ pub struct TopicLogSync<T, S, M, L, E> {
 
 /// Sync protocol combining TopicHandshake and LogSync protocols into one so that peers can sync
 /// logs over a generic T topic. The mapping of T to a set of logs is handled locally by the
-/// TopicMap. The initiating peer sends their T to the remote and this establishes the topic for
-/// the session. After sync is complete peers optionally enter "live-mode" where concurrently
-/// received and future messages will be sent directly. As we may receive messages from many sync
-/// sessions concurrently, messages forwarded to a sync session in live-mode are de-duplicated in
-/// order to avoid flooding the network with redundant data.
+/// TopicMap.
+///
+/// The initiating peer sends their T to the remote and this establishes the topic for the session.
+/// After sync is complete peers optionally enter "live-mode" where concurrently received and
+/// future messages will be sent directly. As we may receive messages from many sync sessions
+/// concurrently, messages forwarded to a sync session in live-mode are de-duplicated in order to
+/// avoid flooding the network with redundant data.
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E> + Clone + Debug,
-    M: TopicLogMap<T, L> + Clone + Debug,
+    T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
+    S: LogStore<L, E> + OperationStore<L, E>,
+    M: TopicLogMap<T, L>,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
 {
@@ -87,13 +90,13 @@ where
 
 impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Debug + Send + Sync + 'static,
-    M: TopicLogMap<T, L> + Clone + Debug + Send + Sync + 'static,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
+    T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    M: TopicLogMap<T, L> + Send + 'static,
+    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    E: Extensions + Send + 'static,
 {
-    type Error = TopicLogSyncError<L, E>;
+    type Error = TopicLogSyncError;
     type Message = TopicLogSyncMessage<L, E>;
     type Output = ();
 
@@ -102,7 +105,7 @@ where
         mut sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         mut stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
-        // @TODO: check there is overlap between the local and remote topic filters and end the
+        // TODO: check there is overlap between the local and remote topic filters and end the
         // session now if not.
 
         // Get the log ids which are associated with this topic query.
@@ -110,7 +113,7 @@ where
             .topic_map
             .get(&self.topic)
             .await
-            .map_err(|err| TopicLogSyncError::TopicMap(format!("{err:?}")))?;
+            .map_err(|err| TopicLogSyncError::TopicMap(err.to_string()))?;
 
         // Run the log sync protocol passing in our local topic logs.
         let mut dedup = {
@@ -132,7 +135,7 @@ where
                         .send(TopicLogSyncEvent::Failed {
                             error: err.to_string(),
                         })
-                        .map_err(TopicSyncChannelError::EventSend)?;
+                        .map_err(|_| TopicSyncChannelError::EventSend)?;
 
                     log_sync_sink
                         .close()
@@ -151,7 +154,7 @@ where
 
             self.event_tx
                 .send(TopicLogSyncEvent::Success)
-                .map_err(TopicSyncChannelError::EventSend)?;
+                .map_err(|_| TopicSyncChannelError::EventSend)?;
 
             return Ok(());
         };
@@ -166,7 +169,7 @@ where
         let mut metrics = LiveModeMetrics::default();
         self.event_tx
             .send(TopicLogSyncEvent::LiveModeStarted)
-            .map_err(TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicSyncChannelError::EventSend)?;
 
         let result = loop {
             tokio::select! {
@@ -178,10 +181,15 @@ where
                                 continue;
                             }
 
-                            metrics.bytes_sent += operation.header.to_bytes().len()  as u64 + operation.header.payload_size;
+                            metrics.bytes_sent +=
+                                operation.header.to_bytes().len() as u64 + operation.header.payload_size;
                             metrics.operations_sent += 1;
 
-                            let result = sink.send(TopicLogSyncMessage::Live(operation.header.clone(), operation.body.clone()))
+                            let result = sink
+                                .send(TopicLogSyncMessage::Live(
+                                    operation.header.clone(),
+                                    operation.body.clone(),
+                                ))
                                 .await
                                 .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
 
@@ -192,12 +200,15 @@ where
                         ToSync::Close => {
                             // We send the close and wait for the remote to close the
                             // connection.
-                            let result = sink.send(TopicLogSyncMessage::Close).await.map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
+                            let result = sink
+                                .send(TopicLogSyncMessage::Close)
+                                .await
+                                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
                             if result.is_err() {
                                 break result;
                             };
                             close_sent = true;
-                        },
+                        }
                     };
                 }
                 message = stream.next() => {
@@ -220,21 +231,30 @@ where
                             };
 
                             let TopicLogSyncMessage::Live(header, body) = message else {
-                                break Err(TopicLogSyncError::UnexpectedProtocolMessage(Box::new(message)));
+                                break Err(TopicLogSyncError::UnexpectedProtocolMessage(
+                                    message.to_string(),
+                                ));
                             };
 
                             // @TODO: check that this message is a part of our topic T set.
 
                             // Insert operation hash into deduplication buffer and if it was
-                            // previously present do not forward the operation to the application layer.
+                            // previously present do not forward the operation to the application
+                            // layer.
                             if !dedup.insert(header.hash()) {
                                 continue;
                             }
 
-                            metrics.bytes_received += header.to_bytes().len()  as u64 + header.payload_size;
+                            metrics.bytes_received += header.to_bytes().len() as u64 + header.payload_size;
                             metrics.operations_received += 1;
-                            self.event_tx.send(TopicLogSyncEvent::Operation(Box::new(Operation{hash: header.hash(), header, body}))).map_err(TopicSyncChannelError::EventSend)?;
-                        },
+                            self.event_tx
+                                .send(TopicLogSyncEvent::Operation(Box::new(Operation {
+                                    hash: header.hash(),
+                                    header,
+                                    body,
+                                })))
+                                .map_err(|_| TopicSyncChannelError::EventSend)?;
+                        }
                         Err(err) => {
                             if close_sent {
                                 debug!("remote closed the stream after we sent a close message");
@@ -242,16 +262,15 @@ where
                             }
                             warn!("error in live-mode: {err:#?}");
                             break Err(TopicLogSyncError::DecodeMessage(format!("{err:?}")));
-                        },
+                        }
                     }
-
                 }
             }
         };
 
         self.event_tx
             .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-            .map_err(TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicSyncChannelError::EventSend)?;
 
         sink.close()
             .await
@@ -266,7 +285,7 @@ where
 
         self.event_tx
             .send(final_event)
-            .map_err(TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicSyncChannelError::EventSend)?;
 
         result
     }
@@ -278,16 +297,17 @@ pub(crate) fn sync_channels<'a, L, E>(
     sink: &mut (impl Sink<TopicLogSyncMessage<L, E>, Error = impl Debug> + Unpin),
     stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L, E>, impl Debug>> + Unpin),
 ) -> (
-    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError<E>> + Unpin,
-    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError<E>>> + Unpin,
+    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError> + Unpin,
+    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError>> + Unpin,
 ) {
     let log_sync_sink = sink
         .sink_map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))
         .with(|message| {
-            ready(Ok::<_, TopicSyncChannelError<E>>(
+            ready(Ok::<_, TopicSyncChannelError>(
                 TopicLogSyncMessage::<L, E>::Sync(message),
             ))
         });
+
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
         Ok(TopicLogSyncMessage::Live { .. }) | Ok(TopicLogSyncMessage::Close) => Err(
@@ -301,31 +321,31 @@ pub(crate) fn sync_channels<'a, L, E>(
 
 /// Error type occurring in topic log sync protocol.
 #[derive(Debug, Error)]
-pub enum TopicSyncChannelError<E> {
+pub enum TopicSyncChannelError {
     #[error("error sending on message sink: {0}")]
     MessageSink(String),
 
     #[error("error receiving from message stream: {0}")]
     MessageStream(String),
 
-    #[error(transparent)]
-    EventSend(#[from] broadcast::error::SendError<TopicLogSyncEvent<E>>),
+    #[error("no active receivers for broadcast")]
+    EventSend,
 }
 
 /// Error type occurring in topic log sync protocol.
 #[derive(Debug, Error)]
-pub enum TopicLogSyncError<L, E> {
+pub enum TopicLogSyncError {
     #[error(transparent)]
-    Sync(#[from] LogSyncError<L, TopicLogSyncEvent<E>>),
+    Sync(#[from] LogSyncError),
 
     #[error("topic map error: {0}")]
     TopicMap(String),
 
-    #[error("unexpected protocol message: {0:?}")]
-    UnexpectedProtocolMessage(Box<TopicLogSyncMessage<L, E>>),
+    #[error("unexpected protocol message: {0}")]
+    UnexpectedProtocolMessage(String),
 
     #[error(transparent)]
-    Channel(#[from] TopicSyncChannelError<E>),
+    Channel(#[from] TopicSyncChannelError),
 
     #[error("remote unexpectedly closed stream in live-mode")]
     UnexpectedStreamClosure,
@@ -378,6 +398,17 @@ pub enum TopicLogSyncMessage<L, E> {
     Close,
 }
 
+impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            TopicLogSyncMessage::Sync(_) => "sync",
+            TopicLogSyncMessage::Live(_, _) => "live",
+            TopicLogSyncMessage::Close => "close",
+        };
+        write!(f, "{value}")
+    }
+}
+
 /// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
 ///
 /// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
@@ -412,8 +443,8 @@ pub enum TopicLogSyncMessage<L, E> {
 /// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
 /// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
 /// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
-pub trait TopicLogMap<T, L> {
-    type Error: Debug;
+pub trait TopicLogMap<T, L>: Clone {
+    type Error: StdError;
 
     fn get(&self, topic: &T) -> impl Future<Output = Result<Logs<L>, Self::Error>>;
 }

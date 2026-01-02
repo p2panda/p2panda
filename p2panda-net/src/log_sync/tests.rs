@@ -566,11 +566,11 @@ async fn topic_log_sync_failure_and_retry() {
     // Alice and Bob should receive all six events (SyncStarted, SyncStatus 2x, Operation,
     // SyncFinished and LiveModeStarted).
     for _ in 0..6 {
-        alice_subscription.next().await.unwrap();
+        alice_subscription.next().await.unwrap().unwrap();
     }
 
     for _ in 0..6 {
-        bob_subscription.next().await.unwrap();
+        bob_subscription.next().await.unwrap().unwrap();
     }
 
     // Alice unexpectedly shuts down.

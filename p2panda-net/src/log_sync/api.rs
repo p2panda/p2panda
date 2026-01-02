@@ -26,10 +26,10 @@ use crate::log_sync::actors::{ToSyncManager, ToTopicManager};
 #[derive(Clone)]
 pub struct LogSync<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     inner: Arc<RwLock<Inner<S, L, E, TM>>>,
 }
@@ -37,10 +37,10 @@ where
 #[derive(Clone)]
 pub struct Inner<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
     actor_ref: ActorRef<ToSyncManager<TopicSyncManager<TopicId, S, TM, L, E>>>,
@@ -48,10 +48,10 @@ where
 
 impl<S, L, E, TM> LogSync<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
     pub(crate) fn new(
@@ -94,10 +94,10 @@ where
 
 impl<S, L, E, TM> Drop for Inner<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     fn drop(&mut self) {
         self.actor_ref.stop(None);

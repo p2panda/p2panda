@@ -5,7 +5,6 @@
 //! This actor forms the coordination layer between the external API and the sync and gossip
 //! sub-systems.
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use iroh::endpoint::Connection;
@@ -139,7 +138,7 @@ impl<M> Default for SyncManager<M> {
 
 impl<M> ThreadLocalActor for SyncManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     type State = SyncManagerState<M>;
 
@@ -420,17 +419,25 @@ where
     }
 }
 
-#[derive(Debug)]
 struct SyncProtocolHandler<M>
 where
-    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     stream_ref: ActorRef<ToSyncManager<M>>,
 }
 
+impl<M> std::fmt::Debug for SyncProtocolHandler<M>
+where
+    M: SyncManagerTrait<TopicId> + Send + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SyncProtocolHandler").finish()
+    }
+}
+
 impl<M> ProtocolHandler for SyncProtocolHandler<M>
 where
-    M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
+    M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     async fn accept(
         &self,

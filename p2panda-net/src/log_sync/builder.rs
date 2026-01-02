@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_core::Extensions;
@@ -20,10 +19,10 @@ use crate::log_sync::{LogSync, LogSyncError};
 
 pub struct Builder<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     store: S,
     topic_map: TM,
@@ -35,10 +34,10 @@ where
 
 impl<S, L, E, TM> Builder<S, L, E, TM>
 where
-    S: Debug + OperationStore<L, E> + LogStore<L, E> + Send + Sync + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
-    E: Extensions + Send + Sync + 'static,
-    TM: Clone + Debug + TopicLogMap<TopicId, L> + Send + Sync + 'static,
+    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    E: Extensions + Send + 'static,
+    TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
     pub fn new(
         store: S,
