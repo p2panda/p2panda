@@ -30,7 +30,7 @@ pub enum ToMdns {
     /// Since this came from an external discovery source we now need to translate this information
     /// into our "meta" transport info types.
     DiscoveredEndpointInfo {
-        endpoint_id: iroh::PublicKey,
+        endpoint_id: iroh::EndpointId,
         endpoint_addr: Option<iroh::EndpointAddr>,
         user_data: Option<UserData>,
     },

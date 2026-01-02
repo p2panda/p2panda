@@ -20,7 +20,7 @@ use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::{SyncStream, ToSyncStream};
+use crate::log_sync::actors::{SyncManager, ToSyncManager};
 use crate::log_sync::api::LogSyncHandle;
 use crate::test_utils::{
     ApplicationArguments, generate_trusted_node_info, setup_logging, test_args_from_seed,
@@ -29,7 +29,7 @@ use crate::{NodeId, TopicId};
 
 struct FailingNode {
     args: ApplicationArguments,
-    sync_ref: ActorRef<ToSyncStream<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>>,
+    sync_ref: ActorRef<ToSyncManager<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>>,
 }
 
 impl FailingNode {
@@ -65,7 +65,7 @@ impl FailingNode {
 
         let thread_pool = ThreadLocalActorSpawner::new();
         let (sync_ref, _) =
-            SyncStream::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
+            SyncManager::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
                 None,
                 (sync_config, address_book, endpoint, gossip),
                 thread_pool,
@@ -249,13 +249,13 @@ async fn failed_sync_session_retry() {
 
         // Alice and Bob create stream for the same topic.
         let alice_handle = {
-            let manager_ref = call!(alice.sync_ref, ToSyncStream::Create, topic, true).unwrap();
+            let manager_ref = call!(alice.sync_ref, ToSyncManager::Create, topic, true).unwrap();
             LogSyncHandle::new(topic, alice.sync_ref.clone(), manager_ref)
         };
         let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
         let _bob_handle = {
-            let manager_ref = call!(bob.sync_ref, ToSyncStream::Create, topic, true).unwrap();
+            let manager_ref = call!(bob.sync_ref, ToSyncManager::Create, topic, true).unwrap();
             LogSyncHandle::new(topic, bob.sync_ref.clone(), manager_ref)
         };
 

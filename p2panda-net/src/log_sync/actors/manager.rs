@@ -34,7 +34,7 @@ type SessionSink<M> = Pin<
 >;
 
 #[derive(Debug)]
-pub enum ToSyncManager<T> {
+pub enum ToTopicManager<T> {
     /// Initiate a sync session with this peer over the given topic
     ///
     /// This adds them to the active sync set.
@@ -75,7 +75,7 @@ pub enum ToSyncManager<T> {
     Close { node_id: NodeId, topic: TopicId },
 }
 
-pub struct SyncManagerState<M>
+pub struct TopicManagerState<M>
 where
     M: SyncManagerTrait<TopicId>,
 {
@@ -93,11 +93,11 @@ where
 }
 
 #[derive(Debug)]
-pub struct SyncManager<M> {
+pub struct TopicManager<M> {
     _marker: PhantomData<M>,
 }
 
-impl<M> Default for SyncManager<M> {
+impl<M> Default for TopicManager<M> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -105,13 +105,13 @@ impl<M> Default for SyncManager<M> {
     }
 }
 
-impl<M> ThreadLocalActor for SyncManager<M>
+impl<M> ThreadLocalActor for TopicManager<M>
 where
     M: SyncManagerTrait<TopicId> + Debug + Send + 'static,
 {
-    type State = SyncManagerState<M>;
+    type State = TopicManagerState<M>;
 
-    type Msg = ToSyncManager<M::Message>;
+    type Msg = ToTopicManager<M::Message>;
 
     type Arguments = (
         TopicId,
@@ -137,7 +137,7 @@ where
             SyncPoller::spawn_linked(None, (event_stream, sender), myself.into(), pool.clone())
                 .await?;
 
-        Ok(SyncManagerState {
+        Ok(TopicManagerState {
             topic,
             manager,
             session_topic_map: SessionTopicMap::default(),
@@ -173,7 +173,7 @@ where
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            ToSyncManager::Initiate {
+            ToTopicManager::Initiate {
                 node_id,
                 topic,
                 live_mode,
@@ -207,7 +207,7 @@ where
                     protocol,
                 })?;
             }
-            ToSyncManager::Retry {
+            ToTopicManager::Retry {
                 node_id,
                 topic,
                 live_mode,
@@ -268,7 +268,7 @@ where
                     protocol,
                 })?;
             }
-            ToSyncManager::Accept {
+            ToTopicManager::Accept {
                 node_id,
                 connection,
                 topic,
@@ -301,7 +301,7 @@ where
                     protocol,
                 })?;
             }
-            ToSyncManager::Publish { topic, data } => {
+            ToTopicManager::Publish { topic, data } => {
                 // Get a handle onto any sync sessions running over the subscription topic and
                 // forward on the data.
                 let session_ids = state.session_topic_map.sessions(&topic);
@@ -313,7 +313,7 @@ where
                     let _ = handle.send(ToSync::Payload(data.clone())).await;
                 }
             }
-            ToSyncManager::CloseAll { topic } => {
+            ToTopicManager::CloseAll { topic } => {
                 // Get a handle onto any sync sessions running over the subscription topic and send
                 // a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
@@ -333,7 +333,7 @@ where
                     );
                 }
             }
-            ToSyncManager::Close { node_id, topic } => {
+            ToTopicManager::Close { node_id, topic } => {
                 if state.active_sync_set.remove(&node_id) {
                     debug!(
                         topic = topic.fmt_short(),
@@ -438,7 +438,7 @@ where
                         let topic = state.topic;
                         let _ = myself
                             .send_after(RETRY_RATE, move || {
-                                ToSyncManager::Retry {
+                                ToTopicManager::Retry {
                                     node_id: remote_node_id,
                                     topic,
                                     // TODO: For now we default to live-mode is true but we should
@@ -465,14 +465,14 @@ where
     }
 }
 
-impl<M> SyncManager<M>
+impl<M> TopicManager<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
     <M as SyncManagerTrait<TopicId>>::Error: StdError + Send + Sync + 'static,
 {
     /// Initiate a session and update related manager state mappings.
     async fn new_session(
-        state: &mut SyncManagerState<M>,
+        state: &mut TopicManagerState<M>,
         actor_id: ActorId,
         node_id: NodeId,
         topic: TopicId,
@@ -510,7 +510,7 @@ where
     }
 
     /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut SyncManagerState<M>, id: SyncSessionId) {
+    fn drop_session(state: &mut TopicManagerState<M>, id: SyncSessionId) {
         state.session_topic_map.drop(id);
         state.node_session_map.iter_mut().for_each(|(_, sessions)| {
             sessions.remove(&id);

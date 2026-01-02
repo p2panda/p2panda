@@ -15,7 +15,7 @@ use crate::TopicId;
 use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::SyncStream;
+use crate::log_sync::actors::SyncManager;
 use crate::log_sync::{LogSync, LogSyncError};
 
 pub struct Builder<S, L, E, TM>
@@ -70,7 +70,7 @@ where
 
             let args = (config, self.address_book, self.endpoint, self.gossip);
 
-            SyncStream::<TopicSyncManager<TopicId, S, TM, L, E>>::spawn(None, args, thread_pool)
+            SyncManager::<TopicSyncManager<TopicId, S, TM, L, E>>::spawn(None, args, thread_pool)
                 .await?
         };
 

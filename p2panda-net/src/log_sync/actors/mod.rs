@@ -7,7 +7,7 @@ mod stream;
 #[cfg(test)]
 mod tests;
 
-pub use manager::{SyncManager, ToSyncManager};
-pub use stream::{SyncStream, ToSyncStream};
+pub use manager::{ToTopicManager, TopicManager};
+pub use stream::{SyncManager, ToSyncManager};
 
 pub const SYNC_PROTOCOL_ID: &[u8] = b"p2panda/log_sync/v1";
