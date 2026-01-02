@@ -7,7 +7,7 @@ use std::time::Duration;
 use p2panda_discovery::address_book::{BoxedAddressBookStore, BoxedError, NodeInfo as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::address_book::report::ConnectionOutcome;
 use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
@@ -24,11 +24,7 @@ pub enum ToAddressBookActor {
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
-    NodeInfosBySyncTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
-
-    /// Returns a list of informations about nodes which are all interested in at least one of the
-    /// given topics in this set.
-    NodeInfosByEphemeralMessagingTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
+    NodeInfosByTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Inserts or updates node information into address book. Use this method if adding node
     /// information from a local configuration, trusted, external source, etc.
@@ -56,18 +52,17 @@ pub enum ToAddressBookActor {
         RpcReplyPort<Result<bool, NodeInfoError>>,
     ),
 
-    /// Sets the list of "topics" for eventually consistent sync this node is "interested" in.
+    /// Sets the list of "topics" this node is "interested" in.
     ///
     /// Topics are usually shared privately and directly with nodes, this is why implementers
     /// usually want to simply overwrite the previous topic set (_not_ extend it).
-    SetSyncTopics(NodeId, HashSet<TopicId>),
+    SetTopics(NodeId, HashSet<TopicId>),
 
-    /// Sets the list of "topics" for ephemeral messaging this node is "interested" in.
-    ///
-    /// Topics for gossip overlays (used for ephemeral messaging) are usually shared privately and
-    /// directly with nodes, this is why implementers usually want to simply overwrite the previous
-    /// topic set (_not_ extend it).
-    SetEphemeralMessagingTopics(NodeId, HashSet<TopicId>),
+    /// Add a topic to set of this node.
+    AddTopic(NodeId, TopicId),
+
+    /// Remove topic from set of this node.
+    RemoveTopic(NodeId, TopicId),
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
     /// exist.
@@ -123,29 +118,16 @@ pub struct AddressBookState {
 }
 
 impl AddressBookState {
-    async fn node_infos_by_sync_topics(
+    async fn node_infos_by_topics(
         &self,
         topics: Vec<TopicId>,
     ) -> Result<Vec<NodeInfo>, BoxedError> {
-        let result = self.store.node_infos_by_sync_topics(&topics).await?;
-        Ok(result)
-    }
-
-    async fn node_infos_by_ephemeral_messaging_topics(
-        &self,
-        topics: Vec<TopicId>,
-    ) -> Result<Vec<NodeInfo>, BoxedError> {
-        let result = self
-            .store
-            .node_infos_by_ephemeral_messaging_topics(&topics)
-            .await?;
+        let result = self.store.node_infos_by_topics(&topics).await?;
         Ok(result)
     }
 
     async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, BoxedError> {
-        let ephemeral_topics = self.store.node_ephemeral_messaging_topics(node_id).await?;
-        let mut topics = self.store.node_sync_topics(node_id).await?;
-        topics.extend(ephemeral_topics);
+        let topics = self.store.node_topics(node_id).await?;
         Ok(topics)
     }
 }
@@ -176,7 +158,7 @@ impl ThreadLocalActor for AddressBookActor {
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -248,34 +230,12 @@ impl ThreadLocalActor for AddressBookActor {
             ToAddressBookActor::WatchTopic(topic, updates_only, reply) => {
                 // Since we don't know where this topic belongs to we need to check both stream
                 // types.
-                let sync_node_ids: HashSet<NodeId> = state
-                    .node_infos_by_sync_topics(vec![topic])
+                let node_ids: HashSet<NodeId> = state
+                    .node_infos_by_topics(vec![topic])
                     .await?
                     .iter()
                     .map(|info| info.id())
                     .collect();
-
-                let ephemeral_node_ids: HashSet<NodeId> = state
-                    .node_infos_by_ephemeral_messaging_topics(vec![topic])
-                    .await?
-                    .iter()
-                    .map(|info| info.id())
-                    .collect();
-
-                // TODO: Topic re-use across stream types should be prohibited on our high-level
-                // API and discovery protocol.
-                if !sync_node_ids.is_empty() && !ephemeral_node_ids.is_empty() {
-                    warn!(
-                        topic = %topic.fmt_short(),
-                        "detected re-use of the same topic for both ephemeral messaging and sync"
-                    );
-                    return Ok(());
-                }
-
-                // Since we've checked that one of the sets _needs_ to be empty, we can simply
-                // merge them.
-                let mut node_ids: HashSet<NodeId> = sync_node_ids;
-                node_ids.extend(ephemeral_node_ids);
 
                 let rx = state.topic_watchers.subscribe(
                     topic,
@@ -330,23 +290,17 @@ impl ThreadLocalActor for AddressBookActor {
                 let result = state.store.node_info(&node_id).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBookActor::NodeInfosBySyncTopics(topics, reply) => {
-                let result = state.node_infos_by_sync_topics(topics).await?;
+            ToAddressBookActor::NodeInfosByTopics(topics, reply) => {
+                let result = state.node_infos_by_topics(topics).await?;
                 let _ = reply.send(result);
             }
-            ToAddressBookActor::NodeInfosByEphemeralMessagingTopics(topics, reply) => {
-                let result = state
-                    .node_infos_by_ephemeral_messaging_topics(topics)
-                    .await?;
-                let _ = reply.send(result);
-            }
-            ToAddressBookActor::SetSyncTopics(node_id, topics) => {
-                state.store.set_sync_topics(node_id, topics.clone()).await?;
+            ToAddressBookActor::SetTopics(node_id, topics) => {
+                state.store.set_topics(node_id, topics.clone()).await?;
 
                 // Inform subscribers about potential change in set of interested nodes.
                 for topic in &topics {
                     let node_ids = state
-                        .node_infos_by_sync_topics(vec![*topic])
+                        .node_infos_by_topics(vec![*topic])
                         .await?
                         .into_iter()
                         .map(|info| info.id());
@@ -359,27 +313,17 @@ impl ThreadLocalActor for AddressBookActor {
                 let topics = state.topics_for_node(&node_id).await?;
                 state.node_topics_watchers.update(&node_id, topics);
             }
-            ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics) => {
-                state
-                    .store
-                    .set_ephemeral_messaging_topics(node_id, topics.clone())
-                    .await?;
-
-                // Inform subscribers about potential change in set of interested nodes.
-                for topic in &topics {
-                    let node_ids = state
-                        .node_infos_by_ephemeral_messaging_topics(vec![*topic])
-                        .await?
-                        .into_iter()
-                        .map(|info| info.id());
-                    state
-                        .topic_watchers
-                        .update(topic, HashSet::from_iter(node_ids));
+            ToAddressBookActor::AddTopic(node_id, topic) => {
+                let mut topics = state.store.node_topics(&node_id).await?;
+                if topics.insert(topic) {
+                    myself.send_message(ToAddressBookActor::SetTopics(node_id, topics))?;
                 }
-
-                // Inform subscribers about changes in set of topics.
-                let topics = state.topics_for_node(&node_id).await?;
-                state.node_topics_watchers.update(&node_id, topics);
+            }
+            ToAddressBookActor::RemoveTopic(node_id, topic) => {
+                let mut topics = state.store.node_topics(&node_id).await?;
+                if topics.remove(&topic) {
+                    myself.send_message(ToAddressBookActor::SetTopics(node_id, topics))?;
+                }
             }
             ToAddressBookActor::RemoveNodeInfo(node_id, reply) => {
                 let result = state.store.remove_node_info(&node_id).await?;

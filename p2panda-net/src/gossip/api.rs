@@ -88,10 +88,7 @@ impl Gossip {
         };
 
         let node_ids = {
-            let node_infos = self
-                .address_book
-                .node_infos_by_ephemeral_messaging_topics([topic])
-                .await?;
+            let node_infos = self.address_book.node_infos_by_topics([topic]).await?;
             node_infos
                 .iter()
                 .filter_map(|info| {
@@ -120,10 +117,6 @@ impl Gossip {
             topic,
             (to_gossip_tx.clone(), from_gossip_tx.clone(), guard.clone()),
         );
-
-        self.address_book
-            .set_ephemeral_messaging_topics(self.my_node_id, senders.keys().cloned())
-            .await?;
 
         Ok(GossipHandle::new(
             topic,

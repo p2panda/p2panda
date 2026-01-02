@@ -11,7 +11,7 @@ use tokio_stream::StreamExt;
 use crate::address_book::AddressBook;
 use crate::gossip::{Gossip, GossipEvent};
 use crate::iroh_endpoint::Endpoint;
-use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args};
+use crate::test_utils::{setup_logging, test_args};
 
 #[tokio::test]
 async fn join_without_bootstrap() {
@@ -59,7 +59,7 @@ async fn join_without_bootstrap() {
         .unwrap();
 
     // Obtain ant's node information including direct addresses.
-    let ant_info = generate_trusted_node_info(&mut ant_args).bootstrap();
+    let ant_info = ant_args.node_info().bootstrap();
 
     // Bat & Cat discovers ant through some out-of-band process. Note that Ant does _not_ have a
     // bootstrap specified.
@@ -68,7 +68,7 @@ async fn join_without_bootstrap() {
         .await
         .unwrap();
     bat_address_book
-        .set_ephemeral_messaging_topics(ant_info.node_id, [topic])
+        .set_topics(ant_info.node_id, [topic])
         .await
         .unwrap();
     cat_address_book
@@ -76,7 +76,7 @@ async fn join_without_bootstrap() {
         .await
         .unwrap();
     cat_address_book
-        .set_ephemeral_messaging_topics(ant_info.node_id, [topic])
+        .set_topics(ant_info.node_id, [topic])
         .await
         .unwrap();
 
@@ -162,7 +162,7 @@ async fn two_peer_gossip() {
         .unwrap();
 
     // Obtain ant's node information including direct addresses.
-    let ant_info = generate_trusted_node_info(&mut ant_args).bootstrap();
+    let ant_info = ant_args.node_info().bootstrap();
 
     // Bat discovers ant through some out-of-band process.
     bat_address_book
@@ -170,7 +170,7 @@ async fn two_peer_gossip() {
         .await
         .unwrap();
     bat_address_book
-        .set_ephemeral_messaging_topics(ant_info.node_id, [topic])
+        .set_topics(ant_info.node_id, [topic])
         .await
         .unwrap();
 
@@ -254,7 +254,7 @@ async fn third_peer_joins_non_bootstrap() {
         .unwrap();
 
     // Obtain ant's node information including direct addresses.
-    let ant_info = generate_trusted_node_info(&mut ant_args).bootstrap();
+    let ant_info = ant_args.node_info().bootstrap();
 
     // Bat discovers ant through some out-of-band process.
     bat_address_book
@@ -262,7 +262,7 @@ async fn third_peer_joins_non_bootstrap() {
         .await
         .unwrap();
     bat_address_book
-        .set_ephemeral_messaging_topics(ant_info.node_id, [topic])
+        .set_topics(ant_info.node_id, [topic])
         .await
         .unwrap();
 
@@ -287,14 +287,14 @@ async fn third_peer_joins_non_bootstrap() {
     let mut bat_from_gossip_rx = bat_handle.subscribe();
 
     // Obtain bat's endpoint information including direct addresses.
-    let bat_info = generate_trusted_node_info(&mut bat_args).bootstrap();
+    let bat_info = bat_args.node_info().bootstrap();
 
     cat_address_book
         .insert_node_info(bat_info.clone())
         .await
         .unwrap();
     cat_address_book
-        .set_ephemeral_messaging_topics(bat_info.node_id, [topic])
+        .set_topics(bat_info.node_id, [topic])
         .await
         .unwrap();
 
@@ -386,7 +386,7 @@ async fn three_peer_gossip_with_rejoin() {
         .unwrap();
 
     // Obtain ant's node information including direct addresses.
-    let ant_info = generate_trusted_node_info(&mut ant_args).bootstrap();
+    let ant_info = ant_args.node_info().bootstrap();
 
     // Bat discovers ant through some out-of-band process.
     bat_address_book
@@ -394,7 +394,7 @@ async fn three_peer_gossip_with_rejoin() {
         .await
         .unwrap();
     bat_address_book
-        .set_ephemeral_messaging_topics(ant_info.node_id, [topic])
+        .set_topics(ant_info.node_id, [topic])
         .await
         .unwrap();
 
@@ -473,7 +473,7 @@ async fn three_peer_gossip_with_rejoin() {
     // topic but cannot "hear" one another.
 
     // Obtain bat's endpoint information including direct addresses.
-    let bat_info = generate_trusted_node_info(&mut bat_args).bootstrap();
+    let bat_info = bat_args.node_info().bootstrap();
 
     // Cat discovers bat through some out-of-band process.
     cat_address_book
@@ -481,7 +481,7 @@ async fn three_peer_gossip_with_rejoin() {
         .await
         .unwrap();
     cat_address_book
-        .set_ephemeral_messaging_topics(bat_info.node_id, [topic])
+        .set_topics(bat_info.node_id, [topic])
         .await
         .unwrap();
 

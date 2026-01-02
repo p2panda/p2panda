@@ -8,7 +8,7 @@ use iroh::endpoint::TransportConfig;
 use p2panda_discovery::address_book::{
     AddressBookStore, BoxedAddressBookStore, WrappedAddressBookStore,
 };
-use p2panda_discovery::psi_hash::{PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
+use p2panda_discovery::psi_hash::{PsiHashDiscoveryProtocol, PsiHashMessage};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
@@ -111,8 +111,8 @@ impl ThreadLocalActor for DiscoverySession {
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<PsiHashDiscoveryMessage<NodeId, NodeInfo>, _>(tx);
-        let mut rx = into_cbor_stream::<PsiHashDiscoveryMessage<NodeId, NodeInfo>, _>(rx);
+        let mut tx = into_cbor_sink::<PsiHashMessage<NodeId, NodeInfo>, _>(tx);
+        let mut rx = into_cbor_stream::<PsiHashMessage<NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
         // TODO: Have a timeout to cancel session if it's running overtime.
@@ -166,13 +166,7 @@ where
 {
     type Error = <S as AddressBookStore<NodeId, NodeInfo>>::Error;
 
-    async fn sync_topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
-        self.store.node_sync_topics(&self.my_node_id).await
-    }
-
-    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
-        self.store
-            .node_ephemeral_messaging_topics(&self.my_node_id)
-            .await
+    async fn topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
+        self.store.node_topics(&self.my_node_id).await
     }
 }

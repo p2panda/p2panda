@@ -22,9 +22,7 @@ use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::log_sync::actors::{SyncManager, ToSyncManager};
 use crate::log_sync::api::LogSyncHandle;
-use crate::test_utils::{
-    ApplicationArguments, generate_trusted_node_info, setup_logging, test_args_from_seed,
-};
+use crate::test_utils::{ApplicationArguments, setup_logging, test_args_from_seed};
 use crate::{NodeId, TopicId};
 
 struct FailingNode {
@@ -240,12 +238,8 @@ async fn failed_sync_session_retry() {
         let mut bob = FailingNode::spawn(random(), vec![], bob_sync_config).await;
 
         let (alice_sync_config, _alice_rx) = FailingSyncConfig::new(alice_behavior);
-        let alice = FailingNode::spawn(
-            random(),
-            vec![generate_trusted_node_info(&mut bob.args)],
-            alice_sync_config,
-        )
-        .await;
+        let alice =
+            FailingNode::spawn(random(), vec![bob.args.node_info()], alice_sync_config).await;
 
         // Alice and Bob create stream for the same topic.
         let alice_handle = {

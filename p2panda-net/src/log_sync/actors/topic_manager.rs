@@ -36,24 +36,13 @@ type SessionSink<M> = Pin<
 #[derive(Debug)]
 pub enum ToTopicManager<T> {
     /// Initiate a sync session with this peer over the given topic
-    ///
-    /// This adds them to the active sync set.
     Initiate {
         node_id: NodeId,
         topic: TopicId,
         live_mode: bool,
     },
 
-    /// Retry sync with this peer after a failed session.
-    Retry {
-        node_id: NodeId,
-        topic: TopicId,
-        live_mode: bool,
-    },
-
     /// Accept a sync session on this connection.
-    ///
-    /// Do not add the node to our active sync set.
     Accept {
         node_id: NodeId,
         topic: TopicId,
@@ -61,25 +50,24 @@ pub enum ToTopicManager<T> {
         connection: Connection,
     },
 
+    /// Retry sync with this peer after a failed session.
+    Retry { node_id: NodeId, live_mode: bool },
+
     /// Send newly published data to all sync sessions running over the given topic.
-    Publish { topic: TopicId, data: T },
+    Publish(T),
 
-    /// Close all active sync sessions running over the given topic.
-    ///
-    /// Additionally empty the current active sync set
-    CloseAll { topic: TopicId },
+    /// Close all active sync sessions running over the given topic. This essentially shuts down
+    /// the whole manager.
+    CloseAll,
 
-    /// Close all active sync sessions running with the given node id and topic.
-    ///
-    /// Additionally remove them from the active sync set.
-    Close { node_id: NodeId, topic: TopicId },
+    /// Close all active sync sessions running with the given node id.
+    Close { node_id: NodeId },
 }
 
 pub struct TopicManagerState<M>
 where
     M: SyncManagerTrait<TopicId>,
 {
-    #[allow(unused)]
     topic: TopicId,
     manager: M,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
@@ -207,16 +195,12 @@ where
                     protocol,
                 })?;
             }
-            ToTopicManager::Retry {
-                node_id,
-                topic,
-                live_mode,
-            } => {
+            ToTopicManager::Retry { node_id, live_mode } => {
                 // If this node was removed from the active sync set we skip retrying.
                 if !state.active_sync_set.contains(&node_id) {
                     debug!(
                         remote = %node_id.fmt_short(),
-                        topic = %topic.fmt_short(),
+                        topic = %state.topic.fmt_short(),
                         %live_mode,
                         "skip re-initiate sync: node no longer in active set"
                     );
@@ -233,7 +217,7 @@ where
                 if !current_sessions.is_empty() {
                     debug!(
                         remote = %node_id.fmt_short(),
-                        topic = %topic.fmt_short(),
+                        topic = %state.topic.fmt_short(),
                         %live_mode,
                         "skip re-initiate sync: other sync sessions already running"
                     );
@@ -242,13 +226,13 @@ where
 
                 debug!(
                     remote = %node_id.fmt_short(),
-                    topic = %topic.fmt_short(),
+                    topic = %state.topic.fmt_short(),
                     %live_mode,
                     "re-initiate sync after failed session"
                 );
 
                 let config = SyncSessionConfig {
-                    topic,
+                    topic: state.topic,
                     remote: node_id,
                     live_mode,
                 };
@@ -259,12 +243,14 @@ where
                     state.pool.clone(),
                 )
                 .await?;
+
                 let protocol =
-                    Self::new_session(state, actor_ref.get_id(), node_id, topic, config).await;
+                    Self::new_session(state, actor_ref.get_id(), node_id, state.topic, config)
+                        .await;
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
                     node_id,
-                    topic,
+                    topic: state.topic,
                     protocol,
                 })?;
             }
@@ -301,10 +287,11 @@ where
                     protocol,
                 })?;
             }
-            ToTopicManager::Publish { topic, data } => {
+            ToTopicManager::Publish(data) => {
                 // Get a handle onto any sync sessions running over the subscription topic and
                 // forward on the data.
-                let session_ids = state.session_topic_map.sessions(&topic);
+                let session_ids = state.session_topic_map.sessions(&state.topic);
+
                 for id in session_ids {
                     let handle = state
                         .session_topic_map
@@ -313,11 +300,12 @@ where
                     let _ = handle.send(ToSync::Payload(data.clone())).await;
                 }
             }
-            ToTopicManager::CloseAll { topic } => {
+            ToTopicManager::CloseAll => {
                 // Get a handle onto any sync sessions running over the subscription topic and send
                 // a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
-                let session_ids = state.session_topic_map.sessions(&topic);
+                let session_ids = state.session_topic_map.sessions(&state.topic);
+
                 for id in session_ids {
                     let handle = state
                         .session_topic_map
@@ -325,31 +313,37 @@ where
                         .expect("session handle exists");
                     let _ = handle.send(ToSync::Close).await;
                 }
+
                 for node_id in state.active_sync_set.drain() {
                     debug!(
-                        topic = topic.fmt_short(),
+                        topic = state.topic.fmt_short(),
                         "removed node from active sync set: {}",
                         node_id.fmt_short()
                     );
                 }
             }
-            ToTopicManager::Close { node_id, topic } => {
+            ToTopicManager::Close { node_id } => {
                 if state.active_sync_set.remove(&node_id) {
                     debug!(
-                        topic = topic.fmt_short(),
+                        topic = state.topic.fmt_short(),
                         "removed node from active sync set: {}",
                         node_id.fmt_short()
                     );
                 };
+
                 let node_sessions = state.node_session_map.get(&node_id).cloned();
+
                 if let Some(node_sessions) = node_sessions {
-                    let topic_sessions = state.session_topic_map.sessions(&topic);
+                    let topic_sessions = state.session_topic_map.sessions(&state.topic);
+
                     for id in topic_sessions.intersection(&node_sessions) {
                         let session_topic =
                             state.session_topic_map.topic(*id).expect("topic to exist");
-                        if &topic != session_topic {
+
+                        if &state.topic != session_topic {
                             continue;
                         }
+
                         let handle = state
                             .session_topic_map
                             .sender_mut(*id)
@@ -360,6 +354,7 @@ where
                 };
             }
         }
+
         Ok(())
     }
 
@@ -435,12 +430,10 @@ where
                         };
 
                         // Send a retry message to the actor after a 5 second delay.
-                        let topic = state.topic;
                         let _ = myself
                             .send_after(RETRY_RATE, move || {
                                 ToTopicManager::Retry {
                                     node_id: remote_node_id,
-                                    topic,
                                     // TODO: For now we default to live-mode is true but we should
                                     // rather retrieve this state from the failed sync session.
                                     live_mode: true,

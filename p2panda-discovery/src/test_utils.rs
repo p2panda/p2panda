@@ -109,19 +109,14 @@ pub type TestStore<R> = MemoryStore<R, TestId, TestInfo>;
 
 #[derive(Clone, Default, Debug)]
 pub struct TestSubscription {
-    pub sync_topics: HashSet<[u8; 32]>,
-    pub ephemeral_messaging_topics: HashSet<[u8; 32]>,
+    pub topics: HashSet<[u8; 32]>,
 }
 
 impl LocalTopics for TestSubscription {
     type Error = Infallible;
 
-    async fn sync_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
-        Ok(self.sync_topics.clone())
-    }
-
-    async fn ephemeral_messaging_topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
-        Ok(self.ephemeral_messaging_topics.clone())
+    async fn topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
+        Ok(self.topics.clone())
     }
 }
 
@@ -129,13 +124,12 @@ impl DiscoveryResult<TestId, TestInfo> {
     pub fn from_neighbors(remote_node_id: TestId, node_ids: &[TestId]) -> Self {
         Self {
             remote_node_id,
-            node_transport_infos: BTreeMap::from_iter(
+            transport_infos: BTreeMap::from_iter(
                 node_ids
                     .iter()
                     .map(|id| (*id, TestTransportInfo::new("test"))),
             ),
-            sync_topics: HashSet::new(),
-            ephemeral_messaging_topics: HashSet::new(),
+            topics: HashSet::new(),
         }
     }
 }

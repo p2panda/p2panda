@@ -3,83 +3,12 @@
 use std::collections::HashMap;
 
 use assert_matches::assert_matches;
-use p2panda_core::{Operation, PrivateKey, PublicKey};
+use p2panda_core::Operation;
 use p2panda_sync::FromSync;
 use p2panda_sync::topic_log_sync::TopicLogSyncEvent as Event;
-use rand::Rng;
 use tokio_stream::StreamExt;
 
-use crate::NodeId;
-use crate::address_book::AddressBook;
-use crate::addrs::NodeInfo;
-use crate::gossip::Gossip;
-use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::LogSync;
-use crate::test_utils::{
-    ApplicationArguments, TestClient, TestExtensions, TestLogId, TestMemoryStore, TestTopicMap,
-    generate_trusted_node_info, setup_logging, test_args_from_seed,
-};
-
-struct TestNode {
-    args: ApplicationArguments,
-    client: TestClient,
-    log_sync: LogSync<TestMemoryStore, TestLogId, TestExtensions, TestTopicMap>,
-}
-
-impl TestNode {
-    pub async fn spawn(seed: [u8; 32], node_infos: Vec<NodeInfo>) -> Self {
-        let (mut args, address_book_store) = test_args_from_seed(seed);
-
-        let client = TestClient::new(
-            // NOTE: In these tests the "client" layer where the p2panda identity lives has a
-            // different private key from the node.
-            PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
-        );
-        let (operation_store, topic_map) = client.sync_config();
-
-        let address_book = AddressBook::builder()
-            .store(address_book_store)
-            .spawn()
-            .await
-            .unwrap();
-
-        // Pre-populate the address book with known addresses.
-        for info in node_infos {
-            address_book.insert_node_info(info).await.unwrap();
-        }
-
-        let endpoint = Endpoint::builder(address_book.clone())
-            .config(args.iroh_config.clone())
-            .private_key(args.private_key.clone())
-            .spawn()
-            .await
-            .unwrap();
-
-        let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
-            .spawn()
-            .await
-            .unwrap();
-
-        let log_sync = LogSync::builder(operation_store, topic_map, address_book, endpoint, gossip)
-            .spawn()
-            .await
-            .unwrap();
-
-        Self {
-            args,
-            client,
-            log_sync,
-        }
-    }
-
-    pub fn node_id(&self) -> NodeId {
-        self.args.public_key
-    }
-
-    pub fn client_id(&self) -> PublicKey {
-        self.client.id()
-    }
-}
+use crate::test_utils::{TestNode, setup_logging};
 
 #[tokio::test]
 async fn e2e_log_sync() {
@@ -88,9 +17,14 @@ async fn e2e_log_sync() {
     let topic = [0; 32];
     let log_id = 0;
 
-    let mut bob = TestNode::spawn([11; 32], vec![]).await;
-    let mut alice =
-        TestNode::spawn([10; 32], vec![generate_trusted_node_info(&mut bob.args)]).await;
+    let mut alice = TestNode::spawn([10; 32]).await;
+    let mut bob = TestNode::spawn([11; 32]).await;
+
+    alice
+        .address_book
+        .insert_node_info(bob.node_info())
+        .await
+        .unwrap();
 
     // Populate Alice's and Bob's store with some test data.
     alice
@@ -293,11 +227,21 @@ async fn e2e_three_party_sync() {
     let log_id = 0;
 
     // Spawn nodes.
-    let mut bob = TestNode::spawn([30; 32], vec![]).await;
-    let mut alice =
-        TestNode::spawn([31; 32], vec![generate_trusted_node_info(&mut bob.args)]).await;
-    let mut carol =
-        TestNode::spawn([32; 32], vec![generate_trusted_node_info(&mut alice.args)]).await;
+    let mut bob = TestNode::spawn([30; 32]).await;
+    let mut alice = TestNode::spawn([31; 32]).await;
+    let mut carol = TestNode::spawn([32; 32]).await;
+
+    alice
+        .address_book
+        .insert_node_info(bob.args.node_info())
+        .await
+        .unwrap();
+
+    carol
+        .address_book
+        .insert_node_info(alice.args.node_info())
+        .await
+        .unwrap();
 
     // Populate stores with some test data.
     alice
@@ -534,9 +478,13 @@ async fn topic_log_sync_failure_and_retry() {
     let topic = [0; 32];
     let log_id = 0;
 
-    let mut alice = TestNode::spawn([102; 32], vec![]).await;
-    let mut bob =
-        TestNode::spawn([103; 32], vec![generate_trusted_node_info(&mut alice.args)]).await;
+    let mut alice = TestNode::spawn([102; 32]).await;
+    let mut bob = TestNode::spawn([103; 32]).await;
+
+    bob.address_book
+        .insert_node_info(alice.args.node_info())
+        .await
+        .unwrap();
 
     // Populate Alice's and Bob's store with some test data.
     alice
@@ -595,7 +543,13 @@ async fn topic_log_sync_failure_and_retry() {
     );
 
     // Alice starts up their node again and subscribes to the same topic.
-    let alice = TestNode::spawn([102; 32], vec![generate_trusted_node_info(&mut bob.args)]).await;
+    let alice = TestNode::spawn([102; 32]).await;
+    alice
+        .address_book
+        .insert_node_info(bob.args.node_info())
+        .await
+        .unwrap();
+
     let alice_handle = alice.log_sync.stream(topic, true).await.unwrap();
     let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 

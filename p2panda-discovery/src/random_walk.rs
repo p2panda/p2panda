@@ -171,7 +171,7 @@ where
 
     /// Merge all unvisited nodes into our set from previous discovery exchange.
     async fn merge_previous(&self, previous: &DiscoveryResult<ID, N>) {
-        let node_ids = previous.node_transport_infos.keys();
+        let node_ids = previous.transport_infos.keys();
         let mut state = self.state.write().await;
         for id in node_ids {
             if !state.visited.contains(id) {

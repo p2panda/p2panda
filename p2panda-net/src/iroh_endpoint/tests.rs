@@ -4,7 +4,7 @@ use iroh::protocol::ProtocolHandler;
 
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
-use crate::test_utils::{generate_trusted_node_info, setup_logging, test_args};
+use crate::test_utils::{setup_logging, test_args};
 
 const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 
@@ -62,7 +62,7 @@ async fn establish_connection() {
 
     // Register iroh endpoint address of Alice, so Bob can connect.
     bob_address_book
-        .insert_node_info(generate_trusted_node_info(&mut alice_args))
+        .insert_node_info(alice_args.node_info())
         .await
         .unwrap();
 

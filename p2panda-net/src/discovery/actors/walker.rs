@@ -64,7 +64,7 @@ impl WalkFromHere {
                 newly_learned_transport_infos,
             } => {
                 *newly_learned_transport_infos as f32
-                    / discovery_result.node_transport_infos.len() as f32
+                    / discovery_result.transport_infos.len() as f32
             }
             WalkFromHere::FailedSession { .. } => 0.0,
         }

@@ -269,6 +269,11 @@ impl ThreadLocalActor for GossipManager {
                     .gossip_senders
                     .insert(topic, (to_gossip_tx.clone(), from_gossip_tx.clone()));
 
+                state
+                    .address_book
+                    .add_topic(state.my_node_id, topic)
+                    .await?;
+
                 // Return sender / receiver pair to the user.
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
             }
@@ -284,6 +289,11 @@ impl ThreadLocalActor for GossipManager {
                 // Drop all associated state.
                 state.sessions.gossip_senders.remove(&topic);
                 state.neighbours.remove(&topic);
+
+                state
+                    .address_book
+                    .remove_topic(state.my_node_id, topic)
+                    .await?;
             }
             ToGossipManager::JoinNodes(topic, nodes) => {
                 // Convert p2panda public keys to iroh endpoint ids.

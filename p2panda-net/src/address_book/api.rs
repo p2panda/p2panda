@@ -93,35 +93,21 @@ impl AddressBook {
         Ok(result)
     }
 
-    pub async fn node_infos_by_sync_topics(
+    pub async fn node_infos_by_topics(
         &self,
         topics: impl IntoIterator<Item = TopicId>,
     ) -> Result<Vec<NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
             inner.actor_ref,
-            ToAddressBookActor::NodeInfosBySyncTopics,
+            ToAddressBookActor::NodeInfosByTopics,
             topics.into_iter().collect()
         )
         .map_err(Box::new)?;
         Ok(result)
     }
 
-    pub async fn node_infos_by_ephemeral_messaging_topics(
-        &self,
-        topics: impl IntoIterator<Item = TopicId>,
-    ) -> Result<Vec<NodeInfo>, AddressBookError> {
-        let inner = self.inner.read().await;
-        let result = call!(
-            inner.actor_ref,
-            ToAddressBookActor::NodeInfosByEphemeralMessagingTopics,
-            topics.into_iter().collect()
-        )
-        .map_err(Box::new)?;
-        Ok(result)
-    }
-
-    pub async fn set_sync_topics(
+    pub async fn set_topics(
         &self,
         node_id: NodeId,
         topics: impl IntoIterator<Item = TopicId>,
@@ -129,27 +115,37 @@ impl AddressBook {
         let inner = self.inner.read().await;
         cast!(
             inner.actor_ref,
-            ToAddressBookActor::SetSyncTopics(node_id, topics.into_iter().collect())
+            ToAddressBookActor::SetTopics(node_id, topics.into_iter().collect())
         )
         .map_err(Box::new)?;
         Ok(())
     }
 
-    pub async fn set_ephemeral_messaging_topics(
+    pub async fn add_topic(&self, node_id: NodeId, topic: TopicId) -> Result<(), AddressBookError> {
+        let inner = self.inner.read().await;
+        cast!(
+            inner.actor_ref,
+            ToAddressBookActor::AddTopic(node_id, topic)
+        )
+        .map_err(Box::new)?;
+        Ok(())
+    }
+
+    pub async fn remove_topic(
         &self,
         node_id: NodeId,
-        topics: impl IntoIterator<Item = TopicId>,
+        topic: TopicId,
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
             inner.actor_ref,
-            ToAddressBookActor::SetEphemeralMessagingTopics(node_id, topics.into_iter().collect())
+            ToAddressBookActor::RemoveTopic(node_id, topic)
         )
         .map_err(Box::new)?;
         Ok(())
     }
 
-    /// Subscribes to channel informing us about node info changes for a specific node.
+    /// Subscribes to channel informing us about:node info changes for a specific node.
     pub async fn watch_node_info(
         &self,
         node_id: NodeId,

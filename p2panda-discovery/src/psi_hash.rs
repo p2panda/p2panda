@@ -22,7 +22,7 @@ const BOB_SALT_BYTE: u8 = 1;
 /// written here. Any out of order message recieved should result in the protocol returning an
 /// error.
 #[derive(Serialize, Deserialize)]
-pub enum PsiHashDiscoveryMessage<ID, N>
+pub enum PsiHashMessage<ID, N>
 where
     N: NodeInfo<ID>,
     for<'a> N::Transports: Serialize + Deserialize<'a>,
@@ -34,15 +34,11 @@ where
     /// Bob sends back his half of the salt, along with his topics hashed using the combined salt.
     BobSaltHalfAndHashedData {
         bob_salt_half: [u8; 32],
-        sync_topics_for_alice: HashSet<[u8; 32]>,
-        ephemeral_messaging_topics_for_alice: HashSet<[u8; 32]>,
+        topics_for_alice: HashSet<[u8; 32]>,
     },
 
     /// Alice replies with her own hashed topics.
-    AliceHashedData {
-        sync_topics_for_bob: HashSet<[u8; 32]>,
-        ephemeral_messaging_topics_for_bob: HashSet<[u8; 32]>,
-    },
+    AliceHashedData { topics_for_bob: HashSet<[u8; 32]> },
 
     /// Both peers then also exchange a list of other nodes they are aware of for peer discovery.
     Nodes {
@@ -110,9 +106,8 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
     /// We don't share any node infos outside of this scope for privacy reasons.
     async fn gather_transport_infos(
         &self,
-        sync_topics: Vec<[u8; 32]>,
-        ephemeral_messaging_topics: Vec<[u8; 32]>,
-    ) -> Result<BTreeMap<ID, N::Transports>, PsiHashDiscoveryError<S, P, ID, N>>
+        topics: Vec<[u8; 32]>,
+    ) -> Result<BTreeMap<ID, N::Transports>, PsiHashError<S, P, ID, N>>
     where
         S: AddressBookStore<ID, N>,
         P: LocalTopics,
@@ -122,17 +117,9 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
         let node_infos = if self.config.share_nodes_with_common_topics {
             let mut result = self
                 .store
-                .node_infos_by_sync_topics(&sync_topics)
+                .node_infos_by_topics(&topics)
                 .await
-                .map_err(PsiHashDiscoveryError::Store)?;
-
-            let ephemeral_node_infos = self
-                .store
-                .node_infos_by_ephemeral_messaging_topics(&ephemeral_messaging_topics)
-                .await
-                .map_err(PsiHashDiscoveryError::Store)?;
-
-            result.extend(ephemeral_node_infos);
+                .map_err(PsiHashError::Store)?;
 
             // Always include our own transport info (in case it changed).
             let contains_our_info = result.iter().any(|info| info.id() == self.my_node_id);
@@ -141,7 +128,7 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
                     .store
                     .node_info(&self.my_node_id)
                     .await
-                    .map_err(PsiHashDiscoveryError::Store)?
+                    .map_err(PsiHashError::Store)?
             {
                 result.extend([my_node_info]);
             }
@@ -151,7 +138,7 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
             self.store
                 .all_node_infos()
                 .await
-                .map_err(PsiHashDiscoveryError::Store)?
+                .map_err(PsiHashError::Store)?
         };
 
         // Assemble transport info results.
@@ -173,9 +160,9 @@ where
     N: NodeInfo<ID>,
     for<'a> N::Transports: Serialize + Deserialize<'a>,
 {
-    type Error = PsiHashDiscoveryError<S, P, ID, N>;
+    type Error = PsiHashError<S, P, ID, N>;
 
-    type Message = PsiHashDiscoveryMessage<ID, N>;
+    type Message = PsiHashMessage<ID, N>;
 
     async fn alice(
         &self,
@@ -184,40 +171,29 @@ where
     ) -> Result<DiscoveryResult<ID, N>, Self::Error> {
         let alice_salt_half = generate_salt_half();
 
-        let message_1 = PsiHashDiscoveryMessage::AliceSaltHalf { alice_salt_half };
-        tx.send(message_1)
-            .await
-            .map_err(|_| PsiHashDiscoveryError::Sink)?;
+        let message_1 = PsiHashMessage::AliceSaltHalf { alice_salt_half };
+        tx.send(message_1).await.map_err(|_| PsiHashError::Sink)?;
 
         let message_2 = match rx.next().await {
-            Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
+            Some(val) => val.map_err(|_| PsiHashError::Stream)?,
             None => {
-                return Err(PsiHashDiscoveryError::Stream);
+                return Err(PsiHashError::Stream);
             }
         };
 
-        let PsiHashDiscoveryMessage::BobSaltHalfAndHashedData {
+        let PsiHashMessage::BobSaltHalfAndHashedData {
             bob_salt_half,
-            sync_topics_for_alice,
-            ephemeral_messaging_topics_for_alice,
+            topics_for_alice,
         } = message_2
         else {
-            return Err(PsiHashDiscoveryError::UnexpectedMessage);
+            return Err(PsiHashError::UnexpectedMessage);
         };
 
-        let my_sync_topics: Vec<[u8; 32]> = self
+        let my_topics: Vec<[u8; 32]> = self
             .subscription
-            .sync_topics()
+            .topics()
             .await
-            .map_err(PsiHashDiscoveryError::Subscription)?
-            .into_iter()
-            .collect();
-
-        let my_ephemeral_topics: Vec<[u8; 32]> = self
-            .subscription
-            .ephemeral_messaging_topics()
-            .await
-            .map_err(PsiHashDiscoveryError::Subscription)?
+            .map_err(PsiHashError::Subscription)?
             .into_iter()
             .collect();
 
@@ -226,60 +202,40 @@ where
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BYTE);
 
         // Alice computes intersection of their own work with what Bob sent them.
-        let sync_topics_intersection =
-            compute_intersection(&my_sync_topics, &sync_topics_for_alice, &bob_final_salt)?;
-        let ephemeral_messaging_topics_intersection = compute_intersection(
-            &my_ephemeral_topics,
-            &ephemeral_messaging_topics_for_alice,
-            &bob_final_salt,
-        )?;
+        let topics_intersection =
+            compute_intersection(&my_topics, &topics_for_alice, &bob_final_salt)?;
 
         // Alice needs to hash their data with their salt and send to Bob so they can do the same.
-        let sync_topics_for_bob: HashSet<[u8; 32]> =
-            HashSet::from_iter(hash_vector(&my_sync_topics, &alice_final_salt)?.into_iter());
-        let ephemeral_messaging_topics_for_bob: HashSet<[u8; 32]> =
-            HashSet::from_iter(hash_vector(&my_ephemeral_topics, &alice_final_salt)?.into_iter());
+        let topics_for_bob: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_topics, &alice_final_salt)?.into_iter());
 
-        tx.send(PsiHashDiscoveryMessage::AliceHashedData {
-            sync_topics_for_bob,
-            ephemeral_messaging_topics_for_bob,
-        })
-        .await
-        .map_err(|_| PsiHashDiscoveryError::Sink)?;
+        tx.send(PsiHashMessage::AliceHashedData { topics_for_bob })
+            .await
+            .map_err(|_| PsiHashError::Sink)?;
 
         let message_4 = match rx.next().await {
-            Some(val) => val.map_err(|_| PsiHashDiscoveryError::Stream)?,
+            Some(val) => val.map_err(|_| PsiHashError::Stream)?,
             None => {
-                return Err(PsiHashDiscoveryError::Stream);
+                return Err(PsiHashError::Stream);
             }
         };
 
-        let PsiHashDiscoveryMessage::Nodes { transport_infos } = message_4 else {
-            return Err(PsiHashDiscoveryError::UnexpectedMessage);
+        let PsiHashMessage::Nodes { transport_infos } = message_4 else {
+            return Err(PsiHashError::UnexpectedMessage);
         };
 
-        tx.send(PsiHashDiscoveryMessage::Nodes {
+        tx.send(PsiHashMessage::Nodes {
             transport_infos: self
-                .gather_transport_infos(
-                    sync_topics_intersection
-                        .clone()
-                        .into_iter()
-                        .collect::<Vec<_>>(),
-                    ephemeral_messaging_topics_intersection
-                        .clone()
-                        .into_iter()
-                        .collect::<Vec<_>>(),
-                )
+                .gather_transport_infos(topics_intersection.clone().into_iter().collect::<Vec<_>>())
                 .await?,
         })
         .await
-        .map_err(|_| PsiHashDiscoveryError::Sink)?;
+        .map_err(|_| PsiHashError::Sink)?;
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
-            node_transport_infos: transport_infos,
-            sync_topics: sync_topics_intersection,
-            ephemeral_messaging_topics: ephemeral_messaging_topics_intersection,
+            transport_infos,
+            topics: topics_intersection,
         })
     }
 
@@ -289,97 +245,66 @@ where
         rx: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<DiscoveryResult<ID, N>, Self::Error> {
         let Some(Ok(message_1)) = rx.next().await else {
-            return Err(PsiHashDiscoveryError::Stream);
+            return Err(PsiHashError::Stream);
         };
 
-        let PsiHashDiscoveryMessage::AliceSaltHalf { alice_salt_half } = message_1 else {
-            return Err(PsiHashDiscoveryError::UnexpectedMessage);
+        let PsiHashMessage::AliceSaltHalf { alice_salt_half } = message_1 else {
+            return Err(PsiHashError::UnexpectedMessage);
         };
         let bob_salt_half = generate_salt_half();
 
         let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT_BYTE);
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BYTE);
 
-        let my_sync_topics: Vec<[u8; 32]> = self
+        let my_topics: Vec<[u8; 32]> = self
             .subscription
-            .sync_topics()
+            .topics()
             .await
-            .map_err(PsiHashDiscoveryError::Subscription)?
+            .map_err(PsiHashError::Subscription)?
             .into_iter()
             .collect();
 
-        let my_ephemeral_topics: Vec<[u8; 32]> = self
-            .subscription
-            .ephemeral_messaging_topics()
-            .await
-            .map_err(PsiHashDiscoveryError::Subscription)?
-            .into_iter()
-            .collect();
+        let topics_for_alice: HashSet<[u8; 32]> =
+            HashSet::from_iter(hash_vector(&my_topics, &bob_final_salt)?.into_iter());
 
-        let sync_topics_for_alice: HashSet<[u8; 32]> =
-            HashSet::from_iter(hash_vector(&my_sync_topics, &bob_final_salt)?.into_iter());
-        let ephemeral_messaging_topics_for_alice: HashSet<[u8; 32]> =
-            HashSet::from_iter(hash_vector(&my_ephemeral_topics, &bob_final_salt)?.into_iter());
-
-        tx.send(PsiHashDiscoveryMessage::BobSaltHalfAndHashedData {
+        tx.send(PsiHashMessage::BobSaltHalfAndHashedData {
             bob_salt_half,
-            sync_topics_for_alice,
-            ephemeral_messaging_topics_for_alice,
+            topics_for_alice,
         })
         .await
-        .map_err(|_| PsiHashDiscoveryError::Sink)?;
+        .map_err(|_| PsiHashError::Sink)?;
 
         let Some(Ok(message_3)) = rx.next().await else {
-            return Err(PsiHashDiscoveryError::Stream);
+            return Err(PsiHashError::Stream);
         };
 
-        let PsiHashDiscoveryMessage::AliceHashedData {
-            sync_topics_for_bob,
-            ephemeral_messaging_topics_for_bob,
-        } = message_3
-        else {
-            return Err(PsiHashDiscoveryError::UnexpectedMessage);
+        let PsiHashMessage::AliceHashedData { topics_for_bob } = message_3 else {
+            return Err(PsiHashError::UnexpectedMessage);
         };
 
-        let sync_topics_intersection =
-            compute_intersection(&my_sync_topics, &sync_topics_for_bob, &alice_final_salt)?;
+        let topics_intersection =
+            compute_intersection(&my_topics, &topics_for_bob, &alice_final_salt)?;
 
-        let ephemeral_messaging_topics_intersection = compute_intersection(
-            &my_ephemeral_topics,
-            &ephemeral_messaging_topics_for_bob,
-            &alice_final_salt,
-        )?;
-
-        tx.send(PsiHashDiscoveryMessage::Nodes {
+        tx.send(PsiHashMessage::Nodes {
             transport_infos: self
-                .gather_transport_infos(
-                    sync_topics_intersection
-                        .clone()
-                        .into_iter()
-                        .collect::<Vec<_>>(),
-                    ephemeral_messaging_topics_intersection
-                        .clone()
-                        .into_iter()
-                        .collect::<Vec<_>>(),
-                )
+                .gather_transport_infos(topics_intersection.clone().into_iter().collect::<Vec<_>>())
                 .await?,
         })
         .await
-        .map_err(|_| PsiHashDiscoveryError::Sink)?;
+        .map_err(|_| PsiHashError::Sink)?;
 
         let Some(Ok(message_5)) = rx.next().await else {
-            return Err(PsiHashDiscoveryError::Stream);
+            return Err(PsiHashError::Stream);
         };
 
-        let PsiHashDiscoveryMessage::Nodes { transport_infos } = message_5 else {
-            return Err(PsiHashDiscoveryError::UnexpectedMessage);
+        let PsiHashMessage::Nodes { transport_infos } = message_5 else {
+            return Err(PsiHashError::UnexpectedMessage);
         };
 
         Ok(DiscoveryResult {
             remote_node_id: self.remote_node_id.clone(),
-            node_transport_infos: transport_infos,
-            sync_topics: sync_topics_intersection,
-            ephemeral_messaging_topics: ephemeral_messaging_topics_intersection,
+            transport_infos: transport_infos,
+            topics: topics_intersection,
         })
     }
 }
@@ -436,7 +361,7 @@ fn combine_salt(alice_salt_half: &[u8; 32], bob_salt_half: &[u8; 32], pair_byte:
 }
 
 #[derive(Debug, Error)]
-pub enum PsiHashDiscoveryError<S, P, ID, N>
+pub enum PsiHashError<S, P, ID, N>
 where
     S: AddressBookStore<ID, N>,
     P: LocalTopics,
@@ -479,30 +404,24 @@ mod tests {
     use crate::test_utils::{TestInfo, TestStore, TestSubscription};
     use crate::traits::DiscoveryProtocol;
 
-    use super::{Config, PsiHashDiscoveryError, PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
+    use super::{Config, PsiHashDiscoveryProtocol, PsiHashError, PsiHashMessage};
 
     #[tokio::test]
     async fn topic_discovery() {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.sync_topics.insert([1; 32]);
-        alice_subscription.sync_topics.insert([2; 32]);
-        alice_subscription
-            .ephemeral_messaging_topics
-            .insert([98; 32]);
-        alice_subscription
-            .ephemeral_messaging_topics
-            .insert([99; 32]);
+        alice_subscription.topics.insert([1; 32]);
+        alice_subscription.topics.insert([2; 32]);
+        alice_subscription.topics.insert([98; 32]);
+        alice_subscription.topics.insert([99; 32]);
         let alice_store = TestStore::new(rng.clone());
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.sync_topics.insert([2; 32]);
-        bob_subscription.sync_topics.insert([3; 32]);
-        bob_subscription.ephemeral_messaging_topics.insert([99; 32]);
-        bob_subscription
-            .ephemeral_messaging_topics
-            .insert([100; 32]);
+        bob_subscription.topics.insert([2; 32]);
+        bob_subscription.topics.insert([3; 32]);
+        bob_subscription.topics.insert([99; 32]);
+        bob_subscription.topics.insert([100; 32]);
         let bob_store = TestStore::new(rng.clone());
 
         let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
@@ -528,15 +447,9 @@ mod tests {
         // Wait until Bob has finished and store their results.
         let bob_result = bob_handle.await.expect("local task failure");
 
-        let mut expected = HashSet::new();
-        expected.insert([2; 32]);
-        assert_eq!(alice_result.sync_topics, expected);
-        assert_eq!(bob_result.sync_topics, expected);
-
-        let mut expected = HashSet::new();
-        expected.insert([99; 32]);
-        assert_eq!(alice_result.ephemeral_messaging_topics, expected);
-        assert_eq!(bob_result.ephemeral_messaging_topics, expected);
+        let expected = HashSet::from_iter([[2; 32], [99; 32]]);
+        assert_eq!(alice_result.topics, expected);
+        assert_eq!(bob_result.topics, expected);
     }
 
     #[tokio::test]
@@ -544,10 +457,8 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.sync_topics.insert([1; 32]);
-        alice_subscription
-            .ephemeral_messaging_topics
-            .insert([99; 32]);
+        alice_subscription.topics.insert([1; 32]);
+        alice_subscription.topics.insert([99; 32]);
         let alice_store = TestStore::new(rng.clone());
 
         let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
@@ -557,7 +468,7 @@ mod tests {
 
         let bob_handle = tokio::task::spawn(async move {
             let _result = bob_tx
-                .send(PsiHashDiscoveryMessage::AliceSaltHalf {
+                .send(PsiHashMessage::AliceSaltHalf {
                     alice_salt_half: [0; 32],
                 })
                 .await;
@@ -566,10 +477,7 @@ mod tests {
         let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
         let alice_result = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await;
         let _bob_result = bob_handle.await;
-        assert!(matches!(
-            alice_result,
-            Err(PsiHashDiscoveryError::UnexpectedMessage)
-        ));
+        assert!(matches!(alice_result, Err(PsiHashError::UnexpectedMessage)));
     }
 
     #[tokio::test]
@@ -577,8 +485,8 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.sync_topics.insert([1; 32]);
-        bob_subscription.ephemeral_messaging_topics.insert([99; 32]);
+        bob_subscription.topics.insert([1; 32]);
+        bob_subscription.topics.insert([99; 32]);
         let bob_store = TestStore::new(rng.clone());
 
         let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0, 1);
@@ -588,19 +496,15 @@ mod tests {
 
         tokio::task::spawn(async move {
             let _result = alice_tx
-                .send(PsiHashDiscoveryMessage::AliceHashedData {
-                    sync_topics_for_bob: HashSet::new(),
-                    ephemeral_messaging_topics_for_bob: HashSet::new(),
+                .send(PsiHashMessage::AliceHashedData {
+                    topics_for_bob: HashSet::new(),
                 })
                 .await;
         });
 
         let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
         let bob_result = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await;
-        assert!(matches!(
-            bob_result,
-            Err(PsiHashDiscoveryError::UnexpectedMessage)
-        ));
+        assert!(matches!(bob_result, Err(PsiHashError::UnexpectedMessage)));
     }
 
     #[tokio::test]
@@ -618,7 +522,7 @@ mod tests {
 
         // Prepare Alice.
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.sync_topics.insert([1; 32]);
+        alice_subscription.topics.insert([1; 32]);
 
         let alice_store = TestStore::new(rng.clone());
 
@@ -627,14 +531,14 @@ mod tests {
             .await
             .unwrap();
         alice_store
-            .set_sync_topics(0, HashSet::from_iter([[1; 32]]))
+            .set_topics(0, HashSet::from_iter([[1; 32]]))
             .await
             .unwrap();
 
         // Prepare Bob.
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.sync_topics.insert([1; 32]);
-        bob_subscription.sync_topics.insert([2; 32]);
+        bob_subscription.topics.insert([1; 32]);
+        bob_subscription.topics.insert([2; 32]);
 
         let bob_store = TestStore::new(rng.clone());
 
@@ -643,7 +547,7 @@ mod tests {
             .await
             .unwrap();
         bob_store
-            .set_sync_topics(1, HashSet::from_iter([[1; 32], [2; 32]]))
+            .set_topics(1, HashSet::from_iter([[1; 32], [2; 32]]))
             .await
             .unwrap();
 
@@ -653,7 +557,7 @@ mod tests {
             .await
             .unwrap();
         bob_store
-            .set_sync_topics(2, HashSet::from_iter([[1; 32]]))
+            .set_topics(2, HashSet::from_iter([[1; 32]]))
             .await
             .unwrap();
 
@@ -663,7 +567,7 @@ mod tests {
             .await
             .unwrap();
         bob_store
-            .set_sync_topics(3, HashSet::from_iter([[2; 32]]))
+            .set_topics(3, HashSet::from_iter([[2; 32]]))
             .await
             .unwrap();
 
@@ -701,15 +605,15 @@ mod tests {
         let bob_result = bob_handle.await.expect("local task failure");
 
         // Alice learned about Charlie.
-        assert!(alice_result.node_transport_infos.contains_key(&1)); // Bob
-        assert!(alice_result.node_transport_infos.contains_key(&2)); // Charlie
-        assert_eq!(alice_result.node_transport_infos.len(), 2);
+        assert!(alice_result.transport_infos.contains_key(&1)); // Bob
+        assert!(alice_result.transport_infos.contains_key(&2)); // Charlie
+        assert_eq!(alice_result.transport_infos.len(), 2);
 
         // Alice did _not_ learn about Daphne.
-        assert!(!alice_result.node_transport_infos.contains_key(&3));
+        assert!(!alice_result.transport_infos.contains_key(&3));
 
         // Bob only got the info of Alice.
-        assert!(bob_result.node_transport_infos.contains_key(&0)); // Alice
-        assert_eq!(bob_result.node_transport_infos.len(), 1);
+        assert!(bob_result.transport_infos.contains_key(&0)); // Alice
+        assert_eq!(bob_result.transport_infos.len(), 1);
     }
 }

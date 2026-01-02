@@ -45,10 +45,10 @@ impl TestNode {
         let store = TestStore::new(rng.clone());
 
         let mut subscription = TestSubscription::default();
-        subscription.sync_topics.insert([7; 32]);
+        subscription.topics.insert([7; 32]);
 
         store
-            .set_sync_topics(id, HashSet::from_iter([[7; 32]]))
+            .set_topics(id, HashSet::from_iter([[7; 32]]))
             .await
             .unwrap();
 
@@ -113,36 +113,25 @@ impl TestNode {
             panic!("running alice protocol failed");
         };
 
-        for (id, info) in alice_result.node_transport_infos {
+        for (id, info) in alice_result.transport_infos {
             self.update_node_info(id, info).await;
         }
 
         self.store
-            .set_sync_topics(remote.id, alice_result.sync_topics)
-            .await
-            .expect("store failure");
-
-        self.store
-            .set_ephemeral_messaging_topics(remote.id, alice_result.ephemeral_messaging_topics)
+            .set_topics(remote.id, alice_result.topics)
             .await
             .expect("store failure");
 
         // Wait until Bob has finished and store their results.
         let bob_result = bob_handle.await.expect("local task failure");
 
-        for (id, info) in &bob_result.node_transport_infos {
+        for (id, info) in &bob_result.transport_infos {
             remote.update_node_info(*id, info.clone()).await;
         }
 
         remote
             .store
-            .set_sync_topics(self.id, bob_result.sync_topics.clone())
-            .await
-            .expect("store failure");
-
-        remote
-            .store
-            .set_ephemeral_messaging_topics(self.id, bob_result.ephemeral_messaging_topics.clone())
+            .set_topics(self.id, bob_result.topics.clone())
             .await
             .expect("store failure");
 

@@ -471,9 +471,8 @@ impl ThreadLocalActor for DiscoveryManager {
                     session_id = &session_info.session_id(),
                     node_id = session_info.remote_node_id().fmt_short(),
                     duration_ms = duration.as_millis(),
-                    transport_infos = %discovery_result.node_transport_infos.len(),
-                    sync_topics = %discovery_result.sync_topics.len(),
-                    ephemeral_messaging_topics = %discovery_result.ephemeral_messaging_topics.len(),
+                    transport_infos = %discovery_result.transport_infos.len(),
+                    topics = %discovery_result.topics.len(),
                     "successful discovery session"
                 );
 
@@ -610,7 +609,7 @@ async fn insert_address_book(
 ) -> usize {
     // Populate address book with hopefully new transport info.
     let mut newly_learned_transport_infos = 0;
-    for (node_id, transport_info) in &discovery_result.node_transport_infos {
+    for (node_id, transport_info) in &discovery_result.transport_infos {
         match state
             .address_book
             .insert_transport_info(*node_id, transport_info.clone().into())
@@ -634,22 +633,10 @@ async fn insert_address_book(
         }
     }
 
-    // Set stream topics into address book for this node.
+    // Remember topics for this node.
     let _ = state
         .address_book
-        .set_sync_topics(
-            discovery_result.remote_node_id,
-            discovery_result.sync_topics,
-        )
-        .await;
-
-    // Set ephemeral stream topics into address book for this node.
-    let _ = state
-        .address_book
-        .set_ephemeral_messaging_topics(
-            discovery_result.remote_node_id,
-            discovery_result.ephemeral_messaging_topics,
-        )
+        .set_topics(discovery_result.remote_node_id, discovery_result.topics)
         .await;
 
     newly_learned_transport_infos

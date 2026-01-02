@@ -78,12 +78,8 @@
 //! systems from the
 //! [IPv8](https://py-ipv8.readthedocs.io/en/latest/further-reading/advanced_peer_discovery.html)
 //! project.
-// @TODO: Move address book into `p2panda-store` when crate is ready.
+// TODO: Move address book into `p2panda-store` when crate is ready.
 pub mod address_book;
-// @TODO: This mostly serves testing the APIs for now and will soon be replaced with the actual PET
-// protocol.
-#[cfg(any(test, feature = "test_utils"))]
-pub mod naive;
 pub mod psi_hash;
 #[cfg(feature = "random_walk")]
 pub mod random_walk;

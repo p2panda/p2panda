@@ -1,35 +1,28 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#![allow(unused)]
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::marker::PhantomData;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::pin::Pin;
 use std::sync::Arc;
 
-use futures_channel::mpsc::{self, SendError};
-use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_store::{LogStore, OperationStore};
+use p2panda_sync::TopicSyncManager;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
 use p2panda_sync::topic_log_sync::TopicLogMap;
-use p2panda_sync::traits::{Protocol, SyncManager};
-use p2panda_sync::{FromSync, ToSync, TopicSyncManager};
 use ractor::thread_local::ThreadLocalActorSpawner;
-use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, broadcast};
-use tokio_stream::wrappers::BroadcastStream;
+use tokio::sync::RwLock;
 
 use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
 use crate::discovery::DiscoveryConfig;
 use crate::iroh_endpoint::IrohConfig;
 use crate::iroh_mdns::MdnsDiscoveryMode;
-use crate::{NetworkId, NodeId, TopicId};
+use crate::{
+    AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NetworkId, NodeId, TopicId,
+};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 
@@ -43,6 +36,23 @@ pub struct ApplicationArguments {
     pub discovery_config: DiscoveryConfig,
     pub mdns_mode: MdnsDiscoveryMode,
     pub root_thread_pool: ThreadLocalActorSpawner,
+}
+
+impl ApplicationArguments {
+    pub fn node_info(&mut self) -> NodeInfo {
+        let transport_info = TrustedTransportInfo::from_addrs([TransportAddress::from_iroh(
+            self.public_key,
+            None,
+            [(self.iroh_config.bind_ip_v4, self.iroh_config.bind_port_v4).into()],
+        )]);
+
+        NodeInfo {
+            node_id: self.public_key,
+            bootstrap: false,
+            transports: Some(transport_info.into()),
+            metrics: NodeMetrics::default(),
+        }
+    }
 }
 
 pub struct ArgsBuilder {
@@ -66,7 +76,6 @@ impl ArgsBuilder {
         }
     }
 
-    #[allow(unused)]
     pub fn with_network_id(mut self, network_id: NetworkId) -> Self {
         self.network_id = network_id;
         self
@@ -87,7 +96,6 @@ impl ArgsBuilder {
         self
     }
 
-    #[allow(unused)]
     pub fn with_discovery_config(mut self, config: DiscoveryConfig) -> Self {
         self.discovery_config = Some(config);
         self
@@ -140,6 +148,7 @@ pub fn test_args_from_seed(
                 ..Default::default()
             })
             .with_rng(rng)
+            .with_mdns_mode(MdnsDiscoveryMode::Disabled)
             .build(),
         store,
     )
@@ -159,6 +168,103 @@ fn deterministic_args() {
     let (args_2, _) = test_args_from_seed([0; 32]);
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
+}
+
+pub struct TestNode {
+    pub args: ApplicationArguments,
+    pub client: TestClient,
+    pub address_book: AddressBook,
+    pub mdns: MdnsDiscovery,
+    pub endpoint: Endpoint,
+    pub discovery: Discovery,
+    pub gossip: Gossip,
+    pub log_sync: LogSync<TestMemoryStore, TestLogId, TestExtensions, TestTopicMap>,
+}
+
+impl TestNode {
+    pub async fn spawn(seed: [u8; 32]) -> Self {
+        Self::spawn_with_args(test_args_from_seed(seed)).await
+    }
+
+    pub async fn spawn_with_args(
+        args: (
+            ApplicationArguments,
+            MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
+        ),
+    ) -> Self {
+        let (mut args, address_book_store) = args;
+
+        let client = TestClient::new(
+            // The identity of the "author" or client has a different private key from the node.
+            PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
+        );
+
+        let address_book = AddressBook::builder()
+            .store(address_book_store)
+            .spawn()
+            .await
+            .unwrap();
+
+        let endpoint = Endpoint::builder(address_book.clone())
+            .config(args.iroh_config.clone())
+            .private_key(args.private_key.clone())
+            .spawn()
+            .await
+            .unwrap();
+
+        let mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
+            .mode(args.mdns_mode.clone())
+            .spawn()
+            .await
+            .unwrap();
+
+        let discovery = Discovery::builder(address_book.clone(), endpoint.clone())
+            .config(args.discovery_config.clone())
+            .spawn()
+            .await
+            .unwrap();
+
+        let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
+            .spawn()
+            .await
+            .unwrap();
+
+        let (operation_store, topic_map) = client.sync_config();
+
+        let log_sync = LogSync::builder(
+            operation_store,
+            topic_map,
+            address_book.clone(),
+            endpoint.clone(),
+            gossip.clone(),
+        )
+        .spawn()
+        .await
+        .unwrap();
+
+        Self {
+            args,
+            client,
+            address_book,
+            mdns,
+            discovery,
+            endpoint,
+            gossip,
+            log_sync,
+        }
+    }
+
+    pub fn node_id(&self) -> NodeId {
+        self.args.public_key
+    }
+
+    pub fn node_info(&mut self) -> NodeInfo {
+        self.args.node_info()
+    }
+
+    pub fn client_id(&self) -> PublicKey {
+        self.client.id()
+    }
 }
 
 pub type TestExtensions = ();
@@ -301,19 +407,5 @@ impl TopicLogMap<TopicId, TestLogId> for TestTopicMap {
     ) -> Result<HashMap<PublicKey, Vec<TestLogId>>, Self::Error> {
         let map = self.0.read().await;
         Ok(map.get(topic).cloned().unwrap_or_default())
-    }
-}
-
-pub fn generate_trusted_node_info(args: &mut ApplicationArguments) -> NodeInfo {
-    let transport_info = TrustedTransportInfo::from_addrs([TransportAddress::from_iroh(
-        args.public_key,
-        None,
-        [(args.iroh_config.bind_ip_v4, args.iroh_config.bind_port_v4).into()],
-    )]);
-    NodeInfo {
-        node_id: args.public_key,
-        bootstrap: false,
-        transports: Some(transport_info.into()),
-        metrics: NodeMetrics::default(),
     }
 }

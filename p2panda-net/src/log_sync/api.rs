@@ -84,6 +84,7 @@ where
         let inner = self.inner.read().await;
         let sync_manager_ref =
             call!(inner.actor_ref, ToSyncManager::Create, topic, live_mode).map_err(Box::new)?;
+
         Ok(LogSyncHandle::new(
             topic,
             inner.actor_ref.clone(),
@@ -151,10 +152,7 @@ where
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.topic_manager_ref
-            .send_message(ToTopicManager::Publish {
-                topic: self.topic,
-                data,
-            })
+            .send_message(ToTopicManager::Publish(data))
             .map_err(Box::new)?;
         Ok(())
     }

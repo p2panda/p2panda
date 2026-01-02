@@ -58,13 +58,10 @@ where
 
     /// Transport information we've learned from this node, potentially also transitive information
     /// about other nodes as well.
-    pub node_transport_infos: BTreeMap<ID, N::Transports>,
+    pub transport_infos: BTreeMap<ID, N::Transports>,
 
-    /// Sync "topics" this node is currently interested in.
-    pub sync_topics: HashSet<[u8; 32]>,
-
-    /// Epehemeral messaging "topics" this node is currently interested in.
-    pub ephemeral_messaging_topics: HashSet<[u8; 32]>,
+    /// Topics this node is currently "interested in".
+    pub topics: HashSet<[u8; 32]>,
 }
 
 impl<ID, N> DiscoveryResult<ID, N>
@@ -74,21 +71,16 @@ where
     pub fn new(remote_node_id: ID) -> Self {
         Self {
             remote_node_id,
-            node_transport_infos: BTreeMap::new(),
-            sync_topics: HashSet::new(),
-            ephemeral_messaging_topics: HashSet::new(),
+            transport_infos: BTreeMap::new(),
+            topics: HashSet::new(),
         }
     }
 }
 
-/// Interface required by discovery protocols to learn which topics for eventual consistent sync
-/// and ephemeral messaging the local node is currently interested in.
+/// Interface required by discovery protocols to learn which topics the local node is currently
+/// interested in.
 pub trait LocalTopics {
     type Error;
 
-    fn sync_topics(&self) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
-
-    fn ephemeral_messaging_topics(
-        &self,
-    ) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
+    fn topics(&self) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
 }
