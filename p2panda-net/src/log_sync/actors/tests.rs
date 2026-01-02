@@ -21,7 +21,7 @@ use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::log_sync::actors::{SyncStream, ToSyncStream};
-use crate::log_sync::api::EventuallyConsistentStream;
+use crate::log_sync::api::LogSyncHandle;
 use crate::test_utils::{
     ApplicationArguments, generate_trusted_node_info, setup_logging, test_args_from_seed,
 };
@@ -250,41 +250,41 @@ async fn failed_sync_session_retry() {
         // Alice and Bob create stream for the same topic.
         let alice_handle = {
             let manager_ref = call!(alice.sync_ref, ToSyncStream::Create, topic, true).unwrap();
-            EventuallyConsistentStream::new(topic, alice.sync_ref.clone(), manager_ref)
+            LogSyncHandle::new(topic, alice.sync_ref.clone(), manager_ref)
         };
         let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
         let _bob_handle = {
             let manager_ref = call!(bob.sync_ref, ToSyncStream::Create, topic, true).unwrap();
-            EventuallyConsistentStream::new(topic, bob.sync_ref.clone(), manager_ref)
+            LogSyncHandle::new(topic, bob.sync_ref.clone(), manager_ref)
         };
 
         // Alice manually initiates a sync session with Bob.
         alice_handle.initiate_session(bob.node_id()).await;
 
-        let event = alice_subscription.recv().await.unwrap();
+        let event = alice_subscription.next().await.unwrap();
         let expected_remote = bob.node_id();
         assert!(
             matches!(
                 event,
-                FromSync {
+                Ok(FromSync {
                     session_id: 0,
                     remote,
                     event: DummySyncEvent::SessionCreated
-                } if remote == expected_remote
+                }) if remote == expected_remote
             ),
             "{:#?}",
             event
         );
-        let event = alice_subscription.recv().await.unwrap();
+        let event = alice_subscription.next().await.unwrap();
         assert!(
             matches!(
                 event,
-                FromSync {
+                Ok(FromSync {
                     session_id: 1,
                     remote,
                     event: DummySyncEvent::SessionCreated
-                } if remote == expected_remote
+                }) if remote == expected_remote
             ),
             "{:#?}",
             event

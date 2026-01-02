@@ -7,6 +7,7 @@ use p2panda_core::{Operation, PrivateKey, PublicKey};
 use p2panda_sync::FromSync;
 use p2panda_sync::topic_log_sync::TopicLogSyncEvent as Event;
 use rand::Rng;
+use tokio_stream::StreamExt;
 
 use crate::NodeId;
 use crate::address_book::AddressBook;
@@ -118,107 +119,107 @@ async fn e2e_log_sync() {
 
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             session_id: 0,
             remote,
             event: Event::SyncStarted(_),
-        } if remote == bob_id
+        }) if remote == bob_id
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncFinished(_),
             ..
-        }
+        })
     );
-    let event: FromSync<Event<()>> = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeStarted,
             ..
-        }
+        })
     );
 
     // Assert Bob receives the expected events.
     let alice_id = alice.node_id();
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             session_id: 0,
             remote,
             event: Event::SyncStarted(_),
-        } if remote == alice_id
+        }) if remote == alice_id
     );
 
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncFinished(_),
             ..
-        }
+        })
     );
-    let event: FromSync<Event<()>> = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeStarted,
             ..
-        }
+        })
     );
 
     // Alice publishes "live" message.
@@ -236,51 +237,51 @@ async fn e2e_log_sync() {
         .unwrap();
 
     // Bob receives Alice's message.
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
 
     // Drop Alice's stream to enforce closing live session with Bob.
     drop(alice_handle);
 
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeFinished(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Success,
             ..
-        }
+        })
     );
 
     // Assert Alice's final events.
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeFinished(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Success,
             ..
-        }
+        })
     );
 }
 
@@ -334,106 +335,106 @@ async fn e2e_three_party_sync() {
 
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             session_id: 0,
             remote,
             event: Event::SyncStarted(_),
-        } if remote == bob_id
+        }) if remote == bob_id
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncFinished(_),
             ..
-        }
+        })
     );
-    let event: FromSync<Event<()>> = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeStarted,
             ..
-        }
+        })
     );
 
     // Assert Bob receives the expected events.
     let alice_id = alice.node_id();
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             session_id: 0,
             remote,
             event: Event::SyncStarted(_),
-        } if remote == alice_id
+        }) if remote == alice_id
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncFinished(_),
             ..
-        }
+        })
     );
-    let event: FromSync<Event<()>> = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeStarted,
             ..
-        }
+        })
     );
 
     // Alice publishes a live mode message.
@@ -451,13 +452,13 @@ async fn e2e_three_party_sync() {
         .unwrap();
 
     // Bob receives Alice's message.
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
 
     // Create Carol's stream.
@@ -467,62 +468,62 @@ async fn e2e_three_party_sync() {
     // Carol initiates sync with Alice.
     carol_handle.initiate_session(alice.node_id()).await;
 
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             session_id: 0,
             event: Event::SyncStarted(_),
             ..
-        }
+        })
     );
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStatus(_),
             ..
-        }
+        })
     );
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Operation(_),
             ..
-        }
+        })
     );
-    let event = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncFinished(_),
             ..
-        }
+        })
     );
-    let event: FromSync<Event<()>> = carol_subscription.recv().await.unwrap();
+    let event = carol_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeStarted,
             ..
-        }
+        })
     );
 }
 
@@ -565,32 +566,32 @@ async fn topic_log_sync_failure_and_retry() {
     // Alice and Bob should receive all six events (SyncStarted, SyncStatus 2x, Operation,
     // SyncFinished and LiveModeStarted).
     for _ in 0..6 {
-        alice_subscription.recv().await.unwrap();
+        alice_subscription.next().await.unwrap();
     }
 
     for _ in 0..6 {
-        bob_subscription.recv().await.unwrap();
+        bob_subscription.next().await.unwrap();
     }
 
     // Alice unexpectedly shuts down.
     drop(alice);
 
     // Bob is informed that the session failed.
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::LiveModeFinished(_),
             ..
-        }
+        })
     );
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::Failed { .. },
             ..
-        }
+        })
     );
 
     // Alice starts up their node again and subscribes to the same topic.
@@ -600,20 +601,20 @@ async fn topic_log_sync_failure_and_retry() {
 
     // Bob should automatically attempt restart and therefore both peers get a "sync started"
     // event.
-    let event = bob_subscription.recv().await.unwrap();
+    let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStarted(_),
             ..
-        }
+        })
     );
-    let event = alice_subscription.recv().await.unwrap();
+    let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
-        FromSync {
+        Ok(FromSync {
             event: Event::SyncStarted(_),
             ..
-        }
+        })
     );
 }

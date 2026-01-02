@@ -59,7 +59,7 @@ async fn modular_api() {
     let mut rx = handle.subscribe().await.unwrap();
 
     tokio::spawn(async move {
-        while let Ok(_event) = rx.recv().await {
+        while let Some(_event) = rx.next().await {
             // ...
         }
     });

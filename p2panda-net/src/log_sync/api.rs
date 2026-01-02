@@ -3,6 +3,7 @@
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use futures_util::{Stream, StreamExt};
 use p2panda_core::Extensions;
 use p2panda_store::{LogId, LogStore, OperationStore};
 use p2panda_sync::topic_log_sync::TopicLogMap;
@@ -12,6 +13,8 @@ use ractor::{ActorRef, call};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{RwLock, broadcast};
+use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
 #[cfg(test)]
 use crate::NodeId;
@@ -77,13 +80,13 @@ where
         topic: TopicId,
         live_mode: bool,
     ) -> Result<
-        EventuallyConsistentStream<TopicSyncManager<TopicId, S, TM, L, E>>,
+        LogSyncHandle<TopicSyncManager<TopicId, S, TM, L, E>>,
         LogSyncError<TopicSyncManager<TopicId, S, TM, L, E>>,
     > {
         let inner = self.inner.read().await;
         let sync_manager_ref =
             call!(inner.actor_ref, ToSyncStream::Create, topic, live_mode).map_err(Box::new)?;
-        Ok(EventuallyConsistentStream::new(
+        Ok(LogSyncHandle::new(
             topic,
             inner.actor_ref.clone(),
             sync_manager_ref,
@@ -120,7 +123,7 @@ where
 /// A handle to an eventually consistent messaging stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
-pub struct EventuallyConsistentStream<M>
+pub struct LogSyncHandle<M>
 where
     M: SyncManager<TopicId> + Send + 'static,
 {
@@ -129,7 +132,7 @@ where
     manager_ref: ActorRef<ToSyncManager<M::Message>>,
 }
 
-impl<M> EventuallyConsistentStream<M>
+impl<M> LogSyncHandle<M>
 where
     M: SyncManager<TopicId> + Send + 'static,
 {
@@ -146,55 +149,51 @@ where
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, message: M::Message) -> Result<(), StreamError<M::Message>> {
+    pub async fn publish(&self, data: M::Message) -> Result<(), LogSyncHandleError<M>> {
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.manager_ref
             .send_message(ToSyncManager::Publish {
                 topic: self.topic,
-                data: message,
+                data,
             })
-            // TODO: change this when we decide on error propagation strategy.
-            .map_err(|_| StreamError::Publish(self.topic))?;
-
+            .map_err(Box::new)?;
         Ok(())
     }
 
     /// Subscribes to the stream.
     ///
-    /// The returned `EventuallyConsistentSubscription` provides a means of receiving messages from
+    /// The returned `LogSyncSubscription` provides a means of receiving messages from
     /// the stream.
-    pub async fn subscribe(
-        &self,
-    ) -> Result<EventuallyConsistentSubscription<M::Event>, StreamError<M::Message>> {
-        if let Some(stream) = call!(self.stream_ref, ToSyncStream::Subscribe, self.topic)
-            .map_err(|_| StreamError::Subscribe(self.topic))?
+    pub async fn subscribe(&self) -> Result<LogSyncSubscription<M>, LogSyncHandleError<M>> {
+        if let Some(stream) =
+            call!(self.stream_ref, ToSyncStream::Subscribe, self.topic).map_err(Box::new)?
         {
-            Ok(EventuallyConsistentSubscription::new(self.topic, stream))
+            Ok(LogSyncSubscription::<M>::new(self.topic, stream))
         } else {
-            Err(StreamError::StreamNotFound)
+            Err(LogSyncHandleError::StreamNotFound)
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn initiate_session(&self, node_id: NodeId) {
-        self.stream_ref
-            .send_message(ToSyncStream::InitiateSync(self.topic, node_id))
-            .unwrap();
     }
 
     /// Returns the topic of the stream.
     pub fn topic(&self) -> TopicId {
         self.topic
     }
+
+    // TODO: Consider making this a public method.
+    #[cfg(test)]
+    pub(crate) async fn initiate_session(&self, node_id: NodeId) {
+        self.stream_ref
+            .send_message(ToSyncStream::InitiateSync(self.topic, node_id))
+            .unwrap();
+    }
 }
 
-impl<M> Drop for EventuallyConsistentStream<M>
+impl<M> Drop for LogSyncHandle<M>
 where
     M: SyncManager<TopicId> + Send + 'static,
 {
     fn drop(&mut self) {
-        // TODO
         // Ignore error here as the actor might already be dropped.
         let _ = self
             .stream_ref
@@ -205,33 +204,27 @@ where
 /// A handle to an eventually consistent messaging stream subscription.
 ///
 /// The stream can be used to receive messages from the stream.
-pub struct EventuallyConsistentSubscription<Ev> {
+pub struct LogSyncSubscription<M>
+where
+    M: SyncManager<TopicId> + Send + 'static,
+{
     topic: TopicId,
     // Messages sent directly from the sync manager.
-    from_sync_rx: broadcast::Receiver<FromSync<Ev>>,
+    from_sync_rx: BroadcastStream<FromSync<M::Event>>,
 }
 
-// TODO: Implement `Stream`.
-
-impl<Ev> EventuallyConsistentSubscription<Ev>
+impl<M> LogSyncSubscription<M>
 where
-    Ev: Clone + Send + 'static,
+    M: SyncManager<TopicId> + Send + 'static,
 {
-    pub(crate) fn new(topic: TopicId, from_sync_rx: broadcast::Receiver<FromSync<Ev>>) -> Self {
+    pub(crate) fn new(
+        topic: TopicId,
+        from_sync_rx: broadcast::Receiver<FromSync<M::Event>>,
+    ) -> Self {
         Self {
             topic,
-            from_sync_rx,
+            from_sync_rx: BroadcastStream::new(from_sync_rx),
         }
-    }
-
-    /// Receives the next message from the stream.
-    pub async fn recv(&mut self) -> Result<FromSync<Ev>, StreamError<()>> {
-        self.from_sync_rx.recv().await.map_err(StreamError::Recv)
-    }
-
-    /// Attempts to return a pending value on this receiver without awaiting.
-    pub fn try_recv(&mut self) -> Result<FromSync<Ev>, StreamError<()>> {
-        self.from_sync_rx.try_recv().map_err(StreamError::TryRecv)
     }
 
     /// Returns the topic of the stream.
@@ -240,29 +233,37 @@ where
     }
 }
 
+impl<M> Stream for LogSyncSubscription<M>
+where
+    M: SyncManager<TopicId> + Send + 'static,
+{
+    type Item = Result<FromSync<M::Event>, LogSyncHandleError<M>>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.from_sync_rx
+            .poll_next_unpin(cx)
+            .map_err(LogSyncHandleError::from)
+    }
+}
+
 #[derive(Debug, Error)]
-pub enum StreamError<T> {
+pub enum LogSyncHandleError<M>
+where
+    M: SyncManager<TopicId> + Send + 'static,
+{
+    /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    Send(#[from] broadcast::error::SendError<T>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToSyncStream<M>>>),
 
     #[error(transparent)]
-    Recv(#[from] broadcast::error::RecvError),
+    Publish(#[from] Box<ractor::MessagingErr<ToSyncManager<M::Message>>>),
 
     #[error(transparent)]
-    TryRecv(#[from] broadcast::error::TryRecvError),
-
-    #[error("failed to create stream for topic {0:?} due to system error")]
-    Create(TopicId),
-
-    #[error("failed to subscribe to topic {0:?} due to system error")]
-    Subscribe(TopicId),
-
-    #[error("failed to close stream for topic {0:?}")]
-    Close(TopicId),
+    Subscribe(#[from] BroadcastStreamRecvError),
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,
-
-    #[error("failed to publish to topic {0:?} due to system error")]
-    Publish(TopicId),
 }
