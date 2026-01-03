@@ -21,7 +21,14 @@ use crate::{NodeId, TopicId};
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
-type GossipSenders = HashMap<TopicId, (mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>, Counter)>;
+type GossipSenders = HashMap<
+    TopicId,
+    (
+        mpsc::Sender<Vec<u8>>,
+        broadcast::Sender<Vec<u8>>,
+        TopicDropGuard,
+    ),
+>;
 
 #[derive(Clone)]
 pub struct Gossip {
@@ -61,10 +68,7 @@ impl Gossip {
         // entry in "senders" and continue to create a new gossip session, overwriting the "dead"
         // entries.
         if let Some((to_gossip_tx, from_gossip_tx, guard)) = self.senders.read().await.get(&topic)
-            && guard
-                .topic_counter
-                .load(std::sync::atomic::Ordering::SeqCst)
-                > 0
+            && guard.counter.load(std::sync::atomic::Ordering::SeqCst) > 0
         {
             return Ok(GossipHandle::new(
                 topic,
@@ -79,11 +83,11 @@ impl Gossip {
 
         // This guard counts the number of active handles and subscriptions for this topic. Like
         // this we can determine if we can leave the overlay.
-        let guard = Counter {
+        let guard = TopicDropGuard {
             topic,
             // Since the counter increments by 1 on each clone and we don't want to count cloning
             // the guard into "senders", we start at -1 here.
-            topic_counter: Arc::new(AtomicIsize::new(-1)),
+            counter: Arc::new(AtomicIsize::new(-1)),
             actor_ref: inner.actor_ref.clone(),
         };
 
@@ -167,7 +171,7 @@ pub struct GossipHandle {
     topic: TopicId,
     to_topic_tx: mpsc::Sender<Vec<u8>>,
     from_gossip_tx: broadcast::Sender<Vec<u8>>,
-    guard: Counter,
+    _guard: TopicDropGuard,
 }
 
 impl GossipHandle {
@@ -175,13 +179,13 @@ impl GossipHandle {
         topic: TopicId,
         to_topic_tx: mpsc::Sender<Vec<u8>>,
         from_gossip_tx: broadcast::Sender<Vec<u8>>,
-        guard: Counter,
+        _guard: TopicDropGuard,
     ) -> Self {
         Self {
             topic,
             to_topic_tx,
             from_gossip_tx,
-            guard,
+            _guard,
         }
     }
 
@@ -202,7 +206,7 @@ impl GossipHandle {
         GossipSubscription::new(
             self.topic,
             self.from_gossip_tx.subscribe(),
-            self.guard.clone(),
+            self._guard.clone(),
         )
     }
 
@@ -218,12 +222,16 @@ impl GossipHandle {
 pub struct GossipSubscription {
     topic: TopicId,
     from_topic_rx: BroadcastStream<Vec<u8>>,
-    _guard: Counter,
+    _guard: TopicDropGuard,
 }
 
 impl GossipSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
-    fn new(topic: TopicId, from_topic_rx: broadcast::Receiver<Vec<u8>>, _guard: Counter) -> Self {
+    fn new(
+        topic: TopicId,
+        from_topic_rx: broadcast::Receiver<Vec<u8>>,
+        _guard: TopicDropGuard,
+    ) -> Self {
         Self {
             topic,
             from_topic_rx: BroadcastStream::new(from_topic_rx),
@@ -259,33 +267,37 @@ pub enum GossipHandleError {
     Subscribe(#[from] BroadcastStreamRecvError),
 }
 
-struct Counter {
+/// Helper maintaining a counter of objects using the same topic.
+///
+/// Check if we can unsubscribe from topic if all handles and subscriptions have been dropped for
+/// it.
+struct TopicDropGuard {
     topic: TopicId,
-    topic_counter: Arc<AtomicIsize>,
+    counter: Arc<AtomicIsize>,
     actor_ref: ActorRef<ToGossipManager>,
 }
 
-impl Clone for Counter {
+impl Clone for TopicDropGuard {
     fn clone(&self) -> Self {
-        self.topic_counter
+        self.counter
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         Self {
             topic: self.topic,
-            topic_counter: self.topic_counter.clone(),
+            counter: self.counter.clone(),
             actor_ref: self.actor_ref.clone(),
         }
     }
 }
 
-impl Drop for Counter {
+impl Drop for TopicDropGuard {
     fn drop(&mut self) {
         let actor_ref = self.actor_ref.clone();
 
         // Check if we can unsubscribe from topic if all handles and subscriptions have been
         // dropped for it.
         let previous_counter = self
-            .topic_counter
+            .counter
             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
         // If this is 1 the last instance of the guard was dropped and the counter is now at zero.

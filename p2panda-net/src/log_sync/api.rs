@@ -34,8 +34,7 @@ where
     inner: Arc<RwLock<Inner<S, L, E, TM>>>,
 }
 
-#[derive(Clone)]
-pub struct Inner<S, L, E, TM>
+struct Inner<S, L, E, TM>
 where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
