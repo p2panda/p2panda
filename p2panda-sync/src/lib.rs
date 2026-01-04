@@ -1,19 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
+
 use p2panda_core::PublicKey;
 
-pub mod dedup;
-pub mod managers;
-pub mod protocols;
-pub mod session_topic_map;
+mod dedup;
+pub mod log_sync;
+pub mod manager;
+pub mod map;
+pub mod protocol;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
+pub mod topic_handshake;
 pub mod traits;
 
-pub use dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
-pub use managers::topic_sync_manager::TopicSyncManager;
-pub use protocols::{log_sync, topic_handshake, topic_log_sync};
-pub use session_topic_map::SessionTopicMap;
+pub use manager::{TopicSyncManager, TopicSyncManagerConfig};
+pub use map::SessionTopicMap;
+pub use protocol::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage};
+
+/// A map of author logs.
+pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
 
 /// Configuration object for instantiated sync sessions.
 #[derive(Clone, Debug)]

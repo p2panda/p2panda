@@ -4,8 +4,7 @@ use std::collections::HashMap;
 
 use assert_matches::assert_matches;
 use p2panda_core::Operation;
-use p2panda_sync::FromSync;
-use p2panda_sync::topic_log_sync::TopicLogSyncEvent as Event;
+use p2panda_sync::{FromSync, TopicLogSyncEvent as Event};
 use tokio_stream::StreamExt;
 
 use crate::test_utils::{TestNode, setup_logging};

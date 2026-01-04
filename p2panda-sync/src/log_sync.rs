@@ -13,15 +13,13 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
 
+use crate::Logs;
+use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 use crate::traits::Protocol;
-use crate::{DEFAULT_BUFFER_CAPACITY, Dedup};
-
-/// A map of author logs.
-pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Default)]
-pub enum State {
+enum State {
     /// Initialise session metrics and announce sync start on event stream.
     #[default]
     Start,
@@ -244,42 +242,55 @@ where
                         .total_operations_local
                         .expect("total operations set");
 
-                    // We perform a loop awaiting futures on both the receiving stream and the
-                    // list of operations we have to send. This means that processing of both
-                    // streams is done concurrently.
+                    // We perform a loop awaiting futures on both the receiving stream and the list
+                    // of operations we have to send. This means that processing of both streams is
+                    // done concurrently.
                     loop {
                         select! {
                             message = stream.next(), if !sync_done_received => {
                                 let Some(message) = message else {
                                     break;
                                 };
-                                let message = message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                                let message =
+                                    message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
-                                        metrics.total_bytes_received += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
+                                        metrics.total_bytes_received += {
+                                            header.len()
+                                                + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
+                                        } as u64;
                                         metrics.total_operations_received += 1;
 
-                                        // TODO: validate that the operations and bytes received matches the total
-                                        // bytes the remote sent in their PreSync message.
+                                        // TODO: validate that the operations and bytes received
+                                        // matches the total bytes the remote sent in their PreSync
+                                        // message.
                                         let header: Header<E> = decode_cbor(&header[..])?;
                                         let body = body.map(|ref bytes| Body::new(bytes));
 
                                         // Insert message hash into deduplication buffer.
                                         //
                                         // NOTE: we don't deduplicate any received messages during
-                                        // sync as for this session they have not been seen
-                                        // before.
+                                        // sync as for this session they have not been seen before.
                                         dedup.insert(header.hash());
 
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
-                                            .send(LogSyncEvent::Data(Box::new(Operation { hash: header.hash(), header, body })).into())
+                                            .send(
+                                                LogSyncEvent::Data(Box::new(Operation {
+                                                    hash: header.hash(),
+                                                    header,
+                                                    body,
+                                                }))
+                                                .into(),
+                                            )
                                             .map_err(|_| LogSyncError::BroadcastSend)?;
-                                    },
+                                    }
                                     LogSyncMessage::Done => {
                                         sync_done_received = true;
-                                    },
-                                    message => return Err(LogSyncError::UnexpectedMessage(message.to_string()))
+                                    }
+                                    message => {
+                                        return Err(LogSyncError::UnexpectedMessage(message.to_string()));
+                                    }
                                 }
                             },
                             Some(hash) = operation_stream.next() => {
@@ -287,19 +298,34 @@ where
                                 dedup.insert(hash);
 
                                 // Fetch raw message bytes and send to remote.
-                                let (header, body) = self.store.get_raw_operation(hash).await.map_err(|err| LogSyncError::OperationStore(format!("{err}")))?.expect("operation to be in store");
-                                metrics.total_bytes_sent += {header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()} as u64;
+                                let (header, body) = self
+                                    .store
+                                    .get_raw_operation(hash)
+                                    .await
+                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
+                                    .expect("operation to be in store");
+
+                                metrics.total_bytes_sent += {
+                                    header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
+                                } as u64;
                                 metrics.total_operations_sent += 1;
-                                sink.send(LogSyncMessage::Operation(header, body)).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+
+                                sink.send(LogSyncMessage::Operation(header, body))
+                                    .await
+                                    .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                 sent_operations += 1;
+
                                 if sent_operations >= total_operations {
-                                    sink.send(LogSyncMessage::Done).await.map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+                                    sink.send(LogSyncMessage::Done)
+                                        .await
+                                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                     sync_done_sent = true;
                                 }
                             },
                             else => {
                                 // If both streams are empty (they return None), or we received a
-                                // sync done message and we sent all our pending operations, exit the loop.
+                                // sync done message and we sent all our pending operations, exit
+                                // the loop.
                                 break;
                             }
                         }

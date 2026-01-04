@@ -8,7 +8,7 @@ use futures::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
-use crate::{FromSync, SyncSessionConfig, ToSync};
+use crate::{FromSync, Logs, SyncSessionConfig, ToSync};
 
 /// Generic protocol interface which runs over a typed sink and stream pair.
 pub trait Protocol {
@@ -49,4 +49,44 @@ pub trait SyncManager<T> {
 
     /// Subscribe to the manager event stream.
     fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static;
+}
+
+/// Maps a topic to the related logs being sent over the wire during sync.
+///
+/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how the
+/// scope for a particular session should be identified. `LogSyncProtocol` maps a generic
+/// `TopicQuery` to a set of logs; users provide an implementation of the `TopicLogMap` trait in
+/// order to define how this mapping occurs.
+///
+/// Since `TopicLogMap` is generic we can use the same mapping across different sync
+/// implementations for the same data type when necessary.
+///
+/// ## Designing `TopicLogMap` for applications
+///
+/// Considering an example chat application which is based on append-only log data types, we
+/// probably want to organise messages from an author for a certain chat group into one log each.
+/// Like this, a chat group can be expressed as a collection of one to potentially many logs (one
+/// per member of the group):
+///
+/// ```text
+/// All authors: A, B and C
+/// All chat groups: 1 and 2
+///
+/// "Chat group 1 with members A and B"
+/// - Log A1
+/// - Log B1
+///
+/// "Chat group 2 with members A, B and C"
+/// - Log A2
+/// - Log B2
+/// - Log C2
+/// ```
+///
+/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
+/// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
+/// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
+pub trait TopicLogMap<T, L>: Clone {
+    type Error: StdError;
+
+    fn get(&self, topic: &T) -> impl Future<Output = Result<Logs<L>, Self::Error>>;
 }

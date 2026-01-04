@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use futures::channel::mpsc;
-use futures::{Sink, Stream};
-use futures::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
+
+use futures::channel::mpsc;
+use futures::{Sink, SinkExt, Stream, StreamExt};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::traits::Protocol;

@@ -13,13 +13,12 @@ use serde::{Deserialize, Serialize};
 use tokio::join;
 use tokio::sync::broadcast;
 
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol, Logs};
-use crate::topic_log_sync::TopicLogMap;
-use crate::topic_log_sync::{
-    TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
+use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol};
+use crate::traits::{Protocol, TopicLogMap};
+use crate::{
+    Logs, ToSync, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
+    TopicSyncManager,
 };
-use crate::traits::Protocol;
-use crate::{ToSync, TopicSyncManager};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;

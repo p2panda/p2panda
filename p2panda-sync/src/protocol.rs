@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::future::ready;
 use std::hash::Hash as StdHash;
@@ -15,11 +14,12 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::{debug, warn};
 
+use crate::ToSync;
+use crate::dedup::DEFAULT_BUFFER_CAPACITY;
 use crate::log_sync::{
-    LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncProtocol, Logs, StatusEvent,
+    LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncProtocol, StatusEvent,
 };
-use crate::traits::Protocol;
-use crate::{DEFAULT_BUFFER_CAPACITY, ToSync};
+use crate::traits::{Protocol, TopicLogMap};
 
 #[derive(Debug)]
 pub struct TopicLogSync<T, S, M, L, E> {
@@ -33,8 +33,9 @@ pub struct TopicLogSync<T, S, M, L, E> {
 }
 
 /// Sync protocol combining TopicHandshake and LogSync protocols into one so that peers can sync
-/// logs over a generic T topic. The mapping of T to a set of logs is handled locally by the
-/// TopicMap.
+/// logs over a generic T topic.
+///
+/// The mapping of T to a set of logs is handled locally by the TopicMap.
 ///
 /// The initiating peer sends their T to the remote and this establishes the topic for the session.
 /// After sync is complete peers optionally enter "live-mode" where concurrently received and
@@ -236,7 +237,7 @@ where
                                 ));
                             };
 
-                            // @TODO: check that this message is a part of our topic T set.
+                            // TODO: check that this message is a part of our topic T set.
 
                             // Insert operation hash into deduplication buffer and if it was
                             // previously present do not forward the operation to the application
@@ -293,7 +294,7 @@ where
 
 /// Map raw message sink and stream into log sync protocol specific channels.
 #[allow(clippy::complexity)]
-pub(crate) fn sync_channels<'a, L, E>(
+fn sync_channels<'a, L, E>(
     sink: &mut (impl Sink<TopicLogSyncMessage<L, E>, Error = impl Debug> + Unpin),
     stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L, E>, impl Debug>> + Unpin),
 ) -> (
@@ -409,46 +410,6 @@ impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E> {
     }
 }
 
-/// Maps a `TopicQuery` to the related logs being sent over the wire during sync.
-///
-/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how
-/// the scope for a particular session should be identified. `LogSyncProtocol` maps a generic
-/// `TopicQuery` to a set of logs; users provide an implementation of the `TopicLogMap` trait in
-/// order to define how this mapping occurs.
-///
-/// Since `TopicLogMap` is generic we can use the same mapping across different sync implementations
-/// for the same data type when necessary.
-///
-/// ## Designing `TopicLogMap` for applications
-///
-/// Considering an example chat application which is based on append-only log data types, we
-/// probably want to organise messages from an author for a certain chat group into one log each.
-/// Like this, a chat group can be expressed as a collection of one to potentially many logs (one
-/// per member of the group):
-///
-/// ```text
-/// All authors: A, B and C
-/// All chat groups: 1 and 2
-///
-/// "Chat group 1 with members A and B"
-/// - Log A1
-/// - Log B1
-///
-/// "Chat group 2 with members A, B and C"
-/// - Log A2
-/// - Log B2
-/// - Log C2
-/// ```
-///
-/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
-/// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
-/// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
-pub trait TopicLogMap<T, L>: Clone {
-    type Error: StdError;
-
-    fn get(&self, topic: &T) -> impl Future<Output = Result<Logs<L>, Self::Error>>;
-}
-
 #[cfg(test)]
 pub mod tests {
     use std::collections::HashMap;
@@ -463,8 +424,9 @@ pub mod tests {
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
-    use crate::topic_log_sync::{LiveModeMetrics, TopicLogSyncError, TopicLogSyncEvent};
     use crate::traits::Protocol;
+
+    use super::{LiveModeMetrics, TopicLogSyncError, TopicLogSyncEvent};
 
     #[tokio::test]
     async fn sync_session_no_operations() {

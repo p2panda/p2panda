@@ -20,9 +20,9 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
-use crate::session_topic_map::SessionTopicMap;
-use crate::topic_log_sync::{TopicLogMap, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
-use crate::traits::SyncManager;
+use crate::map::SessionTopicMap;
+use crate::protocol::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::traits::{SyncManager, TopicLogMap};
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
@@ -61,7 +61,7 @@ where
 }
 
 #[derive(Debug)]
-pub struct SessionStream<T, E>
+struct SessionStream<T, E>
 where
     T: Clone,
     E: Extensions,
@@ -401,12 +401,12 @@ mod tests {
     use p2panda_core::{Body, Operation};
 
     use crate::TopicSyncManager;
-    use crate::managers::topic_sync_manager::TopicSyncManagerConfig;
+    use crate::manager::TopicSyncManagerConfig;
+    use crate::protocol::TopicLogSyncEvent;
     use crate::test_utils::{
         Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
         drain_stream, run_protocol, setup_logging,
     };
-    use crate::topic_log_sync::TopicLogSyncEvent;
     use crate::traits::SyncManager;
     use crate::{FromSync, SyncSessionConfig, ToSync};
 
