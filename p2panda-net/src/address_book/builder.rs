@@ -11,6 +11,8 @@ use crate::NodeId;
 use crate::address_book::actor::AddressBookActor;
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::addrs::NodeInfo;
+#[cfg(feature = "supervisor")]
+use crate::supervisor::Supervisor;
 
 pub struct Builder {
     pub(crate) store: Option<BoxedAddressBookStore<NodeId, NodeInfo>>,
@@ -46,5 +48,13 @@ impl Builder {
         };
 
         Ok(AddressBook::new(actor_ref))
+    }
+
+    #[cfg(feature = "supervisor")]
+    pub async fn spawn_linked(
+        self,
+        supervisor: &Supervisor,
+    ) -> Result<AddressBook, AddressBookError> {
+        todo!()
     }
 }

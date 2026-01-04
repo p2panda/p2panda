@@ -44,6 +44,7 @@ log_sync = [
   "dep:p2panda-store",
   "dep:p2panda-sync",
 ]
+supervisor = []
 test_utils = [
   "dep:tracing-subscriber",
 ]

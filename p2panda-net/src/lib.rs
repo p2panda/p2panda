@@ -14,6 +14,8 @@ pub mod iroh_endpoint;
 pub mod iroh_mdns;
 #[cfg(feature = "log_sync")]
 pub mod log_sync;
+#[cfg(feature = "supervisor")]
+pub mod supervisor;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod timestamp;
