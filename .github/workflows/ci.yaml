@@ -39,7 +39,7 @@ jobs:
           channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check project and dependencies
-        run: cargo check
+        run: cargo check --all-features
 
   fmt:
     runs-on: ubuntu-latest
@@ -71,4 +71,4 @@ jobs:
           channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check code with clippy
-        run: cargo clippy -- -D warnings --no-deps
+        run: cargo clippy --all-features -- -D warnings --no-deps
