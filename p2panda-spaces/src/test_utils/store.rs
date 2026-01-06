@@ -40,6 +40,7 @@ impl<M, C> MemoryStore<M, C>
 where
     C: Conditions,
 {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let orderer_y = AuthOrderer::init();
         let auth_y = AuthGroupState::new(orderer_y);
