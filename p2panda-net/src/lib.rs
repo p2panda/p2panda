@@ -34,6 +34,8 @@ pub use iroh_endpoint::Endpoint;
 pub use iroh_mdns::MdnsDiscovery;
 #[cfg(feature = "log_sync")]
 pub use log_sync::LogSync;
+#[cfg(feature = "supervisor")]
+pub use supervisor::Supervisor;
 
 pub type NodeId = p2panda_core::PublicKey;
 

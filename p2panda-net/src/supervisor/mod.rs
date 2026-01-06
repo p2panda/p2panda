@@ -4,6 +4,8 @@ mod actor;
 mod api;
 mod builder;
 mod config;
+#[cfg(test)]
+mod tests;
 mod traits;
 
 pub use api::{Supervisor, SupervisorError};
