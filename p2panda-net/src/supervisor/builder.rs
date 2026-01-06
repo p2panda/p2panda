@@ -24,9 +24,8 @@ impl Builder {
     pub async fn spawn(self) -> Result<Supervisor, SupervisorError> {
         let thread_pool = ThreadLocalActorSpawner::new();
 
-        let args = ();
-
-        let (actor_ref, _) = SupervisorActor::spawn(None, args, thread_pool.clone()).await?;
+        let args = (self.strategy, thread_pool.clone());
+        let (actor_ref, _) = SupervisorActor::spawn(None, args, thread_pool).await?;
 
         Ok(Supervisor::new(actor_ref))
     }

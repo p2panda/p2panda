@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use ractor::{ActorRef, cast};
+use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -30,14 +30,15 @@ impl Supervisor {
         Builder::new()
     }
 
-    pub(crate) async fn start_child<C>(&self, child: C) -> Result<(), SupervisorError>
+    pub(crate) async fn start_child_actor<C>(&self, child: C) -> Result<(), SupervisorError>
     where
         C: ChildActor + 'static,
     {
         let inner = self.inner.read().await;
-        cast!(
+        call!(
             inner.actor_ref,
-            ToSupervisorActor::StartChild(Box::new(child))
+            ToSupervisorActor::StartChildActor,
+            Box::new(child)
         )
         .map_err(Box::new)?;
         Ok(())
