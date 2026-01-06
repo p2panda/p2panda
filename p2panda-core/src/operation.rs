@@ -119,6 +119,7 @@ impl<E> PartialEq for Operation<E> {
 
 impl<E> Eq for Operation<E> {}
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl<E> PartialOrd for Operation<E> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.hash.cmp(&other.hash))
@@ -409,10 +410,10 @@ where
         }
     };
 
-    if let Some(body) = &operation.body {
-        if claimed_payload_hash != Some(body.hash()) || claimed_payload_size != body.size() {
-            return Err(OperationError::PayloadMismatch);
-        }
+    if let Some(body) = &operation.body
+        && (claimed_payload_hash != Some(body.hash()) || claimed_payload_size != body.size())
+    {
+        return Err(OperationError::PayloadMismatch);
     }
 
     Ok(())

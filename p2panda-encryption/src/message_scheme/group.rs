@@ -211,10 +211,11 @@ where
         }
 
         // Accept "add" control messages if we are being added by it.
-        if let ForwardSecureMessageContent::Control(ControlMessage::Add { added }) = message_type {
-            if !is_established && added == y.my_id {
-                is_create_or_welcome = true;
-            }
+        if let ForwardSecureMessageContent::Control(ControlMessage::Add { added }) = message_type
+            && !is_established
+            && added == y.my_id
+        {
+            is_create_or_welcome = true;
         }
 
         let y_orderer_i = ORD::queue(y.orderer, message).map_err(GroupError::Orderer)?;

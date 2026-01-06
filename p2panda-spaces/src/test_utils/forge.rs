@@ -36,7 +36,9 @@ where
 
 #[derive(Debug)]
 pub struct TestForgeInner {
+    #[allow(unused)]
     next_seq_num: SeqNum,
+    #[allow(unused)]
     private_key: PrivateKey,
 }
 
@@ -63,7 +65,7 @@ where
 
         let message = TestMessage {
             seq_num,
-            public_key: self.public_key.clone(),
+            public_key: self.public_key,
             spaces_args: args,
         };
 

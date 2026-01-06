@@ -61,6 +61,7 @@ impl<'a> SyncProtocol<'a, SyncTestTopic> for DummyProtocol {
         sink.send(DummyProtocolMessage::Done).await?;
         app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
+        #[allow(clippy::never_loop)]
         while let Some(result) = stream.next().await {
             let message: DummyProtocolMessage = result?;
             debug!("message received: {:?}", message);
@@ -153,6 +154,7 @@ impl<'a> SyncProtocol<'a, SyncTestTopic> for PingPongProtocol {
 
         app_tx.send(FromSync::HandshakeSuccess(topic_query)).await?;
 
+        #[allow(clippy::never_loop)]
         while let Some(result) = stream.next().await {
             let message = result?;
 
@@ -308,6 +310,7 @@ impl<'a> SyncProtocol<'a, SyncTestTopic> for FailingProtocol {
 
         app_tx.send(FromSync::HandshakeSuccess(topic)).await?;
 
+        #[allow(clippy::never_loop)]
         while let Some(result) = stream.next().await {
             let message: FailingProtocolMessage = result?;
             match &message {

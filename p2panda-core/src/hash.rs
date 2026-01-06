@@ -115,6 +115,7 @@ impl FromStr for Hash {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for Hash {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.0.as_bytes().cmp(other.0.as_bytes()))

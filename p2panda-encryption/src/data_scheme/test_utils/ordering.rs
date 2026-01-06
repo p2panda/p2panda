@@ -180,12 +180,12 @@ where
                 .to_owned()
         });
 
-        if let Some(ref message) = message {
-            if let GroupMessageContent::Control(_) = message.content() {
-                // Mark messages as "last seen" so we can mention the "previous" ones as soon
-                // as we publish a message ourselves.
-                y.previous.insert(message.sender(), message.id());
-            }
+        if let Some(ref message) = message
+            && let GroupMessageContent::Control(_) = message.content()
+        {
+            // Mark messages as "last seen" so we can mention the "previous" ones as soon
+            // as we publish a message ourselves.
+            y.previous.insert(message.sender(), message.id());
         }
 
         Ok((y, message))

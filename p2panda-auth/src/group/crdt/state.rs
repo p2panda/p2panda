@@ -68,7 +68,7 @@ where
 
     /// Return `true` if the member is an active member of the group.
     pub fn is_member(&self) -> bool {
-        self.member_counter % 2 != 0
+        !self.member_counter.is_multiple_of(2)
     }
 
     /// Return `true` if the member has `Pull` access.

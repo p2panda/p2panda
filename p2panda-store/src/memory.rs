@@ -56,14 +56,14 @@ impl<T> Default for MemoryStore<T, ()> {
 
 impl<T, E> MemoryStore<T, E> {
     /// Obtain a read-lock on the store.
-    pub fn read_store(&self) -> RwLockReadGuard<InnerMemoryStore<T, E>> {
+    pub fn read_store(&self) -> RwLockReadGuard<'_, InnerMemoryStore<T, E>> {
         self.inner
             .read()
             .expect("acquire shared read access on store")
     }
 
     /// Obtain a write-lock on the store.
-    pub fn write_store(&self) -> RwLockWriteGuard<InnerMemoryStore<T, E>> {
+    pub fn write_store(&self) -> RwLockWriteGuard<'_, InnerMemoryStore<T, E>> {
         self.inner
             .write()
             .expect("acquire exclusive write access on store")

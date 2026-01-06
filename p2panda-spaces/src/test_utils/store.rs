@@ -138,6 +138,12 @@ pub struct TestKeyStoreInner {
     key_registry: KeyRegistryState<ActorId>,
 }
 
+impl Default for TestKeyStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestKeyStore {
     pub fn new() -> Self {
         let inner = TestKeyStoreInner {

@@ -109,13 +109,13 @@ where
     async fn on_actor_message(&mut self, msg: ToGossipActor) -> Result<bool> {
         match msg {
             ToGossipActor::Broadcast { topic_id, bytes } => {
-                if let Some(gossip_tx) = self.gossip_senders.get(&topic_id) {
-                    if let Err(err) = gossip_tx.broadcast(bytes.into()).await {
-                        error!(
-                            topic_id = "{topic_id:?}",
-                            "failed to broadcast gossip msg: {}", err
-                        )
-                    }
+                if let Some(gossip_tx) = self.gossip_senders.get(&topic_id)
+                    && let Err(err) = gossip_tx.broadcast(bytes.into()).await
+                {
+                    error!(
+                        topic_id = "{topic_id:?}",
+                        "failed to broadcast gossip msg: {}", err
+                    )
                 }
             }
             ToGossipActor::Join { topic_id, peers } => {

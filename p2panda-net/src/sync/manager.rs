@@ -212,9 +212,9 @@ where
                    }
                 },
                  _ = resync_poll_interval.tick() => {
-                    if let Some(scope) = self.resync_queue.pop_front() {
-                        if let Some(attempt) = self.sessions.get(&scope) {
-                            if let Status::Complete(completion) = attempt.status {
+                    if let Some(scope) = self.resync_queue.pop_front()
+                        && let Some(attempt) = self.sessions.get(&scope)
+                            && let Status::Complete(completion) = attempt.status {
                                 if completion.elapsed() >= resync_interval {
                                     if let Err(err) = self.schedule_attempt(scope).await {
                                         error!("failed to schedule resync attempt: {}", err)
@@ -223,13 +223,11 @@ where
                                     self.resync_queue.push_back(scope)
                                 }
                             }
-                        }
-                    }
                 }
                 _ = retry_poll_interval.tick() => {
-                    if let Some(scope) = self.retry_queue.pop_front() {
-                        if let Some(attempt) = self.sessions.get(&scope) {
-                            if let Status::Failed(failure) = attempt.status {
+                    if let Some(scope) = self.retry_queue.pop_front()
+                        && let Some(attempt) = self.sessions.get(&scope)
+                            && let Status::Failed(failure) = attempt.status {
                                 if failure.elapsed() >= retry_interval {
                                     if let Err(err) = self.schedule_attempt(scope).await {
                                         error!("failed to schedule resync attempt: {}", err)
@@ -238,8 +236,6 @@ where
                                     self.retry_queue.push_back(scope)
                                 }
                             }
-                        }
-                    }
                 }
             }
         }

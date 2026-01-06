@@ -50,8 +50,11 @@ pub type TestSpaceError = SpaceError<
 >;
 
 pub struct TestPeer {
+    #[allow(unused)]
     pub(crate) id: TestPeerId,
+    #[allow(unused)]
     pub(crate) manager: TestManager,
+    #[allow(unused)]
     pub(crate) credentials: Credentials,
 }
 
