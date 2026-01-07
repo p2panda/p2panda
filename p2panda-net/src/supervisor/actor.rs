@@ -41,6 +41,8 @@ pub struct SupervisorActorState {
     thread_pool: ThreadLocalActorSpawner,
 }
 
+pub type SupervisorActorArgs = (RestartStrategy, ThreadLocalActorSpawner);
+
 #[derive(Default)]
 pub struct SupervisorActor;
 
@@ -49,7 +51,7 @@ impl ThreadLocalActor for SupervisorActor {
 
     type State = SupervisorActorState;
 
-    type Arguments = (RestartStrategy, ThreadLocalActorSpawner);
+    type Arguments = SupervisorActorArgs;
 
     async fn pre_start(
         &self,

@@ -108,7 +108,7 @@ impl ThreadLocalActor for TestActor {
 }
 
 #[tokio::test]
-async fn spawn_linked() {
+async fn restart_after_failure() {
     setup_logging();
 
     let supervisor = Supervisor::builder()
@@ -129,5 +129,26 @@ async fn spawn_linked() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Actor continues to work as expected.
+    assert_eq!(test.echo(27).await, 27);
+}
+
+#[tokio::test]
+async fn nested_supervisors() {
+    setup_logging();
+
+    let root_supervisor = Supervisor::builder().spawn().await.unwrap();
+
+    let child_supervisor = Supervisor::builder()
+        .spawn_linked(&root_supervisor)
+        .await
+        .unwrap();
+
+    let test = TestApi::spawn_linked(&child_supervisor).await;
     assert_eq!(test.echo(15).await, 15);
+
+    test.panic().await;
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert_eq!(test.echo(27).await, 27);
 }

@@ -10,6 +10,7 @@ pub struct Builder {
 }
 
 impl Builder {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             strategy: RestartStrategy::default(),
@@ -25,8 +26,17 @@ impl Builder {
         let thread_pool = ThreadLocalActorSpawner::new();
 
         let args = (self.strategy, thread_pool.clone());
-        let (actor_ref, _) = SupervisorActor::spawn(None, args, thread_pool).await?;
+        let (actor_ref, _) = SupervisorActor::spawn(None, args.clone(), thread_pool).await?;
 
-        Ok(Supervisor::new(actor_ref))
+        Ok(Supervisor::new(Some(actor_ref), args))
+    }
+
+    pub async fn spawn_linked(self, parent: &Supervisor) -> Result<Supervisor, SupervisorError> {
+        let args = (self.strategy, parent.thread_pool());
+        let supervisor = Supervisor::new(None, args);
+
+        parent.start_child_actor(supervisor.clone()).await?;
+
+        Ok(supervisor)
     }
 }
