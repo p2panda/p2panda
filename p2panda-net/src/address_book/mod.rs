@@ -4,6 +4,8 @@ mod actor;
 mod api;
 mod builder;
 pub mod report;
+#[cfg(feature = "supervisor")]
+mod supervisor;
 pub mod watchers;
 
 pub use api::{AddressBook, AddressBookError};

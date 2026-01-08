@@ -43,10 +43,7 @@ impl Supervisor {
     {
         let inner = self.inner.read().await;
         call!(
-            inner
-                .actor_ref
-                .as_ref()
-                .expect("actor spawned during construction"),
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToSupervisorActor::StartChildActor,
             Box::new(child)
         )

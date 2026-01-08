@@ -15,18 +15,17 @@ use crate::addrs::{NodeInfo, NodeInfoError, TransportInfo};
 use crate::watchers::{UpdatesOnly, WatcherReceiver};
 use crate::{NodeId, TopicId};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AddressBook {
-    inner: Arc<RwLock<Inner>>,
+    pub(super) inner: Arc<RwLock<Inner>>,
 }
 
-#[derive(Clone, Debug)]
-struct Inner {
-    actor_ref: ActorRef<ToAddressBookActor>,
+pub(super) struct Inner {
+    pub(super) actor_ref: Option<ActorRef<ToAddressBookActor>>,
 }
 
 impl AddressBook {
-    pub(crate) fn new(actor_ref: ActorRef<ToAddressBookActor>) -> Self {
+    pub(crate) fn new(actor_ref: Option<ActorRef<ToAddressBookActor>>) -> Self {
         Self {
             inner: Arc::new(RwLock::new(Inner { actor_ref })),
         }
@@ -41,8 +40,12 @@ impl AddressBook {
     /// Returns `None` if no information was found for this node.
     pub async fn node_info(&self, node_id: NodeId) -> Result<Option<NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
-        let result =
-            call!(inner.actor_ref, ToAddressBookActor::NodeInfo, node_id).map_err(Box::new)?;
+        let result = call!(
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
+            ToAddressBookActor::NodeInfo,
+            node_id
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
@@ -57,7 +60,7 @@ impl AddressBook {
     pub async fn insert_node_info(&self, node_info: NodeInfo) -> Result<bool, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::InsertNodeInfo,
             node_info
         )
@@ -84,7 +87,7 @@ impl AddressBook {
     ) -> Result<bool, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::InsertTransportInfo,
             node_id,
             transport_info
@@ -99,7 +102,7 @@ impl AddressBook {
     ) -> Result<Vec<NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::NodeInfosByTopics,
             topics.into_iter().collect()
         )
@@ -114,7 +117,7 @@ impl AddressBook {
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::SetTopics(node_id, topics.into_iter().collect())
         )
         .map_err(Box::new)?;
@@ -124,7 +127,7 @@ impl AddressBook {
     pub async fn add_topic(&self, node_id: NodeId, topic: TopicId) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::AddTopic(node_id, topic)
         )
         .map_err(Box::new)?;
@@ -138,7 +141,7 @@ impl AddressBook {
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::RemoveTopic(node_id, topic)
         )
         .map_err(Box::new)?;
@@ -153,7 +156,7 @@ impl AddressBook {
     ) -> Result<WatcherReceiver<Option<NodeInfo>>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::WatchNodeInfo,
             node_id,
             updates_only
@@ -170,7 +173,7 @@ impl AddressBook {
     ) -> Result<WatcherReceiver<HashSet<NodeId>>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::WatchTopic,
             topic_id,
             updates_only
@@ -187,7 +190,7 @@ impl AddressBook {
     ) -> Result<WatcherReceiver<HashSet<TopicId>>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::WatchNodeTopics,
             node_id,
             updates_only
@@ -206,7 +209,7 @@ impl AddressBook {
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToAddressBookActor::Report(node_id, connection_outcome)
         )
         .map_err(Box::new)?;
@@ -217,14 +220,26 @@ impl AddressBook {
         &self,
     ) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToAddressBookActor::Store).map_err(Box::new)?;
+        let result = call!(
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
+            ToAddressBookActor::Store
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 }
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        self.actor_ref.stop(None);
+        if let Some(actor_ref) = self.actor_ref.take() {
+            actor_ref.stop(None);
+        }
+    }
+}
+
+impl std::fmt::Debug for AddressBook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddressBook").finish()
     }
 }
 
@@ -237,6 +252,11 @@ pub enum AddressBookError {
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
     ActorRpc(#[from] Box<ractor::RactorErr<ToAddressBookActor>>),
+
+    /// Spawning the internal actor as a child actor of a supervisor failed.
+    #[cfg(feature = "supervisor")]
+    #[error(transparent)]
+    SupervisorSpawn(#[from] crate::supervisor::SupervisorError),
 
     /// Address book store failed.
     #[error(transparent)]

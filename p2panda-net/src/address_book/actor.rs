@@ -131,6 +131,8 @@ impl AddressBookState {
     }
 }
 
+pub type AddressBookActorArgs = (BoxedAddressBookStore<NodeId, NodeInfo>,);
+
 #[derive(Default)]
 pub struct AddressBookActor;
 
@@ -139,7 +141,7 @@ impl ThreadLocalActor for AddressBookActor {
 
     type Msg = ToAddressBookActor;
 
-    type Arguments = (BoxedAddressBookStore<NodeId, NodeInfo>,);
+    type Arguments = AddressBookActorArgs;
 
     async fn pre_start(
         &self,

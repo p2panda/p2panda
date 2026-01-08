@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use ractor::{ActorCell, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
+use ractor::{ActorCell, ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tracing::{trace, warn};
 
 use crate::supervisor::config::RestartStrategy;
@@ -16,6 +16,7 @@ pub enum ToSupervisorActor {
 
 struct ChildActorState {
     child: Box<dyn ChildActor + 'static>,
+    actor_cell: ActorCell,
     #[allow(unused)]
     first_started: Instant,
     last_restarted: Option<Instant>,
@@ -24,9 +25,10 @@ struct ChildActorState {
 }
 
 impl ChildActorState {
-    pub fn new(child: Box<dyn ChildActor + 'static>) -> Self {
+    pub fn new(child: Box<dyn ChildActor + 'static>, actor_cell: ActorCell) -> Self {
         Self {
             child,
+            actor_cell,
             first_started: Instant::now(),
             last_restarted: None,
             restarts: 0,
@@ -37,7 +39,7 @@ impl ChildActorState {
 
 pub struct SupervisorActorState {
     restart_strategy: RestartStrategy,
-    children: HashMap<ActorCell, ChildActorState>,
+    children: HashMap<ActorId, ChildActorState>,
     thread_pool: ThreadLocalActorSpawner,
 }
 
@@ -81,7 +83,7 @@ impl ThreadLocalActor for SupervisorActor {
 
                 state
                     .children
-                    .insert(actor_cell, ChildActorState::new(child));
+                    .insert(actor_cell.get_id(), ChildActorState::new(child, actor_cell));
 
                 let _ = reply.send(());
             }
@@ -108,7 +110,7 @@ impl ThreadLocalActor for SupervisorActor {
 
                 match state.restart_strategy {
                     RestartStrategy::OneForOne => {
-                        if let Some(mut child_state) = state.children.remove(&actor_cell) {
+                        if let Some(mut child_state) = state.children.remove(&actor_cell.get_id()) {
                             child_state.restarts += 1;
                             child_state.failures += 1;
                             child_state.last_restarted = Some(Instant::now());
@@ -116,18 +118,20 @@ impl ThreadLocalActor for SupervisorActor {
                                 .child
                                 .on_start(myself.clone().into(), state.thread_pool.clone())
                                 .await?;
-                            state.children.insert(next_actor_cell, child_state);
+                            let next_actor_id = next_actor_cell.get_id();
+                            child_state.actor_cell = next_actor_cell;
+                            state.children.insert(next_actor_id, child_state);
                         }
                     }
                     RestartStrategy::OneForAll => {
                         let mut next_children = HashMap::new();
 
-                        for (child_actor, mut child_state) in state.children.drain() {
+                        for (_, mut child_state) in state.children.drain() {
                             // Terminate this actor.
-                            child_actor.stop(None);
+                            child_state.actor_cell.stop(None);
 
                             // .. and restart it directly again.
-                            if actor_cell == child_actor {
+                            if child_state.actor_cell == actor_cell {
                                 child_state.failures += 1;
                             }
                             child_state.restarts += 1;
@@ -137,7 +141,9 @@ impl ThreadLocalActor for SupervisorActor {
                                 .child
                                 .on_start(myself.clone().into(), state.thread_pool.clone())
                                 .await?;
-                            next_children.insert(next_actor_cell, child_state);
+                            let next_actor_id = next_actor_cell.get_id();
+                            child_state.actor_cell = next_actor_cell;
+                            next_children.insert(next_actor_id, child_state);
                         }
 
                         state.children = next_children;

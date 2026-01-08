@@ -380,9 +380,11 @@ pub fn create_operation(
 
 /// Test topic map.
 #[derive(Clone, Debug)]
+#[allow(clippy::type_complexity)]
 pub struct TestTopicMap(Arc<RwLock<HashMap<TopicId, HashMap<PublicKey, Vec<TestLogId>>>>>);
 
 impl TestTopicMap {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self(Arc::new(RwLock::new(HashMap::new())))
     }

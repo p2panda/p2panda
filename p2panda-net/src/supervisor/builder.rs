@@ -34,9 +34,7 @@ impl Builder {
     pub async fn spawn_linked(self, parent: &Supervisor) -> Result<Supervisor, SupervisorError> {
         let args = (self.strategy, parent.thread_pool());
         let supervisor = Supervisor::new(None, args);
-
         parent.start_child_actor(supervisor.clone()).await?;
-
         Ok(supervisor)
     }
 }
