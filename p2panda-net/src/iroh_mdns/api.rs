@@ -13,7 +13,9 @@ use crate::iroh_mdns::actor::{MdnsActorArgs, ToMdns};
 
 #[derive(Clone)]
 pub struct MdnsDiscovery {
+    #[allow(unused)]
     pub(super) args: MdnsActorArgs,
+    #[allow(unused)]
     pub(super) inner: Arc<RwLock<Inner>>,
 }
 
