@@ -5,7 +5,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 use crate::address_book::AddressBook;
-use crate::discovery::actors::DiscoveryManager;
+use crate::discovery::actors::{DiscoveryManager, DiscoveryManagerArgs};
 use crate::discovery::config::DiscoveryConfig;
 use crate::discovery::{Discovery, DiscoveryError};
 use crate::iroh_endpoint::Endpoint;
@@ -38,15 +38,21 @@ impl Builder {
         self
     }
 
+    pub(crate) fn build_args(self) -> DiscoveryManagerArgs {
+        let config = self.config.unwrap_or_default();
+        let rng = self.rng.unwrap_or(ChaCha20Rng::from_os_rng());
+        let args = (config, rng, self.address_book, self.endpoint);
+        args
+    }
+
     pub async fn spawn(self) -> Result<Discovery, DiscoveryError> {
+        let args = self.build_args();
+
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
-            let config = self.config.unwrap_or_default();
-            let rng = self.rng.unwrap_or(ChaCha20Rng::from_os_rng());
-            let args = (config, rng, self.address_book, self.endpoint);
-            DiscoveryManager::spawn(None, args, thread_pool).await?
+            DiscoveryManager::spawn(None, args.clone(), thread_pool).await?
         };
 
-        Ok(Discovery::new(actor_ref))
+        Ok(Discovery::new(Some(actor_ref), args))
     }
 }

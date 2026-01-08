@@ -22,11 +22,17 @@ use crate::iroh_endpoint::{from_public_key, to_public_key};
 /// The endpoint can "resolve" node ids to iroh's endpoint addresses and inform the address book
 /// about our own, changed address (for example if the home relay changed or we got an direct IP
 /// address, etc., in iroh this is called "publish").
-#[derive(Debug)]
 pub struct AddressBookDiscovery {
     private_key: PrivateKey,
     address_book: AddressBook,
     semaphore: Arc<Semaphore>,
+}
+
+// Required by iroh's `Discovery` trait.
+impl std::fmt::Debug for AddressBookDiscovery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AddressBookDiscovery").finish()
+    }
 }
 
 /// Identifies source of discovered item.

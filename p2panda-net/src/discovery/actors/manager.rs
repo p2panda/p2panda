@@ -212,6 +212,8 @@ pub struct WalkerInfo {
     handle: JoinHandle<()>,
 }
 
+pub type DiscoveryManagerArgs = (DiscoveryConfig, ChaCha20Rng, AddressBook, Endpoint);
+
 #[derive(Debug, Default)]
 pub struct DiscoveryManager;
 
@@ -220,7 +222,7 @@ impl ThreadLocalActor for DiscoveryManager {
 
     type Msg = ToDiscoveryManager;
 
-    type Arguments = (DiscoveryConfig, ChaCha20Rng, AddressBook, Endpoint);
+    type Arguments = DiscoveryManagerArgs;
 
     async fn pre_start(
         &self,

@@ -237,26 +237,20 @@ impl Drop for Inner {
     }
 }
 
-impl std::fmt::Debug for AddressBook {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AddressBook").finish()
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum AddressBookError {
     /// Spawning the internal actor failed.
     #[error(transparent)]
     ActorSpawn(#[from] ractor::SpawnErr),
 
-    /// Messaging with internal actor via RPC failed.
-    #[error(transparent)]
-    ActorRpc(#[from] Box<ractor::RactorErr<ToAddressBookActor>>),
-
     /// Spawning the internal actor as a child actor of a supervisor failed.
     #[cfg(feature = "supervisor")]
     #[error(transparent)]
-    SupervisorSpawn(#[from] crate::supervisor::SupervisorError),
+    ActorLinkedSpawn(#[from] crate::supervisor::SupervisorError),
+
+    /// Messaging with internal actor via RPC failed.
+    #[error(transparent)]
+    ActorRpc(#[from] Box<ractor::RactorErr<ToAddressBookActor>>),
 
     /// Address book store failed.
     #[error(transparent)]
