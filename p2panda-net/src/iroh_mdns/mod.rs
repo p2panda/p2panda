@@ -4,6 +4,8 @@ mod actor;
 mod api;
 mod builder;
 mod config;
+#[cfg(feature = "supervisor")]
+mod supervisor;
 #[cfg(test)]
 mod tests;
 

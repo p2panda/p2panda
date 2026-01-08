@@ -43,6 +43,8 @@ pub struct MdnsState {
     handle: Option<JoinHandle<()>>,
 }
 
+pub type MdnsActorArgs = (MdnsDiscoveryMode, AddressBook, Endpoint);
+
 #[derive(Default)]
 pub struct MdnsActor;
 
@@ -51,7 +53,7 @@ impl ThreadLocalActor for MdnsActor {
 
     type State = MdnsState;
 
-    type Arguments = (MdnsDiscoveryMode, AddressBook, Endpoint);
+    type Arguments = MdnsActorArgs;
 
     async fn pre_start(
         &self,

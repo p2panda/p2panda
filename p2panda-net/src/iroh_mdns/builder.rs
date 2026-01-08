@@ -4,7 +4,7 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
-use crate::iroh_mdns::actor::MdnsActor;
+use crate::iroh_mdns::actor::{MdnsActor, MdnsActorArgs};
 use crate::iroh_mdns::{MdnsDiscovery, MdnsDiscoveryError, MdnsDiscoveryMode};
 
 pub struct Builder {
@@ -27,16 +27,19 @@ impl Builder {
         self
     }
 
+    pub(crate) fn build_args(self) -> MdnsActorArgs {
+        let config = self.mode.unwrap_or_default();
+        (config, self.address_book, self.endpoint)
+    }
+
     pub async fn spawn(self) -> Result<MdnsDiscovery, MdnsDiscoveryError> {
+        let args = self.build_args();
+
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
-
-            let config = self.mode.unwrap_or_default();
-            let args = (config, self.address_book, self.endpoint);
-
-            MdnsActor::spawn(None, args, thread_pool).await?
+            MdnsActor::spawn(None, args.clone(), thread_pool).await?
         };
 
-        Ok(MdnsDiscovery::new(actor_ref))
+        Ok(MdnsDiscovery::new(Some(actor_ref), args))
     }
 }
