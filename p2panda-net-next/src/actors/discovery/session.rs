@@ -4,9 +4,8 @@ use std::collections::HashSet;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::psi_hash::{PsiHashDiscoveryMessage, PsiHashDiscoveryProtocol};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
@@ -48,7 +47,7 @@ pub struct DiscoverySessionArguments<S> {
     pub session_id: DiscoverySessionId,
     pub store: S,
     pub manager_ref: ActorRef<ToDiscoveryManager>,
-    pub transport_config: Arc<TransportConfig>,
+    pub transport_config: QuicTransportConfig,
     pub args: DiscoverySessionRole,
 }
 

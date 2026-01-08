@@ -9,9 +9,7 @@ mod mdns;
 mod tests;
 pub mod user_data;
 
-use std::sync::Arc;
-
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::ProtocolHandler;
 use ractor::{ActorRef, call, registry};
 use thiserror::Error;
@@ -63,7 +61,7 @@ pub enum RegisterProtocolError {
 pub async fn connect(
     node_id: NodeId,
     protocol_id: impl AsRef<[u8]>,
-    transport_config: Option<Arc<TransportConfig>>,
+    transport_config: Option<QuicTransportConfig>,
     actor_namespace: ActorNamespace,
 ) -> Result<iroh::endpoint::Connection, ConnectError> {
     // Ask address book for available node information.

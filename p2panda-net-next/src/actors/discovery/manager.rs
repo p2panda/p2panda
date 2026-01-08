@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::{AddressBookStore, NodeInfo as _};
@@ -85,7 +85,7 @@ pub struct DiscoveryManagerState<S> {
     walkers_reset: Arc<Notify>,
     watch_handle: Option<JoinHandle<()>>,
     events_tx: broadcast::Sender<DiscoveryEvent>,
-    transport_config: Arc<TransportConfig>,
+    transport_config: QuicTransportConfig,
     metrics: DiscoveryMetrics,
 }
 
@@ -271,10 +271,11 @@ where
         // Custom QUIC transport parameters for discovery protocol. We don't want to wait too long
         // for unreachable nodes. QUIC should fastly tell us about a timeout which will mark this
         // node as "stale".
-        let mut transport_config = TransportConfig::default();
-        transport_config.max_idle_timeout(Some(
-            MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
-        ));
+        let transport_config = QuicTransportConfig::builder()
+            .max_idle_timeout(Some(
+                MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+            ))
+            .build();
 
         // Invoke the handler to register the discovery protocol and do other setups.
         let _ = myself.cast(ToDiscoveryManager::Initiate);
@@ -292,7 +293,7 @@ where
             walkers_reset,
             watch_handle: None,
             events_tx,
-            transport_config: Arc::new(transport_config),
+            transport_config,
             metrics: DiscoveryMetrics::default(),
         })
     }

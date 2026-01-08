@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
-
-use iroh::endpoint::{ConnectOptions, TransportConfig};
+use iroh::endpoint::{ConnectOptions, QuicTransportConfig};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
@@ -25,7 +23,7 @@ pub enum IrohConnectionArgs {
         endpoint: iroh::endpoint::Endpoint,
         endpoint_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
-        transport_config: Option<Arc<TransportConfig>>,
+        transport_config: Option<QuicTransportConfig>,
         reply: ConnectionReplyPort,
     },
     Accept {

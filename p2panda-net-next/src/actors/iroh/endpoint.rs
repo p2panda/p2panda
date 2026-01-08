@@ -7,7 +7,7 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::DynProtocolHandler;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent, cast};
@@ -64,7 +64,7 @@ pub enum ToIrohEndpoint {
     Connect(
         iroh::EndpointAddr,
         ProtocolId,
-        Option<Arc<TransportConfig>>,
+        Option<QuicTransportConfig>,
         ConnectionReplyPort,
     ),
 
@@ -165,11 +165,12 @@ impl ThreadLocalActor for IrohEndpoint {
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
                 // Default QUIC transport parameters, can be overwritten when connecting to a node.
-                let mut transport_config = TransportConfig::default();
-                transport_config.keep_alive_interval(Some(KEEP_ALIVE_INTERVAL));
-                transport_config.max_idle_timeout(Some(
-                    MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
-                ));
+                let transport_config = QuicTransportConfig::builder()
+                    .keep_alive_interval(KEEP_ALIVE_INTERVAL)
+                    .max_idle_timeout(Some(
+                        MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+                    ))
+                    .build();
 
                 // Register list of possible "home relays" for this node.
                 let relay_map = iroh::RelayMap::from_iter(config.relay_urls);

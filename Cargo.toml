@@ -3,18 +3,24 @@ resolver = "2"
 members = [
     "fuzz",
     "p2panda-auth",
-    "p2panda-blobs",
     "p2panda-core",
-    "p2panda-discovery",
     "p2panda-discovery-next",
     "p2panda-encryption",
-    "p2panda-net",
     "p2panda-net-next",
     "p2panda-spaces",
     "p2panda-store",
     "p2panda-stream",
-    "p2panda-sync",
     "p2panda-sync-next",
 ]
 
 [workspace.lints.rust]
+
+# TODO: https://github.com/n0-computer/iroh/issues/3241
+[patch.crates-io]
+iroh = { git = "https://github.com/n0-computer/iroh", branch = "main" }
+iroh-base = { git = "https://github.com/n0-computer/iroh", branch = "main" }
+iroh-quinn = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+iroh-quinn-proto = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+iroh-quinn-udp = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+
+netwatch = { git = "https://github.com/n0-computer/net-tools", branch = "main" }
