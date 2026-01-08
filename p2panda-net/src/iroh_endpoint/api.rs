@@ -9,30 +9,23 @@ use tokio::sync::RwLock;
 
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Builder;
-use crate::iroh_endpoint::actors::{ConnectError, ToIrohEndpoint};
+use crate::iroh_endpoint::actors::{ConnectError, IrohEndpointArgs, ToIrohEndpoint};
 use crate::{NetworkId, NodeId};
 
 #[derive(Clone)]
 pub struct Endpoint {
-    network_id: NetworkId,
-    my_node_id: NodeId,
-    inner: Arc<RwLock<Inner>>,
+    pub(super) args: IrohEndpointArgs,
+    pub(super) inner: Arc<RwLock<Inner>>,
 }
 
-#[derive(Clone)]
-struct Inner {
-    actor_ref: ActorRef<ToIrohEndpoint>,
+pub(super) struct Inner {
+    pub(super) actor_ref: Option<ActorRef<ToIrohEndpoint>>,
 }
 
 impl Endpoint {
-    pub(crate) fn new(
-        network_id: NetworkId,
-        my_node_id: NodeId,
-        actor_ref: ActorRef<ToIrohEndpoint>,
-    ) -> Self {
+    pub(crate) fn new(actor_ref: Option<ActorRef<ToIrohEndpoint>>, args: IrohEndpointArgs) -> Self {
         Self {
-            network_id,
-            my_node_id,
+            args,
             inner: Arc::new(RwLock::new(Inner { actor_ref })),
         }
     }
@@ -44,16 +37,20 @@ impl Endpoint {
     /// Return the internal iroh endpoint instance.
     pub async fn endpoint(&self) -> Result<iroh::Endpoint, EndpointError> {
         let inner = self.inner.read().await;
-        let result = call!(inner.actor_ref, ToIrohEndpoint::Endpoint).map_err(Box::new)?;
+        let result = call!(
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
+            ToIrohEndpoint::Endpoint
+        )
+        .map_err(Box::new)?;
         Ok(result)
     }
 
     pub fn network_id(&self) -> NetworkId {
-        self.network_id
+        self.args.0
     }
 
     pub fn node_id(&self) -> NodeId {
-        self.my_node_id
+        self.args.1.public_key()
     }
 
     /// Register protocol handler for a given ALPN (protocol identifier).
@@ -65,7 +62,7 @@ impl Endpoint {
         let protocol_id = protocol_id.as_ref().to_vec();
         let inner = self.inner.read().await;
         cast!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToIrohEndpoint::RegisterProtocol(protocol_id, Box::new(protocol_handler))
         )
         .map_err(Box::new)?;
@@ -85,7 +82,7 @@ impl Endpoint {
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToIrohEndpoint::Connect,
             node_id,
             protocol_id.as_ref().to_vec(),
@@ -103,7 +100,7 @@ impl Endpoint {
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
         let inner = self.inner.read().await;
         let result = call!(
-            inner.actor_ref,
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
             ToIrohEndpoint::Connect,
             node_id,
             protocol_id.as_ref().to_vec(),
@@ -120,6 +117,11 @@ pub enum EndpointError {
     #[error(transparent)]
     ActorSpawn(#[from] ractor::SpawnErr),
 
+    /// Spawning the internal actor as a child actor of a supervisor failed.
+    #[cfg(feature = "supervisor")]
+    #[error(transparent)]
+    ActorLinkedSpawn(#[from] crate::supervisor::SupervisorError),
+
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
     ActorRpc(#[from] Box<ractor::RactorErr<ToIrohEndpoint>>),
@@ -130,6 +132,8 @@ pub enum EndpointError {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        self.actor_ref.stop(None);
+        if let Some(actor_ref) = self.actor_ref.take() {
+            actor_ref.stop(None);
+        }
     }
 }

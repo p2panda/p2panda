@@ -5,6 +5,8 @@ mod api;
 mod builder;
 mod config;
 mod discovery;
+#[cfg(feature = "supervisor")]
+mod supervisor;
 #[cfg(test)]
 mod tests;
 pub(crate) mod user_data;

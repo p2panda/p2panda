@@ -93,6 +93,8 @@ pub struct IrohState {
     worker_pool: ThreadLocalActorSpawner,
 }
 
+pub type IrohEndpointArgs = (NetworkId, PrivateKey, IrohConfig, AddressBook);
+
 #[derive(Default)]
 pub struct IrohEndpoint;
 
@@ -101,7 +103,7 @@ impl ThreadLocalActor for IrohEndpoint {
 
     type Msg = ToIrohEndpoint;
 
-    type Arguments = (NetworkId, PrivateKey, IrohConfig, AddressBook);
+    type Arguments = IrohEndpointArgs;
 
     async fn pre_start(
         &self,

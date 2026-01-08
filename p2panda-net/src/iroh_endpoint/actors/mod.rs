@@ -3,7 +3,7 @@
 mod connection;
 mod endpoint;
 
-pub use endpoint::{ConnectError, IrohEndpoint, ToIrohEndpoint};
+pub use endpoint::{ConnectError, IrohEndpoint, IrohEndpointArgs, ToIrohEndpoint};
 
 /// Returns true if endpoint is globally reachable.
 pub(crate) fn is_globally_reachable_endpoint(addr: iroh::EndpointAddr) -> bool {

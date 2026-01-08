@@ -41,8 +41,7 @@ impl Builder {
     pub(crate) fn build_args(self) -> DiscoveryManagerArgs {
         let config = self.config.unwrap_or_default();
         let rng = self.rng.unwrap_or(ChaCha20Rng::from_os_rng());
-        let args = (config, rng, self.address_book, self.endpoint);
-        args
+        (config, rng, self.address_book, self.endpoint)
     }
 
     pub async fn spawn(self) -> Result<Discovery, DiscoveryError> {
