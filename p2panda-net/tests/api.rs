@@ -19,14 +19,12 @@ async fn modular_api() {
         .await
         .unwrap();
 
-    // TODO: Should this rather be a "resolver" etc.? Discovery is a confusing term.
     let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
         .mode(MdnsDiscoveryMode::Active)
         .spawn()
         .await
         .unwrap();
 
-    // TODO: Should this be ConfidentialDiscovery or TopicDiscovery etc.?
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()
         .await
