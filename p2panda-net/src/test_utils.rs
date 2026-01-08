@@ -395,7 +395,7 @@ impl TestTopicMap {
         logs: HashMap<PublicKey, Vec<TestLogId>>,
     ) -> Option<HashMap<PublicKey, Vec<TestLogId>>> {
         let mut map = self.0.write().await;
-        map.insert(topic.clone(), logs)
+        map.insert(*topic, logs)
     }
 }
 
