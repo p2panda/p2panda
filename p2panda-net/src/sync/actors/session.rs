@@ -15,8 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::SYNC_PROTOCOL_ID;
-use crate::{NodeId, TopicId};
+use crate::{NodeId, ProtocolId, TopicId};
 
 pub type SyncSessionId = u64;
 
@@ -25,6 +24,7 @@ pub enum SyncSessionMessage<P> {
         node_id: NodeId,
         topic: TopicId,
         protocol: P,
+        protocol_id: ProtocolId,
     },
     Accept {
         connection: Connection,
@@ -75,8 +75,9 @@ where
                 node_id,
                 topic,
                 protocol,
+                protocol_id,
             } => {
-                let connection = state.0.connect(node_id, SYNC_PROTOCOL_ID).await?;
+                let connection = state.0.connect(node_id, protocol_id).await?;
 
                 // First run the TopicHandshake protocol.
                 let (tx, rx) = connection.open_bi().await?;

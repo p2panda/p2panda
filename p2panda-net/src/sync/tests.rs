@@ -20,10 +20,12 @@ use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::{SyncManager, ToSyncManager};
-use crate::log_sync::api::LogSyncHandle;
+use crate::sync::actors::{SyncManager, ToSyncManager};
+use crate::sync::handle::SyncHandle;
 use crate::test_utils::{ApplicationArguments, setup_logging, test_args_from_seed};
 use crate::{NodeId, TopicId};
+
+const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 
 struct FailingNode {
     args: ApplicationArguments,
@@ -65,7 +67,13 @@ impl FailingNode {
         let (sync_ref, _) =
             SyncManager::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
                 None,
-                (sync_config, address_book, endpoint, gossip),
+                (
+                    TEST_PROTOCOL_ID.to_vec(),
+                    sync_config,
+                    address_book,
+                    endpoint,
+                    gossip,
+                ),
                 thread_pool,
             )
             .await
@@ -244,17 +252,17 @@ async fn failed_sync_session_retry() {
         // Alice and Bob create stream for the same topic.
         let alice_handle = {
             let manager_ref = call!(alice.sync_ref, ToSyncManager::Create, topic, true).unwrap();
-            LogSyncHandle::new(topic, alice.sync_ref.clone(), manager_ref)
+            SyncHandle::new(topic, alice.sync_ref.clone(), manager_ref)
         };
         let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
         let _bob_handle = {
             let manager_ref = call!(bob.sync_ref, ToSyncManager::Create, topic, true).unwrap();
-            LogSyncHandle::new(topic, bob.sync_ref.clone(), manager_ref)
+            SyncHandle::new(topic, bob.sync_ref.clone(), manager_ref)
         };
 
         // Alice manually initiates a sync session with Bob.
-        alice_handle.initiate_session(bob.node_id()).await;
+        alice_handle.initiate_session(bob.node_id());
 
         let event = alice_subscription.next().await.unwrap();
         let expected_remote = bob.node_id();

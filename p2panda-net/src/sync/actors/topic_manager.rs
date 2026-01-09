@@ -17,10 +17,10 @@ use tokio::time::Duration;
 use tracing::{debug, warn};
 
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::poller::{SyncPoller, ToSyncPoller};
-use crate::log_sync::actors::session::{SyncSession, SyncSessionId, SyncSessionMessage};
+use crate::sync::actors::poller::{SyncPoller, ToSyncPoller};
+use crate::sync::actors::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::utils::ShortFormat;
-use crate::{NodeId, TopicId};
+use crate::{NodeId, ProtocolId, TopicId};
 
 const RETRY_RATE: Duration = Duration::from_secs(5);
 
@@ -70,6 +70,7 @@ where
 {
     topic: TopicId,
     manager: M,
+    protocol_id: ProtocolId,
     session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
     active_sync_set: HashSet<NodeId>,
@@ -102,6 +103,7 @@ where
     type Msg = ToTopicManager<M::Message>;
 
     type Arguments = (
+        ProtocolId,
         TopicId,
         M::Config,
         broadcast::Sender<FromSync<M::Event>>,
@@ -113,7 +115,7 @@ where
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (topic, config, sender, endpoint) = args;
+        let (protocol_id, topic, config, sender, endpoint) = args;
         let pool = ThreadLocalActorSpawner::new();
 
         let mut manager = M::from_config(config);
@@ -128,6 +130,7 @@ where
         Ok(TopicManagerState {
             topic,
             manager,
+            protocol_id,
             session_topic_map: SessionTopicMap::default(),
             node_session_map: HashMap::new(),
             active_sync_set: HashSet::new(),
@@ -193,6 +196,7 @@ where
                     node_id,
                     topic,
                     protocol,
+                    protocol_id: state.protocol_id.clone(),
                 })?;
             }
             ToTopicManager::Retry { node_id, live_mode } => {
@@ -252,6 +256,7 @@ where
                     node_id,
                     topic: state.topic,
                     protocol,
+                    protocol_id: state.protocol_id.clone(),
                 })?;
             }
             ToTopicManager::Accept {

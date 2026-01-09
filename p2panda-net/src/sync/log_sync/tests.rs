@@ -48,7 +48,7 @@ async fn e2e_log_sync() {
     let mut bob_subscription = bob_handle.subscribe().await.unwrap();
 
     // Alice manually initiates a sync session with Bob.
-    alice_handle.initiate_session(bob.node_id()).await;
+    alice_handle.initiate_session(bob.node_id());
 
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
@@ -274,7 +274,7 @@ async fn e2e_three_party_sync() {
     let mut bob_subscription = bob_handle.subscribe().await.unwrap();
 
     // Alice initiates sync.
-    alice_handle.initiate_session(bob.node_id()).await;
+    alice_handle.initiate_session(bob.node_id());
 
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
@@ -409,7 +409,7 @@ async fn e2e_three_party_sync() {
     let mut carol_subscription = carol_handle.subscribe().await.unwrap();
 
     // Carol initiates sync with Alice.
-    carol_handle.initiate_session(alice.node_id()).await;
+    carol_handle.initiate_session(alice.node_id());
 
     let event = carol_subscription.next().await.unwrap();
     assert_matches!(
@@ -508,7 +508,7 @@ async fn topic_log_sync_failure_and_retry() {
     let mut bob_subscription = bob_handle.subscribe().await.unwrap();
 
     // Bob manually initiates a sync session with Alice.
-    bob_handle.initiate_session(alice.node_id()).await;
+    bob_handle.initiate_session(alice.node_id());
 
     // Alice and Bob should receive all six events (SyncStarted, SyncStatus 2x, Operation,
     // SyncFinished and LiveModeStarted).

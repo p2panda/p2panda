@@ -25,9 +25,9 @@ use crate::address_book::AddressBook;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::{Endpoint, to_public_key};
-use crate::log_sync::actors::{SYNC_PROTOCOL_ID, ToTopicManager, TopicManager};
+use crate::sync::actors::{ToTopicManager, TopicManager};
 use crate::utils::ShortFormat;
-use crate::{NodeId, TopicId};
+use crate::{NodeId, ProtocolId, TopicId};
 
 type IsLiveModeEnabled = bool;
 
@@ -100,6 +100,7 @@ pub struct SyncManagerState<M>
 where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
+    protocol_id: ProtocolId,
     address_book: AddressBook,
     endpoint: Endpoint,
     gossip: Gossip,
@@ -219,14 +220,14 @@ where
 
     type Msg = ToSyncManager<M>;
 
-    type Arguments = (M::Config, AddressBook, Endpoint, Gossip);
+    type Arguments = (ProtocolId, M::Config, AddressBook, Endpoint, Gossip);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (sync_config, address_book, endpoint, gossip) = args;
+        let (protocol_id, sync_config, address_book, endpoint, gossip) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -239,6 +240,7 @@ where
         let _ = myself.cast(ToSyncManager::RegisterProtocol);
 
         Ok(SyncManagerState {
+            protocol_id,
             address_book,
             endpoint,
             gossip,
@@ -275,7 +277,7 @@ where
                 state
                     .endpoint
                     .accept(
-                        SYNC_PROTOCOL_ID,
+                        state.protocol_id.clone(),
                         SyncProtocolHandler {
                             stream_ref: myself.clone(),
                         },
@@ -308,6 +310,7 @@ where
                 let (sync_manager_ref, _) = TopicManager::<M>::spawn_linked(
                     None,
                     (
+                        state.protocol_id.clone(),
                         topic,
                         state.sync_config.clone(),
                         from_sync_tx,

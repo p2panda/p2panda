@@ -4,7 +4,7 @@
 pub mod address_book;
 pub mod addrs;
 pub mod cbor;
-#[cfg(feature = "confidential_discovery")]
+#[cfg(feature = "discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]
 pub mod gossip;
@@ -12,10 +12,10 @@ pub mod gossip;
 pub mod iroh_endpoint;
 #[cfg(feature = "iroh_mdns")]
 pub mod iroh_mdns;
-#[cfg(feature = "log_sync")]
-pub mod log_sync;
 #[cfg(feature = "supervisor")]
 pub mod supervisor;
+#[cfg(feature = "sync")]
+pub mod sync;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod timestamp;
@@ -24,7 +24,7 @@ pub mod watchers;
 
 #[cfg(feature = "address_book")]
 pub use address_book::AddressBook;
-#[cfg(feature = "confidential_discovery")]
+#[cfg(feature = "discovery")]
 pub use discovery::Discovery;
 #[cfg(feature = "gossip")]
 pub use gossip::Gossip;
@@ -32,10 +32,10 @@ pub use gossip::Gossip;
 pub use iroh_endpoint::Endpoint;
 #[cfg(feature = "iroh_mdns")]
 pub use iroh_mdns::MdnsDiscovery;
-#[cfg(feature = "log_sync")]
-pub use log_sync::LogSync;
 #[cfg(feature = "supervisor")]
 pub use supervisor::Supervisor;
+#[cfg(feature = "sync")]
+pub use sync::LogSync;
 
 pub type NodeId = p2panda_core::PublicKey;
 

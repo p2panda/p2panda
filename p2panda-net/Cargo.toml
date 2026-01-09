@@ -11,9 +11,9 @@ default = [
   "address_book",
   "iroh_endpoint",
   "iroh_mdns",
-  "confidential_discovery",
+  "discovery",
   "gossip",
-  "log_sync",
+  "sync",
 ]
 address_book = [
   "dep:p2panda-store",
@@ -27,7 +27,7 @@ iroh_mdns = [
   "iroh_endpoint",
   "iroh/discovery-local-network",
 ]
-confidential_discovery = [
+discovery = [
   "address_book",
   "iroh_endpoint",
   "dep:p2panda-discovery",
@@ -37,7 +37,7 @@ gossip = [
   "iroh_endpoint",
   "dep:iroh-gossip",
 ]
-log_sync = [
+sync = [
   "address_book",
   "iroh_endpoint",
   "gossip",

@@ -13,8 +13,8 @@ use crate::TopicId;
 use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::log_sync::actors::SyncManager;
-use crate::log_sync::{LogSync, LogSyncError};
+use crate::sync::actors::SyncManager;
+use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
 
 pub struct Builder<S, L, E, TM>
 where
@@ -66,7 +66,13 @@ where
                 topic_map: self.topic_map,
             };
 
-            let args = (config, self.address_book, self.endpoint, self.gossip);
+            let args = (
+                LOG_SYNC_PROTOCOL_ID.to_vec(),
+                config,
+                self.address_book,
+                self.endpoint,
+                self.gossip,
+            );
 
             SyncManager::<TopicSyncManager<TopicId, S, TM, L, E>>::spawn(None, args, thread_pool)
                 .await?
