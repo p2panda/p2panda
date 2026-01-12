@@ -185,8 +185,8 @@ impl ThreadLocalActor for IrohEndpoint {
                     .discovery(address_book_discovery)
                     .secret_key(from_private_key(state.args.private_key.clone()))
                     .transport_config(transport_config)
-                    .bind_addr_v4(socket_address_v4)
-                    .bind_addr_v6(socket_address_v6)
+                    .bind_addr(socket_address_v4)?
+                    .bind_addr(socket_address_v6)?
                     .bind()
                     .await?;
 

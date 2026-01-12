@@ -17,10 +17,10 @@ members = [
 
 # TODO: https://github.com/n0-computer/iroh/issues/3241
 [patch.crates-io]
-iroh = { git = "https://github.com/n0-computer/iroh", branch = "main" }
-iroh-base = { git = "https://github.com/n0-computer/iroh", branch = "main" }
-iroh-quinn = { git = "https://github.com/n0-computer/quinn", branch = "main" }
-iroh-quinn-proto = { git = "https://github.com/n0-computer/quinn", branch = "main" }
-iroh-quinn-udp = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+iroh = { git = "https://github.com/n0-computer/iroh", rev = "e0fcf7dba99a96566523756be08508390965cda3" }
+iroh-base = { git = "https://github.com/n0-computer/iroh", rev = "e0fcf7dba99a96566523756be08508390965cda3" }
+iroh-quinn = { git = "https://github.com/n0-computer/quinn", rev = "43a7a7c089088472298380d97497043a2967dee3" }
+iroh-quinn-proto = { git = "https://github.com/n0-computer/quinn", rev = "43a7a7c089088472298380d97497043a2967dee3" }
+iroh-quinn-udp = { git = "https://github.com/n0-computer/quinn", rev = "43a7a7c089088472298380d97497043a2967dee3" }
 
-netwatch = { git = "https://github.com/n0-computer/net-tools", branch = "main" }
+netwatch = { git = "https://github.com/n0-computer/net-tools", rev = "9af33c3ae16ae96e7b1b56289e783e3329b408dc" }
