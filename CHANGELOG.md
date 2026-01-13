@@ -12,9 +12,9 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Introduce `Conditions` super-trait in `p2panda-auth` [#780](https://github.com/p2panda/p2panda/pull/780)
-- Add `serde` derives to all state structs in `p2panda-auth` [809](https://github.com/p2panda/p2panda/pull/809) 
+- Add `serde` derives to all state structs in `p2panda-auth` [#809](https://github.com/p2panda/p2panda/pull/809) 
 - `p2panda-spaces`: data encryption for groups and multiple devices [#836](https://github.com/p2panda/p2panda/pull/836)
-- Add `serde` derives to the `Event` types in `p2panda-spaces` [809](https://github.com/p2panda/p2panda/pull/868) 
+- Added `Serialize` and `Deserialize` to `p2panda-spaces::Event` [#868](https://github.com/p2panda/p2panda/pull/868) 
 
 ### Changed
 
