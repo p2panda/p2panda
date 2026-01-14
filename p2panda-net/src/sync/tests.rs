@@ -1,333 +1,298 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::time::Duration;
 
-use futures_util::FutureExt;
-use p2panda_core::PrivateKey;
-use p2panda_sync::SyncError;
-use p2panda_sync::test_protocols::{FailingProtocol, SyncTestTopic};
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use futures_channel::mpsc::{self, SendError};
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::{FromSync, ToSync};
+use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+use ractor::{ActorRef, call};
+use rand::random;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
-use crate::engine::ToEngineActor;
-use crate::sync;
+use crate::address_book::AddressBook;
+use crate::addrs::NodeInfo;
+use crate::gossip::Gossip;
+use crate::iroh_endpoint::Endpoint;
+use crate::sync::actors::{SyncManager, ToSyncManager};
+use crate::sync::handle::SyncHandle;
+use crate::test_utils::{ApplicationArguments, setup_logging, test_args_from_seed};
+use crate::{NodeId, TopicId};
 
-/// Helper method to establish a sync session between the initiator and acceptor.
-async fn run_sync_impl(
-    protocol: FailingProtocol,
-) -> (
-    mpsc::Receiver<ToEngineActor<SyncTestTopic>>,
-    mpsc::Receiver<ToEngineActor<SyncTestTopic>>,
-    JoinHandle<Result<(), SyncError>>,
-    JoinHandle<Result<(), SyncError>>,
-) {
-    let topic = SyncTestTopic::new("run test protocol impl");
+const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 
-    let initiator_node_id = PrivateKey::new().public_key();
-    let acceptor_node_id = PrivateKey::new().public_key();
+struct FailingNode {
+    args: ApplicationArguments,
+    sync_ref: ActorRef<ToSyncManager<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>>,
+}
 
-    let sync_protocol = Arc::new(protocol);
+impl FailingNode {
+    pub async fn spawn(
+        seed: [u8; 32],
+        node_infos: Vec<NodeInfo>,
+        sync_config: FailingSyncConfig,
+    ) -> Self {
+        let (args, address_book_store) = test_args_from_seed(seed);
 
-    // Duplex streams which simulate both ends of a bi-directional network connection.
-    let (initiator_stream, acceptor_stream) = tokio::io::duplex(64 * 1024);
-    let (initiator_read, initiator_write) = tokio::io::split(initiator_stream);
-    let (acceptor_read, acceptor_write) = tokio::io::split(acceptor_stream);
+        let address_book = AddressBook::builder()
+            .store(address_book_store)
+            .spawn()
+            .await
+            .unwrap();
 
-    // Channel for sending messages out of a running sync session.
-    let (initiator_tx, initiator_rx) = mpsc::channel(128);
-    let (acceptor_tx, acceptor_rx) = mpsc::channel(128);
+        // Pre-populate the address book with known addresses.
+        for info in node_infos {
+            address_book.insert_node_info(info).await.unwrap();
+        }
 
-    let sync_protocol_clone = sync_protocol.clone();
+        let endpoint = Endpoint::builder(address_book.clone())
+            .config(args.iroh_config.clone())
+            .private_key(args.private_key.clone())
+            .spawn()
+            .await
+            .unwrap();
 
-    let initiator_handle = {
-        let topic = topic.clone();
+        let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
+            .spawn()
+            .await
+            .unwrap();
 
-        tokio::spawn(async move {
-            sync::initiate_sync(
-                &mut initiator_write.compat_write(),
-                &mut initiator_read.compat(),
-                acceptor_node_id,
-                topic.clone(),
-                sync_protocol,
-                initiator_tx,
+        let thread_pool = ThreadLocalActorSpawner::new();
+        let (sync_ref, _) =
+            SyncManager::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
+                None,
+                (
+                    TEST_PROTOCOL_ID.to_vec(),
+                    sync_config,
+                    address_book,
+                    endpoint,
+                    gossip,
+                ),
+                thread_pool,
             )
             .await
-        })
-    };
+            .unwrap();
 
-    let acceptor_handle = {
-        tokio::spawn(async move {
-            sync::accept_sync(
-                &mut acceptor_write.compat_write(),
-                &mut acceptor_read.compat(),
-                initiator_node_id,
-                sync_protocol_clone,
-                acceptor_tx,
-            )
-            .await
-        })
-    };
+        Self { args, sync_ref }
+    }
 
-    (initiator_rx, acceptor_rx, initiator_handle, acceptor_handle)
+    pub fn node_id(&self) -> NodeId {
+        self.args.public_key
+    }
+
+    pub fn shutdown(&self) {
+        self.sync_ref.stop(None);
+    }
+}
+
+#[derive(Debug, Error)]
+enum SyncError {
+    #[error("unexpected sync failure")]
+    UnexpectedFailure,
+}
+
+#[derive(Debug, Clone)]
+enum SyncBehaviour {
+    Panic,
+    Error,
+    Wait,
+}
+
+#[derive(Debug)]
+struct FailingSyncProtocol {
+    behaviour: SyncBehaviour,
+}
+
+impl Protocol for FailingSyncProtocol {
+    type Output = ();
+    type Error = SyncError;
+    type Message = ();
+
+    async fn run(
+        self,
+        sink: &mut (impl Sink<Self::Message, Error = impl std::fmt::Debug> + Unpin),
+        stream: &mut (impl Stream<Item = Result<Self::Message, impl std::fmt::Debug>> + Unpin),
+    ) -> Result<Self::Output, Self::Error> {
+        // Send one message otherwise the accepting peer will not be able to accept the connection.
+        let _ = sink.send(()).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        match self.behaviour {
+            SyncBehaviour::Panic => panic!(),
+            SyncBehaviour::Error => return Err(SyncError::UnexpectedFailure),
+            SyncBehaviour::Wait => {
+                while let Some(_) = stream.next().await {}
+                return Err(SyncError::UnexpectedFailure);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FailingSyncConfig {
+    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
+    pub behaviour: SyncBehaviour,
+}
+
+impl FailingSyncConfig {
+    pub fn new(behaviour: SyncBehaviour) -> (Self, broadcast::Receiver<FromSync<DummySyncEvent>>) {
+        let (tx, rx) = broadcast::channel(128);
+        (
+            Self {
+                event_tx: tx,
+                behaviour,
+            },
+            rx,
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+#[allow(unused)]
+enum DummySyncEvent {
+    SessionCreated,
+    SyncStarted,
+    Received(DummySyncMessage),
+    SyncFinished,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum DummySyncMessage {
+    Data,
+    Close,
+}
+
+#[derive(Debug)]
+struct DummySyncManager<C, P> {
+    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
+    #[allow(unused)]
+    pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
+    pub config: C,
+    pub _marker: PhantomData<P>,
+}
+
+impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncConfig, FailingSyncProtocol> {
+    type Protocol = FailingSyncProtocol;
+    type Event = DummySyncEvent;
+    type Config = FailingSyncConfig;
+    type Message = ();
+    type Error = SendError;
+
+    fn from_config(config: Self::Config) -> Self {
+        let event_rx = config.event_tx.subscribe();
+        DummySyncManager {
+            event_tx: config.event_tx.clone(),
+            event_rx,
+            config,
+            _marker: PhantomData,
+        }
+    }
+
+    async fn session(
+        &mut self,
+        session_id: u64,
+        config: &p2panda_sync::SyncSessionConfig<TopicId>,
+    ) -> Self::Protocol {
+        self.event_tx
+            .send(FromSync {
+                session_id,
+                remote: config.remote,
+                event: DummySyncEvent::SessionCreated,
+            })
+            .unwrap();
+        FailingSyncProtocol {
+            behaviour: self.config.behaviour.clone(),
+        }
+    }
+
+    async fn session_handle(
+        &self,
+        _session_id: u64,
+    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>> {
+        // Just a dummy channel to satisfy the API in testing environment.
+        let (tx, _) = mpsc::channel::<ToSync<Self::Message>>(128);
+        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>;
+        Some(sink)
+    }
+
+    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
+        let stream = BroadcastStream::new(self.event_tx.subscribe())
+            .filter_map(|event| async { event.ok() });
+        Box::pin(stream)
+    }
 }
 
 #[tokio::test]
-async fn initiator_fails_critical() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::InitiatorFailsCritical).await;
+async fn failed_sync_session_retry() {
+    setup_logging();
 
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
+    let topic = [0; 32];
 
-    // Note: "SyncFailed" message is handled by manager for initiators.
-    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
+    for (alice_behavior, bob_behavior) in [
+        (SyncBehaviour::Panic, SyncBehaviour::Wait),
+        (SyncBehaviour::Wait, SyncBehaviour::Panic),
+        (SyncBehaviour::Error, SyncBehaviour::Wait),
+        (SyncBehaviour::Wait, SyncBehaviour::Error),
+        (SyncBehaviour::Error, SyncBehaviour::Error),
+    ] {
+        // Spawn nodes.
+        let (bob_sync_config, _bob_rx) = FailingSyncConfig::new(bob_behavior);
+        let mut bob = FailingNode::spawn(random(), vec![], bob_sync_config).await;
 
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
+        let (alice_sync_config, _alice_rx) = FailingSyncConfig::new(alice_behavior);
+        let alice =
+            FailingNode::spawn(random(), vec![bob.args.node_info()], alice_sync_config).await;
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
+        // Alice and Bob create stream for the same topic.
+        let alice_handle = {
+            let manager_ref = call!(alice.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+            SyncHandle::new(topic, alice.sync_ref.clone(), manager_ref)
+        };
+        let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncFailed { .. })
-    ));
+        let _bob_handle = {
+            let manager_ref = call!(bob.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+            SyncHandle::new(topic, bob.sync_ref.clone(), manager_ref)
+        };
 
-    // Expected handler results.
-    assert_eq!(
-        initiator_handle.await.unwrap(),
-        Err(SyncError::Critical(
-            "something really bad happened in the initiator".into(),
-        ))
-    );
-    assert_eq!(
-        acceptor_handle.await.unwrap(),
-        // The acceptor failed as well, but only with an "unexpected behaviour" error over the
-        // unexpectedly closed pipe.
-        Err(SyncError::UnexpectedBehaviour("broken pipe".into()))
-    );
-}
+        // Alice manually initiates a sync session with Bob.
+        alice_handle.initiate_session(bob.node_id());
 
-#[tokio::test]
-async fn initiator_fails_unexpected() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::InitiatorFailsUnexpected).await;
+        let event = alice_subscription.next().await.unwrap();
+        let expected_remote = bob.node_id();
+        assert!(
+            matches!(
+                event,
+                Ok(FromSync {
+                    session_id: 0,
+                    remote,
+                    event: DummySyncEvent::SessionCreated
+                }) if remote == expected_remote
+            ),
+            "{:#?}",
+            event
+        );
+        let event = alice_subscription.next().await.unwrap();
+        assert!(
+            matches!(
+                event,
+                Ok(FromSync {
+                    session_id: 1,
+                    remote,
+                    event: DummySyncEvent::SessionCreated
+                }) if remote == expected_remote
+            ),
+            "{:#?}",
+            event
+        );
 
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    // Note: "SyncFailed" message is handled by manager for initiators.
-    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
-
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncFailed { .. })
-    ));
-
-    // Expected handler results.
-    assert_eq!(
-        initiator_handle.await.unwrap(),
-        Err(SyncError::UnexpectedBehaviour("bang!".into(),))
-    );
-    assert_eq!(
-        acceptor_handle.await.unwrap(),
-        Err(SyncError::UnexpectedBehaviour("broken pipe".into()))
-    );
-}
-
-#[tokio::test]
-async fn initiator_sends_topic_twice() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::InitiatorSendsTopicTwice).await;
-
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
-
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncFailed { .. })
-    ));
-
-    assert_eq!(initiator_handle.await.unwrap(), Ok(()));
-    assert_eq!(
-        acceptor_handle.await.unwrap(),
-        // This is _not_ a critical error as the acceptor protocol implementation handled the
-        // protocol violation (sending topic twice) by itself.
-        Err(SyncError::UnexpectedBehaviour(
-            "received topic too often".into(),
-        ))
-    );
-}
-
-#[tokio::test]
-async fn acceptor_fails_critical() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::AcceptorFailsCritical).await;
-
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        // Initiator can end the session without any issues even when the acceptor fails.
-        // @TODO: Do we want to detect the closed connection from the remote peer?
-        Some(ToEngineActor::SyncDone { .. })
-    ));
-
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncFailed { .. })
-    ));
-
-    // Expected handler results.
-    assert_eq!(initiator_handle.await.unwrap(), Ok(()));
-    assert_eq!(
-        acceptor_handle.await.unwrap(),
-        Err(SyncError::Critical(
-            "something really bad happened in the acceptor".into(),
-        ))
-    );
-}
-
-#[tokio::test]
-async fn acceptor_sends_topic() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::AcceptorSendsTopic).await;
-
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    // Note: "SyncFailed" message is handled by manager for initiators.
-    assert!(rx_initiator.recv().now_or_never().unwrap().is_none());
-
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
-
-    // Expected handler results.
-    assert_eq!(
-        initiator_handle.await.unwrap(),
-        Err(SyncError::UnexpectedBehaviour(
-            "unexpected message received from acceptor".into(),
-        ))
-    );
-    assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
-}
-
-#[tokio::test]
-async fn run_sync_without_error() {
-    let (mut rx_initiator, mut rx_acceptor, initiator_handle, acceptor_handle) =
-        run_sync_impl(FailingProtocol::NoError).await;
-
-    // Expected initiator messages.
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_initiator.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
-
-    // Expected acceptor messages.
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncStart { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncHandshakeSuccess { .. })
-    ));
-
-    assert!(matches!(
-        rx_acceptor.recv().await,
-        Some(ToEngineActor::SyncDone { .. })
-    ));
-
-    // Expected handler results.
-    assert_eq!(initiator_handle.await.unwrap(), Ok(()));
-    assert_eq!(acceptor_handle.await.unwrap(), Ok(()));
+        alice.shutdown();
+        bob.shutdown();
+    }
 }
