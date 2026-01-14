@@ -164,8 +164,8 @@ where
 {
     let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
-    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
-    let mut remote_message_rx = remote_message_rx.map(|message| Ok::<_, ()>(message));
+    let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
+    let mut remote_message_rx = remote_message_rx.map(Ok::<_, ()>);
 
     let (local_result, remote_result) = join!(
         session_local.run(&mut local_message_tx, &mut remote_message_rx),
@@ -188,7 +188,7 @@ where
 {
     let (mut local_message_tx, remote_message_rx) = mpsc::channel(128);
     let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
-    let mut local_message_rx = local_message_rx.map(|message| Ok::<_, ()>(message));
+    let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
 
     for message in messages {
         remote_message_tx.send(message.to_owned()).await.unwrap();
@@ -209,7 +209,7 @@ where
     while let Some(Some(item)) = stream.next().now_or_never() {
         items.push(item);
     }
-    return items;
+    items
 }
 
 /// Log id extension.
@@ -287,6 +287,12 @@ impl TestTopic {
 /// Test topic map.
 #[derive(Clone, Debug)]
 pub struct TestTopicMap(HashMap<TestTopic, Logs<u64>>);
+
+impl Default for TestTopicMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl TestTopicMap {
     pub fn new() -> Self {
