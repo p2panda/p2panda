@@ -166,7 +166,7 @@ pub enum CborCodecError {
     BrokenPipe(String),
 }
 
-/// Converts critical I/O error (which occurs during codec stream handling) into [`SyncError`].
+/// Converts critical I/O error (which occurs during codec stream handling) into [`CborCodecError`].
 ///
 /// This is usually a critical system failure indicating an implementation bug or lacking resources
 /// on the user's machine.
