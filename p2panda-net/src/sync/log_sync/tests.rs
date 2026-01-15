@@ -571,3 +571,36 @@ async fn topic_log_sync_failure_and_retry() {
         })
     );
 }
+
+#[tokio::test]
+async fn unsubscribe_from_gossip_after_drop() {
+    setup_logging();
+
+    let sync_topic = [0; 32];
+
+    let alice = TestNode::spawn([10; 32]).await;
+    let alice_handle = alice.log_sync.stream(sync_topic, true).await.unwrap();
+
+    let mut watcher = alice
+        .address_book
+        .watch_node_topics(alice.node_id(), false)
+        .await
+        .unwrap();
+
+    // Alice should be subscribed to the topic.
+    while let Some(event) = watcher.recv().await {
+        // Assert that the original sync topic is _not_ used but the derived gossip topic instead.
+        if !event.value.contains(&sync_topic) && event.value.len() == 1 {
+            break;
+        }
+    }
+
+    // Alice should be unsubscribed from the topic after dropping the sync handle.
+    drop(alice_handle);
+
+    while let Some(event) = watcher.recv().await {
+        if event.value.is_empty() {
+            break;
+        }
+    }
+}

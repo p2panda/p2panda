@@ -30,7 +30,7 @@ async fn modular_api() {
         .await
         .unwrap();
 
-    let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
+    let gossip = Gossip::builder(address_book, endpoint.clone())
         .spawn()
         .await
         .unwrap();
@@ -48,7 +48,7 @@ async fn modular_api() {
     let store = TestMemoryStore::new();
     let topic_map = TestTopicMap::new();
 
-    let sync = LogSync::builder(store, topic_map, address_book, endpoint, gossip)
+    let sync = LogSync::builder(store, topic_map, endpoint, gossip)
         .spawn()
         .await
         .unwrap();

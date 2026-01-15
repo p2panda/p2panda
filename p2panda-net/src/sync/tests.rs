@@ -67,13 +67,7 @@ impl FailingNode {
         let (sync_ref, _) =
             SyncManager::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
                 None,
-                (
-                    TEST_PROTOCOL_ID.to_vec(),
-                    sync_config,
-                    address_book,
-                    endpoint,
-                    gossip,
-                ),
+                (TEST_PROTOCOL_ID.to_vec(), sync_config, endpoint, gossip),
                 thread_pool,
             )
             .await
