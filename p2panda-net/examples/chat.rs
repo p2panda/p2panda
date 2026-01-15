@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
-use p2panda_core::PrivateKey;
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
@@ -23,7 +23,7 @@ use p2panda_net::{
 use p2panda_store::MemoryStore;
 use p2panda_sync::Logs;
 use p2panda_sync::traits::TopicLogMap;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -202,4 +202,51 @@ async fn main() -> Result<()> {
     tokio::signal::ctrl_c().await?;
 
     Ok(())
+}
+
+fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
+    let mut buffer = String::new();
+    let stdin = std::io::stdin();
+    loop {
+        stdin.read_line(&mut buffer)?;
+        line_tx.blocking_send(buffer.clone())?;
+        buffer.clear();
+    }
+}
+
+fn create_operation(
+    private_key: &PrivateKey,
+    body: &Body,
+    seq_num: u64,
+    backlink: Option<Hash>,
+) -> (Hash, Header, Vec<u8>, Operation) {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let mut header = Header {
+        version: 1,
+        public_key: private_key.public_key(),
+        signature: None,
+        payload_size: body.size(),
+        payload_hash: Some(body.hash()),
+        timestamp,
+        seq_num,
+        backlink,
+        previous: vec![],
+        extensions: (),
+    };
+
+    header.sign(private_key);
+    let header_bytes = header.to_bytes();
+    let hash = header.hash();
+
+    let operation = Operation {
+        hash,
+        header: header.clone(),
+        body: Some(body.to_owned()),
+    };
+
+    (hash, header, header_bytes, operation)
 }
