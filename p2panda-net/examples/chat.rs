@@ -20,7 +20,7 @@ use p2panda_net::utils::ShortFormat;
 use p2panda_net::{
     AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
 };
-use p2panda_store::MemoryStore;
+use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::Logs;
 use p2panda_sync::traits::TopicLogMap;
 use tokio::sync::{RwLock, mpsc};
@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
     println!("relay url: {}", RELAY_URL);
 
     // Set up sync for p2panda operations.
-    let store = ChatStore::new();
+    let mut store = ChatStore::new();
 
     let topic_map = ChatTopicMap::default();
     topic_map.insert(public_key, LOG_ID).await;
@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
     };
 
     let endpoint = Endpoint::builder(address_book.clone())
-        .private_key(private_key)
+        .private_key(private_key.clone())
         .network_id(NETWORK_ID)
         .config(endpoint_config)
         .spawn()
@@ -190,13 +190,36 @@ async fn main() -> Result<()> {
         }
     });
 
-    let sync = LogSync::builder(store, topic_map, address_book, endpoint, gossip)
+    let sync = LogSync::builder(store.clone(), topic_map, address_book, endpoint, gossip)
         .spawn()
         .await
         .unwrap();
 
     let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
     let _sync_rx = sync_tx.subscribe().await.unwrap();
+
+    // Listen for text input via the terminal.
+    let (line_tx, mut line_rx) = mpsc::channel(1);
+    std::thread::spawn(move || input_loop(line_tx));
+
+    let mut seq_num = 0;
+    let mut backlink = None;
+
+    // Sign and encode each line of text input and broadcast it on the chat topic.
+    while let Some(text) = line_rx.recv().await {
+        let body = Body::new(text.as_bytes());
+        let (hash, header, header_bytes, operation) =
+            create_operation(&private_key, &body, seq_num, backlink);
+        store
+            .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
+            .await
+            .unwrap();
+
+        sync_tx.publish(operation).await.unwrap();
+
+        seq_num += 1;
+        backlink = Some(hash);
+    }
 
     // Listen for `Ctrl+c` and shutdown the node.
     tokio::signal::ctrl_c().await?;
