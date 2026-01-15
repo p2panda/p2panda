@@ -8,8 +8,9 @@ use std::sync::Arc;
 use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_store::{LogStore, OperationStore};
-use p2panda_sync::traits::TopicLogMap;
-use p2panda_sync::{TopicSyncManager, TopicSyncManagerConfig};
+use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
+use p2panda_sync::protocols::Logs;
+use p2panda_sync::traits::TopicMap;
 use ractor::thread_local::ThreadLocalActorSpawner;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -227,7 +228,7 @@ impl TestNode {
             .await
             .unwrap();
 
-        let (operation_store, topic_map) = client.sync_config();
+        let (operation_store, topic_map) = client.sync_args();
 
         let log_sync =
             LogSync::builder(operation_store, topic_map, endpoint.clone(), gossip.clone())
@@ -266,7 +267,7 @@ pub type TestLogId = u64;
 
 pub type TestMemoryStore = p2panda_store::MemoryStore<TestLogId, TestExtensions>;
 
-pub type TestSyncConfig = TopicSyncManagerConfig<TestMemoryStore, TestTopicMap>;
+pub type TestSyncConfig = TopicSyncManagerArgs<TestMemoryStore, TestTopicMap>;
 
 pub type TestTopicSyncManager =
     TopicSyncManager<TopicId, TestMemoryStore, TestTopicMap, TestLogId, TestExtensions>;
@@ -338,7 +339,7 @@ impl TestClient {
         self.topic_map.insert(topic, logs).await;
     }
 
-    pub fn sync_config(&self) -> (TestMemoryStore, TestTopicMap) {
+    pub fn sync_args(&self) -> (TestMemoryStore, TestTopicMap) {
         (self.store.clone(), self.topic_map.clone())
     }
 }
@@ -375,7 +376,7 @@ pub fn create_operation(
 /// Test topic map.
 #[derive(Clone, Debug)]
 #[allow(clippy::type_complexity)]
-pub struct TestTopicMap(Arc<RwLock<HashMap<TopicId, HashMap<PublicKey, Vec<TestLogId>>>>>);
+pub struct TestTopicMap(Arc<RwLock<HashMap<TopicId, Logs<TestLogId>>>>);
 
 impl TestTopicMap {
     #[allow(clippy::new_without_default)]
@@ -386,20 +387,17 @@ impl TestTopicMap {
     pub async fn insert(
         &mut self,
         topic: &TopicId,
-        logs: HashMap<PublicKey, Vec<TestLogId>>,
-    ) -> Option<HashMap<PublicKey, Vec<TestLogId>>> {
+        logs: Logs<TestLogId>,
+    ) -> Option<Logs<TestLogId>> {
         let mut map = self.0.write().await;
         map.insert(*topic, logs)
     }
 }
 
-impl TopicLogMap<TopicId, TestLogId> for TestTopicMap {
+impl TopicMap<TopicId, Logs<TestLogId>> for TestTopicMap {
     type Error = Infallible;
 
-    async fn get(
-        &self,
-        topic: &TopicId,
-    ) -> Result<HashMap<PublicKey, Vec<TestLogId>>, Self::Error> {
+    async fn get(&self, topic: &TopicId) -> Result<Logs<TestLogId>, Self::Error> {
         let map = self.0.read().await;
         Ok(map.get(topic).cloned().unwrap_or_default())
     }

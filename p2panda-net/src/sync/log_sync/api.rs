@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use p2panda_core::Extensions;
 use p2panda_store::{LogId, LogStore, OperationStore};
-use p2panda_sync::TopicSyncManager;
-use p2panda_sync::traits::{SyncManager as SyncManagerTrait, TopicLogMap};
+use p2panda_sync::manager::TopicSyncManager;
+use p2panda_sync::protocols::Logs;
+use p2panda_sync::traits::{Manager as SyncManagerTrait, TopicMap};
 use ractor::{ActorRef, call};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -44,7 +45,7 @@ where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicLogMap<TopicId, L> + Send + 'static,
+    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     inner: Arc<RwLock<Inner<S, L, E, TM>>>,
 }
@@ -54,7 +55,7 @@ where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicLogMap<TopicId, L> + Send + 'static,
+    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
     actor_ref: ActorRef<ToSyncManager<TopicSyncManager<TopicId, S, TM, L, E>>>,
@@ -65,7 +66,7 @@ where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicLogMap<TopicId, L> + Send + 'static,
+    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
     pub(crate) fn new(
@@ -111,7 +112,7 @@ where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
     L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicLogMap<TopicId, L> + Send + 'static,
+    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     fn drop(&mut self) {
         self.actor_ref.stop(None);

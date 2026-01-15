@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 
 use futures_channel::mpsc;
 use iroh::endpoint::{Connection, VarInt};
-use p2panda_sync::topic_handshake::{
+use p2panda_sync::protocols::{
     TopicHandshakeEvent, TopicHandshakeInitiator, TopicHandshakeMessage,
 };
 use p2panda_sync::traits::Protocol;

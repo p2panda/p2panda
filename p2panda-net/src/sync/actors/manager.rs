@@ -11,10 +11,8 @@ use std::sync::Arc;
 use iroh::endpoint::Connection;
 use iroh::protocol::ProtocolHandler;
 use p2panda_sync::FromSync;
-use p2panda_sync::topic_handshake::{
-    TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
-};
-use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage};
+use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::{RwLock, broadcast};
@@ -107,7 +105,7 @@ where
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
     gossip_topics: GossipTopicMap,
-    sync_config: M::Config,
+    sync_args: M::Args,
     thread_pool: ThreadLocalActorSpawner,
 }
 
@@ -229,14 +227,14 @@ where
 
     type Msg = ToSyncManager<M>;
 
-    type Arguments = (ProtocolId, M::Config, Endpoint, Gossip);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_config, endpoint, gossip) = args;
+        let (protocol_id, sync_args, endpoint, gossip) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -256,7 +254,7 @@ where
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
             sync_receivers,
-            sync_config,
+            sync_args,
             thread_pool,
         })
     }
@@ -327,7 +325,7 @@ where
                     (
                         state.protocol_id.clone(),
                         topic,
-                        state.sync_config.clone(),
+                        state.sync_args.clone(),
                         from_sync_tx,
                         state.endpoint.clone(),
                     ),

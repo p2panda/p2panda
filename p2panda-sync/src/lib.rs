@@ -1,29 +1,36 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
-
+//! Data-type agnostic interfaces for implementing sync protocols and managers which can be used
+//! stand-alone or as part of the local-first stack provided by
+//! [`p2panda-net`].
+//!
+//! Users can implement two-party sync protocols over a `Sink` / `Stream` pair with the `Protocol`
+//! trait and a system for instantiating and orchestrating concurrent sync sessions with the
+//! `Manager` trait.
+//!
+//! Concrete implementations for performing sync over p2panda append-only logs associated with a
+//! generic topic can be found in the `manager` and `protocols` modules.
+//!
+//! For most high-level users [`p2panda-net`]
+//! will be the entry point into local-first development with p2panda. Interfaces in this crate
+//! are intended for cases where users want to integrate their own base convergent data-type and
+//! sync protocols as a module in the
+//! [`p2panda-net`] stack.
+//!
+//! [`p2panda-net`]: https://docs.rs/p2panda-net/latest/p2panda_net/
 use p2panda_core::PublicKey;
 
 mod dedup;
-pub mod log_sync;
 pub mod manager;
-pub mod map;
-pub mod protocol;
+pub mod protocols;
+#[doc(hidden)]
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
-pub mod topic_handshake;
 pub mod traits;
 
-pub use manager::{TopicSyncManager, TopicSyncManagerConfig};
-pub use map::SessionTopicMap;
-pub use protocol::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage};
-
-/// A map of author logs.
-pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
-
-/// Configuration object for instantiated sync sessions.
+/// Configuration object for instantiating sync sessions.
 #[derive(Clone, Debug)]
-pub struct SyncSessionConfig<T> {
+pub struct SessionConfig<T> {
     pub topic: T,
     pub remote: PublicKey,
     pub live_mode: bool,
