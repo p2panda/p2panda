@@ -17,10 +17,12 @@ use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
-use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, MdnsDiscovery, NodeId, TopicId};
+use p2panda_net::{
+    AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
+};
 use p2panda_store::MemoryStore;
+use p2panda_sync::Logs;
 use p2panda_sync::traits::TopicLogMap;
-use p2panda_sync::{Logs, TopicSyncManager};
 use tokio::sync::RwLock;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -91,8 +93,6 @@ impl TopicLogMap<TopicId, LogId> for ChatTopicMap {
 
 type ChatStore = MemoryStore<LogId, ()>;
 
-type ChatTopicSyncManager = TopicSyncManager<TopicId, ChatStore, ChatTopicMap, LogId, ()>;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();
@@ -111,6 +111,12 @@ async fn main() -> Result<()> {
     println!("network id: {}", NETWORK_ID.fmt_short());
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
+
+    // Set up sync for p2panda operations.
+    let store = ChatStore::new();
+
+    let topic_map = ChatTopicMap::default();
+    topic_map.insert(public_key, LOG_ID).await;
 
     // Prepare address book.
     let address_book = AddressBook::builder().spawn().await.unwrap();
@@ -183,6 +189,14 @@ async fn main() -> Result<()> {
             tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
         }
     });
+
+    let sync = LogSync::builder(store, topic_map, address_book, endpoint, gossip)
+        .spawn()
+        .await
+        .unwrap();
+
+    let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
+    let _sync_rx = sync_tx.subscribe().await.unwrap();
 
     // Listen for `Ctrl+c` and shutdown the node.
     tokio::signal::ctrl_c().await?;
