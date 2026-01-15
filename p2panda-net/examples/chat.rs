@@ -21,8 +21,8 @@ use p2panda_net::{
     AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
 };
 use p2panda_store::{MemoryStore, OperationStore};
-use p2panda_sync::Logs;
 use p2panda_sync::traits::TopicLogMap;
+use p2panda_sync::{Logs, TopicLogSyncEvent};
 use tokio::sync::{RwLock, mpsc};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -190,13 +190,64 @@ async fn main() -> Result<()> {
         }
     });
 
-    let sync = LogSync::builder(store.clone(), topic_map, address_book, endpoint, gossip)
-        .spawn()
-        .await
-        .unwrap();
+    let sync = LogSync::builder(
+        store.clone(),
+        topic_map.clone(),
+        address_book,
+        endpoint,
+        gossip,
+    )
+    .spawn()
+    .await
+    .unwrap();
 
     let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
-    let _sync_rx = sync_tx.subscribe().await.unwrap();
+    let mut sync_rx = sync_tx.subscribe().await.unwrap();
+
+    // Receive messages from the sync stream.
+    {
+        let mut store = store.clone();
+
+        tokio::task::spawn(async move {
+            while let Some(Ok(from_sync)) = sync_rx.next().await {
+                match from_sync.event {
+                    TopicLogSyncEvent::SyncFinished(metrics) => {
+                        info!(
+                            "finished sync session with {}, bytes received = {}, bytes sent = {}",
+                            from_sync.remote.fmt_short(),
+                            metrics.total_bytes_remote.unwrap_or_default(),
+                            metrics.total_bytes_local.unwrap_or_default()
+                        );
+                    }
+                    TopicLogSyncEvent::Operation(operation) => {
+                        if store.has_operation(operation.hash).await.unwrap() {
+                            continue;
+                        }
+
+                        print!(
+                            "{}: {}",
+                            operation.header.public_key.fmt_short(),
+                            String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap()
+                        );
+
+                        store
+                            .insert_operation(
+                                operation.hash,
+                                &operation.header,
+                                operation.body.as_ref(),
+                                &operation.header.to_bytes(),
+                                &LOG_ID,
+                            )
+                            .await
+                            .unwrap();
+
+                        topic_map.insert(operation.header.public_key, LOG_ID).await;
+                    }
+                    _ => (),
+                }
+            }
+        });
+    }
 
     // Listen for text input via the terminal.
     let (line_tx, mut line_rx) = mpsc::channel(1);
