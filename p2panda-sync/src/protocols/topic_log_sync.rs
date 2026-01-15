@@ -17,11 +17,24 @@ use tracing::{debug, warn};
 
 use crate::ToSync;
 use crate::dedup::DEFAULT_BUFFER_CAPACITY;
-use crate::log_sync::{
-    LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncProtocol, StatusEvent,
+use crate::protocols::log_sync::{
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncStatus,
 };
 use crate::traits::{Protocol, TopicLogMap};
 
+/// Protocol for synchronizing logs which are associated with a generic T topic.
+///
+/// The mapping of T to a set of logs is handled on the application layer using an implementation
+/// of the `TopicLogMap` trait.
+///
+/// After sync is complete peers optionally enter "live-mode" where concurrently received and
+/// future messages will be sent directly to the application layer and forwarded to any
+/// concurrently running sync sessions. As we may receive messages from many sync sessions
+/// concurrently, messages forwarded to a sync session in live-mode are de-duplicated in order to
+/// avoid flooding the network with redundant data.
+///
+/// It is assumed that the T topic has been negotiated between parties prior to initiating this
+/// sync protocol.
 #[derive(Debug)]
 pub struct TopicLogSync<T, S, M, L, E> {
     pub store: S,
@@ -33,19 +46,6 @@ pub struct TopicLogSync<T, S, M, L, E> {
     pub _phantom: PhantomData<L>,
 }
 
-/// Protocol for synchronizing logs which are associated with a generic T topic.
-/// 
-/// The mapping of T to a set of logs is handled on the application layer using an implementation
-/// of the `TopicLogMap` trait.
-///
-/// After sync is complete peers optionally enter "live-mode" where concurrently received and
-/// future messages will be sent directly to the application layer and forwarded to any
-/// concurrently running sync sessions. As we may receive messages from many sync sessions
-/// concurrently, messages forwarded to a sync session in live-mode are de-duplicated in order to
-/// avoid flooding the network with redundant data.
-/// 
-/// It is assumed that the T topic has been negotiated between parties prior to initiating this
-/// sync protocol.
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
@@ -124,7 +124,7 @@ where
         // Run the log sync protocol passing in our local topic logs.
         let mut dedup = {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
-            let protocol = LogSyncProtocol::new_with_capacity(
+            let protocol = LogSync::new_with_capacity(
                 self.store.clone(),
                 logs,
                 self.event_tx.clone(),
@@ -141,12 +141,12 @@ where
                         .send(TopicLogSyncEvent::Failed {
                             error: err.to_string(),
                         })
-                        .map_err(|_| TopicSyncChannelError::EventSend)?;
+                        .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
                     log_sync_sink
                         .close()
                         .await
-                        .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+                        .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))?;
 
                     return Err(err.into());
                 }
@@ -156,11 +156,11 @@ where
         let Some(mut live_mode_rx) = self.live_mode_rx else {
             sink.close()
                 .await
-                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))?;
 
             self.event_tx
                 .send(TopicLogSyncEvent::Success)
-                .map_err(|_| TopicSyncChannelError::EventSend)?;
+                .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
             return Ok(());
         };
@@ -172,10 +172,10 @@ where
         // messages and also check they are part of our topic sub-set selection before forwarding
         // them on the event stream, or to the remote peer.
         let mut close_sent = false;
-        let mut metrics = LiveModeMetrics::default();
+        let mut metrics = TopicLogSyncLiveMetrics::default();
         self.event_tx
             .send(TopicLogSyncEvent::LiveModeStarted)
-            .map_err(|_| TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
         let result = loop {
             tokio::select! {
@@ -197,7 +197,7 @@ where
                                     operation.body.clone(),
                                 ))
                                 .await
-                                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
+                                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
 
                             if result.is_err() {
                                 break result;
@@ -209,7 +209,7 @@ where
                             let result = sink
                                 .send(TopicLogSyncMessage::Close)
                                 .await
-                                .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")).into());
+                                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
                             if result.is_err() {
                                 break result;
                             };
@@ -259,7 +259,7 @@ where
                                     header,
                                     body,
                                 })))
-                                .map_err(|_| TopicSyncChannelError::EventSend)?;
+                                .map_err(|_| TopicLogSyncChannelError::EventSend)?;
                         }
                         Err(err) => {
                             if close_sent {
@@ -276,11 +276,11 @@ where
 
         self.event_tx
             .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-            .map_err(|_| TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
         sink.close()
             .await
-            .map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))?;
+            .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))?;
 
         let final_event = match result.as_ref() {
             Ok(_) => TopicLogSyncEvent::Success,
@@ -291,7 +291,7 @@ where
 
         self.event_tx
             .send(final_event)
-            .map_err(|_| TopicSyncChannelError::EventSend)?;
+            .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
         result
     }
@@ -303,13 +303,13 @@ fn sync_channels<'a, L, E>(
     sink: &mut (impl Sink<TopicLogSyncMessage<L, E>, Error = impl Debug> + Unpin),
     stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L, E>, impl Debug>> + Unpin),
 ) -> (
-    impl Sink<LogSyncMessage<L>, Error = TopicSyncChannelError> + Unpin,
-    impl Stream<Item = Result<LogSyncMessage<L>, TopicSyncChannelError>> + Unpin,
+    impl Sink<LogSyncMessage<L>, Error = TopicLogSyncChannelError> + Unpin,
+    impl Stream<Item = Result<LogSyncMessage<L>, TopicLogSyncChannelError>> + Unpin,
 ) {
     let log_sync_sink = sink
-        .sink_map_err(|err| TopicSyncChannelError::MessageSink(format!("{err:?}")))
+        .sink_map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
         .with(|message| {
-            ready(Ok::<_, TopicSyncChannelError>(
+            ready(Ok::<_, TopicLogSyncChannelError>(
                 TopicLogSyncMessage::<L, E>::Sync(message),
             ))
         });
@@ -317,17 +317,17 @@ fn sync_channels<'a, L, E>(
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
         Ok(TopicLogSyncMessage::Live { .. }) | Ok(TopicLogSyncMessage::Close) => Err(
-            TopicSyncChannelError::MessageStream("non-protocol message received".to_string()),
+            TopicLogSyncChannelError::MessageStream("non-protocol message received".to_string()),
         ),
-        Err(err) => Err(TopicSyncChannelError::MessageStream(format!("{err:?}"))),
+        Err(err) => Err(TopicLogSyncChannelError::MessageStream(format!("{err:?}"))),
     });
 
     (log_sync_sink, log_sync_stream)
 }
 
-/// Error type occurring in topic log sync protocol.
+/// Error type occurring in topic log sync channels.
 #[derive(Debug, Error)]
-pub enum TopicSyncChannelError {
+pub enum TopicLogSyncChannelError {
     #[error("error sending on message sink: {0}")]
     MessageSink(String),
 
@@ -351,7 +351,7 @@ pub enum TopicLogSyncError {
     UnexpectedProtocolMessage(String),
 
     #[error(transparent)]
-    Channel(#[from] TopicSyncChannelError),
+    Channel(#[from] TopicLogSyncChannelError),
 
     #[error("remote unexpectedly closed stream in live-mode")]
     UnexpectedStreamClosure,
@@ -362,20 +362,21 @@ pub enum TopicLogSyncError {
 
 /// Sync metrics emitted in event messages.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct LiveModeMetrics {
+pub struct TopicLogSyncLiveMetrics {
     pub operations_received: u64,
     pub operations_sent: u64,
     pub bytes_received: u64,
     pub bytes_sent: u64,
 }
 
+/// Events emitted from topic log sync sessions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TopicLogSyncEvent<E> {
     SyncStarted(LogSyncMetrics),
     SyncStatus(LogSyncMetrics),
     SyncFinished(LogSyncMetrics),
     LiveModeStarted,
-    LiveModeFinished(LiveModeMetrics),
+    LiveModeFinished(TopicLogSyncLiveMetrics),
     Operation(Box<Operation<E>>),
     Success,
     Failed { error: String },
@@ -385,9 +386,9 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
     fn from(event: LogSyncEvent<E>) -> Self {
         match event {
             LogSyncEvent::Status(status_event) => match status_event {
-                StatusEvent::Started { metrics } => TopicLogSyncEvent::SyncStarted(metrics),
-                StatusEvent::Progress { metrics } => TopicLogSyncEvent::SyncStatus(metrics),
-                StatusEvent::Completed { metrics } => TopicLogSyncEvent::SyncFinished(metrics),
+                LogSyncStatus::Started { metrics } => TopicLogSyncEvent::SyncStarted(metrics),
+                LogSyncStatus::Progress { metrics } => TopicLogSyncEvent::SyncStatus(metrics),
+                LogSyncStatus::Completed { metrics } => TopicLogSyncEvent::SyncFinished(metrics),
             },
             LogSyncEvent::Data(operation) => TopicLogSyncEvent::Operation(operation),
         }
@@ -425,13 +426,13 @@ pub mod tests {
     use p2panda_core::{Body, Operation};
 
     use crate::ToSync;
-    use crate::log_sync::{LogSyncError, LogSyncMessage};
+    use crate::protocols::{LogSyncError, LogSyncMessage};
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
     };
     use crate::traits::Protocol;
 
-    use super::{LiveModeMetrics, TopicLogSyncError, TopicLogSyncEvent};
+    use super::{TopicLogSyncLiveMetrics, TopicLogSyncError, TopicLogSyncEvent};
 
     #[tokio::test]
     async fn sync_session_no_operations() {
@@ -760,7 +761,7 @@ pub mod tests {
                 }
                 7 => {
                     let metrics = assert_matches!(event, TestTopicSyncEvent::LiveModeFinished(metrics) => metrics);
-                    let LiveModeMetrics {
+                    let TopicLogSyncLiveMetrics {
                         operations_received,
                         operations_sent,
                         bytes_received,
@@ -900,7 +901,7 @@ pub mod tests {
                 }
                 7 => {
                     let metrics = assert_matches!(event, TestTopicSyncEvent::LiveModeFinished(metrics) => metrics);
-                    let LiveModeMetrics {
+                    let TopicLogSyncLiveMetrics {
                         operations_received,
                         operations_sent,
                         bytes_received,

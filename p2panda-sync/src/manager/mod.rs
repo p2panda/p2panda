@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Manager for initiating and orchestrating topic log sync sessions.
-//! 
+//!
 //! Concurrently running sessions perform message forwarding with de-duplication. Events from all
-//! running sync sessions can be consumed via a single manager event stream. 
+//! running sync sessions can be consumed via a single manager event stream.
+mod session_map;
+
+pub use session_map::SessionTopicMap;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
@@ -24,8 +28,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
-use crate::map::SessionTopicMap;
-use crate::protocol::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
 use crate::traits::{SyncManager, TopicLogMap};
 use crate::{FromSync, SyncSessionConfig, ToSync};
 
@@ -407,9 +410,8 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
-    use crate::TopicSyncManager;
-    use crate::manager::TopicSyncManagerConfig;
-    use crate::protocol::TopicLogSyncEvent;
+    use crate::manager::{TopicSyncManager, TopicSyncManagerConfig};
+    use crate::protocols::TopicLogSyncEvent;
     use crate::test_utils::{
         Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
         drain_stream, run_protocol, setup_logging,

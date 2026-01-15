@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Traits defining interfaces required for implementing sync protocols and managers.
+//! Interfaces for implementing sync protocols and managers.
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::pin::Pin;

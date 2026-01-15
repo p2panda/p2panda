@@ -87,7 +87,7 @@ mod tests {
 
     use futures::channel::mpsc;
 
-    use crate::SessionTopicMap;
+    use crate::manager::SessionTopicMap;
     use crate::test_utils::TestTopic;
 
     const SESSION1: u64 = 1;

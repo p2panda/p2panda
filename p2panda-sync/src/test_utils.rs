@@ -14,12 +14,13 @@ use serde::{Deserialize, Serialize};
 use tokio::join;
 use tokio::sync::broadcast;
 
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol};
-use crate::traits::{Protocol, TopicLogMap};
-use crate::{
-    Logs, ToSync, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
-    TopicSyncManager,
+use crate::protocols::{
+    LogSyncError, LogSyncEvent, LogSyncMessage, LogSync, TopicLogSync, TopicLogSyncError,
+    TopicLogSyncEvent, TopicLogSyncMessage,
 };
+use crate::traits::{Protocol, TopicLogMap};
+use crate::manager::TopicSyncManager;
+use crate::{Logs, ToSync};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -27,7 +28,7 @@ pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
-pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
+pub type TestLogSync = LogSync<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
@@ -97,7 +98,7 @@ impl Peer {
         logs: &Logs<u64>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = broadcast::channel(128);
-        let session = LogSyncProtocol::new(self.store.clone(), logs.clone(), event_tx);
+        let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
     }
 
