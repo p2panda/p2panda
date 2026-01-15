@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Example chat application using p2panda-net.
+use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -14,16 +17,27 @@ use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
-use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, MdnsDiscovery, NodeId};
+use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, MdnsDiscovery, NodeId, TopicId};
+use p2panda_store::MemoryStore;
+use p2panda_sync::traits::TopicLogMap;
+use p2panda_sync::{Logs, TopicSyncManager};
+use tokio::sync::RwLock;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
+
+type LogId = u64;
+
+const CHAT_TOPIC: [u8; 32] = [1; 32];
 
 const HEARTBEAT_TOPIC: [u8; 32] = [2; 32];
 
 const NETWORK_ID: [u8; 32] = [7; 32];
 
 const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
+
+/// This application maintains only one log per author, this is why we can hard-code it.
+const LOG_ID: LogId = 1;
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -47,6 +61,37 @@ struct Args {
     #[arg(short = 'm', long, action)]
     mdns: bool,
 }
+
+#[derive(Clone, Default, Debug)]
+pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
+
+impl ChatTopicMap {
+    async fn insert(&self, node_id: NodeId, log_id: LogId) {
+        let mut map = self.0.write().await;
+        map.entry(CHAT_TOPIC)
+            .and_modify(|logs| {
+                logs.insert(node_id, vec![log_id]);
+            })
+            .or_insert({
+                let mut value = HashMap::new();
+                value.insert(node_id, vec![log_id]);
+                value
+            });
+    }
+}
+
+impl TopicLogMap<TopicId, LogId> for ChatTopicMap {
+    type Error = Infallible;
+
+    async fn get(&self, topic_query: &TopicId) -> Result<Logs<LogId>, Self::Error> {
+        let map = self.0.read().await;
+        Ok(map.get(topic_query).cloned().unwrap_or_default())
+    }
+}
+
+type ChatStore = MemoryStore<LogId, ()>;
+
+type ChatTopicSyncManager = TopicSyncManager<TopicId, ChatStore, ChatTopicMap, LogId, ()>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
