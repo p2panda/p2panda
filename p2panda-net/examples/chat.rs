@@ -10,13 +10,13 @@ use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::PrivateKey;
 use p2panda_net::addrs::NodeInfo;
-use p2panda_net::iroh_endpoint::{from_public_key, IrohConfig};
+use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
 use p2panda_net::{AddressBook, Endpoint, Gossip, MdnsDiscovery, NodeId};
 use tracing::info;
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 const HEARTBEAT_TOPIC: [u8; 32] = [2; 32];
 
