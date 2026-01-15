@@ -11,9 +11,7 @@ use std::sync::Arc;
 use iroh::endpoint::Connection;
 use iroh::protocol::ProtocolHandler;
 use p2panda_sync::FromSync;
-use p2panda_sync::topic_handshake::{
-    TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage,
-};
+use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage};
 use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};

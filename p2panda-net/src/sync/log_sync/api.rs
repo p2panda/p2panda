@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use p2panda_core::Extensions;
 use p2panda_store::{LogId, LogStore, OperationStore};
-use p2panda_sync::TopicSyncManager;
+use p2panda_sync::manager::TopicSyncManager;
 use p2panda_sync::traits::{SyncManager as SyncManagerTrait, TopicLogMap};
 use ractor::{ActorRef, call};
 use serde::{Deserialize, Serialize};

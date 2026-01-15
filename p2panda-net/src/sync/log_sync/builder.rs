@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use p2panda_core::Extensions;
 use p2panda_store::{LogId, LogStore, OperationStore};
 use p2panda_sync::traits::TopicLogMap;
-use p2panda_sync::{TopicSyncManager, TopicSyncManagerConfig};
+use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerConfig};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use serde::{Deserialize, Serialize};
 

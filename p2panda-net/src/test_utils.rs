@@ -9,7 +9,7 @@ use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_store::{LogStore, OperationStore};
 use p2panda_sync::traits::TopicLogMap;
-use p2panda_sync::{TopicSyncManager, TopicSyncManagerConfig};
+use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerConfig};
 use ractor::thread_local::ThreadLocalActorSpawner;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
