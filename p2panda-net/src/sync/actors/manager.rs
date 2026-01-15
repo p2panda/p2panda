@@ -21,7 +21,6 @@ use tokio::sync::{RwLock, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::address_book::AddressBook;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::{Endpoint, to_public_key};
@@ -84,8 +83,9 @@ struct TopicManagers<T> {
 /// Mapping of topic to the regarding gossip overlays dealing with the membership handling.
 type GossipHandles = HashMap<TopicId, (GossipHandle, JoinHandle<()>)>;
 
-/// Mapping between the "mixed" topic (key) and it's "real" version (value).
-type MixedTopicMap = Arc<RwLock<HashMap<TopicId, TopicId>>>;
+/// Mapping between the "mixed" topic (key) used for gossip and it's "original" version (value)
+/// used by sync.
+type GossipTopicMap = Arc<RwLock<HashMap<TopicId, TopicId>>>;
 
 impl<T> Default for TopicManagers<T> {
     fn default() -> Self {
@@ -101,13 +101,12 @@ where
     M: SyncManagerTrait<TopicId> + Send + 'static,
 {
     protocol_id: ProtocolId,
-    address_book: AddressBook,
     endpoint: Endpoint,
     gossip: Gossip,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
-    mixed_topics: MixedTopicMap,
+    gossip_topics: GossipTopicMap,
     sync_config: M::Config,
     thread_pool: ThreadLocalActorSpawner,
 }
@@ -121,6 +120,8 @@ where
         self.topic_managers.topic_manager_map.remove(topic);
         self.sync_receivers.remove(topic);
 
+        // Dropping the gossip handle will unsubscribe us from the gossip topic and remove it from
+        // the address book.
         if let Some((_, handle)) = self.gossip_handles.remove(topic) {
             // Close task running HyParView membership logic.
             handle.abort();
@@ -140,18 +141,26 @@ where
         // purposes (membership algorithms aiding sync protocols or ephemeral messaging gossip
         // overlays), we're defining a constant with which topics from the user will be mixed to
         // derive a new one.
-        let mixed_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
-        self.mixed_topics.write().await.insert(mixed_topic, topic);
+        let gossip_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
+        self.gossip_topics.write().await.insert(gossip_topic, topic);
+
+        debug!(
+            sync_topic = topic.fmt_short(),
+            gossip_topic = gossip_topic.fmt_short(),
+            "join gossip overlay for peer-sampling",
+        );
 
         // Join gossip overlay to use HyParView membership algorithm for peer sampling.
-        let gossip_handle = self.gossip.stream(mixed_topic).await?;
+        //
+        // This will subscribe us to the gossip topic and add it to the address book.
+        let gossip_handle = self.gossip.stream(gossip_topic).await?;
 
         // Listen for events of HyParView who entered or left the "active view". This informs with
         // whom we're running sync sessions with.
         let gossip_events_handle = {
             let mut events = self.gossip.events().await?;
             let myself = myself.clone();
-            let mixed_topics = self.mixed_topics.clone();
+            let gossip_topics = self.gossip_topics.clone();
 
             tokio::spawn(async move {
                 loop {
@@ -171,17 +180,17 @@ where
                         }
                     };
 
-                    let Some(original_topic) =
-                        mixed_topics.read().await.get(&topic_from_event).cloned()
+                    let Some(sync_topic) =
+                        gossip_topics.read().await.get(&topic_from_event).cloned()
                     else {
                         continue;
                     };
 
                     for node in nodes {
                         let message = if is_initiate {
-                            ToSyncManager::InitiateSync(original_topic, node)
+                            ToSyncManager::InitiateSync(sync_topic, node)
                         } else {
-                            ToSyncManager::EndSync(original_topic, node)
+                            ToSyncManager::EndSync(sync_topic, node)
                         };
 
                         if myself.send_message(message).is_err() {
@@ -220,14 +229,14 @@ where
 
     type Msg = ToSyncManager<M>;
 
-    type Arguments = (ProtocolId, M::Config, AddressBook, Endpoint, Gossip);
+    type Arguments = (ProtocolId, M::Config, Endpoint, Gossip);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_config, address_book, endpoint, gossip) = args;
+        let (protocol_id, sync_config, endpoint, gossip) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -241,12 +250,11 @@ where
 
         Ok(SyncManagerState {
             protocol_id,
-            address_book,
             endpoint,
             gossip,
             gossip_handles,
             topic_managers: sync_managers,
-            mixed_topics: Arc::default(),
+            gossip_topics: Arc::default(),
             sync_receivers,
             sync_config,
             thread_pool,
@@ -274,6 +282,11 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match message {
             ToSyncManager::RegisterProtocol => {
+                debug!(
+                    protocol_id = state.protocol_id.fmt_short(),
+                    "register sync protocol",
+                );
+
                 state
                     .endpoint
                     .accept(
@@ -292,6 +305,8 @@ where
                     let _ = reply.send(sync_manager_ref.clone());
                     return Ok(());
                 }
+
+                debug!(topic = topic.fmt_short(), live_mode, "create sync manager");
 
                 // Join gossip overlay to use HyParView membership algorithm for peer sampling.
                 state.spawn_membership_task(&myself, topic).await?;
@@ -331,12 +346,6 @@ where
                     .actor_topic_map
                     .insert(sync_manager_ref.get_id(), topic);
 
-                // Inform address book about the newly subscribed topic.
-                state
-                    .address_book
-                    .add_topic(state.endpoint.node_id(), topic)
-                    .await?;
-
                 let _ = reply.send(sync_manager_ref);
             }
             ToSyncManager::Subscribe(topic, reply) => {
@@ -366,19 +375,22 @@ where
                     sync_manager.drain()?;
                 }
 
-                // Drop all channels and handles associated with the topic.
+                // Drop all channels and handles associated with the topic. The removed gossip
+                // overlay will automatically remove the entry from the address book.
                 state.drop_topic_state(&topic);
 
-                // Inform address book about removed topic.
-                state
-                    .address_book
-                    .remove_topic(state.endpoint.node_id(), topic)
-                    .await?;
+                debug!(topic = topic.fmt_short(), "close sync manager");
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
                 if let Some((sync_manager_actor, live_mode)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        node_id = node_id.fmt_short(),
+                        "initiate sync session",
+                    );
+
                     sync_manager_actor.send_message(ToTopicManager::Initiate {
                         node_id,
                         topic,
@@ -390,6 +402,12 @@ where
                 if let Some((sync_manager_actor, live_mode)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        node_id = node_id.fmt_short(),
+                        "accept sync session",
+                    );
+
                     sync_manager_actor.send_message(ToTopicManager::Accept {
                         node_id,
                         topic,
@@ -402,6 +420,12 @@ where
                 if let Some((sync_manager_actor, _)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
+                    debug!(
+                        topic = topic.fmt_short(),
+                        node_id = node_id.fmt_short(),
+                        "end sync session",
+                    );
+
                     sync_manager_actor.send_message(ToTopicManager::Close { node_id })?;
                 }
             }

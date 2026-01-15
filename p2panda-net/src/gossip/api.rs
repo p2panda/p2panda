@@ -301,7 +301,7 @@ impl Drop for TopicDropGuard {
             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
         // If this is 1 the last instance of the guard was dropped and the counter is now at zero.
-        if previous_counter == 1 {
+        if previous_counter <= 1 {
             // Ignore this error, it could be that the actor has already stopped.
             let _ = actor_ref.send_message(ToGossipManager::Unsubscribe(self.topic));
         }

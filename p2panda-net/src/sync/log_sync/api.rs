@@ -13,7 +13,6 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::TopicId;
-use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::ToSyncManager;
@@ -61,11 +60,10 @@ where
     pub fn builder(
         store: S,
         topic_map: TM,
-        address_book: AddressBook,
         endpoint: Endpoint,
         gossip: Gossip,
     ) -> Builder<S, L, E, TM> {
-        Builder::<S, L, E, TM>::new(store, topic_map, address_book, endpoint, gossip)
+        Builder::<S, L, E, TM>::new(store, topic_map, endpoint, gossip)
     }
 
     // TODO: Extensions should be generic over a stream handle, not over this struct.

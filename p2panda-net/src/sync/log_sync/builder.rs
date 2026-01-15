@@ -10,7 +10,6 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use serde::{Deserialize, Serialize};
 
 use crate::TopicId;
-use crate::address_book::AddressBook;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
@@ -25,7 +24,6 @@ where
 {
     store: S,
     topic_map: TM,
-    address_book: AddressBook,
     endpoint: Endpoint,
     gossip: Gossip,
     _marker: PhantomData<(L, E)>,
@@ -38,17 +36,10 @@ where
     E: Extensions + Send + 'static,
     TM: TopicLogMap<TopicId, L> + Send + 'static,
 {
-    pub fn new(
-        store: S,
-        topic_map: TM,
-        address_book: AddressBook,
-        endpoint: Endpoint,
-        gossip: Gossip,
-    ) -> Self {
+    pub fn new(store: S, topic_map: TM, endpoint: Endpoint, gossip: Gossip) -> Self {
         Self {
             store,
             topic_map,
-            address_book,
             endpoint,
             gossip,
             _marker: PhantomData,
@@ -69,7 +60,6 @@ where
             let args = (
                 LOG_SYNC_PROTOCOL_ID.to_vec(),
                 config,
-                self.address_book,
                 self.endpoint,
                 self.gossip,
             );

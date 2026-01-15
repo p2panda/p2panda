@@ -54,6 +54,7 @@ Highlights are marked with a pancake 🥞
 - Remove uni-streams limit, additional tests for gossip [#874](https://github.com/p2panda/p2panda/pull/874)
 - Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
 - Handle outdated operations which got processed while being pruned, fix overflow substraction bug [#894](https://github.com/p2panda/p2panda/pull/894)
+- Gossip handles address book for sync topic [#942](https://github.com/p2panda/p2panda/pull/942)
 
 ## [0.4.0] - 07/07/2025
 

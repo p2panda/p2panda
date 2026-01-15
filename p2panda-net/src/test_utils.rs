@@ -230,16 +230,11 @@ impl TestNode {
 
         let (operation_store, topic_map) = client.sync_config();
 
-        let log_sync = LogSync::builder(
-            operation_store,
-            topic_map,
-            address_book.clone(),
-            endpoint.clone(),
-            gossip.clone(),
-        )
-        .spawn()
-        .await
-        .unwrap();
+        let log_sync =
+            LogSync::builder(operation_store, topic_map, endpoint.clone(), gossip.clone())
+                .spawn()
+                .await
+                .unwrap();
 
         Self {
             args,
