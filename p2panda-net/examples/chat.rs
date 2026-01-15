@@ -204,6 +204,9 @@ async fn main() -> Result<()> {
     let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
     let mut sync_rx = sync_tx.subscribe().await.unwrap();
 
+    // Mapping of public keys to nicknames.
+    let mut nicknames = HashMap::new();
+
     // Receive messages from the sync stream.
     {
         let mut store = store.clone();
@@ -224,11 +227,28 @@ async fn main() -> Result<()> {
                             continue;
                         }
 
-                        print!(
-                            "{}: {}",
-                            operation.header.public_key.fmt_short(),
-                            String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap()
-                        );
+                        let remote_public_key = operation.header.public_key;
+                        let remote_id = remote_public_key.fmt_short();
+
+                        let text =
+                            String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap();
+
+                        // Check if the text of this operation is setting a nickname.
+                        if let Some(nick) = text.strip_prefix("/nick ") {
+                            if let Some(previous_nick) = nicknames.get(&remote_public_key) {
+                                print!("-> {} is now known as: {}", previous_nick, nick);
+                            } else {
+                                print!("-> {} is now known as: {}", remote_id, nick);
+                            }
+                            nicknames.insert(remote_public_key, nick.trim().to_owned());
+                        } else {
+                            // Print a regular chat message.
+                            print!(
+                                "{}: {}",
+                                nicknames.get(&remote_public_key).unwrap_or(&remote_id),
+                                text
+                            )
+                        }
 
                         store
                             .insert_operation(
@@ -270,6 +290,11 @@ async fn main() -> Result<()> {
 
         seq_num += 1;
         backlink = Some(hash);
+
+        // Update the nickname mapping for the local node.
+        if let Some(nick) = text.strip_prefix("/nick ") {
+            print!("-> changed nick to: {}", nick);
+        }
     }
 
     // Listen for `Ctrl+c` and shutdown the node.
