@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_sync::traits::{Protocol, SyncManager as SyncManagerTrait};
+use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
@@ -29,14 +29,14 @@ const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 
 struct FailingNode {
     args: ApplicationArguments,
-    sync_ref: ActorRef<ToSyncManager<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>>,
+    sync_ref: ActorRef<ToSyncManager<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>>,
 }
 
 impl FailingNode {
     pub async fn spawn(
         seed: [u8; 32],
         node_infos: Vec<NodeInfo>,
-        sync_config: FailingSyncConfig,
+        sync_args: FailingSyncArgs,
     ) -> Self {
         let (args, address_book_store) = test_args_from_seed(seed);
 
@@ -65,9 +65,9 @@ impl FailingNode {
 
         let thread_pool = ThreadLocalActorSpawner::new();
         let (sync_ref, _) =
-            SyncManager::<DummySyncManager<FailingSyncConfig, FailingSyncProtocol>>::spawn(
+            SyncManager::<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>::spawn(
                 None,
-                (TEST_PROTOCOL_ID.to_vec(), sync_config, endpoint, gossip),
+                (TEST_PROTOCOL_ID.to_vec(), sync_args, endpoint, gossip),
                 thread_pool,
             )
             .await
@@ -129,12 +129,12 @@ impl Protocol for FailingSyncProtocol {
 }
 
 #[derive(Clone, Debug)]
-struct FailingSyncConfig {
+struct FailingSyncArgs {
     pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
     pub behaviour: SyncBehaviour,
 }
 
-impl FailingSyncConfig {
+impl FailingSyncArgs {
     pub fn new(behaviour: SyncBehaviour) -> (Self, broadcast::Receiver<FromSync<DummySyncEvent>>) {
         let (tx, rx) = broadcast::channel(128);
         (
@@ -167,23 +167,23 @@ struct DummySyncManager<C, P> {
     pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
     #[allow(unused)]
     pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
-    pub config: C,
+    pub args: C,
     pub _marker: PhantomData<P>,
 }
 
-impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncConfig, FailingSyncProtocol> {
+impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncArgs, FailingSyncProtocol> {
     type Protocol = FailingSyncProtocol;
     type Event = DummySyncEvent;
-    type Config = FailingSyncConfig;
+    type Args = FailingSyncArgs;
     type Message = ();
     type Error = SendError;
 
-    fn from_config(config: Self::Config) -> Self {
-        let event_rx = config.event_tx.subscribe();
+    fn from_args(args: Self::Args) -> Self {
+        let event_rx = args.event_tx.subscribe();
         DummySyncManager {
-            event_tx: config.event_tx.clone(),
+            event_tx: args.event_tx.clone(),
             event_rx,
-            config,
+            args,
             _marker: PhantomData,
         }
     }
@@ -191,7 +191,7 @@ impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncConfig, FailingSy
     async fn session(
         &mut self,
         session_id: u64,
-        config: &p2panda_sync::SyncSessionConfig<TopicId>,
+        config: &p2panda_sync::SessionConfig<TopicId>,
     ) -> Self::Protocol {
         self.event_tx
             .send(FromSync {
@@ -201,7 +201,7 @@ impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncConfig, FailingSy
             })
             .unwrap();
         FailingSyncProtocol {
-            behaviour: self.config.behaviour.clone(),
+            behaviour: self.args.behaviour.clone(),
         }
     }
 
@@ -236,10 +236,10 @@ async fn failed_sync_session_retry() {
         (SyncBehaviour::Error, SyncBehaviour::Error),
     ] {
         // Spawn nodes.
-        let (bob_sync_config, _bob_rx) = FailingSyncConfig::new(bob_behavior);
+        let (bob_sync_config, _bob_rx) = FailingSyncArgs::new(bob_behavior);
         let mut bob = FailingNode::spawn(random(), vec![], bob_sync_config).await;
 
-        let (alice_sync_config, _alice_rx) = FailingSyncConfig::new(alice_behavior);
+        let (alice_sync_config, _alice_rx) = FailingSyncArgs::new(alice_behavior);
         let alice =
             FailingNode::spawn(random(), vec![bob.args.node_info()], alice_sync_config).await;
 

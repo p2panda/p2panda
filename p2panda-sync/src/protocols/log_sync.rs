@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Two-party sync protocol over append-only logs.
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -13,9 +14,11 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
 
-use crate::Logs;
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 use crate::traits::Protocol;
+
+/// A map of author logs.
+pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Default)]
@@ -54,7 +57,7 @@ enum State {
 }
 
 /// Efficient sync protocol for append-only log data types.
-pub struct LogSyncProtocol<L, E, S, Evt> {
+pub struct LogSync<L, E, S, Evt> {
     state: State,
     logs: Logs<L>,
     store: S,
@@ -63,7 +66,7 @@ pub struct LogSyncProtocol<L, E, S, Evt> {
     _marker: PhantomData<E>,
 }
 
-impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
+impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
     pub fn new(store: S, logs: Logs<L>, event_tx: broadcast::Sender<Evt>) -> Self {
         Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
     }
@@ -85,7 +88,7 @@ impl<L, E, S, Evt> LogSyncProtocol<L, E, S, Evt> {
     }
 }
 
-impl<L, E, S, Evt> Protocol for LogSyncProtocol<L, E, S, Evt>
+impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
@@ -111,7 +114,7 @@ where
                     let metrics = LogSyncMetrics::default();
                     self.event_tx
                         .send(
-                            LogSyncEvent::Status(StatusEvent::Started {
+                            LogSyncEvent::Status(LogSyncStatus::Started {
                                 metrics: metrics.clone(),
                             })
                             .into(),
@@ -179,7 +182,7 @@ where
 
                     self.event_tx
                         .send(
-                            LogSyncEvent::Status(StatusEvent::Progress {
+                            LogSyncEvent::Status(LogSyncStatus::Progress {
                                 metrics: metrics.clone(),
                             })
                             .into(),
@@ -220,7 +223,7 @@ where
 
                     self.event_tx
                         .send(
-                            LogSyncEvent::Status(StatusEvent::Progress {
+                            LogSyncEvent::Status(LogSyncStatus::Progress {
                                 metrics: metrics.clone(),
                             })
                             .into(),
@@ -338,7 +341,7 @@ where
                 State::End { metrics } => {
                     self.event_tx
                         .send(
-                            LogSyncEvent::Status(StatusEvent::Completed {
+                            LogSyncEvent::Status(LogSyncStatus::Completed {
                                 metrics: metrics.clone(),
                             })
                             .into(),
@@ -488,7 +491,7 @@ where
 /// Events emitted from log sync sessions.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LogSyncEvent<E> {
-    Status(StatusEvent),
+    Status(LogSyncStatus),
     Data(Box<Operation<E>>),
 }
 
@@ -507,7 +510,7 @@ pub struct LogSyncMetrics {
 
 /// Sync status variants sent on log sync events.
 #[derive(Clone, Debug, PartialEq)]
-pub enum StatusEvent {
+pub enum LogSyncStatus {
     Started { metrics: LogSyncMetrics },
     Progress { metrics: LogSyncMetrics },
     Completed { metrics: LogSyncMetrics },
@@ -547,8 +550,8 @@ mod tests {
     use futures::StreamExt;
     use p2panda_core::Body;
 
-    use crate::log_sync::{
-        LogSyncError, LogSyncEvent, LogSyncMetrics, Logs, Operation, StatusEvent,
+    use crate::protocols::log_sync::{
+        LogSyncError, LogSyncEvent, LogSyncMetrics, LogSyncStatus, Logs, Operation,
     };
     use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
 
@@ -570,7 +573,7 @@ mod tests {
                 0 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Started { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(LogSyncStatus::Started { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, None);
@@ -579,7 +582,7 @@ mod tests {
                 1 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress { metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. } })
+                        LogSyncEvent::Status(LogSyncStatus::Progress { metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. } })
                          => (total_operations_local, total_bytes_local)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -588,7 +591,7 @@ mod tests {
                 2 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(LogSyncStatus::Progress { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -597,7 +600,7 @@ mod tests {
                 3 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Completed { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
+                        LogSyncEvent::Status(LogSyncStatus::Completed { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
                          => (total_operations_remote, total_bytes_remote)
                     );
                     assert_eq!(total_operations, Some(0));
@@ -653,12 +656,12 @@ mod tests {
             let event = event_rx.recv().await.unwrap();
             match index {
                 0 => {
-                    assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. }));
+                    assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. }));
                 }
                 1 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress {
+                        LogSyncEvent::Status(LogSyncStatus::Progress {
                             metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. }
                         }) => (total_operations_local, total_bytes_local)
                     );
@@ -669,7 +672,7 @@ mod tests {
                 2 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Progress {
+                        LogSyncEvent::Status(LogSyncStatus::Progress {
                             metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
                         }) => (total_operations_remote, total_bytes_remote)
                     );
@@ -679,7 +682,7 @@ mod tests {
                 3 => {
                     let (total_operations, total_bytes) = assert_matches!(
                         event,
-                        LogSyncEvent::Status(StatusEvent::Completed {
+                        LogSyncEvent::Status(LogSyncStatus::Completed {
                             metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
                         }) => (total_operations_remote, total_bytes_remote)
                     );
@@ -765,9 +768,9 @@ mod tests {
         for index in 0..=5 {
             let event = peer_a_event_rx.recv().await.unwrap();
             match index {
-                0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
-                1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
-                2 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
+                0 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. })),
+                1 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
+                2 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
@@ -785,7 +788,7 @@ mod tests {
                     assert_eq!(body_inner.unwrap(), body_b);
                 }
                 5 => {
-                    assert_matches!(event, LogSyncEvent::Status(StatusEvent::Completed { .. }));
+                    assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Completed { .. }));
                     break;
                 }
                 _ => panic!(),
@@ -795,9 +798,9 @@ mod tests {
         for index in 0..=5 {
             let event = peer_b_event_rx.recv().await.unwrap();
             match index {
-                0 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Started { .. })),
-                1 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
-                2 => assert_matches!(event, LogSyncEvent::Status(StatusEvent::Progress { .. })),
+                0 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. })),
+                1 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
+                2 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
                 3 => {
                     let (header, body_inner) = assert_matches!(
                         event,
@@ -815,7 +818,7 @@ mod tests {
                     assert_eq!(body_inner.unwrap(), body_a);
                 }
                 5 => {
-                    let metrics = assert_matches!(event, LogSyncEvent::Status(StatusEvent::Completed { metrics }) => metrics);
+                    let metrics = assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Completed { metrics }) => metrics);
                     let LogSyncMetrics {
                         total_operations_local,
                         total_operations_remote,

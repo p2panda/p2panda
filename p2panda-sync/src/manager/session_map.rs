@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Maintain mapping of generic topics to session ids and of session ids to a channel sender.
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
-/// Mapping of generic topics to session ids and of session ids to a channel sender.
+/// Map of generic topics to session ids and of session ids to a channel sender.
 #[derive(Clone, Debug)]
 pub struct SessionTopicMap<T, TX> {
     pub(crate) session_tx_map: HashMap<u64, TX>,
@@ -86,7 +87,7 @@ mod tests {
 
     use futures::channel::mpsc;
 
-    use crate::SessionTopicMap;
+    use crate::manager::SessionTopicMap;
     use crate::test_utils::TestTopic;
 
     const SESSION1: u64 = 1;

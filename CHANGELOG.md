@@ -47,6 +47,7 @@ Highlights are marked with a pancake 🥞
 - Add `subscription()` method to `SyncManager` which returns `Stream` [#873](https://github.com/p2panda/p2panda/pull/873)
 - Improvements to sync poller actor with tests [#877](https://github.com/p2panda/p2panda/pull/877)
 - Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
+- Module refactoring and minor API improvements in `p2panda-sync` [#944](https://github.com/p2panda/p2panda/pull/944)
 
 ### Fixed
 
