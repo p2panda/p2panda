@@ -10,10 +10,11 @@ use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::PrivateKey;
 use p2panda_net::addrs::NodeInfo;
+use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
-use p2panda_net::{AddressBook, Endpoint, Gossip, MdnsDiscovery, NodeId};
+use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, MdnsDiscovery, NodeId};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -106,6 +107,12 @@ async fn main() -> Result<()> {
         .await
         .unwrap();
 
+    let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
+        .config(DiscoveryConfig::default())
+        .spawn()
+        .await
+        .unwrap();
+
     if args.mdns {
         let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
             .mode(MdnsDiscoveryMode::Active)
@@ -120,8 +127,8 @@ async fn main() -> Result<()> {
         .unwrap();
 
     // Subscribe to gossip overlay to receive (ephemeral) messages.
-    let gossip_handle = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
-    let mut gossip_rx = gossip_handle.subscribe();
+    let gossip_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
+    let mut gossip_rx = gossip_tx.subscribe();
 
     // Receive and log each (ephemeral) heartbeat message.
     tokio::spawn(async move {
@@ -139,7 +146,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         loop {
             let rnd: u64 = rand::random();
-            gossip_handle.publish(rnd.to_be_bytes()).await.unwrap();
+            gossip_tx.publish(rnd.to_be_bytes()).await.unwrap();
             tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
         }
     });
