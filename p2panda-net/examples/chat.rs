@@ -70,18 +70,6 @@ async fn main() -> Result<()> {
     // Prepare address book.
     let address_book = AddressBook::builder().spawn().await.unwrap();
 
-    // Log local node info changes (includes transport info).
-    {
-        let address_book = address_book.clone();
-        tokio::spawn(async move {
-            if let Ok(mut event_rx) = address_book.watch_node_info(public_key, true).await {
-                while let Some(event) = event_rx.recv().await {
-                    info!("{:?}", event);
-                }
-            }
-        });
-    }
-
     // Add a bootstrap node to our address book if one was supplied by the user.
     if let Some(id) = args.bootstrap_id {
         let endpoint_addr = EndpointAddr::new(from_public_key(id));
