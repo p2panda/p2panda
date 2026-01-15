@@ -13,19 +13,45 @@ Highlights are marked with a pancake 🥞
 
 - Introduce `Conditions` super-trait in `p2panda-auth` [#780](https://github.com/p2panda/p2panda/pull/780)
 - Add `serde` derives to all state structs in `p2panda-auth` [#809](https://github.com/p2panda/p2panda/pull/809) 
-- `p2panda-spaces`: data encryption for groups and multiple devices [#836](https://github.com/p2panda/p2panda/pull/836)
-- Added `Serialize` and `Deserialize` to `p2panda-spaces::Event` [#868](https://github.com/p2panda/p2panda/pull/868) 
+- `p2panda-spaces`: data encryption for groups and multiple devices [#836](https://github.com/p2panda/p2panda/pull/836) 🥞
+- Added `Serialize` and `Deserialize` to `p2panda-spaces::Event` [#868](https://github.com/p2panda/p2panda/pull/868)
+- Additional test for framed CBOR operation streaming [#885](https://github.com/p2panda/p2panda/pull/885)
+- `p2panda-net` rewrite ([tracking issue](https://github.com/p2panda/p2panda/issues/818))
+  - mDNS discovery for iroh endpoint [#869](https://github.com/p2panda/p2panda/pull/869)
+  - Simple, incremental backoff logic for random walk [#870](https://github.com/p2panda/p2panda/pull/870)
+  - Discovery service connecting address book with iroh [#872](https://github.com/p2panda/p2panda/pull/872)
+  - Address book watchers to inform other systems about node info or topic set changes [#876](https://github.com/p2panda/p2panda/pull/876)
+  - Trusted transport info [#878](https://github.com/p2panda/p2panda/pull/878)
+  - Types, trait and API follow-ups of sync manager integration [#879](https://github.com/p2panda/p2panda/pull/879)
+  - Generate NeighborUp events when we join the gossip overlay [#882](https://github.com/p2panda/p2panda/pull/882)
+  - Non-blocking manager event streams [#883](https://github.com/p2panda/p2panda/pull/883)
+  - Reset backoff when subscribing to topic [#888](https://github.com/p2panda/p2panda/pull/888)
+  - Remove transport info when connection attempt failed [#889](https://github.com/p2panda/p2panda/pull/889)
+  - Track if node is stale in address book [#891](https://github.com/p2panda/p2panda/pull/891)
+  - Hash-based private set intersection for topic discovery [#895](https://github.com/p2panda/p2panda/pull/895) 🥞
+  - Improve time-critical tests by using `mock_instant` [#896](https://github.com/p2panda/p2panda/pull/896)
+  - Re-initiate sync with node if session fails [#902](https://github.com/p2panda/p2panda/pull/902)
+  - Fix ordering for events updating our own transport info [#904](https://github.com/p2panda/p2panda/pull/904)
+  - Do not report failed connection attempts when own node has limited reachability [#905](https://github.com/p2panda/p2panda/pull/905)
+  - Heal gossip overlay after coming up back online [#906](https://github.com/p2panda/p2panda/pull/906)
+  - Add missing relay url in user data during mDNS discovery [#907](https://github.com/p2panda/p2panda/pull/907)
+  - Allow endpoint to gracefully shut down on drop [#908](https://github.com/p2panda/p2panda/pull/908)
+  - Modular API for new `p2panda-net` [#909](https://github.com/p2panda/p2panda/pull/909) 🥞
 
 ### Changed
 
 - One global state object and operation graph for all groups [#781](https://github.com/p2panda/p2panda/pull/781)
 - Handle strong removal edge cases and cycles in nested groups, improve concurrent re-adds [#788](https://github.com/p2panda/p2panda/pull/788)
 - Make `Extensions` non-optional [#811](https://github.com/p2panda/p2panda/pull/811)
+- Add `subscription()` method to `SyncManager` which returns `Stream` [#873](https://github.com/p2panda/p2panda/pull/873)
+- Improvements to sync poller actor with tests [#877](https://github.com/p2panda/p2panda/pull/877)
+- Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
 
 ### Fixed
 
 - Enable nonblocking for unbound socket used in mdns discovery [#794](https://github.com/p2panda/p2panda/pull/794)
 - Allow managing multiple long-term pre-keys [#830](https://github.com/p2panda/p2panda/pull/830)
+- Remove uni-streams limit, additional tests for gossip [#874](https://github.com/p2panda/p2panda/pull/874)
 - Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
 - Handle outdated operations which got processed while being pruned, fix overflow substraction bug [#894](https://github.com/p2panda/p2panda/pull/894)
 
