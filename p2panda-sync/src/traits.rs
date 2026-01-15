@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Traits defining interfaces required for implementing sync protocols and managers.
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::pin::Pin;
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{FromSync, Logs, SyncSessionConfig, ToSync};
 
-/// Generic protocol interface which runs over a typed sink and stream pair.
+/// Generic protocol interface which runs over a sink and stream pair.
 pub trait Protocol {
     type Output;
     type Error: StdError + Send + Sync + 'static;
@@ -53,10 +54,10 @@ pub trait SyncManager<T> {
 
 /// Maps a topic to the related logs being sent over the wire during sync.
 ///
-/// Each `SyncProtocol` implementation defines the type of data it is expecting to sync and how the
-/// scope for a particular session should be identified. `LogSyncProtocol` maps a generic
-/// `TopicQuery` to a set of logs; users provide an implementation of the `TopicLogMap` trait in
-/// order to define how this mapping occurs.
+/// Required in TopicLogSync protocol, it defines the type of data it is expecting to sync and how
+/// the scope for a particular session should be identified. `TopicLogSync` maps a generic `T` to
+/// a set of logs; users provide an implementation of the `TopicLogMap` trait in order to define
+/// how this mapping occurs.
 ///
 /// Since `TopicLogMap` is generic we can use the same mapping across different sync
 /// implementations for the same data type when necessary.
@@ -82,9 +83,9 @@ pub trait SyncManager<T> {
 /// - Log C2
 /// ```
 ///
-/// If we implement `TopicQuery` to express that we're interested in syncing over a specific chat
-/// group, for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only
-/// logs of all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
+/// If we implement `T` to express that we're interested in syncing over a specific chat group,
+/// for example "Chat Group 2" we would implement `TopicLogMap` to give us all append-only logs of
+/// all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
 pub trait TopicLogMap<T, L>: Clone {
     type Error: StdError;
 

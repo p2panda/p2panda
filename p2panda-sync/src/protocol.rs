@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Two-party sync protocol over a topic associated with a collection of append-only logs.
 use std::fmt::Debug;
 use std::future::ready;
 use std::hash::Hash as StdHash;
@@ -32,16 +33,19 @@ pub struct TopicLogSync<T, S, M, L, E> {
     pub _phantom: PhantomData<L>,
 }
 
-/// Sync protocol combining TopicHandshake and LogSync protocols into one so that peers can sync
-/// logs over a generic T topic.
+/// Protocol for synchronizing logs which are associated with a generic T topic.
+/// 
+/// The mapping of T to a set of logs is handled on the application layer using an implementation
+/// of the `TopicLogMap` trait.
 ///
-/// The mapping of T to a set of logs is handled locally by the TopicMap.
-///
-/// The initiating peer sends their T to the remote and this establishes the topic for the session.
 /// After sync is complete peers optionally enter "live-mode" where concurrently received and
-/// future messages will be sent directly. As we may receive messages from many sync sessions
+/// future messages will be sent directly to the application layer and forwarded to any
+/// concurrently running sync sessions. As we may receive messages from many sync sessions
 /// concurrently, messages forwarded to a sync session in live-mode are de-duplicated in order to
 /// avoid flooding the network with redundant data.
+/// 
+/// It is assumed that the T topic has been negotiated between parties prior to initiating this
+/// sync protocol.
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
@@ -69,6 +73,7 @@ where
         )
     }
 
+    /// Instantiates a sync protocol with custom buffer capacity.
     pub fn new_with_capacity(
         topic: T,
         store: S,

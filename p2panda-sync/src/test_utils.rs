@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Test utilities.
 use std::{collections::HashMap, convert::Infallible};
 
 use futures::{FutureExt, SinkExt, Stream, StreamExt};

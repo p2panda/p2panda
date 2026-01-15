@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Manager for initiating and orchestrating topic log sync sessions.
+//! 
+//! Concurrently running sessions perform message forwarding with de-duplication. Events from all
+//! running sync sessions can be consumed via a single manager event stream. 
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
@@ -27,7 +31,7 @@ use crate::{FromSync, SyncSessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
 
-pub trait StreamDebug<Item>: Stream<Item = Item> + Send + Debug + 'static {}
+trait StreamDebug<Item>: Stream<Item = Item> + Send + Debug + 'static {}
 
 impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debug + 'static {}
 
@@ -36,10 +40,6 @@ impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debu
 /// Sync sessions are created via the manager, which instantiates them with access to the shared
 /// topic map and operation store as well as channels for receiving sync events and for sending
 /// newly arriving operations in live mode.
-///
-/// The manager method `next_event` must be polled in order to consume events coming from any
-/// running sync sessions, as well as to allow the manager to perform important event forwarding
-/// between sync sessions.
 ///
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
@@ -105,10 +105,12 @@ where
     type Message = Operation<E>;
     type Error = TopicSyncManagerError;
 
+    /// Instantiate a manager from a configuration object.
     fn from_config(config: Self::Config) -> Self {
         Self::new(config.topic_map, config.store)
     }
 
+    /// Instantiate a new sync session.
     async fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
         let (event_tx, event_rx) = broadcast::channel::<TopicLogSyncEvent<E>>(CHANNEL_BUFFER);
@@ -153,6 +155,7 @@ where
         )
     }
 
+    /// Retrieve a handle to a running sync session.
     async fn session_handle(
         &self,
         session_id: u64,
@@ -172,6 +175,7 @@ where
         })
     }
 
+    /// Subscribe to the event stream for all running sync sessions.
     fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let (manager_tx, manager_rx) = mpsc::channel(CHANNEL_BUFFER);
         self.manager_tx.push(manager_tx);
@@ -213,7 +217,7 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub struct ManagerEventStreamState<T, E>
+struct ManagerEventStreamState<T, E>
 where
     T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     E: Extensions + Send + 'static,
@@ -225,8 +229,9 @@ where
 
 /// Event stream for a manager returned from SyncManager::subscribe().
 ///
-/// This stream must be polled in order for the manager to forward live mode events onto
-/// concurrently running sync sessions.
+/// Calling `next_event` on the manager event stream both returns the next event in the event
+/// queue (combined events of all running sync sessions). If the event contains an operation
+/// then it will be forwarded on to any concurrently running sync sessions.
 #[allow(clippy::type_complexity)]
 pub struct ManagerEventStream<T, E>
 where
@@ -373,12 +378,14 @@ where
     }
 }
 
+/// Configuration object for `TopicSyncManager`.
 #[derive(Clone, Debug)]
 pub struct TopicSyncManagerConfig<S, M> {
     pub store: S,
     pub topic_map: M,
 }
 
+/// Error types which can be returned from `TopicSyncManager`.
 #[derive(Debug, Error)]
 pub enum TopicSyncManagerError {
     #[error(transparent)]
