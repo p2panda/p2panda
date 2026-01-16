@@ -1,11 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Manager for initiating and orchestrating topic log sync sessions.
+//!
+//! Concurrently running sessions perform message forwarding with de-duplication. Events from all
+//! running sync sessions can be consumed via a single manager event stream.
+mod event_stream;
+mod session_map;
+
+pub use event_stream::ManagerEventStream;
+pub use session_map::SessionTopicMap;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::future::ready;
@@ -20,26 +29,18 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
-use crate::map::SessionTopicMap;
-use crate::protocol::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
-use crate::traits::{SyncManager, TopicLogMap};
-use crate::{FromSync, SyncSessionConfig, ToSync};
+use crate::manager::event_stream::{ManagerEventStreamState, StreamDebug};
+use crate::protocols::{Logs, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::traits::{Manager, TopicMap};
+use crate::{FromSync, SessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
-
-pub trait StreamDebug<Item>: Stream<Item = Item> + Send + Debug + 'static {}
-
-impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debug + 'static {}
 
 /// Create and manage topic log sync sessions.
 ///
 /// Sync sessions are created via the manager, which instantiates them with access to the shared
 /// topic map and operation store as well as channels for receiving sync events and for sending
 /// newly arriving operations in live mode.
-///
-/// The manager method `next_event` must be polled in order to consume events coming from any
-/// running sync sessions, as well as to allow the manager to perform important event forwarding
-/// between sync sessions.
 ///
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
@@ -61,7 +62,7 @@ where
 }
 
 #[derive(Debug)]
-struct SessionStream<T, E>
+pub(crate) struct SessionStream<T, E>
 where
     T: Clone,
     E: Extensions,
@@ -91,25 +92,27 @@ where
     }
 }
 
-impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
+impl<T, S, M, L, E> Manager<T> for TopicSyncManager<T, S, M, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
-    M: TopicLogMap<T, L> + Send + 'static,
+    M: TopicMap<T, Logs<L>> + Send + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
-    type Config = TopicSyncManagerConfig<S, M>;
+    type Args = TopicSyncManagerArgs<S, M>;
     type Event = TopicLogSyncEvent<E>;
     type Message = Operation<E>;
     type Error = TopicSyncManagerError;
 
-    fn from_config(config: Self::Config) -> Self {
+    /// Instantiate a manager from arguments.
+    fn from_args(config: Self::Args) -> Self {
         Self::new(config.topic_map, config.store)
     }
 
-    async fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
+    /// Instantiate a new sync session.
+    async fn session(&mut self, session_id: u64, config: &SessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
         let (event_tx, event_rx) = broadcast::channel::<TopicLogSyncEvent<E>>(CHANNEL_BUFFER);
 
@@ -153,6 +156,7 @@ where
         )
     }
 
+    /// Retrieve a handle to a running sync session.
     async fn session_handle(
         &self,
         session_id: u64,
@@ -172,6 +176,7 @@ where
         })
     }
 
+    /// Subscribe to the event stream for all running sync sessions.
     fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
         let (manager_tx, manager_rx) = mpsc::channel(CHANNEL_BUFFER);
         self.manager_tx.push(manager_tx);
@@ -212,173 +217,14 @@ where
     }
 }
 
-#[allow(clippy::type_complexity)]
-pub struct ManagerEventStreamState<T, E>
-where
-    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    E: Extensions + Send + 'static,
-{
-    manager_rx: mpsc::Receiver<SessionStream<T, E>>,
-    session_rx_set: SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
-    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
-}
-
-/// Event stream for a manager returned from SyncManager::subscribe().
-///
-/// This stream must be polled in order for the manager to forward live mode events onto
-/// concurrently running sync sessions.
-#[allow(clippy::type_complexity)]
-pub struct ManagerEventStream<T, E>
-where
-    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    E: Extensions + Send + 'static,
-{
-    state: Option<ManagerEventStreamState<T, E>>,
-
-    /// The current future being polled.
-    pending: Option<
-        Pin<
-            Box<
-                dyn Future<
-                        Output = (
-                            ManagerEventStreamState<T, E>,
-                            Option<FromSync<TopicLogSyncEvent<E>>>,
-                        ),
-                    > + Send,
-            >,
-        >,
-    >,
-}
-
-impl<T, E> ManagerEventStream<T, E>
-where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    E: Extensions + Send + 'static,
-{
-    async fn next_event(
-        mut state: ManagerEventStreamState<T, E>,
-    ) -> (
-        ManagerEventStreamState<T, E>,
-        Option<FromSync<TopicLogSyncEvent<E>>>,
-    ) {
-        loop {
-            tokio::select!(
-                biased;
-                item = state.manager_rx.next() => {
-                    let Some(manager_event) = item else {
-                        debug!("manager event stream closed");
-                        return (state, None)
-                    };
-                    debug!("manager event received: {manager_event:?}");
-                    let session_id = manager_event.session_id;
-                    state.session_topic_map
-                    .insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
-
-                    let stream = BroadcastStream::new(manager_event.event_rx);
-
-                    #[allow(clippy::type_complexity)]
-                    let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>> =
-                        Box::pin(stream.map(Box::new(
-                            move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
-                                event.ok().map(|event| FromSync {
-                                    session_id,
-                                    remote: manager_event.remote,
-                                    event,
-                                })
-                            },
-                        )));
-                    state.session_rx_set.push(stream);
-                }
-                Some(Some(from_sync)) = state.session_rx_set.next() => {
-                    debug!("from sync event received: {from_sync:?}");
-                    let session_id = from_sync.session_id();
-                    let event = from_sync.event();
-
-                    let operation = match event {
-                        TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
-                        _ => return (state, Some(from_sync)),
-                    };
-
-                    if let Some(operation) = operation {
-                        let Some(topic) = state.session_topic_map.topic(session_id) else {
-                            debug!("session {session_id} not found");
-                            state.session_topic_map.drop(session_id);
-                            continue;
-                        };
-                        let keys = state.session_topic_map.sessions(topic);
-                        let mut dropped = vec![];
-
-                        for id in keys {
-                            if id == session_id {
-                                continue;
-                            }
-
-                            let Some(tx) = state.session_topic_map.sender_mut(id) else {
-                                debug!("session {id} channel unexpectedly closed");
-                                state.session_topic_map.drop(session_id);
-                                continue;
-                            };
-
-                            let result = tx.send(ToSync::Payload(operation.clone())).await;
-
-                            if result.is_err() {
-                                debug!("failed sending message on session channel");
-                                dropped.push(id);
-                            }
-                        }
-
-                        for id in dropped {
-                            state.session_topic_map.drop(id);
-                        }
-                    }
-
-                    return (state, Some(from_sync))
-                }
-            )
-        }
-    }
-}
-
-impl<T, E> Unpin for ManagerEventStream<T, E>
-where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    E: Extensions + Send + 'static,
-{
-}
-
-impl<T, E> Stream for ManagerEventStream<T, E>
-where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    E: Extensions + Send + 'static,
-{
-    type Item = FromSync<TopicLogSyncEvent<E>>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if self.pending.is_none() {
-            let fut = Box::pin(ManagerEventStream::next_event(
-                self.state.take().expect("state is not None"),
-            ));
-            self.pending = Some(fut);
-        }
-
-        let fut = self.pending.as_mut().unwrap();
-        match fut.as_mut().poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready((state, item)) => {
-                self.pending = None;
-                self.state.replace(state);
-                Poll::Ready(item)
-            }
-        }
-    }
-}
-
+/// Configuration object for `TopicSyncManager`.
 #[derive(Clone, Debug)]
-pub struct TopicSyncManagerConfig<S, M> {
+pub struct TopicSyncManagerArgs<S, M> {
     pub store: S,
     pub topic_map: M,
 }
 
+/// Error types which can be returned from `TopicSyncManager`.
 #[derive(Debug, Error)]
 pub enum TopicSyncManagerError {
     #[error(transparent)]
@@ -400,22 +246,21 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
-    use crate::TopicSyncManager;
-    use crate::manager::TopicSyncManagerConfig;
-    use crate::protocol::TopicLogSyncEvent;
+    use crate::manager::{TopicSyncManager, TopicSyncManagerArgs};
+    use crate::protocols::TopicLogSyncEvent;
     use crate::test_utils::{
         Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
         drain_stream, run_protocol, setup_logging,
     };
-    use crate::traits::SyncManager;
-    use crate::{FromSync, SyncSessionConfig, ToSync};
+    use crate::traits::Manager;
+    use crate::{FromSync, SessionConfig, ToSync};
 
     #[test]
-    fn from_config() {
+    fn from_args() {
         let store = TestMemoryStore::new();
         let topic_map = TestTopicMap::new();
-        let config = TopicSyncManagerConfig { store, topic_map };
-        let _: TestTopicSyncManager = SyncManager::from_config(config);
+        let config = TopicSyncManagerArgs { store, topic_map };
+        let _: TestTopicSyncManager = Manager::from_args(config);
     }
 
     #[tokio::test]
@@ -447,7 +292,7 @@ mod tests {
             TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
-        let config = SyncSessionConfig {
+        let config = SessionConfig {
             topic,
             remote: peer_b.id(),
             live_mode: true,
@@ -648,7 +493,7 @@ mod tests {
         let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
 
         // Session A -> B (A initiates)
-        let mut config = SyncSessionConfig {
+        let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_b.id(),
             live_mode: true,
@@ -658,7 +503,7 @@ mod tests {
         let session_b = manager_b.session(SESSION_BA, &config).await;
 
         // Session A -> C (A initiates)
-        let mut config = SyncSessionConfig {
+        let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_c.id(),
             live_mode: true,
@@ -807,7 +652,7 @@ mod tests {
             TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
-        let config = SyncSessionConfig {
+        let config = SessionConfig {
             topic,
             remote: peer_b.id(),
             live_mode: true,

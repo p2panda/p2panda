@@ -8,8 +8,9 @@ use std::pin::Pin;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
-use p2panda_sync::traits::SyncManager as SyncManagerTrait;
-use p2panda_sync::{FromSync, SessionTopicMap, SyncSessionConfig, ToSync};
+use p2panda_sync::manager::SessionTopicMap;
+use p2panda_sync::traits::Manager as SyncManagerTrait;
+use p2panda_sync::{FromSync, SessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::broadcast;
@@ -105,7 +106,7 @@ where
     type Arguments = (
         ProtocolId,
         TopicId,
-        M::Config,
+        M::Args,
         broadcast::Sender<FromSync<M::Event>>,
         Endpoint,
     );
@@ -118,7 +119,7 @@ where
         let (protocol_id, topic, config, sender, endpoint) = args;
         let pool = ThreadLocalActorSpawner::new();
 
-        let mut manager = M::from_config(config);
+        let mut manager = M::from_args(config);
         let event_stream = manager.subscribe();
 
         // The sync poller actor lives as long as the manager and only terminates due to the
@@ -177,7 +178,7 @@ where
                 );
 
                 state.active_sync_set.insert(node_id);
-                let config = SyncSessionConfig {
+                let config = SessionConfig {
                     topic,
                     remote: node_id,
                     live_mode,
@@ -235,7 +236,7 @@ where
                     "re-initiate sync after failed session"
                 );
 
-                let config = SyncSessionConfig {
+                let config = SessionConfig {
                     topic: state.topic,
                     remote: node_id,
                     live_mode,
@@ -272,7 +273,7 @@ where
                     "accept sync session"
                 );
 
-                let config = SyncSessionConfig {
+                let config = SessionConfig {
                     topic,
                     remote: node_id,
                     live_mode,
@@ -474,7 +475,7 @@ where
         actor_id: ActorId,
         node_id: NodeId,
         topic: TopicId,
-        config: SyncSessionConfig<TopicId>,
+        config: SessionConfig<TopicId>,
     ) -> <M as SyncManagerTrait<TopicId>>::Protocol {
         let session_id: SyncSessionId = state.next_session_id;
         state.next_session_id += 1;

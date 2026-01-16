@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Two-party topic handshake protocol.
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 

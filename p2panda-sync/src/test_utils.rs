@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Test utilities.
 use std::{collections::HashMap, convert::Infallible};
 
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -13,12 +14,13 @@ use serde::{Deserialize, Serialize};
 use tokio::join;
 use tokio::sync::broadcast;
 
-use crate::log_sync::{LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncProtocol};
-use crate::traits::{Protocol, TopicLogMap};
-use crate::{
-    Logs, ToSync, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncMessage,
-    TopicSyncManager,
+use crate::ToSync;
+use crate::manager::TopicSyncManager;
+use crate::protocols::{
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, Logs, TopicLogSync, TopicLogSyncError,
+    TopicLogSyncEvent, TopicLogSyncMessage,
 };
+use crate::traits::{Protocol, TopicMap};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -26,7 +28,7 @@ pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
-pub type TestLogSync = LogSyncProtocol<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
+pub type TestLogSync = LogSync<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
@@ -96,7 +98,7 @@ impl Peer {
         logs: &Logs<u64>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = broadcast::channel(128);
-        let session = LogSyncProtocol::new(self.store.clone(), logs.clone(), event_tx);
+        let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
     }
 
@@ -299,15 +301,15 @@ impl TestTopicMap {
         TestTopicMap(HashMap::new())
     }
 
-    pub fn insert(&mut self, topic_query: &TestTopic, logs: Logs<u64>) -> Option<Logs<u64>> {
-        self.0.insert(topic_query.clone(), logs)
+    pub fn insert(&mut self, topic: &TestTopic, logs: Logs<u64>) -> Option<Logs<u64>> {
+        self.0.insert(topic.clone(), logs)
     }
 }
 
-impl TopicLogMap<TestTopic, u64> for TestTopicMap {
+impl TopicMap<TestTopic, Logs<u64>> for TestTopicMap {
     type Error = Infallible;
 
-    async fn get(&self, topic_query: &TestTopic) -> Result<Logs<u64>, Self::Error> {
-        Ok(self.0.get(topic_query).cloned().unwrap_or_default())
+    async fn get(&self, topic: &TestTopic) -> Result<Logs<u64>, Self::Error> {
+        Ok(self.0.get(topic).cloned().unwrap_or_default())
     }
 }

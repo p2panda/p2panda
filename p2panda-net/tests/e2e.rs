@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use futures_util::StreamExt;
 use p2panda_core::Body;
 use p2panda_net::test_utils::{TestNode, setup_logging};
-use p2panda_sync::TopicLogSyncEvent;
+use p2panda_sync::protocols::TopicLogSyncEvent;
 
 #[tokio::test]
 async fn gossip_and_sync_with_same_topic() {

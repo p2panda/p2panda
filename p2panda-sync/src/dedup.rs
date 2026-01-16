@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Ring-buffer based deduplication of generic messages.
 use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 
