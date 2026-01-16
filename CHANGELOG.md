@@ -37,6 +37,7 @@ Highlights are marked with a pancake 🥞
   - Add missing relay url in user data during mDNS discovery [#907](https://github.com/p2panda/p2panda/pull/907)
   - Allow endpoint to gracefully shut down on drop [#908](https://github.com/p2panda/p2panda/pull/908)
   - Modular API for new `p2panda-net` [#909](https://github.com/p2panda/p2panda/pull/909) 🥞
+  - Method to configure relay urls in Endpoint builder [#948](https://github.com/p2panda/p2panda/pull/948)
 
 ### Changed
 
