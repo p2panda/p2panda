@@ -551,7 +551,7 @@ mod tests {
     use p2panda_core::Body;
 
     use crate::protocols::log_sync::{
-        LogSyncError, LogSyncEvent, LogSyncMetrics, Logs, Operation, LogSyncStatus,
+        LogSyncError, LogSyncEvent, LogSyncMetrics, LogSyncStatus, Logs, Operation,
     };
     use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
 

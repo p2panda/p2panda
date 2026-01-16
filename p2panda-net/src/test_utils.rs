@@ -8,9 +8,9 @@ use std::sync::Arc;
 use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
 use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_store::{LogStore, OperationStore};
+use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
 use p2panda_sync::protocols::Logs;
 use p2panda_sync::traits::TopicMap;
-use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
 use ractor::thread_local::ThreadLocalActorSpawner;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -403,10 +403,7 @@ impl TestTopicMap {
 impl TopicMap<TopicId, Logs<TestLogId>> for TestTopicMap {
     type Error = Infallible;
 
-    async fn get(
-        &self,
-        topic: &TopicId,
-    ) -> Result<Logs<TestLogId>, Self::Error> {
+    async fn get(&self, topic: &TopicId) -> Result<Logs<TestLogId>, Self::Error> {
         let map = self.0.read().await;
         Ok(map.get(topic).cloned().unwrap_or_default())
     }

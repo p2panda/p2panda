@@ -8,9 +8,9 @@ use std::pin::Pin;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
+use p2panda_sync::manager::SessionTopicMap;
 use p2panda_sync::traits::Manager as SyncManagerTrait;
 use p2panda_sync::{FromSync, SessionConfig, ToSync};
-use p2panda_sync::manager::SessionTopicMap;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::broadcast;

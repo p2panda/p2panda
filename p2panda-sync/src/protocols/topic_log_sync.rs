@@ -433,7 +433,7 @@ pub mod tests {
     };
     use crate::traits::Protocol;
 
-    use super::{TopicLogSyncLiveMetrics, TopicLogSyncError, TopicLogSyncEvent};
+    use super::{TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncLiveMetrics};
 
     #[tokio::test]
     async fn sync_session_no_operations() {

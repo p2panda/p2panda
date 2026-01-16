@@ -62,7 +62,7 @@ pub trait Manager<T> {
 /// for the same data type when necessary.
 ///
 /// For example a `TopicMap` map implementation could map a generic `T` to a set of logs.
-/// 
+///
 /// ## Designing `TopicMap` for applications
 ///
 /// Considering an example chat application which is based on append-only log data types, we

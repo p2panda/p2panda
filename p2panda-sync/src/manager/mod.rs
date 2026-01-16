@@ -4,11 +4,11 @@
 //!
 //! Concurrently running sessions perform message forwarding with de-duplication. Events from all
 //! running sync sessions can be consumed via a single manager event stream.
-mod session_map;
 mod event_stream;
+mod session_map;
 
-pub use session_map::SessionTopicMap;
 pub use event_stream::ManagerEventStream;
+pub use session_map::SessionTopicMap;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
