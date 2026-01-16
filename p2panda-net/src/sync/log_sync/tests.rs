@@ -571,3 +571,75 @@ async fn topic_log_sync_failure_and_retry() {
         })
     );
 }
+
+use crate::sync::actors::manager::{GOSSIP_TOPIC_MIX_VALUE, derive_topic};
+
+#[tokio::test]
+async fn non_mix_topic_address_book_registration() {
+    setup_logging();
+
+    // We're running the same topic for both gossip and sync sessions, and even though they are the
+    // same, they should be correctly treating different parts of the system.
+    let topic = [1; 32];
+
+    // Start Panda's node.
+    let mut panda = TestNode::spawn([98; 32]).await;
+
+    let mut panda_raw_topic_watcher_rx = panda.address_book.watch_topic(topic, true).await.unwrap();
+    let mixed_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
+    let mut panda_mixed_topic_watcher_rx = panda
+        .address_book
+        .watch_topic(mixed_topic, true)
+        .await
+        .unwrap();
+
+    // Subscribe to sync topic to receive (eventually consistent) messages.
+    let panda_sync_handle = panda.log_sync.stream(topic, true).await.unwrap();
+    let panda_sync_rx = panda_sync_handle.subscribe().await.unwrap();
+
+    // Start Penguin's node.
+    let mut penguin = TestNode::spawn([99; 32]).await;
+
+    // Penguin adds Panda as a "bootstrap" node in its address book.
+    penguin
+        .address_book
+        .insert_node_info(panda.node_info().bootstrap())
+        .await
+        .unwrap();
+
+    let mut penguin_raw_topic_watcher_rx =
+        panda.address_book.watch_topic(topic, true).await.unwrap();
+    let mixed_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
+    let mut penguin_mixed_topic_watcher_rx = panda
+        .address_book
+        .watch_topic(mixed_topic, true)
+        .await
+        .unwrap();
+
+    // Penguin initiates a sync stream for this topic and is ready now to share it's created
+    // operation with Panda.
+    let _penguin_sync_handle = penguin.log_sync.stream(topic, true).await.unwrap();
+
+    // Assert panda and penguin each know they are both in the topic overlay for the "mixed" topic id.
+    let event = panda_mixed_topic_watcher_rx.recv().await.unwrap();
+    let node_ids = event.value;
+    assert!(node_ids.contains(&panda.node_id()), "{node_ids:?}");
+    assert!(node_ids.contains(&penguin.node_id()), "{node_ids:?}");
+
+    let event = penguin_mixed_topic_watcher_rx.recv().await.unwrap();
+    let node_ids = event.value;
+    assert!(node_ids.contains(&panda.node_id()), "{node_ids:?}");
+    assert!(node_ids.contains(&penguin.node_id()), "{node_ids:?}");
+
+    // Both panda and penguin are also subscribed to the "raw" topic id gossip overlay.
+    // TODO: this should not be the case. 
+    let event = panda_raw_topic_watcher_rx.recv().await.unwrap();
+    let node_ids = event.value;
+    assert!(node_ids.contains(&panda.node_id()), "{node_ids:?}");
+    assert!(node_ids.contains(&penguin.node_id()), "{node_ids:?}");
+
+    let event = penguin_raw_topic_watcher_rx.recv().await.unwrap();
+    let node_ids = event.value;
+    assert!(node_ids.contains(&panda.node_id()), "{node_ids:?}");
+    assert!(node_ids.contains(&penguin.node_id()), "{node_ids:?}");
+}

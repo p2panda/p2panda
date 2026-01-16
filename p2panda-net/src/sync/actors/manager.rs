@@ -34,7 +34,7 @@ type IsLiveModeEnabled = bool;
 /// Constant to mix a given topic with to derive a new one.
 ///
 /// This value was generated randomly to guarantee no collisions.
-const GOSSIP_TOPIC_MIX_VALUE: TopicId = [
+pub(crate) const GOSSIP_TOPIC_MIX_VALUE: TopicId = [
     253, 6, 251, 217, 173, 228, 215, 244, 130, 181, 150, 142, 220, 244, 49, 219, 35, 94, 163, 197,
     229, 93, 143, 227, 97, 61, 38, 202, 63, 250, 26, 233,
 ];
@@ -522,6 +522,6 @@ where
 }
 
 /// Hash the concatenation of a topic with a given value to derive new topic.
-fn derive_topic(topic: TopicId, value: impl AsRef<[u8]>) -> TopicId {
+pub(crate) fn derive_topic(topic: TopicId, value: impl AsRef<[u8]>) -> TopicId {
     p2panda_core::Hash::new([topic.as_ref(), value.as_ref()].concat()).into()
 }
