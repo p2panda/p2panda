@@ -6,6 +6,8 @@ mod builder;
 pub mod report;
 #[cfg(feature = "supervisor")]
 mod supervisor;
+#[cfg(test)]
+mod tests;
 pub mod watchers;
 
 pub use api::{AddressBook, AddressBookError};
