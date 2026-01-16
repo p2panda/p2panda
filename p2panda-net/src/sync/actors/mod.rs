@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-mod manager;
+pub(crate) mod manager;
 mod poller;
 mod session;
 mod topic_manager;
