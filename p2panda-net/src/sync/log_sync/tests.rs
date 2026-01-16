@@ -632,7 +632,7 @@ async fn non_mix_topic_address_book_registration() {
     assert!(node_ids.contains(&penguin.node_id()), "{node_ids:?}");
 
     // Both panda and penguin are also subscribed to the "raw" topic id gossip overlay.
-    // TODO: this should not be the case. 
+    // TODO: this should not be the case.
     let event = panda_raw_topic_watcher_rx.recv().await.unwrap();
     let node_ids = event.value;
     assert!(node_ids.contains(&panda.node_id()), "{node_ids:?}");
