@@ -12,7 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Introduce `Conditions` super-trait in `p2panda-auth` [#780](https://github.com/p2panda/p2panda/pull/780)
-- Add `serde` derives to all state structs in `p2panda-auth` [#809](https://github.com/p2panda/p2panda/pull/809) 
+- Add `serde` derives to all state structs in `p2panda-auth` [#809](https://github.com/p2panda/p2panda/pull/809)
 - `p2panda-spaces`: data encryption for groups and multiple devices [#836](https://github.com/p2panda/p2panda/pull/836) 🥞
 - Added `Serialize` and `Deserialize` to `p2panda-spaces::Event` [#868](https://github.com/p2panda/p2panda/pull/868)
 - Additional test for framed CBOR operation streaming [#885](https://github.com/p2panda/p2panda/pull/885)
@@ -54,6 +54,7 @@ Highlights are marked with a pancake 🥞
 - Remove uni-streams limit, additional tests for gossip [#874](https://github.com/p2panda/p2panda/pull/874)
 - Do not overwrite serde errors during deserialization of `Header` [#886](https://github.com/p2panda/p2panda/pull/886)
 - Handle outdated operations which got processed while being pruned, fix overflow substraction bug [#894](https://github.com/p2panda/p2panda/pull/894)
+- Fix race-condition in add_topic and remove_topic [#947](https://github.com/p2panda/p2panda/pull/947)
 
 ## [0.4.0] - 07/07/2025
 

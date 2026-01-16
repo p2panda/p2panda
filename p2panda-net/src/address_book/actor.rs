@@ -129,6 +129,31 @@ impl AddressBookState {
         let topics = self.store.node_topics(node_id).await?;
         Ok(topics)
     }
+
+    async fn set_topics(
+        &self,
+        node_id: NodeId,
+        topics: HashSet<TopicId>,
+    ) -> Result<(), BoxedError> {
+        self.store.set_topics(node_id, topics.clone()).await?;
+
+        // Inform subscribers about potential change in set of interested nodes.
+        for topic in &topics {
+            let node_ids = self
+                .node_infos_by_topics(vec![*topic])
+                .await?
+                .into_iter()
+                .map(|info| info.id());
+            self.topic_watchers
+                .update(topic, HashSet::from_iter(node_ids));
+        }
+
+        // Inform subscribers about changes in set of topics.
+        let topics = self.topics_for_node(&node_id).await?;
+        self.node_topics_watchers.update(&node_id, topics);
+
+        Ok(())
+    }
 }
 
 pub type AddressBookActorArgs = (BoxedAddressBookStore<NodeId, NodeInfo>,);
@@ -159,7 +184,7 @@ impl ThreadLocalActor for AddressBookActor {
 
     async fn handle(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -296,34 +321,18 @@ impl ThreadLocalActor for AddressBookActor {
                 let _ = reply.send(result);
             }
             ToAddressBookActor::SetTopics(node_id, topics) => {
-                state.store.set_topics(node_id, topics.clone()).await?;
-
-                // Inform subscribers about potential change in set of interested nodes.
-                for topic in &topics {
-                    let node_ids = state
-                        .node_infos_by_topics(vec![*topic])
-                        .await?
-                        .into_iter()
-                        .map(|info| info.id());
-                    state
-                        .topic_watchers
-                        .update(topic, HashSet::from_iter(node_ids));
-                }
-
-                // Inform subscribers about changes in set of topics.
-                let topics = state.topics_for_node(&node_id).await?;
-                state.node_topics_watchers.update(&node_id, topics);
+                state.set_topics(node_id, topics).await?;
             }
             ToAddressBookActor::AddTopic(node_id, topic) => {
                 let mut topics = state.store.node_topics(&node_id).await?;
                 if topics.insert(topic) {
-                    myself.send_message(ToAddressBookActor::SetTopics(node_id, topics))?;
+                    state.set_topics(node_id, topics).await?;
                 }
             }
             ToAddressBookActor::RemoveTopic(node_id, topic) => {
                 let mut topics = state.store.node_topics(&node_id).await?;
                 if topics.remove(&topic) {
-                    myself.send_message(ToAddressBookActor::SetTopics(node_id, topics))?;
+                    state.set_topics(node_id, topics).await?;
                 }
             }
             ToAddressBookActor::RemoveNodeInfo(node_id, reply) => {
