@@ -85,6 +85,7 @@ pub struct IrohState {
     network_id: NetworkId,
     private_key: PrivateKey,
     config: IrohConfig,
+    relay_map: iroh::RelayMap,
     address_book: AddressBook,
     endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
@@ -93,7 +94,13 @@ pub struct IrohState {
     worker_pool: ThreadLocalActorSpawner,
 }
 
-pub type IrohEndpointArgs = (NetworkId, PrivateKey, IrohConfig, AddressBook);
+pub type IrohEndpointArgs = (
+    NetworkId,
+    PrivateKey,
+    IrohConfig,
+    iroh::RelayMap,
+    AddressBook,
+);
 
 #[derive(Default)]
 pub struct IrohEndpoint;
@@ -110,7 +117,7 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (network_id, private_key, config, address_book) = args;
+        let (network_id, private_key, config, relay_map, address_book) = args;
 
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
@@ -119,6 +126,7 @@ impl ThreadLocalActor for IrohEndpoint {
             network_id,
             private_key,
             config,
+            relay_map,
             address_book,
             endpoint: None,
             protocols: Arc::default(),
@@ -175,10 +183,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 ));
 
                 // Register list of possible "home relays" for this node.
-                let relay_mode = {
-                    let relay_map = iroh::RelayMap::from_iter(config.relay_urls);
-                    iroh::RelayMode::Custom(relay_map)
-                };
+                let relay_mode = iroh::RelayMode::Custom(state.relay_map.clone());
 
                 // Connect iroh's endpoint with our own address book to "publish" our changed iroh
                 // address directly and "resolve" endpoint id's.

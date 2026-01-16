@@ -24,12 +24,6 @@ pub struct IrohConfig {
     /// Setting the port to `0` will use a random port. If the port specified is already in use, it
     /// will fallback to choosing a random port.
     pub bind_port_v6: u16,
-
-    /// Sets the relay servers to assist in establishing connectivity.
-    ///
-    /// Relay servers are used to establish initial connection with another iroh endpoint. They
-    /// also perform various functions related to hole punching.
-    pub relay_urls: Vec<iroh::RelayUrl>,
 }
 
 impl Default for IrohConfig {
@@ -39,7 +33,6 @@ impl Default for IrohConfig {
             bind_port_v4: DEFAULT_BIND_PORT,
             bind_ip_v6: Ipv6Addr::UNSPECIFIED,
             bind_port_v6: DEFAULT_BIND_PORT + 2,
-            relay_urls: Vec::new(),
         }
     }
 }

@@ -144,7 +144,6 @@ pub fn test_args_from_seed(
                 bind_port_v4: rng.random_range(49152..65535),
                 bind_ip_v6: Ipv6Addr::LOCALHOST,
                 bind_port_v6: rng.random_range(49152..65535),
-                ..Default::default()
             })
             .with_rng(rng)
             .with_mdns_mode(MdnsDiscoveryMode::Disabled)
