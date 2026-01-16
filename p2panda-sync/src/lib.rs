@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
-
 use p2panda_core::PublicKey;
 
 mod dedup;
@@ -11,12 +9,9 @@ pub mod protocols;
 pub mod test_utils;
 pub mod traits;
 
-/// A map of author logs.
-pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
-
-/// Configuration object for instantiated sync sessions.
+/// Configuration object for instantiating sync sessions.
 #[derive(Clone, Debug)]
-pub struct SyncSessionConfig<T> {
+pub struct SessionConfig<T> {
     pub topic: T,
     pub remote: PublicKey,
     pub live_mode: bool,

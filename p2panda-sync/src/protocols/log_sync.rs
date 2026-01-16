@@ -14,9 +14,11 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
 
-use crate::Logs;
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 use crate::traits::Protocol;
+
+/// A map of author logs.
+pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Default)]

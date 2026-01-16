@@ -17,15 +17,16 @@ use tracing::{debug, warn};
 
 use crate::ToSync;
 use crate::dedup::DEFAULT_BUFFER_CAPACITY;
+use crate::protocols::Logs;
 use crate::protocols::log_sync::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncStatus,
 };
-use crate::traits::{Protocol, TopicLogMap};
+use crate::traits::{Protocol, TopicMap};
 
 /// Protocol for synchronizing logs which are associated with a generic T topic.
 ///
 /// The mapping of T to a set of logs is handled on the application layer using an implementation
-/// of the `TopicLogMap` trait.
+/// of the `TopicMap` trait.
 ///
 /// After sync is complete peers optionally enter "live-mode" where concurrently received and
 /// future messages will be sent directly to the application layer and forwarded to any
@@ -50,11 +51,11 @@ impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E>,
-    M: TopicLogMap<T, L>,
+    M: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
 {
-    /// Returns a new sync protocol instance, configured with a store and `TopicLogMap` implementation
+    /// Returns a new sync protocol instance, configured with a store and `TopicMap` implementation
     /// which associates the to-be-synced logs with a given topic.
     pub fn new(
         topic: T,
@@ -98,7 +99,7 @@ impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
-    M: TopicLogMap<T, L> + Send + 'static,
+    M: TopicMap<T, Logs<L>> + Send + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
 {

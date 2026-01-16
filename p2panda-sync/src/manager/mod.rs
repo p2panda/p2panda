@@ -30,9 +30,9 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
 use crate::manager::event_stream::{ManagerEventStreamState, StreamDebug};
-use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
-use crate::traits::{SyncManager, TopicLogMap};
-use crate::{FromSync, SyncSessionConfig, ToSync};
+use crate::protocols::{Logs, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::traits::{Manager, TopicMap};
+use crate::{FromSync, SessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
 
@@ -92,27 +92,27 @@ where
     }
 }
 
-impl<T, S, M, L, E> SyncManager<T> for TopicSyncManager<T, S, M, L, E>
+impl<T, S, M, L, E> Manager<T> for TopicSyncManager<T, S, M, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
-    M: TopicLogMap<T, L> + Send + 'static,
+    M: TopicMap<T, Logs<L>> + Send + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;
-    type Config = TopicSyncManagerConfig<S, M>;
+    type Args = TopicSyncManagerArgs<S, M>;
     type Event = TopicLogSyncEvent<E>;
     type Message = Operation<E>;
     type Error = TopicSyncManagerError;
 
-    /// Instantiate a manager from a configuration object.
-    fn from_config(config: Self::Config) -> Self {
+    /// Instantiate a manager from arguments.
+    fn from_args(config: Self::Args) -> Self {
         Self::new(config.topic_map, config.store)
     }
 
     /// Instantiate a new sync session.
-    async fn session(&mut self, session_id: u64, config: &SyncSessionConfig<T>) -> Self::Protocol {
+    async fn session(&mut self, session_id: u64, config: &SessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
         let (event_tx, event_rx) = broadcast::channel::<TopicLogSyncEvent<E>>(CHANNEL_BUFFER);
 
@@ -219,7 +219,7 @@ where
 
 /// Configuration object for `TopicSyncManager`.
 #[derive(Clone, Debug)]
-pub struct TopicSyncManagerConfig<S, M> {
+pub struct TopicSyncManagerArgs<S, M> {
     pub store: S,
     pub topic_map: M,
 }
@@ -246,21 +246,21 @@ mod tests {
     use futures::{SinkExt, StreamExt};
     use p2panda_core::{Body, Operation};
 
-    use crate::manager::{TopicSyncManager, TopicSyncManagerConfig};
+    use crate::manager::{TopicSyncManager, TopicSyncManagerArgs};
     use crate::protocols::TopicLogSyncEvent;
     use crate::test_utils::{
         Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
         drain_stream, run_protocol, setup_logging,
     };
-    use crate::traits::SyncManager;
-    use crate::{FromSync, SyncSessionConfig, ToSync};
+    use crate::traits::Manager;
+    use crate::{FromSync, SessionConfig, ToSync};
 
     #[test]
-    fn from_config() {
+    fn from_args() {
         let store = TestMemoryStore::new();
         let topic_map = TestTopicMap::new();
-        let config = TopicSyncManagerConfig { store, topic_map };
-        let _: TestTopicSyncManager = SyncManager::from_config(config);
+        let config = TopicSyncManagerArgs { store, topic_map };
+        let _: TestTopicSyncManager = Manager::from_args(config);
     }
 
     #[tokio::test]
@@ -292,7 +292,7 @@ mod tests {
             TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
-        let config = SyncSessionConfig {
+        let config = SessionConfig {
             topic,
             remote: peer_b.id(),
             live_mode: true,
@@ -493,7 +493,7 @@ mod tests {
         let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
 
         // Session A -> B (A initiates)
-        let mut config = SyncSessionConfig {
+        let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_b.id(),
             live_mode: true,
@@ -503,7 +503,7 @@ mod tests {
         let session_b = manager_b.session(SESSION_BA, &config).await;
 
         // Session A -> C (A initiates)
-        let mut config = SyncSessionConfig {
+        let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_c.id(),
             live_mode: true,
@@ -652,7 +652,7 @@ mod tests {
             TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
-        let config = SyncSessionConfig {
+        let config = SessionConfig {
             topic,
             remote: peer_b.id(),
             live_mode: true,

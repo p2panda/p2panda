@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 use tokio::join;
 use tokio::sync::broadcast;
 
+use crate::ToSync;
+use crate::manager::TopicSyncManager;
 use crate::protocols::{
-    LogSyncError, LogSyncEvent, LogSyncMessage, LogSync, TopicLogSync, TopicLogSyncError,
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, Logs, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
 };
-use crate::traits::{Protocol, TopicLogMap};
-use crate::manager::TopicSyncManager;
-use crate::{Logs, ToSync};
+use crate::traits::{Protocol, TopicMap};
 
 // General test types.
 pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
@@ -301,15 +301,15 @@ impl TestTopicMap {
         TestTopicMap(HashMap::new())
     }
 
-    pub fn insert(&mut self, topic_query: &TestTopic, logs: Logs<u64>) -> Option<Logs<u64>> {
-        self.0.insert(topic_query.clone(), logs)
+    pub fn insert(&mut self, topic: &TestTopic, logs: Logs<u64>) -> Option<Logs<u64>> {
+        self.0.insert(topic.clone(), logs)
     }
 }
 
-impl TopicLogMap<TestTopic, u64> for TestTopicMap {
+impl TopicMap<TestTopic, Logs<u64>> for TestTopicMap {
     type Error = Infallible;
 
-    async fn get(&self, topic_query: &TestTopic) -> Result<Logs<u64>, Self::Error> {
-        Ok(self.0.get(topic_query).cloned().unwrap_or_default())
+    async fn get(&self, topic: &TestTopic) -> Result<Logs<u64>, Self::Error> {
+        Ok(self.0.get(topic).cloned().unwrap_or_default())
     }
 }

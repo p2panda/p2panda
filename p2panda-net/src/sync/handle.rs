@@ -2,7 +2,7 @@
 
 use futures_util::{Stream, StreamExt};
 use p2panda_sync::FromSync;
-use p2panda_sync::traits::SyncManager as SyncManagerTrait;
+use p2panda_sync::traits::Manager as SyncManagerTrait;
 use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::broadcast;
