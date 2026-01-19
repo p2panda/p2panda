@@ -60,10 +60,10 @@ pub struct Config {
 /// can compute the intersection locally. At the end of a sucessful run both peers should end up
 /// with the same set of intersecting topics.
 ///
-/// We generate a salt that is unique per session by concatenating [random
-/// bytes][`generate_salt_half`] from both peers and use it in the hash to prevent replay attacks.
-/// Additionally we add a single constant byte to the salt depending on which peer the message is
-/// coming from so that bob cannot simply replay alice's hashes as his own answer.
+/// We generate a salt that is unique per session by concatenating random bytes from both peers and
+/// use it in the hash to prevent replay attacks. Additionally we add a single constant byte to the
+/// salt depending on which peer the message is coming from so that bob cannot simply replay
+/// alice's hashes as their own answer.
 pub struct PsiHashDiscoveryProtocol<S, P, ID, N> {
     store: S,
     subscription: P,
