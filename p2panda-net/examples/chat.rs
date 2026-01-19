@@ -143,13 +143,16 @@ async fn main() -> Result<()> {
         .await
         .unwrap();
 
-    if args.mdns {
-        let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
-            .mode(MdnsDiscoveryMode::Active)
-            .spawn()
-            .await
-            .unwrap();
-    }
+    let mdns_discovery_mode = if args.mdns {
+        MdnsDiscoveryMode::Active
+    } else {
+        MdnsDiscoveryMode::Disabled
+    };
+    let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
+        .mode(mdns_discovery_mode)
+        .spawn()
+        .await
+        .unwrap();
 
     let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
         .spawn()
