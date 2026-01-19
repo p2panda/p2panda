@@ -146,7 +146,7 @@ pub fn test_args_from_seed(
                 bind_port_v6: rng.random_range(49152..65535),
             })
             .with_rng(rng)
-            .with_mdns_mode(MdnsDiscoveryMode::Disabled)
+            .with_mdns_mode(MdnsDiscoveryMode::Passive)
             .build(),
         store,
     )

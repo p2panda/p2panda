@@ -15,7 +15,6 @@ pub enum MdnsDiscoveryMode {
     Active,
     #[default]
     Passive,
-    Disabled,
 }
 
 impl Display for MdnsDiscoveryMode {
@@ -23,7 +22,6 @@ impl Display for MdnsDiscoveryMode {
         let value = match self {
             MdnsDiscoveryMode::Active => "active",
             MdnsDiscoveryMode::Passive => "passive",
-            MdnsDiscoveryMode::Disabled => "disabled",
         };
         write!(f, "{value}")
     }
