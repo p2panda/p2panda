@@ -13,7 +13,7 @@ pub(crate) mod user_data;
 
 pub use api::{Endpoint, EndpointError};
 pub use builder::{Builder, DEFAULT_NETWORK_ID};
-pub use config::{DEFAULT_BIND_PORT, IrohConfig};
+pub use config::IrohConfig;
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {
