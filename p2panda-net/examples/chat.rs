@@ -3,7 +3,6 @@
 //! Example chat application using p2panda-net.
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -14,7 +13,7 @@ use iroh::EndpointAddr;
 use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::discovery::DiscoveryConfig;
-use p2panda_net::iroh_endpoint::{IrohConfig, from_public_key};
+use p2panda_net::iroh_endpoint::from_public_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
 use p2panda_net::{
@@ -103,7 +102,7 @@ async fn main() -> Result<()> {
     let seed = args
         .seed
         .map(|seed| [seed; 32])
-        .unwrap_or_else(|| rand::random::<[u8; 32]>());
+        .unwrap_or_else(rand::random::<[u8; 32]>);
 
     let private_key = PrivateKey::from_bytes(&seed);
     let public_key = private_key.public_key();
@@ -130,18 +129,10 @@ async fn main() -> Result<()> {
             .await?;
     }
 
-    let endpoint_config = IrohConfig {
-        bind_ip_v4: Ipv4Addr::LOCALHOST,
-        bind_port_v4: 0,
-        bind_ip_v6: Ipv6Addr::LOCALHOST,
-        bind_port_v6: 0,
-        relay_urls: vec![RELAY_URL.parse().unwrap()],
-    };
-
     let endpoint = Endpoint::builder(address_book.clone())
         .private_key(private_key.clone())
         .network_id(NETWORK_ID)
-        .config(endpoint_config)
+        .relay_url(RELAY_URL.parse().unwrap())
         .spawn()
         .await
         .unwrap();
@@ -190,16 +181,10 @@ async fn main() -> Result<()> {
         }
     });
 
-    let sync = LogSync::builder(
-        store.clone(),
-        topic_map.clone(),
-        address_book,
-        endpoint,
-        gossip,
-    )
-    .spawn()
-    .await
-    .unwrap();
+    let sync = LogSync::builder(store.clone(), topic_map.clone(), endpoint, gossip)
+        .spawn()
+        .await
+        .unwrap();
 
     let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
     let mut sync_rx = sync_tx.subscribe().await.unwrap();
