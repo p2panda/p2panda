@@ -10,7 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::from_public_key;
@@ -23,6 +23,7 @@ use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::traits::TopicLogMap;
 use p2panda_sync::{Logs, TopicLogSyncEvent};
 use tokio::sync::{RwLock, mpsc};
+use tokio::time::Instant;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -163,23 +164,93 @@ async fn main() -> Result<()> {
     let gossip_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
     let mut gossip_rx = gossip_tx.subscribe();
 
+    // Mapping of public key to nickname.
+    let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
+
+    // Mapping of public key to the instant that the last heartbeat message was received.
+    let status = Arc::new(RwLock::new(HashMap::new()));
+
     // Receive and log each (ephemeral) heartbeat message.
-    tokio::spawn(async move {
-        loop {
-            if let Some(Ok(message)) = gossip_rx.next().await {
-                info!(
-                    "heartbeat <3 {}",
-                    u64::from_be_bytes(message.try_into().unwrap())
-                );
+    {
+        let nicknames = Arc::clone(&nicknames);
+        let status = Arc::clone(&status);
+        tokio::spawn(async move {
+            loop {
+                if let Some(Ok(message)) = gossip_rx.next().await {
+                    // Extract the sender's public key from the message.
+                    let (sender, _rnd_bytes) = message.split_at(32);
+                    let sender_public_key_bytes: &[u8; 32] = sender.try_into().unwrap();
+                    let sender_public_key = PublicKey::from_bytes(sender_public_key_bytes).unwrap();
+
+                    // Look up nickname for sender.
+                    let name =
+                        if let Some(nickname) = nicknames.read().await.get(&sender_public_key) {
+                            nickname.to_owned()
+                        } else {
+                            sender_public_key.fmt_short()
+                        };
+
+                    info!("received heartbeat from {}", name);
+
+                    // Update status hashmap.
+                    if status
+                        .write()
+                        .await
+                        .insert(sender_public_key, Instant::now())
+                        .is_none()
+                    {
+                        println!("-> {} came online", name)
+                    }
+                }
             }
-        }
-    });
+        });
+    }
+
+    // TODO: Rather send an explicit "going offline" message before shutdown.
+    //
+    // Print a message when a peer goes offline.
+    {
+        let nicknames = Arc::clone(&nicknames);
+        let status = Arc::clone(&status);
+        tokio::task::spawn(async move {
+            loop {
+                let now = Instant::now();
+                for (public_key, last_heartbeat) in status.read().await.iter() {
+                    let secs_since_last_heartbeat = now.duration_since(*last_heartbeat).as_secs();
+                    println!(
+                        "{} last seen {} seconds ago",
+                        public_key, secs_since_last_heartbeat
+                    );
+                    if secs_since_last_heartbeat > 30 {
+                        let name = if let Some(nickname) = nicknames.read().await.get(public_key) {
+                            nickname.to_owned()
+                        } else {
+                            public_key.fmt_short()
+                        };
+
+                        println!("-> {} went offline", name);
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_secs(15)).await;
+            }
+        });
+    }
 
     // Publish (ephemeral) heartbeat messages.
     tokio::task::spawn(async move {
         loop {
+            // Generate a random number to ensure each message is unique.
             let rnd: u64 = rand::random();
-            gossip_tx.publish(rnd.to_be_bytes()).await.unwrap();
+            let rnd_bytes = rnd.to_be_bytes().to_vec();
+
+            // Combine our public key with the random number.
+            let mut msg = public_key.as_bytes().to_vec();
+            msg.extend(rnd_bytes);
+
+            // Publish the message to the gossip topic.
+            gossip_tx.publish(msg).await.unwrap();
+
             tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
         }
     });
@@ -192,13 +263,10 @@ async fn main() -> Result<()> {
     let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
     let mut sync_rx = sync_tx.subscribe().await.unwrap();
 
-    // Mapping of public keys to nicknames.
-    let mut nicknames = HashMap::new();
-
     // Receive messages from the sync stream.
     {
         let mut store = store.clone();
-
+        let nicknames = Arc::clone(&nicknames);
         tokio::task::spawn(async move {
             while let Some(Ok(from_sync)) = sync_rx.next().await {
                 match from_sync.event {
@@ -223,17 +291,28 @@ async fn main() -> Result<()> {
 
                         // Check if the text of this operation is setting a nickname.
                         if let Some(nick) = text.strip_prefix("/nick ") {
-                            if let Some(previous_nick) = nicknames.get(&remote_public_key) {
+                            if let Some(previous_nick) =
+                                nicknames.read().await.get(&remote_public_key)
+                            {
                                 print!("-> {} is now known as: {}", previous_nick, nick);
                             } else {
                                 print!("-> {} is now known as: {}", remote_id, nick);
                             }
-                            nicknames.insert(remote_public_key, nick.trim().to_owned());
+
+                            // Update the nicknames map.
+                            nicknames
+                                .write()
+                                .await
+                                .insert(remote_public_key, nick.trim().to_owned());
                         } else {
                             // Print a regular chat message.
                             print!(
                                 "{}: {}",
-                                nicknames.get(&remote_public_key).unwrap_or(&remote_id),
+                                nicknames
+                                    .read()
+                                    .await
+                                    .get(&remote_public_key)
+                                    .unwrap_or(&remote_id),
                                 text
                             )
                         }
@@ -287,6 +366,8 @@ async fn main() -> Result<()> {
 
     // Listen for `Ctrl+c` and shutdown the node.
     tokio::signal::ctrl_c().await?;
+
+    // TODO: Send "going offline" message on gossip channel.
 
     Ok(())
 }
