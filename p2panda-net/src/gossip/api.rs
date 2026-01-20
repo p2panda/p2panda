@@ -167,6 +167,7 @@ pub enum GossipError {
 /// received if they were published after the subscription was created.
 ///
 /// Use the sync stream if you wish to receive past state for eventual consistency.
+#[derive(Clone)]
 pub struct GossipHandle {
     topic: TopicId,
     to_topic_tx: mpsc::Sender<Vec<u8>>,
