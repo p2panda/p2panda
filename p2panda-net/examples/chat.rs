@@ -75,10 +75,6 @@ struct Args {
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
 
-    /// Seed for deterministic private key generation.
-    #[arg(short = 's', long, value_name = "SEED")]
-    seed: Option<u8>,
-
     /// Enable mDNS discovery
     #[arg(short = 'm', long, action)]
     mdns: bool,
@@ -119,13 +115,7 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    // Use manually configured seed or pick a random one.
-    let seed = args
-        .seed
-        .map(|seed| [seed; 32])
-        .unwrap_or_else(rand::random::<[u8; 32]>);
-
-    let private_key = PrivateKey::from_bytes(&seed);
+    let private_key = PrivateKey::new();
     let public_key = private_key.public_key();
 
     println!("network id: {}", NETWORK_ID.fmt_short());
