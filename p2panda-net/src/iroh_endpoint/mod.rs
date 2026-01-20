@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Establish encrypted, direct connections over Internet Protocol with QUIC.
 mod actors;
 mod api;
 mod builder;
@@ -12,7 +13,7 @@ mod tests;
 pub(crate) mod user_data;
 
 pub use api::{Endpoint, EndpointError};
-pub use builder::{Builder, DEFAULT_NETWORK_ID};
+pub use builder::Builder;
 pub use config::IrohConfig;
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.

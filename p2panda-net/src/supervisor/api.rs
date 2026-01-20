@@ -12,6 +12,30 @@ use crate::supervisor::actor::{SupervisorActor, SupervisorActorArgs, ToSuperviso
 use crate::supervisor::builder::Builder;
 use crate::supervisor::traits::ChildActor;
 
+/// Monitor system with supervisors and restart modules on critical failure.
+///
+/// ## Example
+///
+/// ```rust
+/// # use std::error::Error;
+/// #
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn Error>> {
+/// # use p2panda_net::{Discovery, Supervisor, AddressBook, Endpoint};
+/// # let address_book = AddressBook::builder().spawn().await?;
+/// # let endpoint = Endpoint::builder(address_book.clone())
+/// #     .spawn()
+/// #     .await?;
+/// let supervisor = Supervisor::builder()
+///     .spawn()
+///     .await?;
+///
+/// // Discovery service is now supervised and will restart automatically on failure.
+/// let discovery = Discovery::builder(address_book, endpoint).spawn_linked(&supervisor).await?;
+/// #
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct Supervisor {
     args: SupervisorActorArgs,

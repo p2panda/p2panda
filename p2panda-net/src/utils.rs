@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Formatting, conversion and connectivity status utilities.
 use std::net::{IpAddr, SocketAddr};
 
 use crate::NodeId;

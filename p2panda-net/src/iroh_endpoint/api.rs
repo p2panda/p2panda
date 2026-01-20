@@ -12,6 +12,78 @@ use crate::iroh_endpoint::Builder;
 use crate::iroh_endpoint::actors::{ConnectError, IrohEndpointArgs, ToIrohEndpoint};
 use crate::{NetworkId, NodeId};
 
+/// Establish encrypted, direct connections over Internet Protocol with QUIC.
+///
+/// ## Example
+///
+/// ```rust
+/// # use std::error::Error;
+/// #
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn Error>> {
+/// # use p2panda_net::{AddressBook, Endpoint};
+/// #
+/// # let address_book = AddressBook::builder().spawn().await?;
+/// #
+/// // Generate Ed25519 key which will be used to authenticate node.
+/// let private_key = p2panda_core::PrivateKey::new();
+///
+/// // Use this iroh relay as a "home relay".
+/// let relay_url = "https://my.relay.org".parse().expect("valid relay url");
+///
+/// // Initialise endpoint with custom network identifier.
+/// let endpoint = Endpoint::builder(address_book)
+///     .network_id([1; 32])
+///     .private_key(private_key)
+///     .relay_url(relay_url)
+///     .spawn()
+///     .await?;
+///
+/// // Other nodes can use this id now to establish a direct connection.
+/// println!("my node id: {}", endpoint.node_id());
+/// #
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## iroh
+///
+/// Most of the lower-level Internet Protocol networking is made possible by the work of [iroh]
+/// utilising well-established and known standards, like QUIC for transport, (self-certified) TLS
+/// 1.3 for transport encryption, QUIC Address Discovery (QAD) for STUN, TURN servers for relayed
+/// fallbacks.
+///
+/// ## Network identifier
+///
+/// Use [`NetworkId`](crate::NetworkId) to actively partition the network. The identifier serves as
+/// a shared secret; nodes will not be able to establish connections if their identifiers differ.
+///
+/// ## Custom Protocol Handlers
+///
+/// Register your own custom protocols using the [`Endpoint::accept`] method.
+///
+/// ## Relays
+///
+/// Use [`Builder::relay_url`] to register one or more iroh relay urls which are required to aid
+/// in establishing a direct connection.
+///
+/// ## Resolving transport infos
+///
+/// To connect to any endpoint by it's node id / public key we first need to resolve it to the
+/// associated addressing information (relay url, IPv4 and IPv6 addresses) before attempting to
+/// establish a direct connection.
+///
+/// `Endpoint` takes the [`AddressBook`](crate::AddressBook) as a dependency which provides it with
+/// the resolved transport information.
+///
+/// The address book itself is populated with resolved transport information by two services:
+///
+/// 1. [`MdnsDiscovery`](crate::MdnsDiscovery): Resolve addresses of nearby devices on the
+///    local-area network.
+/// 2. [`Discovery`](crate::Discovery): Resolve addresses using random-walk strategy, exploring the
+///    network.
+///
+/// [iroh]: https://www.iroh.computer/
 #[derive(Clone)]
 pub struct Endpoint {
     pub(super) args: IrohEndpointArgs,

@@ -15,6 +15,51 @@ use crate::addrs::{NodeInfo, NodeInfoError, TransportInfo};
 use crate::watchers::{UpdatesOnly, WatcherReceiver};
 use crate::{NodeId, TopicId};
 
+/// Manage node information, bootstraps and their associated transport addresses and topics.
+///
+/// ## Example
+///
+/// To help an application to bootstrap into the network, it is possible to manually add node
+/// information and manage associated topics for nodes directly on the address book using
+/// [`AddressBook::insert_node_info`]:
+///
+/// ```rust
+/// # use std::error::Error;
+/// #
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn Error>> {
+/// # use p2panda_net::{AddressBook, Endpoint};
+/// # use p2panda_net::addrs::NodeInfo;
+/// #
+/// let address_book = AddressBook::builder().spawn().await?;
+///
+/// let bootstrap_node = {
+///     let node_id = "c0f3ce745cee96e1e9c01a20746cd503bb2199c2459d8ff8697f5edb30569101"
+///         .parse()
+///         .expect("valid hex-encoded Ed25519 public key");
+///     let relay_url = "https://my.relay.org".parse().expect("valid relay url");
+///
+///     let endpoint_addr = iroh::EndpointAddr::new(node_id)
+///        .with_relay_url(relay_url);
+///
+///     NodeInfo::from(endpoint_addr).bootstrap()
+/// };
+///
+/// address_book.insert_node_info(bootstrap_node).await?;
+/// #
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Topic Discovery and Resolving Transport Info
+///
+/// The address book itself is populated with transport information and associated node topics by
+/// two "discovery" services:
+///
+/// 1. [`MdnsDiscovery`](crate::MdnsDiscovery): Resolve addresses of nearby devices on the
+///    local-area network.
+/// 2. [`Discovery`](crate::Discovery): Resolve addresses and confidentially exchange topics using
+///    random-walk strategy, exploring the network.
 #[derive(Clone)]
 pub struct AddressBook {
     pub(super) inner: Arc<RwLock<Inner>>,

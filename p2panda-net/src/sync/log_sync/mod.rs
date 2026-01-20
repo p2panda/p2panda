@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Eventually consistent, local-first sync protocol based on append-only logs.
 mod api;
 mod builder;
 #[cfg(test)]

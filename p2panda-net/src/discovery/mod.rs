@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Confidential topic discovery and random-walk strategy to resolve transport infos.
 mod actors;
 mod api;
 mod backoff;

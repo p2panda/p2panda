@@ -4,18 +4,19 @@
 //!
 //! ## Motivation
 //!
-//! Discovery can be used to find nodes and their transport information (to aid establishing a
-//! direct peer-to-peer connection) which are interested in the same "topic". A topic in p2panda is
-//! a secret, randomly generated hash, similar to a shared symmetric key. Since topics usually
-//! represent identifiers or namespaces for data and documents for only a certain amount of people
-//! (for example a "text document" or "chat group" or "image folder") it should only be shared with
-//! exactly these people and never accidentially leaked in our protocols.
+//! Discovery can be used to find nodes which share a common interest in a topic. During this
+//! process, transport information is exchanged in order to aid in the establishment of direct
+//! peer-to-peer connections. A topic in p2panda is a secret, randomly-generated hash that plays a
+//! similar role to a shared symmetric key. Topics usually represent identifiers or namespaces for
+//! data and documents associated with a specific group of people (for example a text document,
+//! chat group or image folder). For this reason, a topic should never be leaked to people outside
+//! of the intended group, whether accidentally or purposefully.
 //!
-//! With this discovery protocol implementation we are introducing a concrete solution which allows
-//! nodes to only ever exchange data when both parties have proven that they are aware of the same
-//! topic. No other, unrelated topics will be "leaked" to any party. This is made possible using
-//! "Private Equality Testing" (PET) or "Private Set Intersection" which is a secure multiparty
-//! computation cryptographic technique. Example:
+//! Our discovery protocol implementation is designed to ensure that topics are never leaked to
+//! unintended actors. Nodes will only ever exchange data when both parties have proven their
+//! knowledege of the same topic. This mutual acknowledgement is achieved using a secure multiparty
+//! cryptographic technique known as Private Equality Testing (PET) or Private Set Intersection
+//! (PSI) which prevents unrelated topics being leaked to other parties. Example:
 //!
 //! ```text
 //! Alice's topics: T1, T2, T3, T4

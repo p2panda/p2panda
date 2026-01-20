@@ -1,5 +1,23 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Types representing node information and transport addresses.
+//!
+//! ## Example
+//!
+//! Create new bootstrap node with attached transport information for iroh:
+//!
+//! ```rust
+//! use p2panda_net::addrs::NodeInfo;
+//!
+//! let node_id = "c0f3ce745cee96e1e9c01a20746cd503bb2199c2459d8ff8697f5edb30569101"
+//!     .parse()
+//!     .expect("valid hex-encoded Ed25519 public key");
+//! let relay_url = "https://my.relay.org".parse().expect("valid relay url");
+//!
+//! let endpoint_addr = iroh::EndpointAddr::new(node_id)
+//!    .with_relay_url(relay_url);
+//! let bootstrap_node = NodeInfo::from(endpoint_addr).bootstrap();
+//! ```
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::mem;
@@ -19,6 +37,11 @@ use crate::iroh_endpoint::from_public_key;
 use crate::iroh_endpoint::to_public_key;
 use crate::timestamp::{HybridTimestamp, Timestamp};
 
+/// Record of a node we store locally in the address book.
+///
+/// Node information associates configuration, metrics and transport information with a node id.
+/// Since the associated information is mostly for our own local use, we can consider `NodeInfo` to
+/// be private data.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeInfo {
     /// Unique identifier (Ed25519 public key) of this node.
@@ -46,6 +69,7 @@ pub struct NodeInfo {
 }
 
 impl NodeInfo {
+    /// Returns new `NodeInfo` with default values.
     pub fn new(node_id: NodeId) -> Self {
         Self {
             node_id,
@@ -85,6 +109,7 @@ impl NodeInfo {
         Ok(is_newer)
     }
 
+    /// Checks authenticity of associated transport information.
     pub fn verify(&self) -> Result<(), NodeInfoError> {
         match self.transports {
             Some(ref transports) => transports.verify(&self.node_id),
@@ -638,6 +663,9 @@ impl Display for TransportAddress {
     }
 }
 
+/// Metrics which are locally recorded for a node.
+///
+/// The recorded information can be used to indicate if a node is "stale" or not.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NodeMetrics {
     failed_connections: usize,
