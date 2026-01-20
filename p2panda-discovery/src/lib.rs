@@ -4,7 +4,7 @@
 //!
 //! ## Motivation
 //!
-//! Discovery can be used to identify nodes and their addressing information (to aid establishing a
+//! Discovery can be used to find nodes and their transport information (to aid establishing a
 //! direct peer-to-peer connection) which are interested in the same "topic". A topic in p2panda is
 //! a secret, randomly generated hash, similar to a shared symmetric key. Since topics usually
 //! represent identifiers or namespaces for data and documents for only a certain amount of people
