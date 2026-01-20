@@ -23,6 +23,8 @@ use p2panda_net::{
 use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::traits::TopicLogMap;
 use p2panda_sync::{Logs, TopicLogSyncEvent};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha12Rng;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
@@ -31,10 +33,6 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 type LogId = u64;
-
-const CHAT_TOPIC: [u8; 32] = [1; 32];
-
-const HEARTBEAT_TOPIC: [u8; 32] = [2; 32];
 
 const NETWORK_ID: [u8; 32] = [7; 32];
 
@@ -71,9 +69,13 @@ pub fn setup_logging() {
 
 #[derive(Parser)]
 struct Args {
-    /// Identifier of a bootstrap node.
+    /// Bootstrap node identifier.
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
+
+    /// Chat topic identifier .
+    #[arg(short = 'c', long, value_name = "CHAT_TOPIC_ID")]
+    chat_topic_id: Option<String>,
 
     /// Enable mDNS discovery
     #[arg(short = 'm', long, action)]
@@ -84,9 +86,9 @@ struct Args {
 pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
 
 impl ChatTopicMap {
-    async fn insert(&self, node_id: NodeId, log_id: LogId) {
+    async fn insert(&self, topic_id: TopicId, node_id: NodeId, log_id: LogId) {
         let mut map = self.0.write().await;
-        map.entry(CHAT_TOPIC)
+        map.entry(topic_id)
             .and_modify(|logs| {
                 logs.insert(node_id, vec![log_id]);
             })
@@ -118,7 +120,20 @@ async fn main() -> Result<()> {
     let private_key = PrivateKey::new();
     let public_key = private_key.public_key();
 
+    // Retrieve the chat topic ID from the provided arguments, otherwise generate a new, random,
+    // cryptographically-secure identifier.
+    let topic_id: [u8; 32] = if let Some(topic) = args.chat_topic_id {
+        hex::decode(topic)
+            .expect("topic id should be valid hex")
+            .try_into()
+            .expect("topic id should be 32 bytes")
+    } else {
+        let mut rng = ChaCha12Rng::from_os_rng();
+        rng.random()
+    };
+
     println!("network id: {}", NETWORK_ID.fmt_short());
+    println!("chat topic id: {}", hex::encode(topic_id));
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
@@ -126,7 +141,7 @@ async fn main() -> Result<()> {
     let mut store = ChatStore::new();
 
     let topic_map = ChatTopicMap::default();
-    topic_map.insert(public_key, LOG_ID).await;
+    topic_map.insert(topic_id, public_key, LOG_ID).await;
 
     // Prepare address book.
     let address_book = AddressBook::builder().spawn().await.unwrap();
@@ -171,10 +186,10 @@ async fn main() -> Result<()> {
         .unwrap();
 
     // Subscribe to gossip overlay to receive and publish (ephemeral) messages.
-    let heartbeat_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
+    let heartbeat_tx = gossip.stream(topic_id).await.unwrap();
     let mut heartbeat_rx = heartbeat_tx.subscribe();
 
-    let final_heartbeat_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
+    let final_heartbeat_tx = gossip.stream(topic_id).await.unwrap();
 
     // Mapping of public key to nickname.
     let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
@@ -238,7 +253,7 @@ async fn main() -> Result<()> {
         .await
         .unwrap();
 
-    let sync_tx = sync.stream(CHAT_TOPIC, true).await.unwrap();
+    let sync_tx = sync.stream(topic_id, true).await.unwrap();
     let mut sync_rx = sync_tx.subscribe().await.unwrap();
 
     // Receive messages from the sync stream.
@@ -306,7 +321,9 @@ async fn main() -> Result<()> {
                             .await
                             .unwrap();
 
-                        topic_map.insert(operation.header.public_key, LOG_ID).await;
+                        topic_map
+                            .insert(topic_id, operation.header.public_key, LOG_ID)
+                            .await;
                     }
                     _ => (),
                 }
