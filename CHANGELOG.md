@@ -38,6 +38,7 @@ Highlights are marked with a pancake 🥞
   - Allow endpoint to gracefully shut down on drop [#908](https://github.com/p2panda/p2panda/pull/908)
   - Modular API for new `p2panda-net` [#909](https://github.com/p2panda/p2panda/pull/909) 🥞
   - Method to configure relay urls in Endpoint builder [#948](https://github.com/p2panda/p2panda/pull/948)
+  - Chat example for `p2panda-net` using modular API [#929](https://github.com/p2panda/p2panda/pull/929)
 
 ### Changed
 
