@@ -332,30 +332,30 @@ async fn main() -> Result<()> {
     let mut backlink = None;
 
     // Sign and encode each line of text input and broadcast it on the chat topic.
-    while let Some(text) = line_rx.recv().await {
-        let body = Body::new(text.as_bytes());
-        let (hash, header, header_bytes, operation) =
-            create_operation(&private_key, &body, seq_num, backlink);
-        store
-            .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
-            .await
-            .unwrap();
+    tokio::task::spawn(async move {
+        while let Some(text) = line_rx.recv().await {
+            let body = Body::new(text.as_bytes());
+            let (hash, header, header_bytes, operation) =
+                create_operation(&private_key, &body, seq_num, backlink);
+            store
+                .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
+                .await
+                .unwrap();
 
-        sync_tx.publish(operation).await.unwrap();
+            sync_tx.publish(operation).await.unwrap();
 
-        seq_num += 1;
-        backlink = Some(hash);
+            seq_num += 1;
+            backlink = Some(hash);
 
-        // Update the nickname mapping for the local node.
-        if let Some(nick) = text.strip_prefix("/nick ") {
-            print!("-> changed nick to: {}", nick);
+            // Update the nickname mapping for the local node.
+            if let Some(nick) = text.strip_prefix("/nick ") {
+                print!("-> changed nick to: {}", nick);
+            }
         }
-    }
+    });
 
     // Listen for `Ctrl+c` and shutdown the node.
     tokio::signal::ctrl_c().await.unwrap();
-
-    println!("received ctrl+c event");
 
     // Create and serialize a final heartbeat message.
     //
