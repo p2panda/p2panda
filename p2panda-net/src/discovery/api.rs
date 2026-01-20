@@ -12,6 +12,13 @@ use crate::discovery::events::DiscoveryEvent;
 use crate::discovery::{Builder, DiscoveryMetrics};
 use crate::iroh_endpoint::Endpoint;
 
+/// Confidential topic discovery and random-walk strategy to resolve transport infos.
+///
+/// ## Design
+///
+/// Read more about the underlying design in [`p2panda-discovery`].
+///
+/// [`p2panda-discovery`]: https://docs.rs/p2panda-discovery/latest/p2panda_discovery/
 #[derive(Clone)]
 pub struct Discovery {
     #[allow(unused, reason = "used by supervisor behind feature flag")]

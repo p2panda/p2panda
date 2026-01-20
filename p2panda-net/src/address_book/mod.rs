@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Manage node information, bootstraps and their associated transport addresses and topics.
 mod actor;
 mod api;
 mod builder;

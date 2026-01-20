@@ -19,6 +19,25 @@ use crate::sync::actors::ToSyncManager;
 use crate::sync::handle::SyncHandle;
 use crate::sync::log_sync::Builder;
 
+/// Eventually consistent, local-first sync protocol based on append-only logs.
+///
+/// ## Example
+///
+/// See [`chat.rs`] for a full example using the sync protocol.
+///
+/// ## Local-first
+///
+/// In local-first applications we want to converge towards the same state eventually, which
+/// requires nodes to catch up on missed messages - independent of if they've been offline or
+/// not.
+///
+/// `p2panda-net` comes with a default `LogSync` protocol implementation which uses p2panda's
+/// **append-only log** Base Convergent Data Type (CDT).
+///
+/// After initial sync has finished, nodes switch to **live-mode** to directly push new messages to the
+/// network using a gossip protocol.
+///
+/// [`chat.rs`]: https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs
 #[derive(Clone)]
 pub struct LogSync<S, L, E, TM>
 where

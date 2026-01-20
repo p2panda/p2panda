@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Eventually consistent, local-first sync protocols.
 mod actors;
 mod handle;
 mod log_sync;

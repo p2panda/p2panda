@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Logical and wall-clock timestamps and hybrids to determine order of events.
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::num::ParseIntError;

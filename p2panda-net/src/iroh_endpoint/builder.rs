@@ -5,16 +5,11 @@ use std::collections::HashSet;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
-use crate::NetworkId;
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::actors::{IrohEndpoint, IrohEndpointArgs};
 use crate::iroh_endpoint::api::{Endpoint, EndpointError};
 use crate::iroh_endpoint::config::IrohConfig;
-
-pub const DEFAULT_NETWORK_ID: NetworkId = [
-    247, 69, 248, 242, 132, 120, 159, 230, 98, 100, 214, 200, 78, 40, 79, 94, 174, 8, 12, 27, 84,
-    195, 246, 159, 132, 240, 79, 208, 1, 43, 132, 118,
-];
+use crate::{DEFAULT_NETWORK_ID, NetworkId};
 
 pub struct Builder {
     network_id: Option<NetworkId>,
@@ -66,8 +61,8 @@ impl Builder {
     /// 3. Relayed and encrypted fallback using the server when establishing a direct connection
     ///    failed (TURN).
     ///
-    /// If no relay is given we can only connect to a node knowing it's directly reachable IP
-    /// address.
+    /// If no relay is given other nodes can only connect to us if a directly reachable IP address
+    /// is available and known to them.
     pub fn relay_url(mut self, url: iroh::RelayUrl) -> Self {
         self.relay_urls.insert(url);
         self

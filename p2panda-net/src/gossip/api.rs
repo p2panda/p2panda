@@ -30,6 +30,72 @@ type GossipSenders = HashMap<
     ),
 >;
 
+/// Gossip protocol to broadcast ephemeral messages to all online nodes interested in the same
+/// topic.
+///
+/// ## Example
+///
+/// ```rust
+/// # use std::error::Error;
+/// #
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn Error>> {
+/// # use futures_util::StreamExt;
+/// # use p2panda_net::{AddressBook, Discovery, Endpoint, MdnsDiscovery, Gossip};
+/// # let address_book = AddressBook::builder().spawn().await?;
+/// # let endpoint = Endpoint::builder(address_book.clone())
+/// #     .spawn()
+/// #     .await?;
+/// #
+/// // Gossip uses the address book to watch for nodes interested in the same topic.
+/// let gossip = Gossip::builder(address_book, endpoint).spawn().await?;
+///
+/// // Join overlay with given topic.
+/// let handle = gossip.stream([1; 32]).await?;
+///
+/// // Publish a message.
+/// handle.publish(b"Hello, Panda!").await?;
+///
+/// // Subscribe to messages.
+/// let mut rx = handle.subscribe();
+///
+/// tokio::spawn(async move {
+///     while let Some(Ok(_bytes)) = rx.next().await {
+///         // ..
+///     }
+/// });
+/// #
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Ephemeral Messaging
+///
+/// These unreliable “ephemeral” streams are intended to be used for relatively short-lived
+/// messages without persistence and catch-up of past state, for example for "Awareness" or
+/// "Presence" features. In most cases, messages will only be received if they were published after
+/// the subscription was created.
+///
+/// Use [`LogSync`](crate::LogSync) if you wish to receive messages even after being offline for
+/// guaranteed eventual consistency.
+///
+///
+/// ## Self-healing overlay
+///
+/// Gossip-based broadcast overlays rely on membership protocols like [HyParView] which do not heal
+/// from network fragmentation caused, for example, by bootstrap nodes going offline.
+///
+/// `p2panda-net` uses it's additional, confidential topic discovery layer in
+/// [`Discovery`](crate::Discovery) to automatically heal these partitions. Whenever possible, it
+/// allows nodes a higher chance to connect to every participating node, thereby decentralising the
+/// entrance points into the network.
+///
+/// [HyParView]: https://asc.di.fct.unl.pt/~jleitao/pdf/dsn07-leitao.pdf
+///
+/// ## Topic Discovery
+///
+/// For gossip to function correctly we need to inform it about discovered nodes who are interested
+/// in the same topic. Check out the [`Discovery`](crate::Discovery) module for more information.
 #[derive(Clone)]
 pub struct Gossip {
     my_node_id: NodeId,
@@ -60,6 +126,8 @@ impl Gossip {
         Builder::new(address_book, endpoint)
     }
 
+    /// Join gossip overlay for this topic and return a handle to publish messages to it or receive
+    /// messages from the network.
     pub async fn stream(&self, topic: TopicId) -> Result<GossipHandle, GossipError> {
         // Check if there's already a handle for this topic and clone it.
         //
@@ -159,14 +227,8 @@ pub enum GossipError {
     AddressBook(#[from] AddressBookError),
 }
 
-/// Gossip provides an interface for publishing messages into the network and receiving messages
-/// from the network.
-///
-/// These more, unreliable "ephemeral" streams are intended to be used for relatively short-lived
-/// messages without persistence and catch-up of past state. In most cases, messages will only be
-/// received if they were published after the subscription was created.
-///
-/// Use the sync stream if you wish to receive past state for eventual consistency.
+/// Handle for publishing ephemeral messages into the gossip overlay and receiving from the
+/// network for a specific topic.
 #[derive(Clone)]
 pub struct GossipHandle {
     topic: TopicId,
@@ -201,7 +263,7 @@ impl GossipHandle {
 
     /// Subscribes to the stream.
     ///
-    /// The returned `GossipSubscription` provides a means of receiving messages from the
+    /// The returned [`GossipSubscription`] provides a means of receiving messages from the
     /// stream.
     pub fn subscribe(&self) -> GossipSubscription {
         GossipSubscription::new(
