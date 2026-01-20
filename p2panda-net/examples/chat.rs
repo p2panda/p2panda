@@ -10,6 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
+use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::discovery::DiscoveryConfig;
@@ -22,6 +23,7 @@ use p2panda_net::{
 use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::traits::TopicLogMap;
 use p2panda_sync::{Logs, TopicLogSyncEvent};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
 use tracing::info;
@@ -40,6 +42,24 @@ const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
 
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
+
+/// Heartbeat message to be sent over gossip (ephemeral messaging).
+#[derive(Debug, Serialize, Deserialize)]
+struct Heartbeat {
+    sender: PublicKey,
+    online: bool,
+    rnd: u64,
+}
+
+impl Heartbeat {
+    fn new(sender: PublicKey, online: bool) -> Self {
+        Self {
+            sender,
+            online,
+            rnd: rand::random(),
+        }
+    }
+}
 
 pub fn setup_logging() {
     tracing_subscriber::registry()
@@ -160,9 +180,11 @@ async fn main() -> Result<()> {
         .await
         .unwrap();
 
-    // Subscribe to gossip overlay to receive (ephemeral) messages.
-    let gossip_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
-    let mut gossip_rx = gossip_tx.subscribe();
+    // Subscribe to gossip overlay to receive and publish (ephemeral) messages.
+    let heartbeat_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
+    let mut heartbeat_rx = heartbeat_tx.subscribe();
+
+    let final_heartbeat_tx = gossip.stream(HEARTBEAT_TOPIC).await.unwrap();
 
     // Mapping of public key to nickname.
     let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
@@ -170,90 +192,56 @@ async fn main() -> Result<()> {
     // Mapping of public key to the instant that the last heartbeat message was received.
     let status = Arc::new(RwLock::new(HashMap::new()));
 
+    // Publish (ephemeral) heartbeat messages.
+    tokio::task::spawn(async move {
+        loop {
+            // Create and serialize a heartbeat message.
+            let msg = Heartbeat::new(public_key, true);
+            let encoded_msg = encode_cbor(&msg).unwrap();
+
+            // Publish the message to the gossip topic.
+            heartbeat_tx.publish(encoded_msg).await.unwrap();
+
+            tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
+        }
+    });
+
     // Receive and log each (ephemeral) heartbeat message.
     {
         let nicknames = Arc::clone(&nicknames);
         let status = Arc::clone(&status);
         tokio::spawn(async move {
             loop {
-                if let Some(Ok(message)) = gossip_rx.next().await {
-                    // Extract the sender's public key from the message.
-                    let (sender, _rnd_bytes) = message.split_at(32);
-                    let sender_public_key_bytes: &[u8; 32] = sender.try_into().unwrap();
-                    let sender_public_key = PublicKey::from_bytes(sender_public_key_bytes).unwrap();
+                if let Some(Ok(message)) = heartbeat_rx.next().await {
+                    let msg: Heartbeat = decode_cbor(&message[..]).expect("valid cbor encoding");
+
+                    info!("received heartbeat: {:?}", msg);
 
                     // Look up nickname for sender.
-                    let name =
-                        if let Some(nickname) = nicknames.read().await.get(&sender_public_key) {
-                            nickname.to_owned()
-                        } else {
-                            sender_public_key.fmt_short()
-                        };
-
-                    info!("received heartbeat from {}", name);
+                    let name = if let Some(nickname) = nicknames.read().await.get(&msg.sender) {
+                        nickname.to_owned()
+                    } else {
+                        msg.sender.fmt_short()
+                    };
 
                     // Update status hashmap.
                     if status
                         .write()
                         .await
-                        .insert(sender_public_key, Instant::now())
+                        .insert(msg.sender, Instant::now())
                         .is_none()
                     {
                         println!("-> {} came online", name)
                     }
-                }
-            }
-        });
-    }
 
-    // TODO: Rather send an explicit "going offline" message before shutdown.
-    //
-    // Print a message when a peer goes offline.
-    {
-        let nicknames = Arc::clone(&nicknames);
-        let status = Arc::clone(&status);
-        tokio::task::spawn(async move {
-            loop {
-                let now = Instant::now();
-                for (public_key, last_heartbeat) in status.read().await.iter() {
-                    let secs_since_last_heartbeat = now.duration_since(*last_heartbeat).as_secs();
-                    println!(
-                        "{} last seen {} seconds ago",
-                        public_key, secs_since_last_heartbeat
-                    );
-                    if secs_since_last_heartbeat > 30 {
-                        let name = if let Some(nickname) = nicknames.read().await.get(public_key) {
-                            nickname.to_owned()
-                        } else {
-                            public_key.fmt_short()
-                        };
-
-                        println!("-> {} went offline", name);
+                    if !msg.online {
+                        status.write().await.remove(&msg.sender);
+                        println!("-> {} went offline", name)
                     }
                 }
-
-                tokio::time::sleep(Duration::from_secs(15)).await;
             }
         });
     }
-
-    // Publish (ephemeral) heartbeat messages.
-    tokio::task::spawn(async move {
-        loop {
-            // Generate a random number to ensure each message is unique.
-            let rnd: u64 = rand::random();
-            let rnd_bytes = rnd.to_be_bytes().to_vec();
-
-            // Combine our public key with the random number.
-            let mut msg = public_key.as_bytes().to_vec();
-            msg.extend(rnd_bytes);
-
-            // Publish the message to the gossip topic.
-            gossip_tx.publish(msg).await.unwrap();
-
-            tokio::time::sleep(Duration::from_secs(rand::random_range(20..30))).await;
-        }
-    });
 
     let sync = LogSync::builder(store.clone(), topic_map.clone(), endpoint, gossip)
         .spawn()
@@ -365,9 +353,20 @@ async fn main() -> Result<()> {
     }
 
     // Listen for `Ctrl+c` and shutdown the node.
-    tokio::signal::ctrl_c().await?;
+    if let Ok(()) = tokio::signal::ctrl_c().await {
+        println!("received ctrl+c event");
 
-    // TODO: Send "going offline" message on gossip channel.
+        // Create and serialize a final heartbeat message.
+        //
+        // This informs other chatters that we are going offline.
+        let msg = Heartbeat::new(public_key, false);
+        let encoded_msg = encode_cbor(&msg).unwrap();
+
+        final_heartbeat_tx.publish(&encoded_msg[..]).await.unwrap();
+
+        // Sleep briefly to allow sending of heartbeat message.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     Ok(())
 }
