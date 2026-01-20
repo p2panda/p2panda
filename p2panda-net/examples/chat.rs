@@ -353,20 +353,20 @@ async fn main() -> Result<()> {
     }
 
     // Listen for `Ctrl+c` and shutdown the node.
-    if let Ok(()) = tokio::signal::ctrl_c().await {
-        println!("received ctrl+c event");
+    tokio::signal::ctrl_c().await.unwrap();
 
-        // Create and serialize a final heartbeat message.
-        //
-        // This informs other chatters that we are going offline.
-        let msg = Heartbeat::new(public_key, false);
-        let encoded_msg = encode_cbor(&msg).unwrap();
+    println!("received ctrl+c event");
 
-        final_heartbeat_tx.publish(&encoded_msg[..]).await.unwrap();
+    // Create and serialize a final heartbeat message.
+    //
+    // This informs other chatters that we are going offline.
+    let msg = Heartbeat::new(public_key, false);
+    let encoded_msg = encode_cbor(&msg).unwrap();
 
-        // Sleep briefly to allow sending of heartbeat message.
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
+    final_heartbeat_tx.publish(&encoded_msg[..]).await.unwrap();
+
+    // Sleep briefly to allow sending of heartbeat message.
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     Ok(())
 }
