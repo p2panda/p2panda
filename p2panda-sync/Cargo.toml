@@ -11,7 +11,7 @@ description = "Local-first sync for append-only logs and traits to build your ow
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["p2p", "local-first", "sync", "replication", "eventual consistency"]
+keywords = ["p2p", "local-first", "sync", "replication"]
 
 [package.metadata.docs.rs]
 all-features = true
