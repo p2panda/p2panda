@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
     let mdns_discovery_mode = if args.mdns {
         MdnsDiscoveryMode::Active
     } else {
-        MdnsDiscoveryMode::Disabled
+        MdnsDiscoveryMode::Passive
     };
     let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
         .mode(mdns_discovery_mode)
