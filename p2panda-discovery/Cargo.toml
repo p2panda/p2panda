@@ -10,7 +10,7 @@ description = "Confidential topic and node discovery protocol"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["p2p", "topic discovery", "discovery", "confidential", "private-set-intersection", "random-walk"]
+keywords = ["p2p", "discovery", "confidential", "private-set-intersection"]
 
 [package.metadata.docs.rs]
 all-features = true

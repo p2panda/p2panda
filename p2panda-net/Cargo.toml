@@ -11,7 +11,7 @@ description = "Data-type-agnostic p2p networking, discovery, gossip and local-fi
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["p2p", "local-first", "offline-first", "networking", "sync", "gossip", "discovery", "mdns"]
+keywords = ["p2p", "local-first", "sync", "gossip", "discovery"]
 
 [package.metadata.docs.rs]
 all-features = true

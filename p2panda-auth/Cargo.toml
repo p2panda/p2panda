@@ -11,7 +11,7 @@ description = "Decentralised group management with fine-grained, per-member perm
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-keywords = ["auth", "access-control", "groups", "multi-device", "crdt", "offline-first"]
+keywords = ["auth", "access-control", "groups", "crdt", "offline-first"]
 
 [package.metadata.docs.rs]
 all-features = true
