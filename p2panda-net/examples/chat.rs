@@ -44,8 +44,8 @@ use p2panda_net::{
     AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
 };
 use p2panda_store::{MemoryStore, OperationStore};
-use p2panda_sync::traits::TopicLogMap;
-use p2panda_sync::{Logs, TopicLogSyncEvent};
+use p2panda_sync::protocols::{Logs, TopicLogSyncEvent as SyncEvent};
+use p2panda_sync::traits::TopicMap;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha12Rng;
 use serde::{Deserialize, Serialize};
@@ -121,7 +121,7 @@ impl ChatTopicMap {
     }
 }
 
-impl TopicLogMap<TopicId, LogId> for ChatTopicMap {
+impl TopicMap<TopicId, Logs<LogId>> for ChatTopicMap {
     type Error = Infallible;
 
     async fn get(&self, topic_query: &TopicId) -> Result<Logs<LogId>, Self::Error> {
@@ -275,7 +275,7 @@ async fn main() -> Result<()> {
         tokio::task::spawn(async move {
             while let Some(Ok(from_sync)) = sync_rx.next().await {
                 match from_sync.event {
-                    TopicLogSyncEvent::SyncFinished(metrics) => {
+                    SyncEvent::SyncFinished(metrics) => {
                         info!(
                             "finished sync session with {}, bytes received = {}, bytes sent = {}",
                             from_sync.remote.fmt_short(),
@@ -283,7 +283,7 @@ async fn main() -> Result<()> {
                             metrics.total_bytes_local.unwrap_or_default()
                         );
                     }
-                    TopicLogSyncEvent::Operation(operation) => {
+                    SyncEvent::Operation(operation) => {
                         if store.has_operation(operation.hash).await.unwrap() {
                             continue;
                         }
