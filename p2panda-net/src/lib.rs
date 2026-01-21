@@ -16,6 +16,20 @@
 //!   [Supervision Trees])
 //! - Modular API allowing users to choose or replace the layers they want to use
 //!
+//! ## Important note
+//!
+//! `p2panda-net` depends on a fixed version
+//! ([`#117`](https://github.com/n0-computer/iroh-gossip/pull/117)) of `iroh-gossip` which has not
+//! been published yet.
+//!
+//! Please patch your build with the fixed crate for now until this is handled upstream by adding
+//! the following lines to your root `Cargo.toml`:
+//!
+//! ```toml
+//! [patch.crates-io]
+//! iroh-gossip = { git = "https://github.com/p2panda/iroh-gossip", rev = "533c34a2758518ece19c1de9f21bc40d61f9b5a5" }
+//! ```
+//!
 //! ## Getting Started
 //!
 //! Install the Rust crate using `cargo add p2panda-net`.
