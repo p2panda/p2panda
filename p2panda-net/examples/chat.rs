@@ -120,10 +120,8 @@ async fn main() -> Result<()> {
     // Retrieve the chat topic ID from the provided arguments, otherwise generate a new, random,
     // cryptographically-secure identifier.
     let topic_id: TopicId = if let Some(topic) = args.chat_topic_id {
-        hex::decode(topic)
-            .expect("topic id should be valid hex")
-            .try_into()
-            .expect("topic id should be 32 bytes")
+        let topic_id = hex::decode(topic)?;
+        topic_id.try_into().expect("topic id should be 32 bytes")
     } else {
         let mut rng = ChaCha12Rng::from_os_rng();
         rng.random()
@@ -136,12 +134,12 @@ async fn main() -> Result<()> {
     topic_map.insert(topic_id, public_key, LOG_ID).await;
 
     // Prepare address book.
-    let address_book = AddressBook::builder().spawn().await.unwrap();
+    let address_book = AddressBook::builder().spawn().await?;
 
     // Add a bootstrap node to our address book if one was supplied by the user.
     if let Some(id) = args.bootstrap_id {
         let endpoint_addr = EndpointAddr::new(from_public_key(id));
-        let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
+        let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse()?);
         address_book
             .insert_node_info(NodeInfo::from(endpoint_addr).bootstrap())
             .await?;
@@ -151,8 +149,7 @@ async fn main() -> Result<()> {
         .private_key(private_key.clone())
         .relay_url(RELAY_URL.parse().unwrap())
         .spawn()
-        .await
-        .unwrap();
+        .await?;
 
     println!("network id: {}", endpoint.network_id().fmt_short());
     println!("chat topic id: {}", hex::encode(topic_id));
@@ -161,8 +158,7 @@ async fn main() -> Result<()> {
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()
-        .await
-        .unwrap();
+        .await?;
 
     let mdns_discovery_mode = if args.mdns {
         MdnsDiscoveryMode::Active
@@ -172,19 +168,17 @@ async fn main() -> Result<()> {
     let _mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
         .mode(mdns_discovery_mode)
         .spawn()
-        .await
-        .unwrap();
+        .await?;
 
     let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
         .spawn()
-        .await
-        .unwrap();
+        .await?;
 
     // Subscribe to gossip overlay to receive and publish (ephemeral) messages.
-    let heartbeat_tx = gossip.stream(topic_id).await.unwrap();
+    let heartbeat_tx = gossip.stream(topic_id).await?;
     let mut heartbeat_rx = heartbeat_tx.subscribe();
 
-    let final_heartbeat_tx = gossip.stream(topic_id).await.unwrap();
+    let final_heartbeat_tx = gossip.stream(topic_id).await?;
 
     // Mapping of public key to nickname.
     let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
@@ -245,11 +239,10 @@ async fn main() -> Result<()> {
 
     let sync = LogSync::builder(store.clone(), topic_map.clone(), endpoint, gossip)
         .spawn()
-        .await
-        .unwrap();
+        .await?;
 
-    let sync_tx = sync.stream(topic_id, true).await.unwrap();
-    let mut sync_rx = sync_tx.subscribe().await.unwrap();
+    let sync_tx = sync.stream(topic_id, true).await?;
+    let mut sync_rx = sync_tx.subscribe().await?;
 
     // Receive messages from the sync stream.
     {
@@ -357,15 +350,15 @@ async fn main() -> Result<()> {
     });
 
     // Listen for `Ctrl+c` and shutdown the node.
-    tokio::signal::ctrl_c().await.unwrap();
+    tokio::signal::ctrl_c().await?;
 
     // Create and serialize a final heartbeat message.
     //
     // This informs other chatters that we are going offline.
     let msg = Heartbeat::new(public_key, false);
-    let encoded_msg = encode_cbor(&msg).unwrap();
+    let encoded_msg = encode_cbor(&msg)?;
 
-    final_heartbeat_tx.publish(&encoded_msg[..]).await.unwrap();
+    final_heartbeat_tx.publish(&encoded_msg[..]).await?;
 
     // Sleep briefly to allow sending of heartbeat message.
     tokio::time::sleep(Duration::from_millis(100)).await;
