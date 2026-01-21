@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-discovery"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
