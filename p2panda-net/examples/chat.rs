@@ -164,7 +164,6 @@ async fn main() -> Result<()> {
         .unwrap();
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
-        .config(DiscoveryConfig::default())
         .spawn()
         .await
         .unwrap();
