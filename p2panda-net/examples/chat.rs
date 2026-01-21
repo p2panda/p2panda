@@ -33,12 +33,10 @@ use tracing_subscriber::prelude::*;
 
 type LogId = u64;
 
-const NETWORK_ID: [u8; 32] = [7; 32];
-
-const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
-
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
+
+const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
 
 /// Heartbeat message to be sent over gossip (ephemeral messaging).
 #[derive(Debug, Serialize, Deserialize)]
@@ -131,11 +129,6 @@ async fn main() -> Result<()> {
         rng.random()
     };
 
-    println!("network id: {}", NETWORK_ID.fmt_short());
-    println!("chat topic id: {}", hex::encode(topic_id));
-    println!("public key: {}", public_key.to_hex());
-    println!("relay url: {}", RELAY_URL);
-
     // Set up sync for p2panda operations.
     let mut store = ChatStore::new();
 
@@ -156,11 +149,15 @@ async fn main() -> Result<()> {
 
     let endpoint = Endpoint::builder(address_book.clone())
         .private_key(private_key.clone())
-        .network_id(NETWORK_ID)
         .relay_url(RELAY_URL.parse().unwrap())
         .spawn()
         .await
         .unwrap();
+
+    println!("network id: {}", endpoint.network_id().fmt_short());
+    println!("chat topic id: {}", hex::encode(topic_id));
+    println!("public key: {}", public_key.to_hex());
+    println!("relay url: {}", RELAY_URL);
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()
