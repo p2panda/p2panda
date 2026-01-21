@@ -69,8 +69,7 @@ futures-util = "0.3.31"
 hex = "0.4.3"
 iroh = { version = "0.95.1", default-features = false, optional = true }
 iroh-base = { version = "0.95.1", optional = true }
-# TODO: Temporary fix. See related issue: https://github.com/n0-computer/iroh-gossip/pull/117
-iroh-gossip = { git = "https://github.com/p2panda/iroh-gossip", rev = "6fad0f740c031876dbb412c7b8237776314d763e", optional = true }
+iroh-gossip = { version = "0.95.0", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
 p2panda-discovery = { path = "../p2panda-discovery", version = "0.4.0", features = ["test_utils"], optional = true }
 p2panda-store = { path = "../p2panda-store", version = "0.4.0", optional = true }
