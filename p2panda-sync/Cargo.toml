@@ -7,7 +7,7 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>",
 ]
-description = "Data-type agnostic traits for p2p sync and opinionated p2panda implementation"
+description = "Local-first sync for append-only logs and traits to build your own"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"

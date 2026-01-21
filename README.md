@@ -36,7 +36,7 @@ p2panda is "broadcast-only" at it’s heart, making any data not only offline-fi
 
 📦 [`p2panda-discovery`](https://crates.io/crates/p2panda-discovery) - Confidential topic and node discovery protocol.
 
-📦 [`p2panda-sync`](https://crates.io/crates/p2panda-sync) - Protocol implementations to efficiently "catch up on past state" with other peers and interfaces to start building your own.
+📦 [`p2panda-sync`](https://crates.io/crates/p2panda-sync) - Local-first sync for append-only logs and traits to build your own.
 
 📦 [`p2panda-blobs`](https://crates.io/crates/p2panda-blobs) - Efficiently send, receive and store (very large) files.
 

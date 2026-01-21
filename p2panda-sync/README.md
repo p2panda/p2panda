@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Data-type agnostic traits for p2p sync with implementations</strong>
+  <strong>Local-first sync for append-only logs and traits to build your own</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
