@@ -1,6 +1,30 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Example chat application using p2panda-net.
+//!
+//! Here we showcase the sync and gossip features of the p2panda-net API and demonstrate the
+//! configuration steps required to successfully run the required sub-systems.
+//!
+//! Chat messages are sent using the p2panda log sync protocol; this allows catching up on past
+//! messages which were published before you came online. The gossip protocol is used to broadcast
+//! heartbeat messages which are used to display online / offline messages for other peers in the
+//! chat.
+//!
+//! ## Usage
+//!
+//! Run the example on the first node:
+//!
+//! `cargo run --example chat`
+//!
+//! Run the example on a second node, using the chat topic ID and public key of the first node:
+//!
+//! `cargo run --example chat -- -c <CHAT_TOPIC_ID> -b <FIRST_NODE_PUBLIC_KEY>`
+//!
+//! Once several nodes are in the same chat, any node's public key can be supplied as the `-b`
+//! parameter (bootstrap node ID).
+//!
+//! Type into the terminal and press <ENTER> to send messages. Type `/nick <NICKNAME>` and press
+//! <ENTER> to set your desired nickname.
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::Arc;
