@@ -10,7 +10,7 @@ mod events;
 #[cfg(test)]
 mod tests;
 
-pub use api::{Gossip, GossipError, GossipHandle, GossipHandleError, GossipSubscription};
+pub use api::{Gossip, GossipError, GossipHandle, GossipSubscription};
 pub use builder::Builder;
 pub use config::{DEFAULT_MAX_MESSAGE_SIZE, GossipConfig, HyParViewConfig, PlumTreeConfig};
 pub use events::GossipEvent;

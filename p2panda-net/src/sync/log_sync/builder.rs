@@ -47,9 +47,7 @@ where
         }
     }
 
-    pub async fn spawn(
-        self,
-    ) -> Result<LogSync<S, L, E, TM>, LogSyncError<TopicSyncManager<TopicId, S, TM, L, E>>> {
+    pub async fn spawn(self) -> Result<LogSync<S, L, E, TM>, LogSyncError<E>> {
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
 

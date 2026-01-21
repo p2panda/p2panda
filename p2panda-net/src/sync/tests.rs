@@ -29,7 +29,7 @@ const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 
 struct FailingNode {
     args: ApplicationArguments,
-    sync_ref: ActorRef<ToSyncManager<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>>,
+    sync_ref: ActorRef<ToSyncManager<DummySyncMessage, DummySyncEvent>>,
 }
 
 impl FailingNode {
@@ -175,7 +175,7 @@ impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncArgs, FailingSync
     type Protocol = FailingSyncProtocol;
     type Event = DummySyncEvent;
     type Args = FailingSyncArgs;
-    type Message = ();
+    type Message = DummySyncMessage;
     type Error = SendError;
 
     fn from_args(args: Self::Args) -> Self {

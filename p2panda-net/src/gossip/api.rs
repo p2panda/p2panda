@@ -253,12 +253,11 @@ impl GossipHandle {
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, bytes: impl Into<Vec<u8>>) -> Result<(), GossipHandleError> {
-        self.to_topic_tx
-            .send(bytes.into())
-            .await
-            .map_err(Box::new)?;
-        Ok(())
+    pub async fn publish(
+        &self,
+        bytes: impl Into<Vec<u8>>,
+    ) -> Result<(), mpsc::error::SendError<Vec<u8>>> {
+        self.to_topic_tx.send(bytes.into()).await
     }
 
     /// Subscribes to the stream.
@@ -309,25 +308,14 @@ impl GossipSubscription {
 }
 
 impl Stream for GossipSubscription {
-    type Item = Result<Vec<u8>, GossipHandleError>;
+    type Item = Result<Vec<u8>, BroadcastStreamRecvError>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        self.from_topic_rx
-            .poll_next_unpin(cx)
-            .map_err(GossipHandleError::from)
+        self.from_topic_rx.poll_next_unpin(cx)
     }
-}
-
-#[derive(Debug, Error)]
-pub enum GossipHandleError {
-    #[error(transparent)]
-    Publish(#[from] Box<mpsc::error::SendError<Vec<u8>>>),
-
-    #[error(transparent)]
-    Subscribe(#[from] BroadcastStreamRecvError),
 }
 
 /// Helper maintaining a counter of objects using the same topic.
