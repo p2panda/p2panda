@@ -178,7 +178,7 @@ async fn main() -> Result<()> {
     let heartbeat_tx = gossip.stream(topic_id).await?;
     let mut heartbeat_rx = heartbeat_tx.subscribe();
 
-    let final_heartbeat_tx = gossip.stream(topic_id).await?;
+    let final_heartbeat_tx = heartbeat_tx.clone();
 
     // Mapping of public key to nickname.
     let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
