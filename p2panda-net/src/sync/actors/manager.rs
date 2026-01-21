@@ -36,21 +36,18 @@ const GOSSIP_TOPIC_MIX_VALUE: TopicId = [
     229, 93, 143, 227, 97, 61, 38, 202, 63, 250, 26, 233,
 ];
 
-pub enum ToSyncManager<M>
-where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-{
+pub enum ToSyncManager<M, E> {
     /// Create stream for this topic and return related manager.
     Create(
         TopicId,
         IsLiveModeEnabled,
-        RpcReplyPort<ActorRef<ToTopicManager<M::Message>>>,
+        RpcReplyPort<ActorRef<ToTopicManager<M>>>,
     ),
 
     /// Subscribe to the given topic to receive incoming sync events.
     Subscribe(
         TopicId,
-        RpcReplyPort<Option<broadcast::Receiver<FromSync<M::Event>>>>,
+        RpcReplyPort<Option<broadcast::Receiver<FromSync<E>>>>,
     ),
 
     /// Close all streams for the given topic.
@@ -132,7 +129,7 @@ where
     /// to initiate sync sessions with the new node in the "active view".
     async fn spawn_membership_task(
         &mut self,
-        myself: &ActorRef<ToSyncManager<M>>,
+        myself: &ActorRef<ToSyncManager<M::Message, M::Event>>,
         topic: TopicId,
     ) -> Result<(), ActorProcessingErr> {
         // To avoid collisions when topics are re-used across the application for different
@@ -225,7 +222,7 @@ where
 {
     type State = SyncManagerState<M>;
 
-    type Msg = ToSyncManager<M>;
+    type Msg = ToSyncManager<M::Message, M::Event>;
 
     type Arguments = (ProtocolId, M::Args, Endpoint, Gossip);
 
@@ -484,25 +481,28 @@ where
     }
 }
 
-struct SyncProtocolHandler<M>
+struct SyncProtocolHandler<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Send + 'static,
+    E: Send + 'static,
 {
-    stream_ref: ActorRef<ToSyncManager<M>>,
+    stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
-impl<M> std::fmt::Debug for SyncProtocolHandler<M>
+impl<M, E> std::fmt::Debug for SyncProtocolHandler<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Send + 'static,
+    E: Send + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SyncProtocolHandler").finish()
     }
 }
 
-impl<M> ProtocolHandler for SyncProtocolHandler<M>
+impl<M, E> ProtocolHandler for SyncProtocolHandler<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Send + 'static,
+    E: Send + 'static,
 {
     async fn accept(
         &self,

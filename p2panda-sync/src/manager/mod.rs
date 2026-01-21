@@ -36,6 +36,8 @@ use crate::{FromSync, SessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
 
+pub type ToTopicSync<E> = ToSync<Operation<E>>;
+
 /// Create and manage topic log sync sessions.
 ///
 /// Sync sessions are created via the manager, which instantiates them with access to the shared
@@ -54,7 +56,7 @@ where
 {
     topic_map: M,
     store: S,
-    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
+    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
     from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
     from_session_rx: HashMap<(u64, PublicKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
     manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
@@ -65,13 +67,13 @@ where
 pub(crate) struct SessionStream<T, E>
 where
     T: Clone,
-    E: Extensions,
+    E: Clone,
 {
     pub session_id: u64,
     pub topic: T,
     pub remote: PublicKey,
     pub event_rx: broadcast::Receiver<TopicLogSyncEvent<E>>,
-    pub live_tx: mpsc::Sender<ToSync<Operation<E>>>,
+    pub live_tx: mpsc::Sender<ToTopicSync<E>>,
 }
 
 impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
@@ -114,7 +116,7 @@ where
     /// Instantiate a new sync session.
     async fn session(&mut self, session_id: u64, config: &SessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
-        let (event_tx, event_rx) = broadcast::channel::<TopicLogSyncEvent<E>>(CHANNEL_BUFFER);
+        let (event_tx, event_rx) = broadcast::channel::<Self::Event>(CHANNEL_BUFFER);
 
         self.from_session_tx
             .insert((session_id, config.remote), event_tx.clone());
@@ -160,8 +162,8 @@ where
     async fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>> {
-        let map_fn = |to_sync: ToSync<Operation<E>>| {
+    ) -> Option<Pin<Box<dyn Sink<ToTopicSync<E>, Error = Self::Error>>>> {
+        let map_fn = |to_sync: ToSync<Self::Message>| {
             ready({
                 match to_sync {
                     ToSync::Payload(operation) => Ok::<_, Self::Error>(ToSync::Payload(operation)),
@@ -172,7 +174,7 @@ where
 
         self.session_topic_map.sender(session_id).map(|tx| {
             Box::pin(tx.clone().with(map_fn))
-                as Pin<Box<dyn Sink<ToSync<Operation<E>>, Error = Self::Error>>>
+                as Pin<Box<dyn Sink<ToTopicSync<E>, Error = Self::Error>>>
         })
     }
 

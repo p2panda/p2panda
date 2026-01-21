@@ -2,7 +2,6 @@
 
 use futures_util::{Stream, StreamExt};
 use p2panda_sync::FromSync;
-use p2panda_sync::traits::Manager as SyncManagerTrait;
 use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -15,23 +14,25 @@ use crate::sync::actors::{ToSyncManager, ToTopicManager};
 /// Handle to a sync stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
-pub struct SyncHandle<M>
+pub struct SyncHandle<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Clone + Send + 'static,
+    E: Clone + Send + 'static,
 {
     topic: TopicId,
-    manager_ref: ActorRef<ToSyncManager<M>>,
-    topic_manager_ref: ActorRef<ToTopicManager<M::Message>>,
+    manager_ref: ActorRef<ToSyncManager<M, E>>,
+    topic_manager_ref: ActorRef<ToTopicManager<M>>,
 }
 
-impl<M> SyncHandle<M>
+impl<M, E> SyncHandle<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Clone + Send + 'static,
+    E: Clone + Send + 'static,
 {
     pub(crate) fn new(
         topic: TopicId,
-        manager_ref: ActorRef<ToSyncManager<M>>,
-        topic_manager_ref: ActorRef<ToTopicManager<M::Message>>,
+        manager_ref: ActorRef<ToSyncManager<M, E>>,
+        topic_manager_ref: ActorRef<ToTopicManager<M>>,
     ) -> Self {
         Self {
             topic,
@@ -41,7 +42,7 @@ where
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, data: M::Message) -> Result<(), SyncHandleError<M>> {
+    pub async fn publish(&self, data: M) -> Result<(), SyncHandleError<M, E>> {
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.topic_manager_ref
@@ -54,11 +55,11 @@ where
     ///
     /// The returned `SyncSubscription` provides a means of receiving messages from
     /// the stream.
-    pub async fn subscribe(&self) -> Result<SyncSubscription<M>, SyncHandleError<M>> {
+    pub async fn subscribe(&self) -> Result<SyncSubscription<E>, SyncHandleError<M, E>> {
         if let Some(stream) =
             call!(self.manager_ref, ToSyncManager::Subscribe, self.topic).map_err(Box::new)?
         {
-            Ok(SyncSubscription::<M>::new(self.topic, stream))
+            Ok(SyncSubscription::<E>::new(self.topic, stream))
         } else {
             Err(SyncHandleError::StreamNotFound)
         }
@@ -82,9 +83,10 @@ where
     }
 }
 
-impl<M> Drop for SyncHandle<M>
+impl<M, E> Drop for SyncHandle<M, E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: Clone + Send + 'static,
+    E: Clone + Send + 'static,
 {
     fn drop(&mut self) {
         // Ignore error here as the actor might already be dropped.
@@ -97,23 +99,17 @@ where
 /// Handle to a sync subscription.
 ///
 /// The stream can be used to receive messages from the stream.
-pub struct SyncSubscription<M>
-where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-{
+pub struct SyncSubscription<E> {
     topic: TopicId,
     // Messages sent directly from the topic manager.
-    from_sync_rx: BroadcastStream<FromSync<M::Event>>,
+    from_sync_rx: BroadcastStream<FromSync<E>>,
 }
 
-impl<M> SyncSubscription<M>
+impl<E> SyncSubscription<E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    E: Clone + Send + 'static,
 {
-    pub(crate) fn new(
-        topic: TopicId,
-        from_sync_rx: broadcast::Receiver<FromSync<M::Event>>,
-    ) -> Self {
+    pub(crate) fn new(topic: TopicId, from_sync_rx: broadcast::Receiver<FromSync<E>>) -> Self {
         Self {
             topic,
             from_sync_rx: BroadcastStream::new(from_sync_rx),
@@ -126,36 +122,28 @@ where
     }
 }
 
-impl<M> Stream for SyncSubscription<M>
+impl<E> Stream for SyncSubscription<E>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    E: Clone + Send + 'static,
 {
-    type Item = Result<FromSync<M::Event>, SyncHandleError<M>>;
+    type Item = Result<FromSync<E>, BroadcastStreamRecvError>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
-        self.from_sync_rx
-            .poll_next_unpin(cx)
-            .map_err(SyncHandleError::from)
+        self.from_sync_rx.poll_next_unpin(cx)
     }
 }
 
 #[derive(Debug, Error)]
-pub enum SyncHandleError<M>
-where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-{
+pub enum SyncHandleError<M, E> {
     /// Messaging with internal actor via RPC failed.
     #[error(transparent)]
-    ActorRpc(#[from] Box<ractor::RactorErr<ToSyncManager<M>>>),
+    ActorRpc(#[from] Box<ractor::RactorErr<ToSyncManager<M, E>>>),
 
     #[error(transparent)]
-    Publish(#[from] Box<ractor::MessagingErr<ToTopicManager<M::Message>>>),
-
-    #[error(transparent)]
-    Subscribe(#[from] BroadcastStreamRecvError),
+    Publish(#[from] Box<ractor::MessagingErr<ToTopicManager<M>>>),
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,

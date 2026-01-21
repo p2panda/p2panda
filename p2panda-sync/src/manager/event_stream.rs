@@ -8,13 +8,12 @@ use std::task::{Context, Poll};
 use futures::channel::mpsc;
 use futures::stream::SelectAll;
 use futures::{SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Operation};
-use serde::{Deserialize, Serialize};
+use p2panda_core::Extensions;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
-use crate::manager::{SessionStream, SessionTopicMap};
+use crate::manager::{SessionStream, SessionTopicMap, ToTopicSync};
 use crate::protocols::TopicLogSyncEvent;
 use crate::{FromSync, ToSync};
 
@@ -25,13 +24,13 @@ impl<T, Item> StreamDebug<Item> for T where T: Stream<Item = Item> + Send + Debu
 #[allow(clippy::type_complexity)]
 pub(crate) struct ManagerEventStreamState<T, E>
 where
-    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Eq + StdHash + Send + 'static,
     E: Extensions + Send + 'static,
 {
     pub(crate) manager_rx: mpsc::Receiver<SessionStream<T, E>>,
     pub(crate) session_rx_set:
         SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
-    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToSync<Operation<E>>>>,
+    pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
 }
 
 type FutureOutput<T, E> = (
@@ -41,13 +40,13 @@ type FutureOutput<T, E> = (
 
 /// Event stream for a manager returned from SyncManager::subscribe().
 ///
-/// Calling `next_event` on the manager event stream both returns the next event in the event
-/// queue (combined events of all running sync sessions). If the event contains an operation
-/// then it will be forwarded on to any concurrently running sync sessions.
+/// Calling `next_event` on the manager event stream returns the next event in the event queue
+/// (combined events of all running sync sessions). If the event contains an operation then it
+/// will be forwarded on to any concurrently running sync sessions.
 #[allow(clippy::type_complexity)]
 pub struct ManagerEventStream<T, E>
 where
-    T: Clone + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Eq + StdHash + Send + 'static,
     E: Extensions + Send + 'static,
 {
     /// Stream state.
@@ -59,7 +58,7 @@ where
 
 impl<T, E> ManagerEventStream<T, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Debug + Eq + StdHash + Send + 'static,
     E: Extensions + Send + 'static,
 {
     async fn next_event(
@@ -78,13 +77,11 @@ where
                     };
                     debug!("manager event received: {manager_event:?}");
                     let session_id = manager_event.session_id;
-                    state.session_topic_map
-                    .insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
+                    state.session_topic_map.insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
 
                     let stream = BroadcastStream::new(manager_event.event_rx);
 
-                    #[allow(clippy::type_complexity)]
-                    let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>> =
+                    let stream =
                         Box::pin(stream.map(Box::new(
                             move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
                                 event.ok().map(|event| FromSync {
@@ -148,14 +145,14 @@ where
 
 impl<T, E> Unpin for ManagerEventStream<T, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Debug + Eq + StdHash + Send + 'static,
     E: Extensions + Send + 'static,
 {
 }
 
 impl<T, E> Stream for ManagerEventStream<T, E>
 where
-    T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    T: Clone + Debug + Eq + StdHash + Send + 'static,
     E: Extensions + Send + 'static,
 {
     type Item = FromSync<TopicLogSyncEvent<E>>;
