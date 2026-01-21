@@ -13,7 +13,6 @@ use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
 use p2panda_net::addrs::NodeInfo;
-use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::iroh_endpoint::from_public_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
@@ -73,7 +72,7 @@ struct Args {
     #[arg(short = 'b', long, value_name = "BOOTSTRAP_ID")]
     bootstrap_id: Option<NodeId>,
 
-    /// Chat topic identifier .
+    /// Chat topic identifier.
     #[arg(short = 'c', long, value_name = "CHAT_TOPIC_ID")]
     chat_topic_id: Option<String>,
 
@@ -122,7 +121,7 @@ async fn main() -> Result<()> {
 
     // Retrieve the chat topic ID from the provided arguments, otherwise generate a new, random,
     // cryptographically-secure identifier.
-    let topic_id: [u8; 32] = if let Some(topic) = args.chat_topic_id {
+    let topic_id: TopicId = if let Some(topic) = args.chat_topic_id {
         hex::decode(topic)
             .expect("topic id should be valid hex")
             .try_into()
