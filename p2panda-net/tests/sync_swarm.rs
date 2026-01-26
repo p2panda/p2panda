@@ -54,6 +54,7 @@ impl LocalSwarm {
         (args, store, client)
     }
 
+    #[allow(unused)]
     pub fn is_online(&self, id: &u8) -> bool {
         self.online_nodes.contains_key(id)
     }
@@ -66,7 +67,7 @@ impl LocalSwarm {
         let node =
             TestNode::spawn_with_args_and_client((args.clone(), store.clone()), client.clone())
                 .await;
-        let handle = node.log_sync.stream(TOPIC, false).await.unwrap();
+        let handle = node.log_sync.stream(TOPIC, true).await.unwrap();
         println!("start sync for {}", id);
 
         let mut store = node.client.store.clone();
@@ -86,9 +87,14 @@ impl LocalSwarm {
                             .insert_operation(hash, &header, body.as_ref(), &header_bytes, &LOG_ID)
                             .await
                             .unwrap();
+
+                        println!("{} received operation", id);
                     }
-                    TopicLogSyncEvent::SyncFinished(metrics) => {
-                        println!("{} sync succeeded receiving {} operations", id, metrics.total_operations_received);
+                    TopicLogSyncEvent::LiveModeStarted => {
+                        println!("{} joined overlay", id);
+                    }
+                    TopicLogSyncEvent::LiveModeFinished(_) => {
+                        println!("{} left overlay", id);
                     }
                     TopicLogSyncEvent::Failed { error } => {
                         println!("{} sync failed with {}", id, error);
@@ -103,6 +109,7 @@ impl LocalSwarm {
         self.online_nodes.insert(id, node);
     }
 
+    #[allow(unused)]
     pub fn set_offline(&mut self, id: u8) -> bool {
         self.online_nodes.remove(&id).is_some()
     }
@@ -170,11 +177,19 @@ async fn large_network() {
 
     sleep(Duration::from_secs(60 * 1)).await;
 
+    print!("   ");
+    for sender_id in 0..NODES_NUM {
+        print!("{} ", sender_id)
+    }
+    print!("\n");
+
     for receiver_id in 0..NODES_NUM {
+        print!("{}: ", receiver_id);
+
         let messages = swarm.messages_by_id(receiver_id).await;
         for sender_id in 0..NODES_NUM {
             let result = messages.contains(&[sender_id.to_be()].to_vec());
-            println!("{} -> {} = {}", sender_id, receiver_id, result);
+            print!("{} ", if result { "x" } else { " " });
 
             // if !messages.contains(&[sender_id.to_be()].to_vec()) {
             //     panic!(
@@ -185,5 +200,6 @@ async fn large_network() {
             //     );
             // }
         }
+        print!("\n");
     }
 }
