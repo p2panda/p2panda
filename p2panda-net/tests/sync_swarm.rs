@@ -163,7 +163,7 @@ impl LocalSwarm {
 async fn large_network() {
     setup_logging();
 
-    const NODES_NUM: u8 = 12;
+    const NODES_NUM: u8 = 8;
 
     let mut swarm = LocalSwarm::new(NODES_NUM);
 
