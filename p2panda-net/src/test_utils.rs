@@ -186,17 +186,27 @@ impl TestNode {
     }
 
     pub async fn spawn_with_args(
-        args: (
+        mut args: (
             ApplicationArguments,
             MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
         ),
     ) -> Self {
-        let (mut args, address_book_store) = args;
-
         let client = TestClient::new(
             // The identity of the "author" or client has a different private key from the node.
-            PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
+            PrivateKey::from_bytes(&args.0.rng.random::<[u8; 32]>()),
         );
+
+        Self::spawn_with_args_and_client(args, client).await
+    }
+
+    pub async fn spawn_with_args_and_client(
+        args: (
+            ApplicationArguments,
+            MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
+        ),
+        client: TestClient,
+    ) -> Self {
+        let (args, address_book_store) = args;
 
         let address_book = AddressBook::builder()
             .store(address_book_store)
@@ -276,6 +286,7 @@ pub type TestTopicSyncManager =
 ///
 /// Contains a private key, store and topic map, produces sessions for either log or topic sync
 /// protocols.
+#[derive(Clone)]
 pub struct TestClient {
     pub store: TestMemoryStore,
     pub private_key: PrivateKey,
