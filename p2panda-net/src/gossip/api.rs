@@ -148,6 +148,8 @@ impl Gossip {
         if let Some((to_gossip_tx, from_gossip_tx, guard)) = self.senders.read().await.get(&topic)
             && guard.has_subscriptions()
         {
+            println!("CLONE");
+
             return Ok(GossipHandle::new(
                 topic,
                 to_gossip_tx.clone(),
@@ -198,6 +200,8 @@ impl Gossip {
                 guard.clone_without_increment(),
             ),
         );
+
+        println!("STREAM {}", guard.counter());
 
         Ok(GossipHandle::new(
             topic,
@@ -287,6 +291,12 @@ impl GossipHandle {
     }
 }
 
+impl Drop for GossipHandle {
+    fn drop(&mut self) {
+        println!("DROP GossipHandle");
+    }
+}
+
 /// A handle to an ephemeral messaging stream subscription.
 ///
 /// The stream can be used to receive messages from the stream.
@@ -313,6 +323,12 @@ impl GossipSubscription {
     /// Returns the topic of the stream.
     pub fn topic(&self) -> TopicId {
         self.topic
+    }
+}
+
+impl Drop for GossipSubscription {
+    fn drop(&mut self) {
+        println!("DROP GossipSubscription");
     }
 }
 
