@@ -11,12 +11,14 @@ use thiserror::Error;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tracing::trace;
 
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::gossip::actors::ToGossipManager;
 use crate::gossip::builder::Builder;
 use crate::gossip::events::GossipEvent;
 use crate::iroh_endpoint::Endpoint;
+use crate::utils::ShortFormat;
 use crate::{NodeId, TopicId};
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
@@ -79,7 +81,6 @@ type GossipSenders = HashMap<
 /// Use [`LogSync`](crate::LogSync) if you wish to receive messages even after being offline for
 /// guaranteed eventual consistency.
 ///
-///
 /// ## Self-healing overlay
 ///
 /// Gossip-based broadcast overlays rely on membership protocols like [HyParView] which do not heal
@@ -90,12 +91,12 @@ type GossipSenders = HashMap<
 /// allows nodes a higher chance to connect to every participating node, thereby decentralising the
 /// entrance points into the network.
 ///
-/// [HyParView]: https://asc.di.fct.unl.pt/~jleitao/pdf/dsn07-leitao.pdf
-///
 /// ## Topic Discovery
 ///
 /// For gossip to function correctly we need to inform it about discovered nodes who are interested
 /// in the same topic. Check out the [`Discovery`](crate::Discovery) module for more information.
+///
+/// [HyParView]: https://asc.di.fct.unl.pt/~jleitao/pdf/dsn07-leitao.pdf
 #[derive(Clone)]
 pub struct Gossip {
     my_node_id: NodeId,
@@ -136,7 +137,7 @@ impl Gossip {
         // entry in "senders" and continue to create a new gossip session, overwriting the "dead"
         // entries.
         if let Some((to_gossip_tx, from_gossip_tx, guard)) = self.senders.read().await.get(&topic)
-            && guard.counter.load(std::sync::atomic::Ordering::SeqCst) > 0
+            && guard.has_subscriptions()
         {
             return Ok(GossipHandle::new(
                 topic,
@@ -151,14 +152,9 @@ impl Gossip {
 
         // This guard counts the number of active handles and subscriptions for this topic. Like
         // this we can determine if we can leave the overlay.
-        let guard = TopicDropGuard {
-            topic,
-            // Since the counter increments by 1 on each clone and we don't want to count cloning
-            // the guard into "senders", we start at -1 here.
-            counter: Arc::new(AtomicIsize::new(-1)),
-            actor_ref: inner.actor_ref.clone(),
-        };
+        let guard = TopicDropGuard::new(topic, inner.actor_ref.clone());
 
+        // Identify the initial nodes we can use to bootstrap ourselves into the overlay.
         let node_ids = {
             let node_infos = self.address_book.node_infos_by_topics([topic]).await?;
             node_infos
@@ -187,7 +183,11 @@ impl Gossip {
         let mut senders = self.senders.write().await;
         senders.insert(
             topic,
-            (to_gossip_tx.clone(), from_gossip_tx.clone(), guard.clone()),
+            (
+                to_gossip_tx.clone(),
+                from_gossip_tx.clone(),
+                guard.clone_without_increment(),
+            ),
         );
 
         Ok(GossipHandle::new(
@@ -328,10 +328,53 @@ struct TopicDropGuard {
     actor_ref: ActorRef<ToGossipManager>,
 }
 
+const INITIAL_COUNTER: isize = 0;
+
+impl TopicDropGuard {
+    fn new(topic: TopicId, actor_ref: ActorRef<ToGossipManager>) -> Self {
+        trace!(
+            topic = topic.fmt_short(),
+            counter = INITIAL_COUNTER,
+            actor_id = %actor_ref.get_id(),
+            "new topic drop guard"
+        );
+
+        Self {
+            topic,
+            counter: Arc::new(AtomicIsize::new(INITIAL_COUNTER)),
+            actor_ref,
+        }
+    }
+
+    fn counter(&self) -> isize {
+        self.counter.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn has_subscriptions(&self) -> bool {
+        self.counter() > INITIAL_COUNTER
+    }
+
+    fn clone_without_increment(&self) -> Self {
+        Self {
+            topic: self.topic,
+            counter: self.counter.clone(),
+            actor_ref: self.actor_ref.clone(),
+        }
+    }
+}
+
 impl Clone for TopicDropGuard {
     fn clone(&self) -> Self {
-        self.counter
+        let value = self
+            .counter
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        trace!(
+            topic = self.topic.fmt_short(),
+            counter = value + 1,
+            actor_id = %self.actor_ref.get_id(),
+            "clone topic drop guard +1"
+        );
 
         Self {
             topic: self.topic,
@@ -343,18 +386,70 @@ impl Clone for TopicDropGuard {
 
 impl Drop for TopicDropGuard {
     fn drop(&mut self) {
-        let actor_ref = self.actor_ref.clone();
-
         // Check if we can unsubscribe from topic if all handles and subscriptions have been
         // dropped for it.
         let previous_counter = self
             .counter
             .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
-        // If this is 1 the last instance of the guard was dropped and the counter is now at zero.
-        if previous_counter <= 1 {
+        trace!(
+            topic = self.topic.fmt_short(),
+            counter = previous_counter - 1,
+            actor_id = %self.actor_ref.get_id(),
+            "drop topic drop guard -1"
+        );
+
+        // If the previous value is one larger than the initial value, the last instance of the
+        // guard was dropped and the counter has no references anymore.
+        let no_subscriptions_left = previous_counter == INITIAL_COUNTER + 1;
+
+        if no_subscriptions_left {
+            trace!(
+                topic = self.topic.fmt_short(),
+                actor_id = %self.actor_ref.get_id(),
+                "send unsubscribe message"
+            );
+
             // Ignore this error, it could be that the actor has already stopped.
-            let _ = actor_ref.send_message(ToGossipManager::Unsubscribe(self.topic));
+            let _ = self
+                .actor_ref
+                .send_message(ToGossipManager::Unsubscribe(self.topic));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
+
+    use crate::gossip::GossipConfig;
+    use crate::gossip::actors::GossipManager;
+    use crate::{AddressBook, Endpoint};
+
+    use super::TopicDropGuard;
+
+    #[tokio::test]
+    async fn topic_drop_guard() {
+        // A bit cumbersone, but that's the only way right now we get this actor ref from ractor.
+        let (actor_ref, _) = {
+            let address_book = AddressBook::builder().spawn().await.unwrap();
+            let endpoint = Endpoint::builder(address_book.clone())
+                .spawn()
+                .await
+                .unwrap();
+            let thread_pool = ThreadLocalActorSpawner::new();
+            let args = (GossipConfig::default(), address_book, endpoint);
+            GossipManager::spawn(None, args, thread_pool).await.unwrap()
+        };
+
+        let guard_1 = TopicDropGuard::new([1; 32], actor_ref);
+        assert_eq!(guard_1.counter(), 0);
+        let _guard_2 = guard_1.clone();
+        assert_eq!(guard_1.counter(), 1);
+        let guard_3 = guard_1.clone();
+        assert_eq!(guard_1.counter(), 2);
+
+        drop(guard_3);
+        assert_eq!(guard_1.counter(), 1);
     }
 }
