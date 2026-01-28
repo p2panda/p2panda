@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix Drop impl causing premature gossip unsubscribe [#968](https://github.com/p2panda/p2panda/pull/968)
+
 ## [0.5.0] - 21/01/2026
 
 ### Added

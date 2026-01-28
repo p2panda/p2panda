@@ -276,6 +276,7 @@ pub type TestTopicSyncManager =
 ///
 /// Contains a private key, store and topic map, produces sessions for either log or topic sync
 /// protocols.
+#[derive(Clone)]
 pub struct TestClient {
     pub store: TestMemoryStore,
     pub private_key: PrivateKey,
