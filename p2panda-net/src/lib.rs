@@ -212,8 +212,8 @@
 //! With `p2panda-net` we work towards a best-effort in containing accidental leakage of such
 //! information by:
 //!
-//! - Use **Network identifiers** to actively partition the network. The identifier serves as a
-//!   shared secret; nodes will not be able to establish connections if their identifiers differ.
+//! - Use **Network identifiers** to actively partition the network. Please note that the
+//!   identifier itself is not secret (yet). [`#965`]
 //! - Use **Confidential Discovery and Sync** to only reveal information about ourselves and
 //!   exchange application data with nodes who have knowledge of the same topic.
 //! - **Disable mDNS** discovery by default to avoid unknowingly leaking information in local-area
@@ -241,6 +241,7 @@
 //! [`chat.rs`]: https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs
 //! [`#925`]: https://github.com/p2panda/p2panda/issues/925
 //! [`#934`]: https://github.com/p2panda/p2panda/issues/934
+//! [`#965`]: https://github.com/p2panda/p2panda/issues/965
 //! [`p2panda-discovery`]: https://docs.rs/p2panda-discovery/latest/p2panda_discovery/
 //! [`p2panda-sync`]: https://docs.rs/p2panda-discovery/latest/p2panda_sync/
 #[cfg(feature = "address_book")]
@@ -319,9 +320,8 @@ pub type TopicId = [u8; 32];
 /// `p2panda-net` are created with the same network protocols, any communication attempts will fail
 /// if they are not using the same network identifier.
 ///
-/// **WARNING:** Sensitive network identifiers have to be treated like secret values and generated
-/// using a cryptographically secure pseudorandom number generator (CSPRNG). Otherwise they can be
-/// easily guessed by third parties.
+/// **WARNING:** The network identifier is _not_ confidentially exchanged with a remote node and
+/// can not be treated as a secret value. See: https://github.com/p2panda/p2panda/issues/965
 pub type NetworkId = [u8; 32];
 
 /// Identifier for a protocol.
