@@ -489,9 +489,6 @@ async fn three_peer_gossip_with_rejoin() {
     let cat_msg_to_bat = b"you there bat?".to_vec();
     cat_handle.publish(cat_msg_to_bat.clone()).await.unwrap();
 
-    // Briefly sleep to allow processing of sent message.
-    sleep(Duration::from_millis(50)).await;
-
     // Ensure bat receives the message from cat.
     let Some(Ok(msg)) = bat_from_gossip_rx.next().await else {
         panic!("expected msg from cat")
@@ -503,9 +500,6 @@ async fn three_peer_gossip_with_rejoin() {
     let bat_msg_to_cat = b"yoyo!".to_vec();
     bat_handle.publish(bat_msg_to_cat.clone()).await.unwrap();
 
-    // Briefly sleep to allow processing of sent message.
-    sleep(Duration::from_millis(500)).await;
-
     // Ensure cat receives the message from bat.
     let Some(Ok(msg)) = cat_from_gossip_rx.next().await else {
         panic!("expected msg from bat")
@@ -514,42 +508,91 @@ async fn three_peer_gossip_with_rejoin() {
 }
 
 #[tokio::test]
-async fn leave_session() {
+async fn leave_overlay_on_drop() {
+    // See issue: https://github.com/p2panda/p2panda/issues/967
     setup_logging();
 
-    let (ant_args, _) = test_args();
+    let (mut ant_args, _) = test_args();
+    let (mut bat_args, _) = test_args();
     let topic = [1; 32];
 
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
+    let bat_address_book = AddressBook::builder().spawn().await.unwrap();
+
     let ant_endpoint = Endpoint::builder(ant_address_book.clone())
         .config(ant_args.iroh_config.clone())
         .private_key(ant_args.private_key.clone())
         .spawn()
         .await
         .unwrap();
+    let bat_endpoint = Endpoint::builder(bat_address_book.clone())
+        .config(bat_args.iroh_config.clone())
+        .private_key(bat_args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
 
-    // 1. Dropping all instances of Gossip breaks the handles.
+    let ant_info = ant_args.node_info().bootstrap();
+    let bat_info = bat_args.node_info().bootstrap();
+
+    bat_address_book
+        .set_topics(ant_info.node_id, [topic])
+        .await
+        .unwrap();
+    bat_address_book.insert_node_info(ant_info).await.unwrap();
+
+    ant_address_book
+        .set_topics(bat_info.node_id, [topic])
+        .await
+        .unwrap();
+    ant_address_book.insert_node_info(bat_info).await.unwrap();
+
     let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
         .spawn()
         .await
         .unwrap();
-    let ant_gossip_2 = ant_gossip.clone();
-    let handle = ant_gossip.stream(topic).await.unwrap();
+    let bat_gossip = Gossip::builder(bat_address_book.clone(), bat_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
 
-    // Drop first instance and assert if we can still send.
+    let ant_handle = ant_gossip.stream(topic).await.unwrap();
+    let bat_handle = bat_gossip.stream(topic).await.unwrap();
+
+    let mut bat_rx = bat_handle.subscribe();
+
+    // 0. Check first if everything is working normally.
+    // =================================================
+
+    assert!(ant_handle.publish(b"test 0").await.is_ok());
+    assert_eq!(bat_rx.next().await.unwrap().unwrap(), b"test 0".to_vec());
+
+    // 1. Dropping all instances of Gossip breaks the handles.
+    // =======================================================
+
+    let ant_gossip_2 = ant_gossip.clone();
+
+    // Drop second instance and assert if we can still send.
     drop(ant_gossip_2);
     tokio::time::sleep(Duration::from_millis(50)).await;
-    assert!(handle.publish(b"test").await.is_ok());
+    assert!(ant_handle.publish(b"test 1").await.is_ok());
+    assert_eq!(bat_rx.next().await.unwrap().unwrap(), b"test 1".to_vec());
 
+    // Drop first instance.
     drop(ant_gossip);
 
     // Wait a little bit until actor stopped.
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // We should not be able anymore to send any messages into any handles.
-    assert!(handle.publish(b"test").await.is_err());
+    assert!(ant_handle.publish(b"test 1").await.is_err());
+
+    // This handle is useless now, let's clean it up.
+    drop(ant_handle);
 
     // 2. Dropping all handles for the same topic closes the gossip session.
+    // =====================================================================
+
     let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
         .spawn()
         .await
@@ -559,39 +602,50 @@ async fn leave_session() {
     let mut events = ant_gossip.events().await.unwrap();
 
     // Create multiple handles for the same topic.
-    let handle_1 = ant_gossip.stream(topic).await.unwrap();
-    let handle_2 = ant_gossip.stream(topic).await.unwrap();
-    let handle_3 = ant_gossip.stream(topic).await.unwrap();
+    let ant_handle_1 = ant_gossip.stream(topic).await.unwrap();
+    let ant_handle_2 = ant_gossip.stream(topic).await.unwrap();
+    let ant_handle_3 = ant_gossip.stream(topic).await.unwrap();
 
-    let rx_1 = handle_1.subscribe();
-    let rx_2 = handle_2.subscribe();
-    let rx_3 = handle_2.subscribe();
-    let rx_4 = handle_1.subscribe();
+    assert!(matches!(
+        events.recv().await,
+        Ok(GossipEvent::Joined { .. })
+    ));
+
+    let ant_rx_1 = ant_handle_1.subscribe();
+    let ant_rx_2 = ant_handle_2.subscribe();
+    let ant_rx_3 = ant_handle_2.subscribe();
+    let ant_rx_4 = ant_handle_1.subscribe();
 
     // Start dropping instances, we should still be able to use the system.
-    drop(handle_2);
-    drop(rx_3);
-    drop(rx_2);
+    drop(ant_handle_2);
+    drop(ant_rx_3);
+    drop(ant_rx_2);
 
-    assert!(handle_1.publish(b"test").await.is_ok());
+    assert!(ant_handle_1.publish(b"test 2").await.is_ok());
+    assert_eq!(bat_rx.next().await.unwrap().unwrap(), b"test 2".to_vec());
 
     // Drop more.
-    drop(rx_1);
-    drop(handle_3);
-    drop(handle_1);
-    drop(rx_4);
+    drop(ant_rx_1);
+    drop(ant_handle_3);
+    drop(ant_handle_1);
 
-    let mut left = false;
-    while let Ok(event) = events.recv().await {
-        if let GossipEvent::Left { topic: event_topic } = event {
-            assert_eq!(topic, event_topic);
-            left = true;
-            break;
-        }
-    }
-    assert!(left, "left the gossip overlay for this topic");
+    // We haven't left the overlay yet.
+    assert_eq!(
+        events.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+    );
+
+    // Finally drop the last instance referring to this topic.
+    drop(ant_rx_4);
+
+    // We expect to leave the overlay now for good.
+    assert!(matches!(events.recv().await, Ok(GossipEvent::Left { .. })));
 
     // 3. Re-joining the same topic should not break anything after leaving.
+    // =====================================================================
+
+    // Make sure we've properly cleaned up internal state, so we can come back anytime.
     let handle = ant_gossip.stream(topic).await.unwrap();
-    assert!(handle.publish(b"test").await.is_ok());
+    assert!(handle.publish(b"test 3").await.is_ok());
+    assert_eq!(bat_rx.next().await.unwrap().unwrap(), b"test 3".to_vec());
 }
