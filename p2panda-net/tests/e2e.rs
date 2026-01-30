@@ -88,4 +88,62 @@ async fn gossip_and_sync_with_same_topic() {
 
     let operation = panda_sync_task.await.unwrap().unwrap();
     assert_eq!(operation.body, Some(Body::new(b"Hello, again, Panda!")));
+
+    let client = penguin.client.clone();
+
+    drop(penguin);
+
+    // Panda waits for Penguin to send something.
+    let mut panda_gossip_rx = panda_gossip_handle.subscribe();
+    let panda_gossip_task = tokio::spawn(async move {
+        while let Some(Ok(bytes)) = panda_gossip_rx.next().await {
+            return Some(bytes);
+        }
+        return None;
+    });
+
+    // Panda waits for Penguin to send something here as well.
+    let mut panda_sync_rx = panda_sync_handle.subscribe().await.unwrap();
+    let panda_sync_task = tokio::spawn(async move {
+        while let Some(Ok(from_sync)) = panda_sync_rx.next().await {
+            if let TopicLogSyncEvent::Operation(operation) = from_sync.event {
+                return Some(operation);
+            }
+        }
+        return None;
+    });
+
+    let mut penguin_2 = TestNode::spawn([99; 32]).await;
+    penguin_2.client = client;
+
+    // Penguin adds Panda as a "bootstrap" node in its address book.
+    penguin_2
+        .address_book
+        .insert_node_info(panda.node_info().bootstrap())
+        .await
+        .unwrap();
+
+    // Penguin publishes into the gossip overlay, so Panda can receive it.
+    let penguin_gossip_handle_2 = penguin_2.gossip.stream(topic).await.unwrap();
+    penguin_gossip_handle_2
+        .publish(b"Hello, Panda II!")
+        .await
+        .unwrap();
+
+    // Penguin stores an operation in the store, the sync protocol will pick it up.
+    penguin_2
+        .client
+        .create_operation(b"Hello, again, Panda!", log_id)
+        .await;
+
+    // Penguin initiates a sync stream for this topic and is ready now to share it's created
+    // operation with Panda.
+    let _penguin_sync_handle = penguin_2.log_sync.stream(topic, true).await.unwrap();
+
+    // Wait until Panda receives something ..
+    let message = panda_gossip_task.await.unwrap();
+    assert_eq!(message, Some(b"Hello, Panda II!".to_vec()));
+
+    let operation = panda_sync_task.await.unwrap().unwrap();
+    assert_eq!(operation.body, Some(Body::new(b"Hello, again, Panda!")));
 }
