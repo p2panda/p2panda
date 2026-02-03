@@ -11,7 +11,7 @@ use futures::{SinkExt, Stream, StreamExt};
 use p2panda_core::Extensions;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::manager::{SessionStream, SessionTopicMap, ToTopicSync};
 use crate::protocols::TopicLogSyncEvent;
@@ -72,10 +72,10 @@ where
                 biased;
                 item = state.manager_rx.next() => {
                     let Some(manager_event) = item else {
-                        debug!("manager event stream closed");
+                        trace!("manager event stream closed");
                         return (state, None)
                     };
-                    debug!("manager event received: {manager_event:?}");
+                    trace!("manager event received: {manager_event:?}");
                     let session_id = manager_event.session_id;
                     state.session_topic_map.insert_with_topic(session_id, manager_event.topic, manager_event.live_tx);
 
@@ -94,7 +94,7 @@ where
                     state.session_rx_set.push(stream);
                 }
                 Some(Some(from_sync)) = state.session_rx_set.next() => {
-                    debug!("from sync event received: {from_sync:?}");
+                    trace!("from sync event received: {from_sync:?}");
                     let session_id = from_sync.session_id();
                     let event = from_sync.event();
 
@@ -105,7 +105,7 @@ where
 
                     if let Some(operation) = operation {
                         let Some(topic) = state.session_topic_map.topic(session_id) else {
-                            debug!("session {session_id} not found");
+                            debug!(session_id, "drop session: missing from topic map");
                             state.session_topic_map.drop(session_id);
                             continue;
                         };
@@ -118,7 +118,7 @@ where
                             }
 
                             let Some(tx) = state.session_topic_map.sender_mut(id) else {
-                                debug!("session {id} channel unexpectedly closed");
+                                debug!(session_id = id, "drop session: channel unexpectedly closed");
                                 state.session_topic_map.drop(session_id);
                                 continue;
                             };
@@ -126,12 +126,12 @@ where
                             let result = tx.send(ToSync::Payload(operation.clone())).await;
 
                             if result.is_err() {
-                                debug!("failed sending message on session channel");
                                 dropped.push(id);
                             }
                         }
 
                         for id in dropped {
+                            debug!(session_id = id, "drop session: channel unexpectedly closed");
                             state.session_topic_map.drop(id);
                         }
                     }

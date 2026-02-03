@@ -190,12 +190,13 @@ where
                     state.pool.clone(),
                 )
                 .await?;
-                let protocol =
+                let (session_id, protocol) =
                     Self::new_session(state, actor_ref.get_id(), node_id, topic, config).await;
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
                     node_id,
                     topic,
+                    session_id,
                     protocol,
                     protocol_id: state.protocol_id.clone(),
                 })?;
@@ -249,13 +250,14 @@ where
                 )
                 .await?;
 
-                let protocol =
+                let (session_id, protocol) =
                     Self::new_session(state, actor_ref.get_id(), node_id, state.topic, config)
                         .await;
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
                     node_id,
                     topic: state.topic,
+                    session_id,
                     protocol,
                     protocol_id: state.protocol_id.clone(),
                 })?;
@@ -285,11 +287,13 @@ where
                     state.pool.clone(),
                 )
                 .await?;
-                let protocol =
+                let (session_id, protocol) =
                     Self::new_session(state, actor_ref.get_id(), node_id, topic, config).await;
 
                 actor_ref.send_message(SyncSessionMessage::Accept {
                     connection,
+                    topic,
+                    session_id,
                     protocol,
                 })?;
             }
@@ -476,7 +480,7 @@ where
         node_id: NodeId,
         topic: TopicId,
         config: SessionConfig<TopicId>,
-    ) -> <M as SyncManagerTrait<TopicId>>::Protocol {
+    ) -> (u64, <M as SyncManagerTrait<TopicId>>::Protocol) {
         let session_id: SyncSessionId = state.next_session_id;
         state.next_session_id += 1;
 
@@ -505,7 +509,7 @@ where
 
         state.actor_session_id_map.insert(actor_id, session_id);
 
-        session
+        (session_id, session)
     }
 
     /// Remove a session from all manager state mappings.

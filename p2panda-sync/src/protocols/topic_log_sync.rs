@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Two-party sync protocol over a topic associated with a collection of append-only logs.
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
@@ -15,14 +16,14 @@ use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
-use tracing::{debug, warn};
+use tracing::{Level, debug, enabled, trace, warn};
 
 use crate::ToSync;
 use crate::dedup::DEFAULT_BUFFER_CAPACITY;
-use crate::protocols::Logs;
 use crate::protocols::log_sync::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncStatus,
 };
+use crate::protocols::{Logs, ShortFormat};
 use crate::traits::{Protocol, TopicMap};
 
 /// Protocol for synchronizing logs which are associated with a generic T topic.
@@ -116,6 +117,10 @@ where
     ) -> Result<Self::Output, Self::Error> {
         // TODO: check there is overlap between the local and remote topic filters and end the
         // session now if not.
+        debug!(
+            live_mode = self.live_mode_rx.is_some(),
+            "start sync session"
+        );
 
         // Get the log ids which are associated with this topic query.
         let logs = self
@@ -124,10 +129,20 @@ where
             .await
             .map_err(|err| TopicLogSyncError::TopicMap(err.to_string()))?;
 
-        debug!("sync logs: {:?}", logs);
+        if enabled!(Level::DEBUG) {
+            let display_logs: HashMap<String, usize> =
+                logs.iter().map(|(k, v)| (k.fmt_short(), v.len())).collect();
+            debug!(logs = ?display_logs, "local topic logs retrieved");
+        }
+
+        if enabled!(Level::TRACE) {
+            let trace_logs: Vec<(String, &Vec<L>)> =
+                logs.iter().map(|(k, v)| (k.fmt_short(), v)).collect();
+            trace!(logs = ?trace_logs, "local topic logs retrieved");
+        }
 
         // Run the log sync protocol passing in our local topic logs.
-        let mut dedup = {
+        let (mut dedup, sync_metrics) = {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
             let protocol = LogSync::new_with_capacity(
                 self.store.clone(),
@@ -140,7 +155,7 @@ where
             // If the log sync session ended with an error, then send a "failed" event and return
             // here with the error itself.
             match result {
-                Ok(dedup) => dedup,
+                Ok(output) => output,
                 Err(err) => {
                     self.event_tx
                         .send(TopicLogSyncEvent::Failed {
@@ -158,140 +173,165 @@ where
             }
         };
 
-        let Some(mut live_mode_rx) = self.live_mode_rx else {
-            sink.close()
-                .await
-                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))?;
+        let mut metrics: TopicLogSyncLiveMetrics = sync_metrics.into();
+        let result = match self.live_mode_rx {
+            None => Ok(()),
+            Some(mut live_mode_rx) => {
+                // Enter live-mode.
+                //
+                // In live-mode we process messages sent from the remote peer and received locally from a
+                // subscription or other concurrent sync sessions. In both cases we should deduplicate
+                // messages and also check they are part of our topic sub-set selection before forwarding
+                // them on the event stream, or to the remote peer.
+                let mut close_sent = false;
+                self.event_tx
+                    .send(TopicLogSyncEvent::LiveModeStarted)
+                    .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
-            self.event_tx
-                .send(TopicLogSyncEvent::Success)
-                .map_err(|_| TopicLogSyncChannelError::EventSend)?;
+                let result = loop {
+                    tokio::select! {
+                        biased;
+                        Some(message) = live_mode_rx.next() => {
+                            match message {
+                                ToSync::Payload(operation) => {
+                                    if !dedup.insert(operation.hash) {
+                                        trace!(id = ?operation.hash.fmt_short(), "ignore duplicate operation sent on live-mode channel");
+                                        continue;
+                                    }
 
-            return Ok(());
-        };
+                                    metrics.bytes_sent +=
+                                        operation.header.to_bytes().len() as u64 + operation.header.payload_size;
+                                    metrics.operations_sent += 1;
 
-        // Enter live-mode.
-        //
-        // In live-mode we process messages sent from the remote peer and received locally from a
-        // subscription or other concurrent sync sessions. In both cases we should deduplicate
-        // messages and also check they are part of our topic sub-set selection before forwarding
-        // them on the event stream, or to the remote peer.
-        let mut close_sent = false;
-        let mut metrics = TopicLogSyncLiveMetrics::default();
-        self.event_tx
-            .send(TopicLogSyncEvent::LiveModeStarted)
-            .map_err(|_| TopicLogSyncChannelError::EventSend)?;
+                                    trace!(
+                                        phase = "live",
+                                        id = ?operation.hash.fmt_short(),
+                                        sent_ops = ?metrics.operations_sent,
+                                        sent_bytes = ?metrics.bytes_sent,
+                                        "sent operation"
+                                    );
 
-        let result = loop {
-            tokio::select! {
-                biased;
-                Some(message) = live_mode_rx.next() => {
-                    match message {
-                        ToSync::Payload(operation) => {
-                            if !dedup.insert(operation.hash) {
-                                continue;
+                                    let result = sink
+                                        .send(TopicLogSyncMessage::Live(
+                                            operation.header,
+                                            operation.body,
+                                        ))
+                                        .await
+                                        .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
+
+                                    if result.is_err() {
+                                        break result;
+                                    };
+                                }
+                                ToSync::Close => {
+                                    // We send the close and wait for the remote to close the
+                                    // connection.
+
+                                    debug!("closing sync session");
+
+                                    let result = sink
+                                        .send(TopicLogSyncMessage::Close)
+                                        .await
+                                        .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
+                                    if result.is_err() {
+                                        break result;
+                                    };
+                                    close_sent = true;
+                                }
+                            };
+                        }
+                        message = stream.next() => {
+                            let Some(message) = message else {
+                                if close_sent {
+                                    break Ok(());
+                                }
+                                break Err(TopicLogSyncError::UnexpectedStreamClosure);
+                            };
+
+                            match message {
+                                Ok(message) => {
+                                    if let TopicLogSyncMessage::Close = message {
+                                        // We received the remotes close message and should close the
+                                        // connection ourselves.
+                                        debug!("received close message from remote");
+                                        break Ok(());
+                                    };
+
+                                    let TopicLogSyncMessage::Live(header, body) = message else {
+                                        break Err(TopicLogSyncError::UnexpectedProtocolMessage(
+                                            message.to_string(),
+                                        ));
+                                    };
+
+                                    // TODO: check that this message is a part of our topic T set.
+
+                                    // Insert operation hash into deduplication buffer and if it was
+                                    // previously present do not forward the operation to the application
+                                    // layer.
+                                    if !dedup.insert(header.hash()) {
+                                        trace!(phase = "live", operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
+                                        continue;
+                                    }
+
+                                    metrics.bytes_received += header.to_bytes().len() as u64 + header.payload_size;
+                                    metrics.operations_received += 1;
+
+                                    trace!(
+                                        phase = "live",
+                                        operation_id = ?header.hash().fmt_short(),
+                                        received_ops = %metrics.operations_received,
+                                        received_bytes = %metrics.bytes_received,
+                                        "received operation"
+                                    );
+
+                                    self.event_tx
+                                        .send(TopicLogSyncEvent::Operation(Box::new(Operation {
+                                            hash: header.hash(),
+                                            header,
+                                            body,
+                                        })))
+                                        .map_err(|_| TopicLogSyncChannelError::EventSend)?;
+                                }
+                                Err(err) => {
+                                    if close_sent {
+                                        break Ok(());
+                                    }
+                                    break Err(TopicLogSyncError::DecodeMessage(format!("{err:?}")));
+                                }
                             }
-
-                            metrics.bytes_sent +=
-                                operation.header.to_bytes().len() as u64 + operation.header.payload_size;
-                            metrics.operations_sent += 1;
-
-                            let result = sink
-                                .send(TopicLogSyncMessage::Live(
-                                    operation.header.clone(),
-                                    operation.body.clone(),
-                                ))
-                                .await
-                                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
-
-                            if result.is_err() {
-                                break result;
-                            };
-                        }
-                        ToSync::Close => {
-                            // We send the close and wait for the remote to close the
-                            // connection.
-                            let result = sink
-                                .send(TopicLogSyncMessage::Close)
-                                .await
-                                .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
-                            if result.is_err() {
-                                break result;
-                            };
-                            close_sent = true;
-                        }
-                    };
-                }
-                message = stream.next() => {
-                    let Some(message) = message else {
-                        debug!("remote closed the stream unexpectedly");
-                        if close_sent {
-                            debug!("remote closed the stream after we sent a close message");
-                            break Ok(());
-                        }
-                        break Err(TopicLogSyncError::UnexpectedStreamClosure);
-                    };
-
-                    match message {
-                        Ok(message) => {
-                            if let TopicLogSyncMessage::Close = message {
-                                // We received the remotes close message and should close the
-                                // connection ourselves.
-                                debug!("received close message from remote");
-                                break Ok(());
-                            };
-
-                            let TopicLogSyncMessage::Live(header, body) = message else {
-                                break Err(TopicLogSyncError::UnexpectedProtocolMessage(
-                                    message.to_string(),
-                                ));
-                            };
-
-                            // TODO: check that this message is a part of our topic T set.
-
-                            // Insert operation hash into deduplication buffer and if it was
-                            // previously present do not forward the operation to the application
-                            // layer.
-                            if !dedup.insert(header.hash()) {
-                                continue;
-                            }
-
-                            metrics.bytes_received += header.to_bytes().len() as u64 + header.payload_size;
-                            metrics.operations_received += 1;
-                            self.event_tx
-                                .send(TopicLogSyncEvent::Operation(Box::new(Operation {
-                                    hash: header.hash(),
-                                    header,
-                                    body,
-                                })))
-                                .map_err(|_| TopicLogSyncChannelError::EventSend)?;
-                        }
-                        Err(err) => {
-                            if close_sent {
-                                debug!("remote closed the stream after we sent a close message");
-                                break Ok(());
-                            }
-                            warn!("error in live-mode: {err:#?}");
-                            break Err(TopicLogSyncError::DecodeMessage(format!("{err:?}")));
                         }
                     }
-                }
+                };
+
+                self.event_tx
+                    .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
+                    .map_err(|_| TopicLogSyncChannelError::EventSend)?;
+
+                result
             }
         };
-
-        self.event_tx
-            .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-            .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
         sink.close()
             .await
             .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))?;
 
         let final_event = match result.as_ref() {
-            Ok(_) => TopicLogSyncEvent::Success,
-            Err(err) => TopicLogSyncEvent::Failed {
-                error: err.to_string(),
-            },
+            Ok(_) => {
+                debug!(
+                    sent_ops = ?metrics.operations_sent,
+                    sent_bytes = ?metrics.bytes_sent,
+                    received_ops = %metrics.operations_received,
+                    received_bytes = %metrics.bytes_received,
+                    "sync session closed"
+                );
+                TopicLogSyncEvent::Success
+            }
+            Err(err) => {
+                warn!(error = ?err, "sync session closed with error");
+                TopicLogSyncEvent::Failed {
+                    error: err.to_string(),
+                }
+            }
         };
 
         self.event_tx
@@ -366,6 +406,17 @@ pub struct TopicLogSyncLiveMetrics {
     pub operations_sent: u64,
     pub bytes_received: u64,
     pub bytes_sent: u64,
+}
+
+impl From<LogSyncMetrics> for TopicLogSyncLiveMetrics {
+    fn from(value: LogSyncMetrics) -> TopicLogSyncLiveMetrics {
+        TopicLogSyncLiveMetrics {
+            operations_received: value.total_operations_received,
+            operations_sent: value.total_operations_sent,
+            bytes_received: value.total_bytes_received,
+            bytes_sent: value.total_bytes_sent,
+        }
+    }
 }
 
 /// Events emitted from topic log sync sessions.
@@ -483,6 +534,7 @@ pub mod tests {
     use crate::protocols::{LogSyncError, LogSyncMessage};
     use crate::test_utils::{
         Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
+        setup_logging,
     };
     use crate::traits::Protocol;
 
@@ -647,6 +699,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn topic_log_sync_full_duplex() {
+        setup_logging();
         let topic = TestTopic::new("messages");
         let log_id = 0;
 
@@ -740,7 +793,7 @@ pub mod tests {
         let mut peer_b = Peer::new(1);
 
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let (_, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
+        let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
         let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
         peer_a.insert_topic(&topic, &logs);
@@ -749,11 +802,12 @@ pub mod tests {
         peer_a.insert_topic(&topic, &logs);
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
-        let expected_live_mode_bytes_received =
-            header_1.payload_size + header_1.to_bytes().len() as u64;
+        let expected_bytes_received = header_0.payload_size
+            + header_0.to_bytes().len() as u64
+            + header_1.payload_size
+            + header_1.to_bytes().len() as u64;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_live_mode_bytes_sent =
-            header_2.payload_size + header_2.to_bytes().len() as u64;
+        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u64;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
@@ -821,10 +875,10 @@ pub mod tests {
                         bytes_received,
                         bytes_sent,
                     } = metrics;
-                    assert_eq!(operations_received, 1);
+                    assert_eq!(operations_received, 2);
                     assert_eq!(operations_sent, 1);
-                    assert_eq!(bytes_received, expected_live_mode_bytes_received);
-                    assert_eq!(bytes_sent, expected_live_mode_bytes_sent);
+                    assert_eq!(bytes_received, expected_bytes_received);
+                    assert_eq!(bytes_sent, expected_bytes_sent);
                 }
                 8 => {
                     assert_matches!(event, TestTopicSyncEvent::Success)
@@ -874,11 +928,12 @@ pub mod tests {
         peer_a.insert_topic(&topic, &logs);
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
-        let expected_live_mode_bytes_received =
-            header_1.payload_size + header_1.to_bytes().len() as u64;
+        let expected_bytes_received = header_0.payload_size
+            + header_0.to_bytes().len() as u64
+            + header_1.payload_size
+            + header_1.to_bytes().len() as u64;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_live_mode_bytes_sent =
-            header_2.payload_size + header_2.to_bytes().len() as u64;
+        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u64;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
@@ -921,7 +976,7 @@ pub mod tests {
                 TestTopicSyncMessage::Live(header_1.clone(), Some(body.clone())),
                 // Duplicate of message sent during sync.
                 TestTopicSyncMessage::Live(header_0.clone(), Some(body.clone())),
-                // Duplicate of message sent earlier in live mode.
+                // Duplicate of message sent earlier in live-mode.
                 TestTopicSyncMessage::Live(header_1.clone(), Some(body.clone())),
                 TestTopicSyncMessage::Close,
             ],
@@ -961,10 +1016,10 @@ pub mod tests {
                         bytes_received,
                         bytes_sent,
                     } = metrics;
-                    assert_eq!(operations_received, 1);
+                    assert_eq!(operations_received, 2);
                     assert_eq!(operations_sent, 1);
-                    assert_eq!(bytes_received, expected_live_mode_bytes_received);
-                    assert_eq!(bytes_sent, expected_live_mode_bytes_sent);
+                    assert_eq!(bytes_received, expected_bytes_received);
+                    assert_eq!(bytes_sent, expected_bytes_sent);
                 }
                 8 => {
                     assert_matches!(event, TestTopicSyncEvent::Success)

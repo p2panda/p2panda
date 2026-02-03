@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 use crate::traits::Protocol;
@@ -36,20 +36,20 @@ enum State<L> {
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSyncOrDone {
-        operations: Vec<(L, u64, Hash)>,
+        operations: Vec<(PublicKey, L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
-        operations: Vec<(L, u64, Hash)>,
+        operations: Vec<(PublicKey, L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
-        operations: Vec<(L, u64, Hash)>,
+        operations: Vec<(PublicKey, L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
@@ -97,7 +97,7 @@ where
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
-    type Output = Dedup<Hash>;
+    type Output = (Dedup<Hash>, LogSyncMetrics);
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -109,7 +109,7 @@ where
         let mut sync_done_sent = false;
         let mut dedup = Dedup::new(self.buffer_capacity);
 
-        loop {
+        let metrics = loop {
             match self.state {
                 State::Start => {
                     let metrics = LogSyncMetrics::default();
@@ -222,6 +222,14 @@ where
                         }
                     }
 
+                    debug!(
+                        local_ops = metrics.total_operations_local.unwrap_or_default(),
+                        remote_ops = metrics.total_operations_remote.unwrap_or_default(),
+                        local_bytes = metrics.total_bytes_local.unwrap_or_default(),
+                        remote_bytes = metrics.total_bytes_remote.unwrap_or_default(),
+                        "sync metrics received",
+                    );
+
                     self.event_tx
                         .send(
                             LogSyncEvent::Status(LogSyncStatus::Progress {
@@ -277,6 +285,14 @@ where
                                         // sync as for this session they have not been seen before.
                                         dedup.insert(header.hash());
 
+                                        trace!(
+                                            phase = "sync",
+                                            id = ?header.hash().fmt_short(),
+                                            received_ops = metrics.total_operations_received,
+                                            received_bytes = metrics.total_bytes_received,
+                                            "received operation"
+                                        );
+
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(
@@ -297,7 +313,7 @@ where
                                     }
                                 }
                             },
-                            Some((log_id, seq_num, hash)) = operation_stream.next() => {
+                            Some((public_key, log_id, seq_num, hash)) = operation_stream.next() => {
                                 // Insert message hash into deduplication buffer.
                                 dedup.insert(hash);
 
@@ -316,25 +332,31 @@ where
                                 tokio::task::yield_now().await;
 
                                 if let Some((header, body)) = result {
-                                    trace!(
-                                        log_id = ?log_id,
-                                        seq_num,
-                                        id = %hash.to_hex()[..6],
-                                        "send operation",
-                                    );
                                     metrics.total_bytes_sent += {
                                         header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
                                     } as u64;
                                     metrics.total_operations_sent += 1;
+
+                                    trace!(
+                                        phase = "sync",
+                                        public_key = %public_key.fmt_short(),
+                                        log_id = ?log_id,
+                                        seq_num,
+                                        id = %hash.fmt_short(),
+                                        sent_ops = metrics.total_operations_sent,
+                                        sent_bytes = metrics.total_bytes_sent,
+                                        "send operation",
+                                    );
 
                                     sink.send(LogSyncMessage::Operation(header, body))
                                         .await
                                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                 } else {
                                     warn!(
+                                        phase = "sync",
                                         log_id = ?log_id,
                                         seq_num,
-                                        id = %hash.to_hex()[..6],
+                                        id = %hash.fmt_short(),
                                         "expected operation missing from store",
                                     );
                                 };
@@ -370,12 +392,12 @@ where
                             .into(),
                         )
                         .map_err(|_| LogSyncError::BroadcastSend)?;
-                    break;
+                    break metrics;
                 }
             }
-        }
+        };
 
-        Ok(dedup)
+        Ok((dedup, metrics))
     }
 }
 
@@ -413,7 +435,7 @@ async fn operations_needed_by_remote<L, E, S>(
     store: &S,
     local_logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<(L, u64, Hash)>, u64), LogSyncError>
+) -> Result<(Vec<(PublicKey, L, u64, Hash)>, u64), LogSyncError>
 where
     L: LogId,
     E: Extensions,
@@ -463,11 +485,13 @@ where
                     .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                 if let Some(log) = log {
-                    // @TODO: we could avoid this extra iteration if we return the log id from the
-                    // get_log_hashes method as well as the hash and seq num.
+                    // @TODO: we could avoid this extra iteration if we return the public key and
+                    // log id from the get_log_hashes method as well as the hash and seq num. We
+                    // only need the additional fields for logging, so an alternative approach
+                    // would be to place this iteration behind a debug config flag.
                     let log: Vec<_> = log
                         .into_iter()
-                        .map(|(seq_num, hash)| (log_id.clone(), seq_num, hash))
+                        .map(|(seq_num, hash)| (*public_key, log_id.clone(), seq_num, hash))
                         .collect();
                     remote_needs.extend(log);
                 }
@@ -571,6 +595,24 @@ pub enum LogSyncError {
 
     #[error("log sync received unexpected protocol message: {0}")]
     UnexpectedMessage(String),
+}
+
+/// Returns a displayable string representing the underlying value in a short format, easy to read
+/// during debugging and logging.
+pub trait ShortFormat {
+    fn fmt_short(&self) -> String;
+}
+
+impl ShortFormat for PublicKey {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..10].to_string()
+    }
+}
+
+impl ShortFormat for Hash {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..5].to_string()
+    }
 }
 
 #[cfg(test)]
