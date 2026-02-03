@@ -14,6 +14,7 @@ Highlights are marked with a pancake 🥞
 - Fix Drop impl causing premature gossip unsubscribe [#968](https://github.com/p2panda/p2panda/pull/968)
 - Fix panic on sink closure after error during sync session [#972](https://github.com/p2panda/p2panda/pull/972)
 - Gracefully handle concurrently deleted operations during sync [#974](https://github.com/p2panda/p2panda/pull/974)
+- Cleanup state in gossip unsubscribe handler [#973](https://github.com/p2panda/p2panda/pull/973)
 
 ## [0.5.0] - 21/01/2026
 

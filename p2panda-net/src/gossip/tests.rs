@@ -14,6 +14,70 @@ use crate::iroh_endpoint::Endpoint;
 use crate::test_utils::{setup_logging, test_args};
 
 #[tokio::test]
+async fn joined_and_left_events_are_received() {
+    setup_logging();
+    let (mut ant_args, _) = test_args();
+    let (mut bat_args, _) = test_args();
+    let topic = [1; 32];
+
+    let ant_address_book = AddressBook::builder().spawn().await.unwrap();
+    let bat_address_book = AddressBook::builder().spawn().await.unwrap();
+
+    let ant_endpoint = Endpoint::builder(ant_address_book.clone())
+        .config(ant_args.iroh_config.clone())
+        .private_key(ant_args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+    let bat_endpoint = Endpoint::builder(bat_address_book.clone())
+        .config(bat_args.iroh_config.clone())
+        .private_key(bat_args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    let ant_info = ant_args.node_info().bootstrap();
+    let bat_info = bat_args.node_info().bootstrap();
+
+    bat_address_book
+        .set_topics(ant_info.node_id, [topic])
+        .await
+        .unwrap();
+    bat_address_book.insert_node_info(ant_info).await.unwrap();
+
+    ant_address_book
+        .set_topics(bat_info.node_id, [topic])
+        .await
+        .unwrap();
+    ant_address_book.insert_node_info(bat_info).await.unwrap();
+
+    let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+    let bat_gossip = Gossip::builder(bat_address_book.clone(), bat_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    let ant_handle = ant_gossip.stream(topic).await.unwrap();
+    let _bat_handle = bat_gossip.stream(topic).await.unwrap();
+
+    let mut events = ant_gossip.events().await.unwrap();
+
+    // Gossip joined event is received by ant.
+    assert!(matches!(
+        events.recv().await,
+        Ok(GossipEvent::Joined { .. })
+    ));
+
+    drop(ant_handle);
+
+    // Gossip left event is received by ant.
+    assert!(matches!(events.recv().await, Ok(GossipEvent::Left { .. })));
+}
+
+#[tokio::test]
 async fn join_without_bootstrap() {
     setup_logging();
 
