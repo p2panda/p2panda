@@ -12,9 +12,11 @@ use p2panda_sync::traits::Protocol;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::iroh_endpoint::Endpoint;
+use crate::utils::ShortFormat;
 use crate::{NodeId, ProtocolId, TopicId};
 
 pub type SyncSessionId = u64;
@@ -23,11 +25,14 @@ pub enum SyncSessionMessage<P> {
     Initiate {
         node_id: NodeId,
         topic: TopicId,
+        session_id: u64,
         protocol: P,
         protocol_id: ProtocolId,
     },
     Accept {
         connection: Connection,
+        topic: TopicId,
+        session_id: u64,
         protocol: P,
     },
 }
@@ -74,6 +79,7 @@ where
             SyncSessionMessage::Initiate {
                 node_id,
                 topic,
+                session_id,
                 protocol,
                 protocol_id,
             } => {
@@ -92,10 +98,14 @@ where
                 topic_handshake.run(&mut tx, &mut rx).await?;
 
                 // Then we run the actual sync protocol.
+                let span = tracing::debug_span!("sync", responder = %node_id.fmt_short(), topic = %topic.fmt_short(), session_id);
                 let (tx, rx) = connection.open_bi().await?;
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);
-                protocol.run(&mut tx, &mut rx).await?;
+                protocol
+                    .run(&mut tx, &mut rx)
+                    .instrument(span.clone())
+                    .await?;
 
                 // In order to ensure all sent messages can be received and processed by both
                 // peers, sync protocol implementations must coordinate the close of a connection.
@@ -106,6 +116,8 @@ where
             }
             SyncSessionMessage::Accept {
                 connection,
+                topic,
+                session_id,
                 protocol,
             } => {
                 // The TopicHandshake protocol has already been run by the accepting party which is
@@ -113,7 +125,9 @@ where
                 let (tx, rx) = connection.accept_bi().await?;
                 let mut tx = into_cbor_sink::<P::Message, _>(tx);
                 let mut rx = into_cbor_stream::<P::Message, _>(rx);
-                protocol.run(&mut tx, &mut rx).await?;
+                let remote = connection.remote_id();
+                let span = tracing::debug_span!(parent: None, "sync", requester = %remote.fmt_short(), topic = %topic.fmt_short(), session_id);
+                protocol.run(&mut tx, &mut rx).instrument(span).await?;
 
                 // See comment above regarding graceful connection closure.
                 connection.close(VarInt::from_u32(0), b"sync protocol accept completed");

@@ -128,7 +128,7 @@ where
             .insert_with_topic(session_id, config.topic.clone(), live_tx.clone());
 
         for manager_tx in self.manager_tx.iter_mut() {
-            if manager_tx
+            if let Err(err) = manager_tx
                 .send(SessionStream {
                     session_id,
                     topic: config.topic.clone(),
@@ -137,9 +137,8 @@ where
                     live_tx: live_tx.clone(),
                 })
                 .await
-                .is_err()
             {
-                debug!("manager handle dropped");
+                debug!("manager handle dropped: {err:?}");
             };
         }
 
