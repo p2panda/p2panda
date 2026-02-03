@@ -36,7 +36,10 @@ pub struct OperationRow {
 
 /// Database representation of a single hash.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
-pub struct HashValue(String);
+pub struct SeqAndHash {
+    seq_num: String,
+    hash: String,
+}
 
 /// Database representation of the sum of all header and body byte size.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
@@ -80,9 +83,9 @@ impl From<RawOperationRow> for RawOperation {
     }
 }
 
-impl From<HashValue> for Hash {
-    fn from(value: HashValue) -> Hash {
-        value.0.parse().unwrap()
+impl From<SeqAndHash> for (u64, Hash) {
+    fn from(value: SeqAndHash) -> (u64, Hash) {
+        (value.seq_num.parse().unwrap(), value.hash.parse().unwrap())
     }
 }
 

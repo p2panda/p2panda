@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
+use tracing::{trace, warn};
 
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
 use crate::traits::Protocol;
@@ -22,7 +23,7 @@ pub type Logs<L> = HashMap<PublicKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Default)]
-enum State {
+enum State<L> {
     /// Initialise session metrics and announce sync start on event stream.
     #[default]
     Start,
@@ -35,20 +36,20 @@ enum State {
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSyncOrDone {
-        operations: Vec<Hash>,
+        operations: Vec<(L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
-        operations: Vec<Hash>,
+        operations: Vec<(L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
-        operations: Vec<Hash>,
+        operations: Vec<(L, u64, Hash)>,
         metrics: LogSyncMetrics,
     },
 
@@ -58,7 +59,7 @@ enum State {
 
 /// Efficient sync protocol for append-only log data types.
 pub struct LogSync<L, E, S, Evt> {
-    state: State,
+    state: State<L>,
     logs: Logs<L>,
     store: S,
     event_tx: broadcast::Sender<Evt>,
@@ -296,26 +297,48 @@ where
                                     }
                                 }
                             },
-                            Some(hash) = operation_stream.next() => {
+                            Some((log_id, seq_num, hash)) = operation_stream.next() => {
                                 // Insert message hash into deduplication buffer.
                                 dedup.insert(hash);
 
                                 // Fetch raw message bytes and send to remote.
-                                let (header, body) = self
+                                let result = self
                                     .store
                                     .get_raw_operation(hash)
                                     .await
-                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
-                                    .expect("operation to be in store");
+                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?;
 
-                                metrics.total_bytes_sent += {
-                                    header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
-                                } as u64;
-                                metrics.total_operations_sent += 1;
+                                // For testing, where the store is an in memory implementation
+                                // which may not yield work to other tasks, we force the task to
+                                // yield in order to test concurrent database actions occurring
+                                // during sync.
+                                #[cfg(test)]
+                                tokio::task::yield_now().await;
 
-                                sink.send(LogSyncMessage::Operation(header, body))
-                                    .await
-                                    .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+                                if let Some((header, body)) = result {
+                                    trace!(
+                                        log_id = ?log_id,
+                                        seq_num,
+                                        id = %hash.to_hex()[..6],
+                                        "send operation",
+                                    );
+                                    metrics.total_bytes_sent += {
+                                        header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
+                                    } as u64;
+                                    metrics.total_operations_sent += 1;
+
+                                    sink.send(LogSyncMessage::Operation(header, body))
+                                        .await
+                                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+                                } else {
+                                    warn!(
+                                        log_id = ?log_id,
+                                        seq_num,
+                                        id = %hash.to_hex()[..6],
+                                        "expected operation missing from store",
+                                    );
+                                };
+
                                 sent_operations += 1;
 
                                 if sent_operations >= total_operations {
@@ -388,9 +411,9 @@ where
 /// hashes of all operations the remote needs, as well as the total bytes.
 async fn operations_needed_by_remote<L, E, S>(
     store: &S,
-    logs: &Logs<L>,
+    local_logs: &Logs<L>,
     remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<Hash>, u64), LogSyncError>
+) -> Result<(Vec<(L, u64, Hash)>, u64), LogSyncError>
 where
     L: LogId,
     E: Extensions,
@@ -400,10 +423,10 @@ where
     // compare our own local log heights with what the remote sent for this topic query.
     //
     // If our logs are more advanced for any log we should collect the entries for sending.
-    let mut operations = Vec::new();
+    let mut remote_needs = Vec::new();
     let mut total_size = 0;
 
-    for (public_key, log_ids) in logs {
+    for (public_key, log_ids) in local_logs {
         for log_id in log_ids {
             // For all logs in this topic query scope get the local height.
             let latest_operation = store
@@ -440,7 +463,13 @@ where
                     .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                 if let Some(log) = log {
-                    operations.extend(log);
+                    // @TODO: we could avoid this extra iteration if we return the log id from the
+                    // get_log_hashes method as well as the hash and seq num.
+                    let log: Vec<_> = log
+                        .into_iter()
+                        .map(|(seq_num, hash)| (log_id.clone(), seq_num, hash))
+                        .collect();
+                    remote_needs.extend(log);
                 }
 
                 let size = store
@@ -455,7 +484,7 @@ where
         }
     }
 
-    Ok((operations, total_size))
+    Ok((remote_needs, total_size))
 }
 
 /// Protocol messages.
@@ -546,14 +575,19 @@ pub enum LogSyncError {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use p2panda_core::Body;
+    use p2panda_store::OperationStore;
 
     use crate::protocols::log_sync::{
         LogSyncError, LogSyncEvent, LogSyncMetrics, LogSyncStatus, Logs, Operation,
     };
-    use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
+    use crate::test_utils::{
+        Peer, TestLogSyncMessage, run_protocol, run_protocol_uni, setup_logging,
+    };
 
     #[tokio::test]
     async fn log_sync_no_operations() {
@@ -937,5 +971,69 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
         assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+    }
+
+    #[tokio::test]
+    async fn log_sync_with_concurrently_pruned_log() {
+        setup_logging();
+
+        let mut peer_a = Peer::new(0);
+        let mut peer_b = Peer::new(1);
+
+        let body = Body::new(&[0; 10000]);
+
+        // Load up the peer with three logs.
+        for _ in 0..30 {
+            let _ = peer_a.create_operation(&body, 0).await;
+        }
+        for _ in 0..30 {
+            let _ = peer_a.create_operation(&body, 1).await;
+        }
+        let mut to_be_pruned_log = vec![];
+        for _ in 0..30 {
+            let (header, _) = peer_a.create_operation(&body, 2).await;
+            to_be_pruned_log.push(header.hash());
+        }
+
+        let mut logs = Logs::default();
+        logs.insert(peer_a.id(), vec![0, 1, 2]);
+
+        let (a_session, _peer_b_event_rx) = peer_a.log_sync_protocol(&logs);
+        let (b_session, mut peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
+
+        let _peer_b_event_tx_clone = b_session.event_tx.clone();
+
+        // Spawn a task to run the sync session.
+        tokio::spawn(async move {
+            run_protocol(a_session, b_session).await.unwrap();
+        });
+
+        // Concurrently delete the first operation from the last log.
+        tokio::time::sleep(Duration::from_micros(1)).await;
+        peer_a
+            .store
+            .delete_operation(to_be_pruned_log[0])
+            .await
+            .unwrap();
+
+        loop {
+            let event = peer_b_event_rx.recv().await.unwrap();
+            if let LogSyncEvent::Status(LogSyncStatus::Completed { metrics }) = event {
+                let LogSyncMetrics {
+                    total_operations_remote,
+                    total_operations_received,
+                    ..
+                } = metrics;
+
+                // We expect all operations to be included in the total remote operations as these
+                // were calculated before pruning occurred.
+                assert_eq!(total_operations_remote.unwrap(), 90);
+
+                // One operation was not sent because it got deleted after the sync session
+                // started.
+                assert_eq!(total_operations_received, 89);
+                break;
+            }
+        }
     }
 }

@@ -276,7 +276,7 @@ where
         public_key: &PublicKey,
         log_id: &L,
         from: Option<u64>,
-    ) -> Result<Option<Vec<Hash>>, Self::Error> {
+    ) -> Result<Option<Vec<(u64, Hash)>>, Self::Error> {
         let store = self.read_store();
         match store.logs.get(&(*public_key, log_id.to_owned())) {
             Some(log) => {
@@ -286,14 +286,14 @@ where
                         if *seq_num >= from {
                             let (_, header, _, _) =
                                 store.operations.get(hash).expect("exists in hash map");
-                            hashes.push(header.hash());
+                            hashes.push((header.seq_num, header.hash()));
                         }
                     });
                 } else {
                     log.iter().for_each(|(_, _, hash)| {
                         let (_, header, _, _) =
                             store.operations.get(hash).expect("exists in hash map");
-                        hashes.push(header.hash());
+                        hashes.push((header.seq_num, header.hash()));
                     });
                 }
                 Ok(Some(hashes))
@@ -701,9 +701,9 @@ mod tests {
             .expect("log should exist");
 
         assert_eq!(hashes.len(), 3);
-        assert_eq!(hashes[0], hash_0);
-        assert_eq!(hashes[1], hash_1);
-        assert_eq!(hashes[2], hash_2);
+        assert_eq!(hashes[0], (0, hash_0));
+        assert_eq!(hashes[1], (1, hash_1));
+        assert_eq!(hashes[2], (2, hash_2));
 
         // Get sum of log byte lengths.
         let size = store
@@ -728,8 +728,8 @@ mod tests {
             .expect("log should exist");
 
         assert_eq!(hashes.len(), 2);
-        assert_eq!(hashes[0], hash_1);
-        assert_eq!(hashes[1], hash_2);
+        assert_eq!(hashes[0], (1, hash_1));
+        assert_eq!(hashes[1], (2, hash_2));
 
         // Get sum of log byte lengths from sequence number 1.
         let size = store
