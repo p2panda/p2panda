@@ -2,14 +2,16 @@
 
 //! Two-party sync protocol over a topic associated with a collection of append-only logs.
 use std::fmt::Debug;
-use std::future::ready;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Extensions, Header, Operation};
 use p2panda_store::{LogId, LogStore, OperationStore};
+use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -121,6 +123,8 @@ where
             .get(&self.topic)
             .await
             .map_err(|err| TopicLogSyncError::TopicMap(err.to_string()))?;
+
+        debug!("sync logs: {:?}", logs);
 
         // Run the log sync protocol passing in our local topic logs.
         let mut dedup = {
@@ -307,13 +311,7 @@ fn sync_channels<'a, L, E>(
     impl Sink<LogSyncMessage<L>, Error = TopicLogSyncChannelError> + Unpin,
     impl Stream<Item = Result<LogSyncMessage<L>, TopicLogSyncChannelError>> + Unpin,
 ) {
-    let log_sync_sink = sink
-        .sink_map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
-        .with(|message| {
-            ready(Ok::<_, TopicLogSyncChannelError>(
-                TopicLogSyncMessage::<L, E>::Sync(message),
-            ))
-        });
+    let log_sync_sink = LogSyncSink::new(sink);
 
     let log_sync_stream = stream.by_ref().map(|message| match message {
         Ok(TopicLogSyncMessage::Sync(message)) => Ok(message),
@@ -414,6 +412,61 @@ impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E> {
             TopicLogSyncMessage::Close => "close",
         };
         write!(f, "{value}")
+    }
+}
+
+pin_project! {
+    /// Sink wrapper which converts messages and errors into the expected types.
+    pub struct LogSyncSink<S, L, E> {
+        #[pin]
+        inner: S,
+        _phantom: std::marker::PhantomData<(L, E)>,
+    }
+}
+
+impl<S, L, E> LogSyncSink<S, L, E> {
+    pub fn new(inner: S) -> Self {
+        Self {
+            inner,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<S, L, E> Sink<LogSyncMessage<L>> for LogSyncSink<S, L, E>
+where
+    S: Sink<TopicLogSyncMessage<L, E>>,
+    S::Error: Debug,
+{
+    type Error = TopicLogSyncChannelError;
+
+    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let this = self.project();
+        this.inner
+            .poll_ready(cx)
+            .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: LogSyncMessage<L>) -> Result<(), Self::Error> {
+        let this = self.project();
+        let msg = TopicLogSyncMessage::Sync(item);
+        this.inner
+            .start_send(msg)
+            .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let this = self.project();
+        this.inner
+            .poll_flush(cx)
+            .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let this = self.project();
+        this.inner
+            .poll_close(cx)
+            .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
     }
 }
 

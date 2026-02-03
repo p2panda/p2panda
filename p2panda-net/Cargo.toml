@@ -92,5 +92,6 @@ clap = { version = "4.5.54", features = ["derive"] }
 futures-test = "0.3.31"
 mock_instant = "0.6.0"
 p2panda-net = { path = ".", features = ["test_utils"] }
+p2panda-sync = { path = "../p2panda-sync", features = ["test_utils"] }
 tokio = { version = "1.47.1", features = ["rt", "sync", "time"] }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
