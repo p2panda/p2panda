@@ -7,7 +7,7 @@ use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::address_book::AddressBook;
 use crate::gossip::GossipConfig;
@@ -102,6 +102,7 @@ pub struct GossipManagerState {
 
 impl GossipManagerState {
     fn drop_topic_state(&mut self, actor_id: &ActorId, topic: &TopicId) {
+        self.sessions.sessions_by_actor_id.remove(actor_id);
         self.sessions.sessions_by_topic.remove(topic);
         self.sessions.gossip_senders.remove(topic);
         self.sessions.gossip_joined_senders.remove(actor_id);
@@ -278,22 +279,28 @@ impl ThreadLocalActor for GossipManager {
                 let _ = reply.send((to_gossip_tx, from_gossip_tx));
             }
             ToGossipManager::Unsubscribe(topic) => {
+                trace!(
+                    node_id = state.my_node_id.fmt_short(),
+                    topic = topic.fmt_short(),
+                    "unsubscribe from gossip topic"
+                );
+
                 // Stop the session associated with this topic.
-                if let Some(actor) = state.sessions.sessions_by_topic.remove(&topic) {
+                if let Some(actor) = state.sessions.sessions_by_topic.get(&topic) {
                     let actor_id = actor.get_id();
-                    state.sessions.gossip_joined_senders.remove(&actor_id);
 
                     actor.stop(Some("received unsubscribe request".to_string()));
-                }
 
-                // Drop all associated state.
-                state.sessions.gossip_senders.remove(&topic);
-                state.neighbours.remove(&topic);
+                    // Drop all state associated with the terminated gossip session.
+                    state.drop_topic_state(&actor_id, &topic);
+                }
 
                 state
                     .address_book
                     .remove_topic(state.my_node_id, topic)
                     .await?;
+
+                let _ = state.events_tx.send(GossipEvent::Left { topic });
             }
             ToGossipManager::JoinNodes(topic, nodes) => {
                 // Convert p2panda public keys to iroh endpoint ids.
@@ -392,21 +399,6 @@ impl ThreadLocalActor for GossipManager {
                         topic = topic.fmt_short(),
                         "received ready from gossip session",
                     );
-                }
-            }
-            SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
-                let actor_id = actor.get_id();
-                if let Some(topic) = state.sessions.sessions_by_actor_id.remove(&actor_id) {
-                    debug!(
-                        %actor_id,
-                        topic = topic.fmt_short(),
-                        "gossip session terminated: {reason:?}",
-                    );
-
-                    // Drop all state associated with the terminated gossip session.
-                    state.drop_topic_state(&actor_id, &topic);
-
-                    let _ = state.events_tx.send(GossipEvent::Left { topic });
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
