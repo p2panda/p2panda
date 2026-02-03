@@ -140,7 +140,7 @@ pub trait LocalLogStore<LogId, Extensions> {
         public_key: &PublicKey,
         log_id: &LogId,
         from: Option<u64>,
-    ) -> Result<Option<Vec<Hash>>, Self::Error>;
+    ) -> Result<Option<Vec<(u64, Hash)>>, Self::Error>;
 
     /// Get the log heights of all logs, by any author, which are stored under the passed log id.
     async fn get_log_heights(&self, log_id: &LogId) -> Result<Vec<(PublicKey, u64)>, Self::Error>;

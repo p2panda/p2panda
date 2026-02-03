@@ -14,7 +14,7 @@ use p2panda_core::cbor::{DecodeError, EncodeError, encode_cbor};
 use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
 
 use crate::operations::{LogId, LogStore, OperationStore};
-use crate::sqlite::models::{ByteCount, HashValue, LogHeightRow, OperationRow, RawOperationRow};
+use crate::sqlite::models::{ByteCount, LogHeightRow, OperationRow, RawOperationRow, SeqAndHash};
 
 #[derive(Debug, Error)]
 pub enum SqliteStoreError {
@@ -433,10 +433,11 @@ where
         public_key: &PublicKey,
         log_id: &L,
         from: Option<u64>,
-    ) -> Result<Option<Vec<Hash>>, Self::Error> {
-        let hashes = query_as::<_, HashValue>(
+    ) -> Result<Option<Vec<(u64, Hash)>>, Self::Error> {
+        let hashes = query_as::<_, SeqAndHash>(
             "
             SELECT
+                seq_num,
                 hash
             FROM
                 operations_v1
@@ -454,7 +455,7 @@ where
         .fetch_all(&self.pool)
         .await?;
 
-        let hashes: Vec<Hash> = hashes.into_iter().map(Into::<Hash>::into).collect();
+        let hashes: Vec<(u64, Hash)> = hashes.into_iter().map(Into::<(u64, Hash)>::into).collect();
 
         if hashes.is_empty() {
             Ok(None)
@@ -943,9 +944,9 @@ mod tests {
             .expect("log should exist");
 
         assert_eq!(hashes.len(), 3);
-        assert_eq!(hashes[0], hash_0);
-        assert_eq!(hashes[1], hash_1);
-        assert_eq!(hashes[2], hash_2);
+        assert_eq!(hashes[0], (0, hash_0));
+        assert_eq!(hashes[1], (1, hash_1));
+        assert_eq!(hashes[2], (2, hash_2));
 
         // Get sum of log byte lengths.
         let size = store
@@ -970,8 +971,8 @@ mod tests {
             .expect("log should exist");
 
         assert_eq!(hashes.len(), 2);
-        assert_eq!(hashes[0], hash_1);
-        assert_eq!(hashes[1], hash_2);
+        assert_eq!(hashes[0], (1, hash_1));
+        assert_eq!(hashes[1], (2, hash_2));
 
         // Get sum of log byte lengths from sequence number 1.
         let size = store

@@ -458,7 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn live_mode_three_peer_forwarding() {
-        use std::collections::HashMap;
+        setup_logging();
 
         const TOPIC_NAME: &str = "chat";
         const LOG_ID: u64 = 0;
