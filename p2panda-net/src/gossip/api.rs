@@ -217,6 +217,11 @@ impl Gossip {
 
 impl Drop for Inner {
     fn drop(&mut self) {
+        trace!(
+            actor_id = %self.actor_ref.get_id(),
+            "drop gossip actor reference"
+        );
+
         // Stop actor after all references (Gossip, GossipHandle, GossipSubscription) have dropped.
         self.actor_ref.stop(None);
     }
@@ -290,6 +295,7 @@ impl GossipHandle {
 /// A handle to an ephemeral messaging stream subscription.
 ///
 /// The stream can be used to receive messages from the stream.
+#[derive(Debug)]
 pub struct GossipSubscription {
     topic: TopicId,
     from_topic_rx: BroadcastStream<Vec<u8>>,
@@ -331,6 +337,7 @@ impl Stream for GossipSubscription {
 ///
 /// Check if we can unsubscribe from topic if all handles and subscriptions have been dropped for
 /// it. The gossip overlay will be left then for this topic.
+#[derive(Debug)]
 struct TopicDropGuard {
     topic: TopicId,
     counter: Arc<AtomicUsize>,

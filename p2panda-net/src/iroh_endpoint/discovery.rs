@@ -5,7 +5,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use futures_util::{FutureExt, Stream, StreamExt};
-use iroh::discovery::{Discovery, DiscoveryError, DiscoveryItem, EndpointData, EndpointInfo};
+use iroh::address_lookup::Error as AddressLookupError;
+use iroh::address_lookup::Item as AddressLookupItem;
+use iroh::address_lookup::{AddressLookup, EndpointData, EndpointInfo};
 use p2panda_core::PrivateKey;
 use p2panda_discovery::address_book::NodeInfo as _;
 use tokio::sync::Semaphore;
@@ -48,7 +50,7 @@ impl AddressBookDiscovery {
     }
 }
 
-impl Discovery for AddressBookDiscovery {
+impl AddressLookup for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
         let private_key = self.private_key.clone();
         let public_key = private_key.public_key();
@@ -109,7 +111,7 @@ impl Discovery for AddressBookDiscovery {
     fn resolve(
         &self,
         endpoint_id: iroh::EndpointId,
-    ) -> Option<BoxStream<Result<DiscoveryItem, DiscoveryError>>> {
+    ) -> Option<BoxStream<Result<AddressLookupItem, AddressLookupError>>> {
         let span = info_span!("resolve", endpoint_id = %endpoint_id.fmt_short());
         trace!(parent: &span, "try to resolve endpoint id");
 
@@ -120,7 +122,7 @@ impl Discovery for AddressBookDiscovery {
                 .watch_node_info(to_public_key(endpoint_id), false)
                 .await
                 .map_err(|_| {
-                    DiscoveryError::from_err_any(
+                    AddressLookupError::from_err_any(
                         PROVENANCE,
                         "address book actor did not respond with subscription",
                     )
@@ -133,7 +135,7 @@ impl Discovery for AddressBookDiscovery {
                             Some(node_info) => {
                                 // Abort resolving if node info has been marked as "stale".
                                 if node_info.is_stale() {
-                                    return Some(Err(DiscoveryError::from_err_any(
+                                    return Some(Err(AddressLookupError::from_err_any(
                                         PROVENANCE,
                                         "node is marked as stale",
                                     )));
@@ -142,7 +144,7 @@ impl Discovery for AddressBookDiscovery {
                                 match iroh::EndpointAddr::try_from(node_info) {
                                     Ok(endpoint_addr) => {
                                         let info = EndpointInfo::from(endpoint_addr);
-                                        Some(Ok(DiscoveryItem::new(info, PROVENANCE, None)))
+                                        Some(Ok(AddressLookupItem::new(info, PROVENANCE, None)))
                                     }
                                     Err(_) => {
                                         // No iroh-related transport information was available,

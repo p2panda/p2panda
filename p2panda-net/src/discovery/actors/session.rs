@@ -2,9 +2,8 @@
 
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use p2panda_discovery::address_book::{
     AddressBookStore, BoxedAddressBookStore, WrappedAddressBookStore,
 };
@@ -34,7 +33,7 @@ pub struct DiscoverySessionArguments {
     pub store: BoxedAddressBookStore<NodeId, NodeInfo>,
     pub endpoint: Endpoint,
     pub manager_ref: ActorRef<ToDiscoveryManager>,
-    pub transport_config: Arc<TransportConfig>,
+    pub quic_transport_config: QuicTransportConfig,
     pub args: DiscoverySessionRole,
 }
 
@@ -89,7 +88,7 @@ impl ThreadLocalActor for DiscoverySession {
             store,
             endpoint,
             manager_ref,
-            transport_config,
+            quic_transport_config,
             args,
         } = args;
         let role = args.role();
@@ -98,7 +97,11 @@ impl ThreadLocalActor for DiscoverySession {
             DiscoverySessionRole::Connect => {
                 // Try to establish a direct connection with this node.
                 let connection = endpoint
-                    .connect_with_config(remote_node_id, DISCOVERY_PROTOCOL_ID, transport_config)
+                    .connect_with_config(
+                        remote_node_id,
+                        DISCOVERY_PROTOCOL_ID,
+                        quic_transport_config,
+                    )
                     .await?;
                 let (tx, rx) = connection.open_bi().await?;
                 (connection, tx, rx)

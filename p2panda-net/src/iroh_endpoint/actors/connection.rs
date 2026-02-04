@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::sync::Arc;
-
-use iroh::endpoint::{ConnectOptions, TransportConfig};
+use iroh::endpoint::{ConnectOptions, QuicTransportConfig};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use thiserror::Error;
@@ -24,7 +22,7 @@ pub enum IrohConnectionArgs {
         endpoint: iroh::endpoint::Endpoint,
         endpoint_addr: iroh::EndpointAddr,
         alpn: ProtocolId,
-        transport_config: Option<Arc<TransportConfig>>,
+        quic_transport_config: Option<QuicTransportConfig>,
         reply: ConnectReplyPort,
     },
     Accept {
@@ -97,14 +95,14 @@ async fn establish_connection(
             endpoint,
             endpoint_addr,
             alpn,
-            transport_config,
+            quic_transport_config,
             reply,
         } => {
             tracing::Span::current().record("alpn", alpn.fmt_short());
             let remote_node_id = to_public_key(endpoint_addr.id);
 
             let mut connect_options = ConnectOptions::default();
-            if let Some(config) = transport_config {
+            if let Some(config) = quic_transport_config {
                 connect_options = connect_options.with_transport_config(config);
             }
 
