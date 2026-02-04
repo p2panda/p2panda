@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use iroh::discovery::UserData;
+use iroh::address_lookup::UserData;
 use iroh::endpoint_info::MaxLengthExceededError;
 use p2panda_core::{IdentityError, Signature};
 use thiserror::Error;
@@ -122,7 +122,7 @@ pub enum UserDataInfoError {
 
 #[cfg(test)]
 mod tests {
-    use iroh::discovery::UserData;
+    use iroh::address_lookup::UserData;
     use p2panda_core::PrivateKey;
 
     use crate::iroh_endpoint::from_public_key;

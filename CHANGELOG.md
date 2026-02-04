@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Changed
+
+- Update iroh to v0.96.1 [#978](https://github.com/p2panda/p2panda/pull/978)
+
 ### Fixed
 
 - Fix Drop impl causing premature gossip unsubscribe [#968](https://github.com/p2panda/p2panda/pull/968)
