@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use iroh::discovery::mdns::{DiscoveryEvent, MdnsDiscovery};
-use iroh::discovery::{Discovery, EndpointData, UserData};
+use iroh::address_lookup::mdns::DiscoveryEvent;
+use iroh::address_lookup::{AddressLookup, EndpointData, MdnsAddressLookup, UserData};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
@@ -39,7 +39,7 @@ pub enum ToMdns {
 pub struct MdnsState {
     my_node_id: NodeId,
     address_book: AddressBook,
-    service: Option<MdnsDiscovery>,
+    service: Option<MdnsAddressLookup>,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -104,7 +104,7 @@ impl ThreadLocalActor for MdnsActor {
                 // resolving interface) as we're already handling that ourselves with checked and
                 // authenticated addresses.
 
-                let mdns = MdnsDiscovery::builder()
+                let mdns = MdnsAddressLookup::builder()
                     // Do not advertise our own endpoint address if in "passive" mode.
                     .advertise(mode.is_active())
                     .service_name(MDNS_SERVICE_NAME)

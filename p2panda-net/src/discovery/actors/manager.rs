@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
 use p2panda_discovery::address_book::NodeInfo as _;
@@ -82,7 +82,7 @@ pub struct DiscoveryManagerState {
     walkers_reset: Arc<Notify>,
     watch_handle: Option<JoinHandle<()>>,
     events_tx: broadcast::Sender<DiscoveryEvent>,
-    transport_config: Arc<TransportConfig>,
+    quic_transport_config: QuicTransportConfig,
     metrics: DiscoveryMetrics,
 }
 
@@ -268,12 +268,13 @@ impl ThreadLocalActor for DiscoveryManager {
         }
 
         // Custom QUIC transport parameters for discovery protocol. We don't want to wait too long
-        // for unreachable nodes. QUIC should fastly tell us about a timeout which will mark this
+        // for unreachable nodes. QUIC should tell us quickly about a timeout so we can mark this
         // node as "stale".
-        let mut transport_config = TransportConfig::default();
-        transport_config.max_idle_timeout(Some(
-            MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
-        ));
+        let quic_transport_config = QuicTransportConfig::builder()
+            .max_idle_timeout(Some(
+                MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+            ))
+            .build();
 
         // Invoke the handler to register the discovery protocol and do other setups.
         let _ = myself.cast(ToDiscoveryManager::Initiate);
@@ -291,7 +292,7 @@ impl ThreadLocalActor for DiscoveryManager {
             walkers_reset,
             watch_handle: None,
             events_tx,
-            transport_config: Arc::new(transport_config),
+            quic_transport_config,
             metrics: DiscoveryMetrics::default(),
         })
     }
@@ -397,7 +398,7 @@ impl ThreadLocalActor for DiscoveryManager {
                         store: state.address_book.store().await?,
                         endpoint: state.endpoint.clone(),
                         manager_ref: myself.clone(),
-                        transport_config: state.transport_config.clone(),
+                        quic_transport_config: state.quic_transport_config.clone(),
                         args: DiscoverySessionRole::Connect,
                     },
                     myself.clone().into(),
@@ -435,7 +436,7 @@ impl ThreadLocalActor for DiscoveryManager {
                         store: state.address_book.store().await?,
                         endpoint: state.endpoint.clone(),
                         manager_ref: myself.clone(),
-                        transport_config: state.transport_config.clone(),
+                        quic_transport_config: state.quic_transport_config.clone(),
                         args: DiscoverySessionRole::Accept { connection },
                     },
                     myself.into(),
