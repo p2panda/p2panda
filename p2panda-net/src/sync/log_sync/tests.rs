@@ -585,7 +585,7 @@ async fn unsubscribe_from_gossip_after_drop() {
 
     let sync_topic = [0; 32];
 
-    let alice = TestNode::spawn([10; 32]).await;
+    let alice = TestNode::spawn([73; 32]).await;
     let alice_handle = alice.log_sync.stream(sync_topic, true).await.unwrap();
 
     let mut watcher = alice
