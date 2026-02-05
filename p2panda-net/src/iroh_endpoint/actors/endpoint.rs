@@ -15,7 +15,7 @@ use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::address_book::{AddressBook, AddressBookError};
@@ -200,7 +200,11 @@ impl ThreadLocalActor for IrohEndpoint {
                     .bind_addr_v4(socket_address_v4)
                     .bind_addr_v6(socket_address_v6)
                     .bind()
-                    .await?;
+                    .await
+                    // In the event of failure, this error is not included
+                    // as part of the ractor error returned to the caller.
+                    // We log it here explicitly to assist with debugging.
+                    .inspect_err(|err| error!("{err}"))?;
 
                 // Handle incoming connection requests from other nodes.
                 let accept_handle = {
