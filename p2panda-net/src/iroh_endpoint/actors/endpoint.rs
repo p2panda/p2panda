@@ -7,7 +7,7 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use iroh::endpoint::TransportConfig;
+use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::DynProtocolHandler;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -61,7 +61,7 @@ pub enum ToIrohEndpoint {
     Connect(
         NodeId,
         ProtocolId,
-        Option<Arc<TransportConfig>>,
+        Option<QuicTransportConfig>,
         ConnectReplyPort,
     ),
 
@@ -176,11 +176,12 @@ impl ThreadLocalActor for IrohEndpoint {
                     SocketAddrV6::new(config.bind_ip_v6, config.bind_port_v6, 0, 0);
 
                 // Default QUIC transport parameters, can be overwritten when connecting to a node.
-                let mut transport_config = TransportConfig::default();
-                transport_config.keep_alive_interval(Some(KEEP_ALIVE_INTERVAL));
-                transport_config.max_idle_timeout(Some(
-                    MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
-                ));
+                let quic_transport_config = QuicTransportConfig::builder()
+                    .keep_alive_interval(KEEP_ALIVE_INTERVAL)
+                    .max_idle_timeout(Some(
+                        MAX_IDLE_TIMEOUT.try_into().expect("correct max idle value"),
+                    ))
+                    .build();
 
                 // Register list of possible "home relays" for this node.
                 let relay_mode = iroh::RelayMode::Custom(state.relay_map.clone());
@@ -194,11 +195,11 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 // Create and bind the endpoint to the socket.
                 let endpoint = iroh::Endpoint::empty_builder(relay_mode)
-                    .discovery(address_book_discovery)
+                    .address_lookup(address_book_discovery)
                     .secret_key(from_private_key(state.private_key.clone()))
-                    .transport_config(transport_config)
-                    .bind_addr_v4(socket_address_v4)
-                    .bind_addr_v6(socket_address_v6)
+                    .transport_config(quic_transport_config)
+                    .bind_addr(socket_address_v4)?
+                    .bind_addr(socket_address_v6)?
                     .bind()
                     .await
                     // In the event of failure, this error is not included
@@ -239,7 +240,7 @@ impl ThreadLocalActor for IrohEndpoint {
                     )
                     .set_alpns(protocols.keys().cloned().collect());
             }
-            ToIrohEndpoint::Connect(node_id, alpn, transport_config, reply) => {
+            ToIrohEndpoint::Connect(node_id, alpn, quic_transport_config, reply) => {
                 let mixed_protocol_id = hash_protocol_id_with_network_id(&alpn, state.network_id);
 
                 // Ask address book for available node information.
@@ -278,7 +279,7 @@ impl ThreadLocalActor for IrohEndpoint {
                                 ),
                             endpoint_addr: endpoint_addr.clone(),
                             alpn: mixed_protocol_id,
-                            transport_config,
+                            quic_transport_config,
                             reply,
                         },
                         myself.clone(),

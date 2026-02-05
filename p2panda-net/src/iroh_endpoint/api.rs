@@ -168,7 +168,7 @@ impl Endpoint {
         &self,
         node_id: NodeId,
         protocol_id: impl AsRef<[u8]>,
-        transport_config: Arc<iroh::endpoint::TransportConfig>,
+        quic_transport_config: iroh::endpoint::QuicTransportConfig,
     ) -> Result<iroh::endpoint::Connection, EndpointError> {
         let inner = self.inner.read().await;
         let result = call!(
@@ -176,7 +176,7 @@ impl Endpoint {
             ToIrohEndpoint::Connect,
             node_id,
             protocol_id.as_ref().to_vec(),
-            Some(transport_config)
+            Some(quic_transport_config)
         )
         .map_err(Box::new)??;
         Ok(result)
