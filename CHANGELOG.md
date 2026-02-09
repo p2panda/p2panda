@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 - Gracefully handle concurrently deleted operations during sync [#974](https://github.com/p2panda/p2panda/pull/974)
 - Cleanup state in gossip unsubscribe handler [#973](https://github.com/p2panda/p2panda/pull/973)
 - Fix bind conflict with unique argument seed [#980](https://github.com/p2panda/p2panda/pull/980)
+- Fix tests: Subscribe to events before topic stream creation [#981](https://github.com/p2panda/p2panda/pull/981)
 
 ## [0.5.0] - 21/01/2026
 

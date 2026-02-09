@@ -60,10 +60,16 @@ async fn joined_and_left_events_are_received() {
         .await
         .unwrap();
 
+    // Create the events subscriber channel _before_ creating the topic stream.
+    //
+    // This is to ensure we don't miss any events; this can happen, for example,
+    // if the `Joined` event is sent before we have created the events
+    // subscriber channel. In that case the `Joined` event will never be
+    // received.
+    let mut events = ant_gossip.events().await.unwrap();
+
     let ant_handle = ant_gossip.stream(topic).await.unwrap();
     let _bat_handle = bat_gossip.stream(topic).await.unwrap();
-
-    let mut events = ant_gossip.events().await.unwrap();
 
     // Gossip joined event is received by ant.
     assert!(matches!(
@@ -158,6 +164,8 @@ async fn join_without_bootstrap() {
         .await
         .unwrap();
 
+    let mut events = ant_gossip.events().await.unwrap();
+
     // Subscribe to gossip topic.
     let _ant_to_gossip = ant_gossip.stream(topic).await.unwrap();
     let _bat_to_gossip = bat_gossip.stream(topic).await.unwrap();
@@ -165,7 +173,6 @@ async fn join_without_bootstrap() {
 
     // Ant should have joined the overlay and learned about two more nodes.
     let mut neighbours = HashSet::new();
-    let mut events = ant_gossip.events().await.unwrap();
 
     if let GossipEvent::Joined {
         topic: event_topic,
