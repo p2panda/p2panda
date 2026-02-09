@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.5.1] - 09/02/2026
+
 ### Changed
 
 - Update iroh to v0.96.1 [#978](https://github.com/p2panda/p2panda/pull/978)
@@ -147,7 +149,8 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/p2panda/p2panda/releases/tag/v0.5.1
 [0.5.0]: https://github.com/p2panda/p2panda/releases/tag/v0.5.0
 [0.4.0]: https://github.com/p2panda/p2panda/releases/tag/v0.4.0
 [0.3.1]: https://github.com/p2panda/p2panda/releases/tag/v0.3.1
