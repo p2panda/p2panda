@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-blobs"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",

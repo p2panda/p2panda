@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-stream"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -23,15 +23,15 @@ workspace = true
 ciborium = "0.2.2"
 futures-channel = "0.3.31"
 futures-util = { version = "0.3.31", features = ["sink"] }
-p2panda-core = { path = "../p2panda-core", version = "0.5.0", features = ["prune"] }
-p2panda-store = { path = "../p2panda-store", version = "0.5.0" }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1", features = ["prune"] }
+p2panda-store = { path = "../p2panda-store", version = "0.5.1" }
 pin-project = "1.1.10"
 pin-utils = "0.1.0"
 thiserror = "2.0.12"
 
 [dev-dependencies]
 async-stream = "0.3.6"
-p2panda-store = { path = "../p2panda-store", version = "0.5.0", features = ["sqlite", "test_utils"] }
+p2panda-store = { path = "../p2panda-store", version = "0.5.1", features = ["sqlite", "test_utils"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.44.2", features = ["rt", "macros"] }
 tokio-stream = "0.1.17"

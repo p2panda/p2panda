@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-encryption"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -33,7 +33,7 @@ hkdf = "0.12.4"
 hpke-rs = "0.2.0"
 hpke-rs-crypto = "0.2.0"
 hpke-rs-rust-crypto = "0.2.0"
-p2panda-core = { version = "0.5.0", path = "../p2panda-core", default-features = false }
+p2panda-core = { version = "0.5.1", path = "../p2panda-core", default-features = false }
 rand_chacha = { version = "0.9.0", features = ["os_rng"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_bytes = "0.11.17"

@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-net"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -70,10 +70,10 @@ hex = "0.4.3"
 iroh = { version = "0.96.1", default-features = false, optional = true }
 iroh-base = { version = "0.96.1", optional = true }
 iroh-gossip = { version = "0.96.0", optional = true }
-p2panda-core = { path = "../p2panda-core", version = "0.5.0" }
-p2panda-discovery = { path = "../p2panda-discovery", version = "0.5.0", features = ["test_utils"], optional = true }
-p2panda-store = { path = "../p2panda-store", version = "0.5.0", optional = true }
-p2panda-sync = { path = "../p2panda-sync", version = "0.5.0", optional = true }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
+p2panda-discovery = { path = "../p2panda-discovery", version = "0.5.1", features = ["test_utils"], optional = true }
+p2panda-store = { path = "../p2panda-store", version = "0.5.1", optional = true }
+p2panda-sync = { path = "../p2panda-sync", version = "0.5.1", optional = true }
 ractor = "0.15.8"
 rand = "0.9.2"
 rand_chacha = "0.9.0"

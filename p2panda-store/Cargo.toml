@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-store"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -28,7 +28,7 @@ test_utils = ["dep:rand"]
 [dependencies]
 ciborium = { version = "0.2.2", optional = true }
 hex = { version = "0.4.3", optional = true }
-p2panda-core = { path = "../p2panda-core", version = "0.5.0" }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
 rand = { version = "0.8.5", optional = true }
 sqlx = { version = "0.8.3", optional = true, features = ["sqlite", "runtime-tokio"] }
 thiserror = "2.0.12"
