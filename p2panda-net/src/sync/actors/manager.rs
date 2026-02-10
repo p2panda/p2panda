@@ -348,6 +348,7 @@ where
                     let subscription = from_sync_rx.resubscribe();
                     let _ = reply.send(Some(subscription));
                 } else {
+                    warn!("subscribe: missing sync receiver");
                     let _ = reply.send(None);
                 }
             }
@@ -368,6 +369,8 @@ where
 
                     // Finish processing all messages in the manager's queue and then kill it.
                     sync_manager.drain()?;
+                } else {
+                    warn!("close: missing topic manager");
                 }
 
                 // Drop all channels and handles associated with the topic. The removed gossip
@@ -391,6 +394,8 @@ where
                         topic,
                         live_mode: *live_mode,
                     })?;
+                } else {
+                    warn!("initiate: missing topic manager");
                 }
             }
             ToSyncManager::Accept(node_id, topic, connection) => {
@@ -409,6 +414,8 @@ where
                         live_mode: *live_mode,
                         connection,
                     })?;
+                } else {
+                    warn!("accept: missing topic manager");
                 }
             }
             ToSyncManager::EndSync(topic, node_id) => {
@@ -422,6 +429,8 @@ where
                     );
 
                     sync_manager_actor.send_message(ToTopicManager::Close { node_id })?;
+                } else {
+                    warn!("end: missing topic manager");
                 }
             }
         }
@@ -444,6 +453,8 @@ where
                         topic = %topic.fmt_short(),
                         "received ready from sync manager"
                     );
+                } else {
+                    warn!("started: missing topic manager");
                 }
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
@@ -457,6 +468,8 @@ where
 
                     // Drop all state associated with the terminated sync manager.
                     state.drop_topic_state(&topic);
+                } else {
+                    warn!("terminated: missing topic manager");
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -472,6 +485,8 @@ where
                     );
 
                     myself.send_message(ToSyncManager::Close(topic))?;
+                } else {
+                    warn!("failed: missing topic manager");
                 }
             }
             _ => (),
