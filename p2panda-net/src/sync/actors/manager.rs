@@ -469,7 +469,11 @@ where
                     // Drop all state associated with the terminated sync manager.
                     state.drop_topic_state(&topic);
                 } else {
-                    warn!("terminated: missing topic manager");
+                    warn!("sync manager terminated: missing topic manager");
+                    warn!(
+                        %actor_id,
+                        "sync manager terminated: {reason:?}",
+                    );
                 }
             }
             SupervisionEvent::ActorFailed(actor, panic_msg) => {
@@ -486,7 +490,11 @@ where
 
                     myself.send_message(ToSyncManager::Close(topic))?;
                 } else {
-                    warn!("failed: missing topic manager");
+                    warn!("sync manager failed: missing topic manager");
+                    warn!(
+                        %actor_id,
+                        "sync manager failed: {panic_msg:#?}",
+                    );
                 }
             }
             _ => (),
