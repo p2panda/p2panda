@@ -118,9 +118,12 @@ impl ThreadLocalActor for GossipHealer {
                                 None
                             }
                         }));
-                        state
-                            .gossip_session_ref
-                            .send_message(ToGossipSession::JoinNodes(state.topic_endpoint_ids.clone()))?;
+
+                        if !state.topic_endpoint_ids.is_empty() {
+                            state
+                                .gossip_session_ref
+                                .send_message(ToGossipSession::JoinNodes(state.topic_endpoint_ids.clone()))?;
+                        }
                     },
                     Some(_) = node_watcher.recv() => {
                         // Re-join the gossip overlay when we've changed our transport info.
