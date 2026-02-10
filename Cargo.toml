@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "fuzz",
+    "p2panda",
     "p2panda-auth",
     "p2panda-blobs",
     "p2panda-core",
