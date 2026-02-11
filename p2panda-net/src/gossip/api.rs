@@ -208,6 +208,9 @@ impl Gossip {
     }
 
     /// Subscribe to system events.
+    ///
+    /// NOTE: only events emitted _after_ calling this method will be received on the returned
+    /// channel.
     pub async fn events(&self) -> Result<broadcast::Receiver<GossipEvent>, GossipError> {
         let inner = self.inner.read().await;
         let result = call!(inner.actor_ref, ToGossipManager::Events).map_err(Box::new)?;
