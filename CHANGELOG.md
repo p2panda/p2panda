@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
+
 ## [0.5.1] - 09/02/2026
 
 ### Changed

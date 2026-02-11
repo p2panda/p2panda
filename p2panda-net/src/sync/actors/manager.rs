@@ -145,6 +145,9 @@ where
             "join gossip overlay for peer-sampling",
         );
 
+        // Subscribe to events coming from the gossip actor.
+        let mut events = self.gossip.events().await?;
+
         // Join gossip overlay to use HyParView membership algorithm for peer sampling.
         //
         // This will subscribe us to the gossip topic and add it to the address book.
@@ -153,7 +156,6 @@ where
         // Listen for events of HyParView who entered or left the "active view". This informs with
         // whom we're running sync sessions with.
         let gossip_events_handle = {
-            let mut events = self.gossip.events().await?;
             let myself = myself.clone();
             let gossip_topics = self.gossip_topics.clone();
 
