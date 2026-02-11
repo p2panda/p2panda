@@ -13,10 +13,10 @@ async fn insert_get_delete_operations_memory() {
 
     let log = TestLog::new();
 
-    let operation_1 = log.operation::<()>(b"hey", None);
-    let operation_2 = log.operation::<()>(b"ho", None);
-    let operation_3 = log.operation::<()>(b"let's", None);
-    let operation_4 = log.operation::<()>(b"go!", None);
+    let operation_1 = log.operation::<()>(b"hey", ());
+    let operation_2 = log.operation::<()>(b"ho", ());
+    let operation_3 = log.operation::<()>(b"let's", ());
+    let operation_4 = log.operation::<()>(b"go!", ());
 
     // Insert
     // ~~~~~~
@@ -103,10 +103,10 @@ async fn insert_get_delete_operations_sqlite() {
 
     let log = TestLog::new();
 
-    let operation_1 = log.operation::<()>(b"hey", None);
-    let operation_2 = log.operation::<()>(b"ho", None);
-    let operation_3 = log.operation::<()>(b"let's", None);
-    let operation_4 = log.operation::<()>(b"go!", None);
+    let operation_1 = log.operation::<()>(b"hey", ());
+    let operation_2 = log.operation::<()>(b"ho", ());
+    let operation_3 = log.operation::<()>(b"let's", ());
+    let operation_4 = log.operation::<()>(b"go!", ());
 
     // Insert
     // ~~~~~~
