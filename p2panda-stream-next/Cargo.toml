@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-stream-next"
-version = "0.1.0"
+version = "0.5.1"
 edition = "2024"
 
 [package.metadata.docs.rs]
@@ -20,10 +20,10 @@ orderer = [
 
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
-p2panda-core = { path = "../p2panda-core", version = "0.4.0", optional = true }
-p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", optional = true }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1", optional = true }
+p2panda-store-next = { path = "../p2panda-store-next", version = "0.5.1", optional = true }
 # @TODO: Remove this as soon as we've brought p2panda-stream-next into p2panda-stream.
-p2panda-stream = { path = "../p2panda-stream", version = "0.4.0", optional = true }
+p2panda-stream = { path = "../p2panda-stream", version = "0.5.1", optional = true }
 pin-project = "1.1.10"
 thiserror = { version = "2.0.16", optional = true }
 tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
@@ -31,8 +31,8 @@ tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync"
 [dev-dependencies]
 futures-test = { version = "0.3.31" }
 futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
-p2panda-core = { path = "../p2panda-core", version = "0.4.0" }
-p2panda-store-next = { path = "../p2panda-store-next", version = "0.4.0", features = ["test_utils"] }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
+p2panda-store-next = { path = "../p2panda-store-next", version = "0.5.1", features = ["test_utils"] }
 serde = { version = "1.0.219" }
 tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { version = "0.1.17", default-features = false }

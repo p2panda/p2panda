@@ -53,13 +53,10 @@ where
                         .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
                 )
                 .bind(operation.body.map(|body| body.to_bytes()))
-                .bind(match operation.header.extensions {
-                    Some(ref extensions) => Some(
-                        encode_cbor(extensions)
-                            .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
-                    ),
-                    None => None,
-                })
+                .bind(
+                    encode_cbor(&operation.header.extensions)
+                        .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
+                )
                 .execute(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
