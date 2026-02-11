@@ -12,6 +12,9 @@ mod supervisor;
 mod tests;
 pub(crate) mod user_data;
 
+// Re-export useful iroh types.
+pub use iroh::RelayUrl;
+
 pub use api::{Endpoint, EndpointError};
 pub use builder::Builder;
 pub use config::IrohConfig;
