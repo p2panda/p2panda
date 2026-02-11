@@ -5,7 +5,6 @@ use std::task::{Context, Poll};
 
 use futures_core::Stream;
 use pin_project::pin_project;
-use tokio::pin;
 
 use crate::processors::Processor;
 use crate::processors::buffered::{Buffer, BufferReceiver, BufferSender};
