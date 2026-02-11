@@ -109,17 +109,14 @@ mod tests {
 
     use super::{Orderer, Ordering};
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     struct TestExtension {
         dependencies: Vec<Hash>,
     }
 
     impl Ordering<Hash> for Operation<TestExtension> {
         fn dependencies(&self) -> &[Hash] {
-            match self.header.extensions {
-                Some(ref extensions) => &extensions.dependencies,
-                None => &[],
-            }
+            &self.header.extensions.dependencies
         }
     }
 
@@ -137,9 +134,9 @@ mod tests {
                 public_key,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
-                extensions: Some(TestExtension {
+                extensions: TestExtension {
                     dependencies: vec![],
-                }),
+                },
                 ..Default::default()
             };
             header.sign(&private_key);
@@ -161,9 +158,9 @@ mod tests {
                 public_key,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
-                extensions: Some(TestExtension {
+                extensions: TestExtension {
                     dependencies: vec![operation_panda.hash],
-                }),
+                },
                 ..Default::default()
             };
             header.sign(&private_key);

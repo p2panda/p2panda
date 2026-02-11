@@ -22,7 +22,7 @@ impl TestLog {
         }
     }
 
-    pub fn operation<E: Extensions>(&self, body: &[u8], extensions: Option<E>) -> Operation<E> {
+    pub fn operation<E: Extensions>(&self, body: &[u8], extensions: E) -> Operation<E> {
         let body = Body::from(body);
 
         let timestamp = SystemTime::now()
