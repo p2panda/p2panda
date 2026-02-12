@@ -132,6 +132,10 @@ impl HybridTimestamp {
             Self(timestamp, LamportTimestamp::default())
         }
     }
+
+    pub fn to_parts(&self) -> (Timestamp, LamportTimestamp) {
+        (self.0, self.1)
+    }
 }
 
 const SEPARATOR: char = '/';

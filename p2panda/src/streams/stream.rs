@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_core::Stream;
+use futures_util::Stream;
 use p2panda_core::{Hash, PublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
