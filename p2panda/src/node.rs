@@ -2,6 +2,7 @@
 
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use p2panda_net::NodeId;
+use p2panda_net::gossip::GossipError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -64,11 +65,17 @@ impl Node {
     pub async fn ephemeral_stream<M>(
         &self,
         topic: Topic,
-    ) -> Result<EphemeralStreamHandle<M>, NodeError>
+    ) -> Result<EphemeralStreamHandle<M>, EphemeralStreamHandleError>
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
-        unimplemented!()
+        let handle = self.network.gossip.stream(topic.into()).await?;
+
+        Ok(EphemeralStreamHandle::new(
+            topic,
+            self.private_key.clone(),
+            handle,
+        ))
     }
 
     pub async fn events(&self) -> Result<EventStream, NodeError> {
@@ -83,6 +90,14 @@ impl Node {
         unimplemented!()
     }
 }
+
+/// Broken / closed communication channel with the internal gossip actor in `p2panda-net`. This can
+/// be due to the actor crashing.
+///
+/// Users may re-attempt creating a new ephemeral stream handle in case the actor restarted later.
+#[derive(Error, Debug)]
+#[error("error occurred in internal gossip actor: {0}")]
+pub struct EphemeralStreamHandleError(#[from] GossipError);
 
 #[derive(Clone, Debug)]
 pub struct Config {
