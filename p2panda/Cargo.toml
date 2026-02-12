@@ -18,11 +18,12 @@ all-features = true
 workspace = true
 
 [dependencies]
-futures-core = "0.3.31"
+futures-util = { version = "0.3.31", default-features = false }
 hex = "0.4.3"
 p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
 p2panda-net = { path = "../p2panda-net", version = "0.5.1" }
 p2panda-store = { path = "../p2panda-store-next", package = "p2panda-store-next", version = "0.5.1" }
+pin-project = "1.1.10"
 rand = "0.10.0"
 rand_chacha = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
