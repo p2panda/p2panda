@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TestLog {
     private_key: PrivateKey,
     backlink: Rc<RefCell<Option<Hash>>>,
