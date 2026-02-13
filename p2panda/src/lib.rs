@@ -11,6 +11,8 @@ mod network;
 pub mod node;
 pub mod operation;
 pub mod streams;
+#[cfg(any(test, feature = "test_utils"))]
+pub mod test_utils;
 pub mod topic;
 
 pub use node::Node;
