@@ -31,14 +31,27 @@ where
         unimplemented!()
     }
 
-    /// Subscribe to the event stream.
+    /// Subscribe to the message stream.
     pub async fn subscribe(&self) -> Result<StreamSubscription<M>, StreamError> {
         unimplemented!()
     }
 
     /// Manually commit a message.
+    // TODO: Implementing this is not a priority right now.
     pub async fn commit(&self, _message_id: Hash) -> Result<(), StreamError> {
         // This is a no-op if messages are automatically committed (which is the default).
+        unimplemented!()
+    }
+
+    /// Repeat streaming all known messages again.
+    ///
+    /// This can be useful if the application doesn't keep any materialised state around and needs
+    /// to repeat all messages on start.
+    ///
+    /// Another use-case is the roll-out of an application update where all state needs to be
+    /// re-materialised.
+    // TODO: This will be required by applications like Reflection.
+    pub async fn replay(&self) -> Result<(), StreamError> {
         unimplemented!()
     }
 }
