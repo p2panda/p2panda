@@ -64,4 +64,8 @@ where
         let mut operations = self.operations.operations.borrow_mut();
         Ok(operations.remove(id).is_some())
     }
+
+    async fn delete_operation_payload(&self, _id: &ID) -> Result<bool, Self::Error> {
+        todo!()
+    }
 }
