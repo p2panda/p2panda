@@ -10,8 +10,8 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Header, Operation};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Body, Extensions, Hash, Header, Operation};
+use p2panda_store::operations::{LogId, LogStore};
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -53,7 +53,7 @@ pub struct TopicLogSync<T, S, M, L, E> {
 impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E>,
+    S: LogStore<Operation<E>, L, Hash> + 'static,
     M: TopicMap<T, Logs<L>>,
     L: LogId + for<'de> Deserialize<'de> + Serialize,
     E: Extensions,
@@ -101,7 +101,7 @@ where
 impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    S: LogStore<Operation<E>, L, Hash> + Clone + Send + 'static,
     M: TopicMap<T, Logs<L>> + Send + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
@@ -350,7 +350,10 @@ fn sync_channels<'a, L, E>(
 ) -> (
     impl Sink<LogSyncMessage<L>, Error = TopicLogSyncChannelError> + Unpin,
     impl Stream<Item = Result<LogSyncMessage<L>, TopicLogSyncChannelError>> + Unpin,
-) {
+)
+where
+    L: LogId,
+{
     let log_sync_sink = LogSyncSink::new(sink);
 
     let log_sync_stream = stream.by_ref().map(|message| match message {
@@ -449,13 +452,19 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
 #[allow(clippy::large_enum_variant)]
-pub enum TopicLogSyncMessage<L, E> {
+pub enum TopicLogSyncMessage<L, E>
+where
+    L: LogId,
+{
     Sync(LogSyncMessage<L>),
     Live(Header<E>, Option<Body>),
     Close,
 }
 
-impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E> {
+impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E>
+where
+    L: LogId,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             TopicLogSyncMessage::Sync(_) => "sync",
@@ -475,7 +484,10 @@ pin_project! {
     }
 }
 
-impl<S, L, E> LogSyncSink<S, L, E> {
+impl<S, L, E> LogSyncSink<S, L, E>
+where
+    L: LogId,
+{
     pub fn new(inner: S) -> Self {
         Self {
             inner,
@@ -486,6 +498,7 @@ impl<S, L, E> LogSyncSink<S, L, E> {
 
 impl<S, L, E> Sink<LogSyncMessage<L>> for LogSyncSink<S, L, E>
 where
+    L: LogId,
     S: Sink<TopicLogSyncMessage<L, E>>,
     S::Error: Debug,
 {

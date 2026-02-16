@@ -20,8 +20,8 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Operation, PublicKey};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Extensions, Hash, Operation, PublicKey};
+use p2panda_store::operations::{LogId, LogStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -97,7 +97,7 @@ where
 impl<T, S, M, L, E> Manager<T> for TopicSyncManager<T, S, M, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    S: LogStore<Operation<E>, L, Hash> + Clone + Send + 'static,
     M: TopicMap<T, Logs<L>> + Send + 'static,
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,

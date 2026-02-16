@@ -7,8 +7,9 @@ use std::marker::PhantomData;
 
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
+use p2panda_core::logs::{Height, StateVector, calculate_diff};
 use p2panda_core::{Body, Extensions, Hash, Header, Operation, PublicKey};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_store::operations::{LogId, LogStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
@@ -32,24 +33,27 @@ enum State<L> {
     SendHave { metrics: LogSyncMetrics },
 
     /// Receive have message from remote and calculate operation diff.
-    ReceiveHave { metrics: LogSyncMetrics },
+    ReceiveHave {
+        local_state_vectors: HashMap<PublicKey, HashMap<L, StateVector>>,
+        metrics: LogSyncMetrics,
+    },
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSyncOrDone {
-        operations: Vec<(PublicKey, L, u64, Hash)>,
+        remote_needs: HashMap<PublicKey, HashMap<L, Height>>,
         metrics: LogSyncMetrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
-        operations: Vec<(PublicKey, L, u64, Hash)>,
+        remote_needs: HashMap<PublicKey, HashMap<L, Height>>,
         metrics: LogSyncMetrics,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
-        operations: Vec<(PublicKey, L, u64, Hash)>,
+        remote_needs: HashMap<PublicKey, HashMap<L, Height>>,
         metrics: LogSyncMetrics,
     },
 
@@ -93,7 +97,7 @@ impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
     L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
     E: Extensions + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
+    S: LogStore<Operation<E>, L, Hash> + Send + 'static,
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
@@ -124,45 +128,56 @@ where
                     self.state = State::SendHave { metrics };
                 }
                 State::SendHave { metrics } => {
-                    let local_log_heights = local_log_heights(&self.store, &self.logs).await?;
-                    sink.send(LogSyncMessage::<L>::Have(local_log_heights.clone()))
+                    let local_state_vectors = local_state_vectors(&self.store, &self.logs).await?;
+                    sink.send(LogSyncMessage::<L>::Have(local_state_vectors.clone()))
                         .await
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
-                    self.state = State::ReceiveHave { metrics };
+                    self.state = State::ReceiveHave {
+                        local_state_vectors,
+                        metrics,
+                    };
                 }
-                State::ReceiveHave { mut metrics } => {
+                State::ReceiveHave {
+                    local_state_vectors,
+                    mut metrics,
+                } => {
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
                     let message =
                         message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
-                    let LogSyncMessage::Have(remote_log_heights) = message else {
+                    let LogSyncMessage::Have(remote_state_vectors) = message else {
                         return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                     };
 
-                    let remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>> =
-                        remote_log_heights.clone().into_iter().collect();
+                    let remote_needs = calculate_diff(&local_state_vectors, &remote_state_vectors);
 
-                    // We only fetch the hashes of the operations we should send to the remote in
-                    // this step. This avoids keeping all headers and payloads in memory, we can
-                    // fetch one at a time as they are needed within the sync phase later.
-                    let (operations, total_size) = operations_needed_by_remote(
-                        &self.store,
-                        &self.logs,
-                        remote_log_heights_map,
-                    )
-                    .await?;
+                    let mut operation_count = 0;
+                    let mut byte_count = 0;
+                    for (public_key, state_vectors) in remote_needs.iter() {
+                        for (log_id, from) in state_vectors.iter() {
+                            if let Some((inner_byte_count, inner_operation_count)) = self
+                                .store
+                                .get_log_size(public_key, log_id, from.seq_num())
+                                .await
+                                .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
+                            {
+                                operation_count += inner_operation_count;
+                                byte_count += inner_byte_count;
+                            };
+                        }
+                    }
 
-                    metrics.total_operations_local = Some(operations.len() as u64);
-                    metrics.total_bytes_local = Some(total_size);
+                    metrics.total_operations_local = Some(operation_count);
+                    metrics.total_bytes_local = Some(byte_count);
 
                     self.state = State::SendPreSyncOrDone {
-                        operations,
+                        remote_needs,
                         metrics,
                     };
                 }
                 State::SendPreSyncOrDone {
-                    operations,
+                    remote_needs,
                     metrics,
                 } => {
                     let total_operations = metrics.total_operations_local.unwrap();
@@ -191,12 +206,12 @@ where
                         .map_err(|_| LogSyncError::BroadcastSend)?;
 
                     self.state = State::ReceivePreSyncOrDone {
-                        operations,
+                        remote_needs,
                         metrics,
                     };
                 }
                 State::ReceivePreSyncOrDone {
-                    operations,
+                    remote_needs,
                     mut metrics,
                 } => {
                     let Some(message) = stream.next().await else {
@@ -240,15 +255,15 @@ where
                         .map_err(|_| LogSyncError::BroadcastSend)?;
 
                     self.state = State::Sync {
-                        operations,
+                        remote_needs,
                         metrics,
                     };
                 }
                 State::Sync {
-                    operations,
+                    remote_needs,
                     mut metrics,
                 } => {
-                    let mut operation_stream = stream::iter(operations);
+                    let mut send_logs = stream::iter(remote_needs);
                     let mut sent_operations = 0;
                     let total_operations = metrics
                         .total_operations_local
@@ -313,61 +328,87 @@ where
                                     }
                                 }
                             },
-                            Some((public_key, log_id, seq_num, hash)) = operation_stream.next() => {
-                                // Insert message hash into deduplication buffer.
-                                dedup.insert(hash);
-
-                                // Fetch raw message bytes and send to remote.
-                                let result = self
-                                    .store
-                                    .get_raw_operation(hash)
+                            message = send_logs.next() => {
+                                let Some((author, remote_needs)) = message else {
+                                    sink.send(LogSyncMessage::Done)
                                     .await
-                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?;
-
-                                // For testing, where the store is an in memory implementation
-                                // which may not yield work to other tasks, we force the task to
-                                // yield in order to test concurrent database actions occurring
-                                // during sync.
-                                #[cfg(test)]
-                                tokio::task::yield_now().await;
-
-                                if let Some((header, body)) = result {
-                                    metrics.total_bytes_sent += {
-                                        header.len() + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
-                                    } as u64;
-                                    metrics.total_operations_sent += 1;
-
-                                    trace!(
-                                        phase = "sync",
-                                        public_key = %public_key.fmt_short(),
-                                        log_id = ?log_id,
-                                        seq_num,
-                                        id = %hash.fmt_short(),
-                                        sent_ops = metrics.total_operations_sent,
-                                        sent_bytes = metrics.total_bytes_sent,
-                                        "send operation",
-                                    );
-
-                                    sink.send(LogSyncMessage::Operation(header, body))
-                                        .await
-                                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
-                                } else {
-                                    warn!(
-                                        phase = "sync",
-                                        log_id = ?log_id,
-                                        seq_num,
-                                        id = %hash.fmt_short(),
-                                        "expected operation missing from store",
-                                    );
+                                    .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+                                    sync_done_sent = true;
+                                    break;
                                 };
 
-                                sent_operations += 1;
+                                for (log_id, after) in remote_needs {
+                                    // Check if the "from" log entry exists on the local. If it
+                                    // does _not_ this means the log states have diverged (forked)
+                                    // and we should pessimistically send all entries we have to
+                                    // the remote.
+                                    let seq_num = match (after.hash(), after.seq_num()) {
+                                        (Some(hash), Some(seq_num)) => {
+                                            let has_entry = self.store.has_entry(&log_id, &hash, seq_num).await.map_err(|err| LogSyncError::OperationStore(format!("{err}")))?;
+                                            if has_entry {
+                                                after.seq_num()
+                                            } else {
+                                                None
+                                            }
+                                        },
+                                        _ => after.seq_num()
+                                    };
 
-                                if sent_operations >= total_operations {
-                                    sink.send(LogSyncMessage::Done)
-                                        .await
-                                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
-                                    sync_done_sent = true;
+                                    // Get all entries from the log we should send to the remote.
+                                    let Some(result) = self
+                                    .store
+                                    .get_log_entries(&author, &log_id, seq_num)
+                                    .await
+                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))? else {
+                                        warn!(
+                                            author = author.fmt_short(),
+                                            log_id = ?log_id,
+                                            after_hash = after.hash().map(|hash|hash.fmt_short()),
+                                            after_seq = after.seq_num(),
+                                            "expected log missing from store"
+                                        );
+                                        continue;
+                                    };
+
+                                    // For testing, where the store is an in memory implementation
+                                    // which may not yield work to other tasks, we force the task to
+                                    // yield in order to test concurrent database actions occurring
+                                    // during sync.
+                                    #[cfg(test)]
+                                    tokio::task::yield_now().await;
+
+                                    for operation in result {
+                                        let header = operation.header;
+                                        let body = operation.body;
+                                        let hash = operation.hash;
+
+                                        // @TODO: also need header bytes here, need to make
+                                        // changes to the LogStore api for this.
+                                        //
+                                        // metrics.total_bytes_sent += { header.len() +
+                                        //     body.as_ref().map(|bytes|
+                                        // bytes.len()).unwrap_or_default() } as u64;
+                                        metrics.total_operations_sent += 1;
+
+                                        trace!(
+                                            phase = "sync",
+                                            public_key = %author.fmt_short(),
+                                            log_id = ?log_id,
+                                            seq_num = header.seq_num,
+                                            id = %hash.fmt_short(),
+                                            sent_ops = metrics.total_operations_sent,
+                                            sent_bytes = metrics.total_bytes_sent,
+                                            "send operation",
+                                        );
+
+                                        // @TODO: need header bytes here, same as above comment.
+                                        // sink.send(LogSyncMessage::Operation(header, body))
+                                        //     .await
+                                        //     .map_err(|err|
+                                        //     LogSyncError::MessageSink(format!("{err:?}")))?;
+                                        sent_operations += 1;
+                                        dedup.insert(hash);
+                                    }
                                 }
                             },
                             else => {
@@ -402,120 +443,37 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-async fn local_log_heights<L, E, S>(
+async fn local_state_vectors<L, E, S>(
     store: &S,
     logs: &Logs<L>,
-) -> Result<Vec<(PublicKey, Vec<(L, u64)>)>, LogSyncError>
+) -> Result<HashMap<PublicKey, HashMap<L, StateVector>>, LogSyncError>
 where
     L: LogId,
-    S: LogStore<L, E> + OperationStore<L, E>,
+    S: LogStore<Operation<E>, L, Hash> + Send + 'static,
 {
-    let mut local_log_heights = Vec::new();
+    let mut result = HashMap::new();
     for (public_key, log_ids) in logs {
-        let mut log_heights = Vec::new();
-        for log_id in log_ids {
-            let latest = store
-                .latest_operation(public_key, log_id)
-                .await
-                .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
-
-            if let Some((header, _)) = latest {
-                log_heights.push((log_id.clone(), header.seq_num));
-            };
-        }
-        local_log_heights.push((*public_key, log_heights));
+        let Some(frontiers) = store
+            .get_frontiers(public_key, log_ids)
+            .await
+            .map_err(|err| LogSyncError::LogStore(format!("{err}")))?
+        else {
+            continue;
+        };
+        result.insert(*public_key, frontiers);
     }
 
-    Ok(local_log_heights)
-}
-
-/// Compare the local log heights with the remote log heights for all given logs and return the
-/// hashes of all operations the remote needs, as well as the total bytes.
-async fn operations_needed_by_remote<L, E, S>(
-    store: &S,
-    local_logs: &Logs<L>,
-    remote_log_heights_map: HashMap<PublicKey, Vec<(L, u64)>>,
-) -> Result<(Vec<(PublicKey, L, u64, Hash)>, u64), LogSyncError>
-where
-    L: LogId,
-    E: Extensions,
-    S: LogStore<L, E> + OperationStore<L, E>,
-{
-    // Now that the topic query has been translated into a collection of logs we want to
-    // compare our own local log heights with what the remote sent for this topic query.
-    //
-    // If our logs are more advanced for any log we should collect the entries for sending.
-    let mut remote_needs = Vec::new();
-    let mut total_size = 0;
-
-    for (public_key, log_ids) in local_logs {
-        for log_id in log_ids {
-            // For all logs in this topic query scope get the local height.
-            let latest_operation = store
-                .latest_operation(public_key, log_id)
-                .await
-                .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
-
-            let log_height = match latest_operation {
-                Some((header, _)) => header.seq_num,
-                // If we don't have this log then continue onto the next without
-                // sending any messages.
-                None => continue,
-            };
-
-            // Calculate from which seq num in the log the remote needs operations.
-            let remote_needs_from = match remote_log_heights_map.get(public_key) {
-                Some(log_heights) => {
-                    match log_heights.iter().find(|(id, _)| *id == *log_id) {
-                        // The log is known by the remote, take their log height
-                        // and plus one.
-                        Some((_, log_height)) => log_height + 1,
-                        // The log is not known, they need from seq num 0
-                        None => 0,
-                    }
-                }
-                // The author is not known, they need from seq num 0.
-                None => 0,
-            };
-
-            if remote_needs_from <= log_height {
-                let log = store
-                    .get_log_hashes(public_key, log_id, Some(remote_needs_from))
-                    .await
-                    .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
-
-                if let Some(log) = log {
-                    // @TODO: we could avoid this extra iteration if we return the public key and
-                    // log id from the get_log_hashes method as well as the hash and seq num. We
-                    // only need the additional fields for logging, so an alternative approach
-                    // would be to place this iteration behind a debug config flag.
-                    let log: Vec<_> = log
-                        .into_iter()
-                        .map(|(seq_num, hash)| (*public_key, log_id.clone(), seq_num, hash))
-                        .collect();
-                    remote_needs.extend(log);
-                }
-
-                let size = store
-                    .get_log_size(public_key, log_id, Some(remote_needs_from))
-                    .await
-                    .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
-
-                if let Some(size) = size {
-                    total_size += size;
-                }
-            };
-        }
-    }
-
-    Ok((remote_needs, total_size))
+    Ok(result)
 }
 
 /// Protocol messages.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", content = "value")]
-pub enum LogSyncMessage<L> {
-    Have(Vec<(PublicKey, Vec<(L, u64)>)>),
+pub enum LogSyncMessage<L>
+where
+    L: LogId,
+{
+    Have(HashMap<PublicKey, HashMap<L, StateVector>>),
     PreSync {
         total_operations: u64,
         total_bytes: u64,
@@ -527,7 +485,7 @@ pub enum LogSyncMessage<L> {
 
 impl<L> Display for LogSyncMessage<L>
 where
-    L: Debug,
+    L: LogId,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
@@ -622,7 +580,6 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use p2panda_core::Body;
-    use p2panda_store::OperationStore;
 
     use crate::protocols::log_sync::{
         LogSyncError, LogSyncEvent, LogSyncMetrics, LogSyncStatus, Logs, Operation,

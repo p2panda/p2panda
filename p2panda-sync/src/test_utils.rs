@@ -7,7 +7,8 @@ use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
 use p2panda_core::{Body, Extension, Hash, Header, Operation, PrivateKey, PublicKey};
-use p2panda_store::{LogStore, MemoryStore, OperationStore};
+use p2panda_store::memory::MemoryStore;
+use p2panda_store::operations::{LogStore, OperationStore};
 use rand::Rng;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
@@ -23,7 +24,8 @@ use crate::protocols::{
 use crate::traits::{Protocol, TopicMap};
 
 // General test types.
-pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
+// @TODO: use SQLite store instead.
+pub type TestMemoryStore = MemoryStore<Operation<LogIdExtension>, Hash>;
 
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
@@ -108,22 +110,23 @@ impl Peer {
         body: &Body,
         log_id: u64,
     ) -> (Header<LogIdExtension>, Vec<u8>) {
-        let (seq_num, backlink) = self
+        let (backlink, seq_num) = self
             .store
-            .latest_operation(&self.private_key.public_key(), &log_id)
+            .get_log_height(&self.private_key.public_key(), &log_id)
             .await
             .unwrap()
-            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-            .unwrap_or((0, None));
+            .map(|(hash, seq_num)| (Some(hash), seq_num + 1))
+            .unwrap_or((None, 0));
 
-        let (header, header_bytes) =
+        let operation =
             create_operation(&self.private_key, body, seq_num, seq_num, backlink, log_id);
 
         self.store
-            .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
+            .insert_operation(&operation.hash, operation.clone())
             .await
             .unwrap();
-        (header, header_bytes)
+        let header_bytes = operation.header.to_bytes();
+        (operation.header, header_bytes)
     }
 
     /// Create an operation but don't insert it in the store.
@@ -132,18 +135,19 @@ impl Peer {
         body: &Body,
         log_id: u64,
     ) -> (Header<LogIdExtension>, Vec<u8>) {
-        let (seq_num, backlink) = self
+        let (backlink, seq_num) = self
             .store
-            .latest_operation(&self.private_key.public_key(), &log_id)
+            .get_log_height(&self.private_key.public_key(), &log_id)
             .await
             .unwrap()
-            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-            .unwrap_or((0, None));
+            .map(|(hash, seq_num)| (Some(hash), seq_num + 1))
+            .unwrap_or((None, 0));
 
-        let (header, header_bytes) =
+        let operation =
             create_operation(&self.private_key, body, seq_num, seq_num, backlink, log_id);
 
-        (header, header_bytes)
+        let header_bytes = operation.header.to_bytes();
+        (operation.header, header_bytes)
     }
 
     pub fn insert_topic(&mut self, topic: &TestTopic, logs: &HashMap<PublicKey, Vec<u64>>) {
@@ -258,7 +262,7 @@ pub fn create_operation(
     timestamp: u64,
     backlink: Option<Hash>,
     log_id: u64,
-) -> (Header<LogIdExtension>, Vec<u8>) {
+) -> Operation<LogIdExtension> {
     let mut header = Header::<LogIdExtension> {
         version: 1,
         public_key: private_key.public_key(),
@@ -273,7 +277,11 @@ pub fn create_operation(
     };
     header.sign(private_key);
     let header_bytes = header.to_bytes();
-    (header, header_bytes)
+    Operation {
+        hash: header.hash(),
+        header,
+        body: Some(body.to_owned()),
+    }
 }
 
 /// Test topic.
