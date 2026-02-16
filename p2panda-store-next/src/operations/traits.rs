@@ -129,6 +129,7 @@ pub trait LogStore<T, L, ID> {
         public_key: &PublicKey,
         log_id: &L,
         after: Option<SeqNum>,
+        // to: Option<SeqNum>,
     ) -> impl Future<Output = Result<Option<(u64, u64)>, Self::Error>>;
 
     /// Get all entries in a log after an optional starting point.
@@ -140,9 +141,11 @@ pub trait LogStore<T, L, ID> {
         // "accidentally" making queries based on the seq number of a log branch that we don't
         // actually have locally (it would save us one db query).
         after: Option<SeqNum>,
+        // to: Option<SeqNum>,
     ) -> impl Future<Output = Result<Option<Vec<T>>, Self::Error>>;
 
     /// Efficiently prune a log.
+    /// // @TODO: rename this method to something better.... prune/prefex deletion related.
     fn delete_entries(
         &self,
         author: &PublicKey,
