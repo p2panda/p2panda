@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::net::{Ipv4Addr, Ipv6Addr};
+
 use p2panda_core::PrivateKey;
-use p2panda_net::iroh_endpoint::RelayUrl;
+use p2panda_net::discovery::DiscoveryConfig;
+use p2panda_net::gossip::GossipConfig;
+use p2panda_net::iroh_endpoint::{IrohConfig, RelayUrl};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::sqlite::SqliteStoreBuilder;
@@ -68,7 +72,35 @@ impl NodeBuilder {
         self
     }
 
-    // TODO: Add more ways to configure the network, etc.
+    pub fn bind_ip_v4(mut self, ip: Ipv4Addr) -> Self {
+        self.config.network.iroh.bind_ip_v4 = ip;
+        self
+    }
+
+    pub fn bind_port_v4(mut self, port: u16) -> Self {
+        self.config.network.iroh.bind_port_v4 = port;
+        self
+    }
+
+    pub fn bind_ip_v6(mut self, ip: Ipv6Addr) -> Self {
+        self.config.network.iroh.bind_ip_v6 = ip;
+        self
+    }
+
+    pub fn bind_port_v6(mut self, port: u16) -> Self {
+        self.config.network.iroh.bind_port_v6 = port;
+        self
+    }
+
+    pub fn discovery_config(mut self, config: DiscoveryConfig) -> Self {
+        self.config.network.discovery = config;
+        self
+    }
+
+    pub fn gossip_config(mut self, config: GossipConfig) -> Self {
+        self.config.network.gossip = config;
+        self
+    }
 
     pub async fn spawn(self) -> Result<Node, NodeError> {
         let private_key = self.private_key.unwrap_or_default();
