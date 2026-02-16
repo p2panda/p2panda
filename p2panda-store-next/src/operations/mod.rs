@@ -7,3 +7,6 @@ mod tests;
 mod traits;
 
 pub use traits::OperationStore;
+
+#[cfg(feature = "sqlite")]
+pub(crate) use sqlite::OperationRow;
