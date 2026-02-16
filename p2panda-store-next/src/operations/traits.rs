@@ -96,7 +96,7 @@ pub trait LogStore<T, L, ID> {
     /// Efficiently get current frontiers for a set of author logs.
     ///
     /// The frontiers of a set of logs are needed when communicating our current state to a remote
-    /// peer during set. Including the "frontiers" (set of hash+seq_num tuples) allows for
+    /// peer during sync. Including the "frontiers" (set of hash+seq_num tuples) allows for
     /// handling of forked logs.
     ///
     /// @NOTE: should we maintain a "frontiers" table where we maintain current frontiers for all
