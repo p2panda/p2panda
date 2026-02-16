@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- Add `LogStore` trait and SQLite implementation [#1004](https://github.com/p2panda/p2panda/pull/1004)
 - Add `TopicStore` trait and SQLite implementation [#1011](https://github.com/p2panda/p2panda/pull/1011)
 
 ### Changed

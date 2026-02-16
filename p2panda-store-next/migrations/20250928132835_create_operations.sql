@@ -11,7 +11,9 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     payload_size            TEXT            NOT NULL,
     payload_hash            TEXT            NULL,
     timestamp               TEXT            NOT NULL,
+    seq_num                 TEXT            NOT NULL,
     header                  BLOB            NOT NULL,
+    header_size             TEXT            NOT NULL,
     body                    BLOB            NULL,
     extensions              BLOB            NULL
 );

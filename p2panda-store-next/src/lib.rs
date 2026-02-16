@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub mod address_book;
+pub mod logs;
 #[cfg(feature = "macros")]
 pub mod macros;
 pub mod operations;
