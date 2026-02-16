@@ -81,6 +81,7 @@ pub mod cbor;
 pub mod extensions;
 pub mod hash;
 pub mod identity;
+pub mod logs;
 pub mod operation;
 #[cfg(feature = "prune")]
 pub mod prune;

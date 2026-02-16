@@ -1,0 +1,44 @@
+[package]
+name = "p2panda-sync-next"
+version = "0.5.1"
+edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
+]
+description = "Local-first sync for append-only logs and traits to build your own"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["p2p", "local-first", "sync", "replication"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+test_utils = ["dep:rand", "dep:tracing-subscriber"]
+
+[dependencies]
+futures = "0.3.31"
+futures-util = "0.3.31"
+p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
+p2panda-store = {package = "p2panda-store-next", path = "../p2panda-store-next", version = "0.5.1" }
+pin-project-lite = "0.2.16"
+rand = { version = "0.9.2", optional = true }
+serde = "1.0.228"
+thiserror = "2.0.17"
+tokio = { version = "1.47.1", features = ["macros", "sync"] }
+tokio-stream = { version = "0.1.17", features = ["sync"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
+
+[dev-dependencies]
+assert_matches = "1.5.0"
+rand = "0.9.2"
+tokio = { version = "1.47.1", features = ["time", "rt", "macros", "sync"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }

@@ -10,6 +10,7 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
+use crate::logs::StateVector;
 use crate::operation::{Body, Header};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -286,6 +287,24 @@ impl<'de> Deserialize<'de> for Body {
     {
         let bytes = deserialize_hex(deserializer)?;
         Ok(Body(bytes.to_vec()))
+    }
+}
+
+impl Serialize for StateVector {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> Deserialize<'de> for StateVector {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
     }
 }
 

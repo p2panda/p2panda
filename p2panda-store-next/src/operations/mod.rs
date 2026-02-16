@@ -10,4 +10,6 @@ mod traits;
 
 #[cfg(feature = "memory")]
 pub use memory::OperationMemoryStore;
-pub use traits::OperationStore;
+pub use traits::{LogId, LogStore, OperationStore};
+
+type SeqNum = u64;
