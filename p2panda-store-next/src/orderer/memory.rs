@@ -36,7 +36,7 @@ impl<ID> Default for OrdererMemoryStore<ID> {
     }
 }
 
-impl<T, ID> OrdererStore<ID> for MemoryStore<T, ID>
+impl<R, T, ID, N> OrdererStore<ID> for MemoryStore<R, T, ID, N>
 where
     T: Debug,
     ID: Clone + Eq + Debug + StdHash,
@@ -91,7 +91,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<T, ID> OrdererTestExt for MemoryStore<T, ID>
+impl<R, T, ID, N> OrdererTestExt for MemoryStore<R, T, ID, N>
 where
     T: Debug,
     ID: Debug,
