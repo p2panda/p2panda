@@ -32,7 +32,7 @@ impl<T, ID> Default for OperationMemoryStore<T, ID> {
     }
 }
 
-impl<T, ID, L> OperationStore<T, ID, L> for MemoryStore<T, ID>
+impl<R, T, ID, L, N> OperationStore<T, ID, L> for MemoryStore<R, T, ID, N>
 where
     T: Clone + Debug,
     ID: Clone + Eq + Debug + StdHash,
