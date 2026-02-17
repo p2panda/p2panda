@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use rand::rand_core::UnwrapErr;
+use rand::rngs::SysRng;
+
+use crate::address_book::test_utils::TestNodeInfo;
+use crate::memory::MemoryStore;
+
+pub type TestMemoryStore<T, ID> = MemoryStore<UnwrapErr<SysRng>, T, ID, TestNodeInfo>;
+
 /// Macro to run the same test logic against all store backend implementations.
 ///
 /// This macro takes a closure that will be executed against each store type:
@@ -24,7 +32,7 @@ macro_rules! assert_all_stores {
     (|$store:ident| $test_body:expr) => {
         // Test with MemoryStore.
         {
-            let $store = $crate::memory::MemoryStore::<(), String>::default();
+            let $store = $crate::test_utils::TestMemoryStore::<(), String>::default();
             $test_body.await;
         }
 
