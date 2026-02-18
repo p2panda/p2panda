@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey, Topic};
+use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
 
 #[derive(Clone, Default)]
 pub struct TestLog {
@@ -24,8 +24,18 @@ impl TestLog {
         }
     }
 
+    pub fn new_from_private_key(private_key: PrivateKey) -> Self {
+        let mut log = TestLog::new();
+        log.private_key = private_key;
+        log
+    }
+
     pub fn id(&self) -> Topic {
         self.log_id
+    }
+
+    pub fn author(&self) -> PublicKey {
+        self.private_key.public_key()
     }
 
     pub fn operation<E: Extensions>(&self, body: &[u8], extensions: E) -> Operation<E> {

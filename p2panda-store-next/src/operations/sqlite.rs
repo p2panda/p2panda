@@ -36,12 +36,14 @@ where
                             payload_size,
                             payload_hash,
                             timestamp,
+                            seq_num,
                             header,
+                            header_size,
                             body,
                             extensions
                         )
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ",
                 )
                 .bind(id.to_hex())
@@ -55,10 +57,13 @@ where
                 .bind(operation.header.payload_size.to_string())
                 .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))
                 .bind(operation.header.timestamp.to_string())
+                .bind(operation.header.seq_num.to_string())
                 .bind(
                     encode_cbor(&operation.header)
                         .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
                 )
+                // TODO: Is this the correct way to determine header size?
+                .bind(operation.header.to_bytes().len().to_string())
                 .bind(operation.body.map(|body| body.to_bytes()))
                 .bind(
                     encode_cbor(&operation.header.extensions)
@@ -141,17 +146,17 @@ where
             .await?;
         Ok(result.rows_affected() > 0)
     }
-    
+
     async fn delete_operation_payload(&self, _id: &Hash) -> Result<bool, Self::Error> {
         todo!()
     }
 }
 
 /// Single operation row as it is inserted in the SQLite database.
-#[derive(Debug, FromRow)]
-struct OperationRow {
+#[derive(Clone, Debug, FromRow)]
+pub(crate) struct OperationRow {
     hash: String,
-    header: Vec<u8>,
+    pub(crate) header: Vec<u8>,
     body: Option<Vec<u8>>,
 }
 

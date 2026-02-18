@@ -11,3 +11,6 @@ mod traits;
 #[cfg(feature = "memory")]
 pub use memory::OperationMemoryStore;
 pub use traits::OperationStore;
+
+#[cfg(feature = "sqlite")]
+pub(crate) use sqlite::OperationRow;

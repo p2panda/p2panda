@@ -61,7 +61,7 @@ pub trait LogStore<T, A, L, S, ID> {
     ) -> impl Future<Output = Result<Option<HashMap<L, S>>, Self::Error>>;
 
     /// Get the byte and operation count of the entries in a log.
-    /// 
+    ///
     /// `after` and `until` fields can be provided to select only a range of the log.
     fn get_log_size(
         &self,
@@ -72,7 +72,7 @@ pub trait LogStore<T, A, L, S, ID> {
     ) -> impl Future<Output = Result<Option<(u64, u64)>, Self::Error>>;
 
     /// Get all entries in a log after an optional starting point.
-    /// 
+    ///
     /// `after` and `to` fields can be provided to select only a range of the log.
     fn get_log_entries(
         &self,
@@ -80,10 +80,10 @@ pub trait LogStore<T, A, L, S, ID> {
         log_id: &L,
         after: Option<S>,
         until: Option<S>,
-    ) -> impl Future<Output = Result<Option<Vec<T>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<Vec<(T, Vec<u8>)>>, Self::Error>>;
 
     /// Prune all entries in a log until the provided sequence number.
-    /// 
+    ///
     /// Returns the number of entries which were pruned.
     fn prune_entries(
         &self,
@@ -91,27 +91,4 @@ pub trait LogStore<T, A, L, S, ID> {
         log_id: &L,
         until: &S,
     ) -> impl Future<Output = Result<u64, Self::Error>>;
-
-    // == OPTIONAL BATCH QUERIES == //
-
-    // @NOTE: If these batch queries are simple to implement then we don't actually need the
-    // equivalent "single log" queries above.  
-
-    /// Get all entries in a set of logs.
-    /// 
-    /// An optional range can be provided for every requested log.
-    fn get_log_entries_batch(
-        &self,
-        author: &A,
-        ranges: &HashMap<L, (Option<S>, Option<S>)>,
-    ) -> impl Future<Output = Result<Vec<T>, Self::Error>>;
-
-    /// Get the byte and operation count of the entries in a set of logs.
-    /// 
-    /// An optional range can be provided for every requested log.
-    fn get_log_size_batch(
-        &self,
-        author: &A,
-        ranges: &HashMap<L, (Option<S>, Option<S>)>,
-    ) -> impl Future<Output = Result<(u64, u64), Self::Error>>;
 }

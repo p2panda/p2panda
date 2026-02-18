@@ -177,7 +177,7 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 #[derive(Clone)]
 pub struct SqliteStore<'a> {
     tx: Arc<Mutex<Option<Transaction<'a>>>>,
-    pool: sqlx::SqlitePool,
+    pub(crate) pool: sqlx::SqlitePool,
     semaphore: Arc<Semaphore>,
 }
 
