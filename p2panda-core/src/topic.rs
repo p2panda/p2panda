@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
+use std::str::FromStr;
 
 use rand::Rng;
 use rand::rngs::OsRng;
@@ -67,6 +68,14 @@ impl Display for Topic {
     }
 }
 
+impl FromStr for Topic {
+    type Err = TopicError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::try_from(hex::decode(value)?.as_slice())
+    }
+}
+
 impl TryFrom<&[u8]> for Topic {
     type Error = TopicError;
 
@@ -81,9 +90,13 @@ impl TryFrom<&[u8]> for Topic {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum TopicError {
     /// Invalid number of bytes.
     #[error("invalid bytes length of {0}, expected {1} bytes")]
     InvalidLength(usize, usize),
+
+    /// String contains invalid hexadecimal characters.
+    #[error("invalid hex encoding in string")]
+    InvalidHexEncoding(#[from] hex::FromHexError),
 }
