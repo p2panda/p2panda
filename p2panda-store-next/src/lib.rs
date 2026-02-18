@@ -8,3 +8,4 @@ pub mod orderer;
 pub mod sqlite;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
+pub mod topics;
