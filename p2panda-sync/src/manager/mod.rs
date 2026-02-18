@@ -20,8 +20,8 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Operation, PublicKey};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Extensions, LogId, Operation, PublicKey};
+use p2panda_store::{LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -99,7 +99,7 @@ where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
     M: TopicMap<T, Logs<L>> + Send + 'static,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
 {
     type Protocol = TopicLogSync<T, S, M, L, E>;

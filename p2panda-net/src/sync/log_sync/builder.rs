@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_core::Extensions;
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Extensions, LogId};
+use p2panda_store::{LogStore, OperationStore};
 use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
 use p2panda_sync::protocols::Logs;
 use p2panda_sync::traits::TopicMap;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
-use serde::{Deserialize, Serialize};
 
 use crate::TopicId;
 use crate::gossip::Gossip;
@@ -19,7 +19,7 @@ use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
 pub struct Builder<S, L, E, TM>
 where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
     TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
@@ -33,7 +33,7 @@ where
 impl<S, L, E, TM> Builder<S, L, E, TM>
 where
     S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
-    L: LogId + Serialize + for<'de> Deserialize<'de> + Send + 'static,
+    L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
     TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
