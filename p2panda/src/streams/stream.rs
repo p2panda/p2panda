@@ -5,11 +5,11 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures_util::Stream;
-use p2panda_core::{Hash, PublicKey};
+use p2panda_core::{Hash, PublicKey, Topic};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{Header, Topic};
+use crate::Header;
 
 /// Handle onto an eventually-consistent stream, exposes API for publishing messages, subscribing
 /// to the event stream, and committing received messages.

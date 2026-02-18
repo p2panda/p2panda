@@ -10,8 +10,8 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Header, Operation};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Body, Extensions, Header, LogId, Operation};
+use p2panda_store::{LogStore, OperationStore};
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -55,7 +55,7 @@ where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
     S: LogStore<L, E> + OperationStore<L, E>,
     M: TopicMap<T, Logs<L>>,
-    L: LogId + for<'de> Deserialize<'de> + Serialize,
+    L: LogId,
     E: Extensions,
 {
     /// Returns a new sync protocol instance, configured with a store and `TopicMap` implementation
@@ -103,7 +103,7 @@ where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
     M: TopicMap<T, Logs<L>> + Send + 'static,
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
 {
     type Error = TopicLogSyncError;

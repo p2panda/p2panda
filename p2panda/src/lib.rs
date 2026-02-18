@@ -13,11 +13,9 @@ pub mod operation;
 pub mod streams;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
-pub mod topic;
 
 pub use node::Node;
 pub use operation::{Extensions, Header, Operation};
-pub use topic::Topic;
 
 pub async fn spawn() -> Result<Node, node::NodeError> {
     Node::spawn().await

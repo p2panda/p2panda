@@ -7,15 +7,13 @@ use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt, ready};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
-use p2panda_core::{PrivateKey, PublicKey, Signature};
+use p2panda_core::{PrivateKey, PublicKey, Signature, Topic};
 use p2panda_net::gossip::{GossipHandle, GossipSubscription};
 use p2panda_net::timestamp::{HybridTimestamp, LamportTimestamp, Timestamp};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
-
-use crate::Topic;
 
 /// Message specification version to create and encode messages for ephemeral streams.
 const MESSAGE_VERSION: u64 = 1;

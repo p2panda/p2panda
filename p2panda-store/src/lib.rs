@@ -173,7 +173,7 @@ mod transactions;
 
 #[cfg(feature = "memory")]
 pub use memory::MemoryStore;
-pub use operations::{LogId, LogStore, OperationStore};
+pub use operations::{LogStore, OperationStore};
 #[cfg(feature = "sqlite")]
 pub use sqlite::store::{SqliteStore, SqliteStoreError};
 pub use transactions::{Transaction, WritableStore, WriteToStore};
