@@ -11,9 +11,9 @@ use sqlx::{Error as SqlxError, Sqlite, query, query_as};
 use thiserror::Error;
 
 use p2panda_core::cbor::{DecodeError, EncodeError, encode_cbor};
-use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, PublicKey, RawOperation};
 
-use crate::operations::{LogId, LogStore, OperationStore};
+use crate::operations::{LogStore, OperationStore};
 use crate::sqlite::models::{ByteCount, LogHeightRow, OperationRow, RawOperationRow, SeqAndHash};
 
 #[derive(Debug, Error)]

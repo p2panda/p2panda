@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use p2panda::Topic;
 use p2panda::streams::EphemeralMessage;
-use p2panda_core::PrivateKey;
+use p2panda_core::{PrivateKey, Topic};
 use tokio::task::JoinHandle;
 
 #[tokio::test]
