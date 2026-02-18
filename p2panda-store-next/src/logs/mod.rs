@@ -3,4 +3,4 @@
 mod sqlite;
 mod traits;
 
-pub use traits::{LogStore, LogId};
+pub use traits::{LogId, LogStore};

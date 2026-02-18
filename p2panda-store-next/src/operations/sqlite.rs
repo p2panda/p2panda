@@ -141,7 +141,7 @@ where
             .await?;
         Ok(result.rows_affected() > 0)
     }
-    
+
     async fn delete_operation_payload(&self, _id: &Hash) -> Result<bool, Self::Error> {
         todo!()
     }
