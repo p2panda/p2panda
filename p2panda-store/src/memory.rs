@@ -6,9 +6,9 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use p2panda_core::{Body, Extensions, Hash, Header, PublicKey, RawOperation};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, PublicKey, RawOperation};
 
-use crate::operations::{LogId, LogStore, OperationStore};
+use crate::operations::{LogStore, OperationStore};
 
 type SeqNum = u64;
 type Timestamp = u64;
@@ -749,8 +749,8 @@ mod tests {
     async fn insert_many_get_one_log() {
         let mut store = MemoryStore::default();
         let private_key = PrivateKey::new();
-        let log_a_id = "a";
-        let log_b_id = "b";
+        let log_a_id = "a".to_string();
+        let log_b_id = "b".to_string();
 
         let body_a0 = Body::new("hello from log a!".as_bytes());
         let body_a1 = Body::new("hello from log a again!".as_bytes());

@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_core::{Hash, PrivateKey, PublicKey};
+use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::gossip::GossipError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::Topic;
 pub use crate::builder::NodeBuilder;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::streams::{EphemeralStreamHandle, EventStream, StreamHandle};

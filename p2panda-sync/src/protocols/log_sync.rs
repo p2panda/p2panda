@@ -7,8 +7,8 @@ use std::marker::PhantomData;
 
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
-use p2panda_core::{Body, Extensions, Hash, Header, Operation, PublicKey};
-use p2panda_store::{LogId, LogStore, OperationStore};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, PublicKey};
+use p2panda_store::{LogStore, OperationStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
@@ -91,7 +91,7 @@ impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
 
 impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
-    L: LogId + for<'de> Deserialize<'de> + Serialize + Send + 'static,
+    L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
     S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,

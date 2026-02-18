@@ -8,9 +8,11 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
+use crate::Topic;
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
 use crate::operation::{Body, Header};
+use crate::topic::TopicError;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -286,6 +288,29 @@ impl<'de> Deserialize<'de> for Body {
     {
         let bytes = deserialize_hex(deserializer)?;
         Ok(Body(bytes.to_vec()))
+    }
+}
+
+impl Serialize for Topic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serialize_hex(&self.0, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Topic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserialize_hex(deserializer)?;
+
+        bytes
+            .as_slice()
+            .try_into()
+            .map_err(|err: TopicError| serde::de::Error::custom(err.to_string()))
     }
 }
 

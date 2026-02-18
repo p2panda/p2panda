@@ -81,20 +81,24 @@ pub mod cbor;
 pub mod extensions;
 pub mod hash;
 pub mod identity;
+pub mod logs;
 pub mod operation;
 #[cfg(feature = "prune")]
 pub mod prune;
 mod serde;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
+pub mod topic;
 pub mod traits;
 
 pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
+pub use logs::LogId;
 pub use operation::{
     Body, Header, Operation, OperationError, RawOperation, validate_backlink, validate_header,
     validate_operation,
 };
 #[cfg(feature = "prune")]
 pub use prune::PruneFlag;
+pub use topic::Topic;
