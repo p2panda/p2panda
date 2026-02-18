@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
 
+### Added
+
+- Add `TopicStore` trait and SQLite implementation [#1011](https://github.com/p2panda/p2panda/pull/1011)
+
 ## [0.5.1] - 09/02/2026
 
 ### Changed
