@@ -174,7 +174,7 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 /// `OperationStore`) etc. do _not_ need to explicity deal with transaction objects, as this is
 /// handled internally now. Like this it is possible to separate the "logic" from the "storage"
 /// layer and keep the code clean.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SqliteStore<'a> {
     tx: Arc<Mutex<Option<Transaction<'a>>>>,
     pool: sqlx::SqlitePool,

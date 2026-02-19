@@ -7,8 +7,7 @@ use p2panda_core::Hash;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::address_book::memory::current_timestamp;
-use crate::address_book::test_utils::{TestNodeId, TestNodeInfo};
+use crate::address_book::test_utils::{TestNodeId, TestNodeInfo, current_timestamp};
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::sqlite::{SqliteStore, SqliteStoreBuilder};
 
