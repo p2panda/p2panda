@@ -3,8 +3,8 @@
 use p2panda_core::test_utils::TestLog;
 use p2panda_core::{Hash, Operation, Topic};
 
-use crate::SqliteStore;
 use crate::operations::OperationStore;
+use crate::{SqliteStore, Transaction};
 
 #[tokio::test]
 async fn insert_get_delete_operations() {
