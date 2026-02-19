@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use p2panda_core::traits::{Digest, OperationId};
 // @TODO: Change these to p2panda_store when ready.
+use p2panda_store_next::Transaction;
 use p2panda_store_next::operations::OperationStore;
 use p2panda_store_next::orderer::OrdererStore;
 use thiserror::Error;
@@ -22,7 +23,7 @@ pub struct Orderer<T, ID, S> {
 impl<T, ID, S> Orderer<T, ID, S>
 where
     ID: OperationId,
-    S: Clone + OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Clone + Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     pub fn new(store: S) -> Self {
         let inner = CausalOrderer::new(store.clone());
@@ -40,18 +41,29 @@ impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
     T: Digest<ID> + Ordering<ID>,
     ID: OperationId,
-    S: OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     type Output = T;
 
     type Error = OrdererError<T, ID, S>;
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
+        let permit = self
+            .store
+            .begin()
+            .await
+            .map_err(|err| OrdererError::Transaction(err))?;
+
         let mut inner = self.inner.lock().await;
         inner
             .process(input.hash(), input.dependencies())
             .await
             .map_err(|err| OrdererError::OrdererStore(err))?;
+
+        self.store
+            .commit(permit)
+            .await
+            .map_err(|err| OrdererError::Transaction(err))?;
 
         self.notify.notify_one(); // Wake up any pending next call
         Ok(())
@@ -61,7 +73,18 @@ where
         loop {
             let mut inner = self.inner.lock().await;
 
+            let permit = self
+                .store
+                .begin()
+                .await
+                .map_err(|err| OrdererError::Transaction(err))?;
+
             if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
+                self.store
+                    .commit(permit)
+                    .await
+                    .map_err(|err| OrdererError::Transaction(err))?;
+
                 return match self
                     .store
                     .get_operation(&id)
@@ -84,7 +107,7 @@ pub enum OrdererError<T, ID, S>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    S: OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     #[error("could not find item with id {0} in operation store")]
     StoreInconsistency(ID),
@@ -94,13 +117,17 @@ where
 
     #[error("{0}")]
     OperationStore(<S as OperationStore<T, ID, u64>>::Error),
+
+    #[error("{0}")]
+    Transaction(<S as Transaction>::Error),
 }
 
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
-    use p2panda_store_next::{operations::OperationStore, sqlite::SqliteStoreBuilder};
+    use p2panda_store_next::operations::OperationStore;
+    use p2panda_store_next::{SqliteStore, Transaction, tx_unwrap};
     use serde::{Deserialize, Serialize};
     use tokio::task;
     use tokio_stream::StreamExt;
@@ -176,28 +203,29 @@ mod tests {
 
         local
             .run_until(async move {
-                let store = SqliteStoreBuilder::new()
-                    .random_memory_url()
-                    .max_connections(1)
-                    .build()
-                    .await
-                    .unwrap();
-
-                let log_id = Topic::new();
+                let store = SqliteStore::temporary().await;
 
                 // Insert operations into store.
-                store
-                    .insert_operation(
-                        &operation_panda.hash,
-                        operation_panda.clone(),
-                        log_id.clone(),
-                    )
-                    .await
-                    .unwrap();
-                store
-                    .insert_operation(&operation_icebear.hash, operation_icebear.clone(), log_id)
-                    .await
-                    .unwrap();
+                tx_unwrap!(store, {
+                    let log_id = Topic::new();
+
+                    store
+                        .insert_operation(
+                            &operation_panda.hash,
+                            operation_panda.clone(),
+                            log_id.clone(),
+                        )
+                        .await
+                        .unwrap();
+                    store
+                        .insert_operation(
+                            &operation_icebear.hash,
+                            operation_icebear.clone(),
+                            log_id,
+                        )
+                        .await
+                        .unwrap();
+                });
 
                 // Prepare processing pipeline for message ordering.
                 let orderer = Orderer::new(store);
