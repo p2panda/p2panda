@@ -414,17 +414,12 @@ impl<'a> OrdererTestExt for SqliteStore<'a> {
 mod tests {
     use p2panda_core::Hash;
 
+    use crate::SqliteStore;
     use crate::orderer::OrdererStore;
-    use crate::sqlite::SqliteStoreBuilder;
 
     #[tokio::test]
     async fn ready() {
-        let store = SqliteStoreBuilder::new()
-            .random_memory_url()
-            .max_connections(1)
-            .build()
-            .await
-            .unwrap();
+        let store = SqliteStore::temporary().await;
 
         let hash_1 = Hash::new(b"tick");
         let hash_2 = Hash::new(b"trick");
@@ -462,12 +457,7 @@ mod tests {
 
     #[tokio::test]
     async fn pending() {
-        let store = SqliteStoreBuilder::new()
-            .random_memory_url()
-            .max_connections(1)
-            .build()
-            .await
-            .unwrap();
+        let store = SqliteStore::temporary().await;
 
         let hash_1 = Hash::new(b"piff");
         let hash_2 = Hash::new(b"puff");

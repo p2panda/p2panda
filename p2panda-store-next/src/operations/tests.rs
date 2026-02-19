@@ -3,17 +3,12 @@
 use p2panda_core::test_utils::TestLog;
 use p2panda_core::{Hash, Operation, Topic};
 
+use crate::SqliteStore;
 use crate::operations::OperationStore;
-use crate::sqlite::SqliteStoreBuilder;
 
 #[tokio::test]
 async fn insert_get_delete_operations() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let log = TestLog::new();
 
