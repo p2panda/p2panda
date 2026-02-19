@@ -3,23 +3,30 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use p2panda_core::Hash;
+use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use rand_chacha::rand_core::SeedableRng;
 
-use crate::address_book::AddressBookMemoryStore;
+use crate::address_book::memory::current_timestamp;
 use crate::address_book::test_utils::{TestNodeId, TestNodeInfo};
-
-use super::memory::current_timestamp;
-use super::{AddressBookStore, NodeInfo};
+use crate::address_book::{AddressBookStore, NodeInfo};
+use crate::sqlite::{SqliteStore, SqliteStoreBuilder};
 
 #[tokio::test]
 async fn insert_node_info() {
-    let rng = ChaCha20Rng::from_seed([1; 32]);
-    let store = AddressBookMemoryStore::new(rng);
+    let store = SqliteStoreBuilder::new()
+        .random_memory_url()
+        .max_connections(1)
+        .build()
+        .await
+        .unwrap();
 
-    let node_info_1 = TestNodeInfo::new(1);
+    let permit = store.begin().await.unwrap();
 
+    let node_info_1 = TestNodeInfo::new(Hash::new(b"turtle"));
     let result = store.insert_node_info(node_info_1.clone()).await.unwrap();
+
+    store.commit(permit).await.unwrap();
 
     assert!(result);
     assert_eq!(
@@ -30,8 +37,16 @@ async fn insert_node_info() {
 
 #[tokio::test]
 async fn set_and_query_topics() {
-    let rng = ChaCha20Rng::from_seed([1; 32]);
-    let store = AddressBookMemoryStore::new(rng);
+    let store = SqliteStoreBuilder::new()
+        .random_memory_url()
+        .max_connections(1)
+        .build()
+        .await
+        .unwrap();
+
+    let billie = Hash::new(b"billie");
+    let daphne = Hash::new(b"daphne");
+    let carlos = Hash::new(b"carlos");
 
     let cats = [100; 32];
     let dogs = [102; 32];
@@ -39,23 +54,48 @@ async fn set_and_query_topics() {
     let frogs = [106; 32];
     let trains = [200; 32];
 
-    store.insert_node_info(TestNodeInfo::new(1)).await.unwrap();
+    let permit = store.begin().await.unwrap();
+
     store
-        .set_topics(1, HashSet::from_iter([cats, dogs, rain]))
+        .insert_node_info(TestNodeInfo::new(billie))
         .await
         .unwrap();
 
-    store.insert_node_info(TestNodeInfo::new(2)).await.unwrap();
+    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+        &store,
+        billie,
+        HashSet::from_iter([cats, dogs, rain]),
+    )
+    .await
+    .unwrap();
+
     store
-        .set_topics(2, HashSet::from_iter([rain]))
+        .insert_node_info(TestNodeInfo::new(daphne))
         .await
         .unwrap();
 
-    store.insert_node_info(TestNodeInfo::new(3)).await.unwrap();
+    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+        &store,
+        daphne,
+        HashSet::from_iter([rain]),
+    )
+    .await
+    .unwrap();
+
     store
-        .set_topics(3, HashSet::from_iter([dogs, frogs]))
+        .insert_node_info(TestNodeInfo::new(carlos))
         .await
         .unwrap();
+
+    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+        &store,
+        carlos,
+        HashSet::from_iter([dogs, frogs]),
+    )
+    .await
+    .unwrap();
+
+    store.commit(permit).await.unwrap();
 
     assert_eq!(
         store
@@ -63,9 +103,9 @@ async fn set_and_query_topics() {
             .await
             .unwrap()
             .into_iter()
-            .map(|item| item.id)
+            .map(|item: TestNodeInfo| item.id)
             .collect::<Vec<TestNodeId>>(),
-        vec![1, 3]
+        vec![billie, carlos]
     );
 
     assert_eq!(
@@ -74,9 +114,9 @@ async fn set_and_query_topics() {
             .await
             .unwrap()
             .into_iter()
-            .map(|item| item.id)
+            .map(|item: TestNodeInfo| item.id)
             .collect::<Vec<TestNodeId>>(),
-        vec![1, 2, 3]
+        vec![daphne, billie, carlos]
     );
 
     assert!(
@@ -85,7 +125,7 @@ async fn set_and_query_topics() {
             .await
             .unwrap()
             .into_iter()
-            .map(|item| item.id)
+            .map(|item: TestNodeInfo| item.id)
             .collect::<Vec<TestNodeId>>()
             .is_empty()
     );
@@ -93,33 +133,78 @@ async fn set_and_query_topics() {
 
 #[tokio::test]
 async fn remove_outdated_node_infos() {
-    let rng = ChaCha20Rng::from_seed([1; 32]);
-    let store = AddressBookMemoryStore::new(rng);
+    let store = SqliteStoreBuilder::new()
+        .random_memory_url()
+        .max_connections(1)
+        .build()
+        .await
+        .unwrap();
 
-    store.insert_node_info(TestNodeInfo::new(1)).await.unwrap();
+    let billie = Hash::new(b"billie");
+    let daphne = Hash::new(b"daphne");
+
+    let permit = store.begin().await.unwrap();
+
     store
-        .set_last_changed(1, current_timestamp() - (60 * 2))
-        .await; // 2 minutes "old"
+        .insert_node_info(TestNodeInfo::new(billie))
+        .await
+        .unwrap();
+    store
+        .set_last_changed(&billie, current_timestamp() - (60 * 2))
+        .await
+        .unwrap(); // 2 minutes "old"
 
     // Timestamp of this entry will be set to "now" automatically.
-    store.insert_node_info(TestNodeInfo::new(2)).await.unwrap();
+    store
+        .insert_node_info(TestNodeInfo::new(daphne))
+        .await
+        .unwrap();
+
+    store.commit(permit).await.unwrap();
+
+    let permit = store.begin().await.unwrap();
 
     // Expect removing one item from database.
-    let result = store
-        .remove_older_than(Duration::from_secs(60))
+    let result =
+        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::remove_older_than(
+            &store,
+            Duration::from_secs(60),
+        )
         .await
         .unwrap();
     assert_eq!(result, 1);
-    assert!(store.node_info(&1).await.unwrap().is_none());
-    assert!(store.node_info(&2).await.unwrap().is_some());
+
+    store.commit(permit).await.unwrap();
+
+    assert!(
+        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &billie)
+            .await
+            .unwrap()
+            .is_none(),
+    );
+    assert!(
+        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &daphne)
+            .await
+            .unwrap()
+            .is_some(),
+    );
 }
 
 #[tokio::test]
 async fn sample_random_nodes() {
+    let store = SqliteStoreBuilder::new()
+        .random_memory_url()
+        .max_connections(1)
+        .build()
+        .await
+        .unwrap();
+
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
-    let store = AddressBookMemoryStore::new(rng.clone());
+
+    let permit = store.begin().await.unwrap();
 
     for id in 0..100 {
+        let id = Hash::new((id as usize).to_ne_bytes());
         store
             .insert_node_info(TestNodeInfo::new(id).with_random_address(&mut rng))
             .await
@@ -127,25 +212,31 @@ async fn sample_random_nodes() {
     }
 
     for id in 200..300 {
+        let id = Hash::new((id as usize).to_ne_bytes());
         store
             .insert_node_info(TestNodeInfo::new_bootstrap(id).with_random_address(&mut rng))
             .await
             .unwrap();
     }
 
+    store.commit(permit).await.unwrap();
+
     // Sampling random nodes should give us some variety.
+    let mut samples = HashSet::new();
     for _ in 0..100 {
-        assert_ne!(
-            store.random_node().await.unwrap().unwrap(),
-            store.random_node().await.unwrap().unwrap(),
+        samples.insert(
+            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::random_node(&store)
+                .await
+                .unwrap(),
         );
     }
+    assert!(samples.len() > 25);
 
+    let mut samples = HashSet::new();
     for _ in 0..100 {
-        let sample_1 = store.random_bootstrap_node().await.unwrap().unwrap();
-        let sample_2 = store.random_bootstrap_node().await.unwrap().unwrap();
-        assert_ne!(sample_1, sample_2,);
-        assert!(sample_1.is_bootstrap());
-        assert!(sample_2.is_bootstrap());
+        let sample: TestNodeInfo = store.random_bootstrap_node().await.unwrap().unwrap();
+        assert!(sample.is_bootstrap());
+        samples.insert(sample);
     }
+    assert!(samples.len() > 25);
 }

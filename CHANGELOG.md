@@ -9,14 +9,18 @@ Highlights are marked with a pancake 🥞
 
 ## [0.5.2] - 09/03/2026
 
-### Fixed
-
-- Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
-- Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
-
 ### Added
 
 - Add `TopicStore` trait and SQLite implementation [#1011](https://github.com/p2panda/p2panda/pull/1011)
+
+### Changed
+
+- Address book SQLite implementation and refactorings [#1007](https://github.com/p2panda/p2panda/pull/1007)
+
+### Fixed
+
+- Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
+- Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
 
 ## [0.5.1] - 09/02/2026
 
