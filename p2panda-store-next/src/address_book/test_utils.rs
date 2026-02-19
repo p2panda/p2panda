@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::hash::Hash as StdHash;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use p2panda_core::Hash;
 use rand::RngExt;
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::address_book::memory::current_timestamp;
 use crate::address_book::traits::NodeInfo;
 
 pub type TestNodeId = Hash;
@@ -100,4 +100,11 @@ impl NodeInfo<TestNodeId> for TestNodeInfo {
     fn transports(&self) -> Option<Self::Transports> {
         self.transports.clone()
     }
+}
+
+pub fn current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock is not behind")
+        .as_secs()
 }

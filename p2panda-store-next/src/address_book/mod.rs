@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#[cfg(feature = "memory")]
-mod memory;
 #[cfg(feature = "sqlite")]
 mod sqlite;
 #[cfg(any(test, feature = "test_utils"))]
@@ -10,6 +8,4 @@ pub mod test_utils;
 mod tests;
 mod traits;
 
-#[cfg(feature = "memory")]
-pub use memory::AddressBookMemoryStore;
 pub use traits::{AddressBookStore, NodeInfo};

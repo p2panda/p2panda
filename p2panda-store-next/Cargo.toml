@@ -10,10 +10,7 @@ all-features = true
 workspace = true
 
 [features]
-default = ["memory", "sqlite"]
-memory = [
-  "dep:rand",
-]
+default = ["sqlite"]
 sqlite = [
   "dep:p2panda-core",
   "dep:serde",
@@ -24,7 +21,6 @@ sqlite = [
 test_utils = [
   "dep:rand",
   "dep:rand_chacha",
-  "memory",
   "sqlite",
 ]
 

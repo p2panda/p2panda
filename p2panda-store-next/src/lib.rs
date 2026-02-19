@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 pub mod address_book;
-#[cfg(feature = "memory")]
-pub mod memory;
 pub mod operations;
 pub mod orderer;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
-#[cfg(any(test, feature = "test_utils"))]
-pub mod test_utils;
 pub mod topics;
