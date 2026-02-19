@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use p2panda_core::{PrivateKey, Topic};
 
-use crate::SqliteStore;
 use crate::topics::TopicStore;
+use crate::{SqliteStore, Transaction};
 
 #[tokio::test]
 async fn update_and_resolve_topic_mapping() {
