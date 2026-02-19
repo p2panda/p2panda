@@ -4,19 +4,15 @@ use std::collections::HashMap;
 
 use p2panda_core::{PrivateKey, Topic};
 
-use crate::sqlite::SqliteStoreBuilder;
+use crate::SqliteStore;
 use crate::topics::TopicStore;
 
 #[tokio::test]
 async fn update_and_resolve_topic_mapping() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let topic = Topic::new();
+
     // The log id is the same as the topic, in a use case like this there will be one log
     // per-author in each topic.
     let log_id = topic;
@@ -50,12 +46,7 @@ async fn update_and_resolve_topic_mapping() {
 
 #[tokio::test]
 async fn path_based_log_ids() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let topic = Topic::new();
 
@@ -100,12 +91,7 @@ async fn path_based_log_ids() {
 
 #[tokio::test]
 async fn remove_association() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let topic = Topic::new();
 

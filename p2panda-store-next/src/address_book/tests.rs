@@ -9,16 +9,11 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::address_book::test_utils::{TestNodeId, TestNodeInfo, current_timestamp};
 use crate::address_book::{AddressBookStore, NodeInfo};
-use crate::sqlite::{SqliteStore, SqliteStoreBuilder};
+use crate::sqlite::SqliteStore;
 
 #[tokio::test]
 async fn insert_node_info() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let permit = store.begin().await.unwrap();
 
@@ -36,12 +31,7 @@ async fn insert_node_info() {
 
 #[tokio::test]
 async fn set_and_query_topics() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let billie = Hash::new(b"billie");
     let daphne = Hash::new(b"daphne");
@@ -132,12 +122,7 @@ async fn set_and_query_topics() {
 
 #[tokio::test]
 async fn remove_outdated_node_infos() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let billie = Hash::new(b"billie");
     let daphne = Hash::new(b"daphne");
@@ -191,12 +176,7 @@ async fn remove_outdated_node_infos() {
 
 #[tokio::test]
 async fn sample_random_nodes() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let mut rng = ChaCha20Rng::from_seed([1; 32]);
 

@@ -193,6 +193,17 @@ impl<'a> SqliteStore<'a> {
         }
     }
 
+    /// Shortcut building an in-memory SQLite database with a randomised name for testing purposes.
+    #[cfg(any(test, feature = "test_utils"))]
+    pub async fn temporary() -> Self {
+        SqliteStoreBuilder::new()
+            .random_memory_url()
+            .max_connections(1)
+            .build()
+            .await
+            .expect("migrations succeeded")
+    }
+
     /// Begins a transaction.
     ///
     /// Transactions are strictly serialized, this is expressed in form of a `TransactionPermit`
