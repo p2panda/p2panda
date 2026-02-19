@@ -33,4 +33,10 @@ pub trait OperationStore<T, ID, C> {
     /// Returns `true` when the removal occurred and `false` when the operation was not found in
     /// the store.
     fn delete_operation(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
+
+    /// Delete an operation payload.
+    ///
+    /// Returns `true` when the removal occurred and `false` when the operation was not found in
+    /// the store.
+    fn delete_operation_payload(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 }

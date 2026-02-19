@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+pub mod logs;
 #[cfg(feature = "memory")]
 pub mod memory;
 pub mod operations;
