@@ -67,14 +67,13 @@ where
         logs: &[L],
     ) -> Result<Option<HashMap<L, SeqNum>>, Self::Error> {
         let mut encoded_log_ids = Vec::new();
-
         for log in logs {
             let encoded_log_id =
                 encode_cbor(&log).map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
             encoded_log_ids.push(encoded_log_id);
         }
 
-        let operations = query_as::<_, LogHeightRow>(
+        let mut query = query_as::<_, LogHeightRow>(
             "
             SELECT
                 log_id,
@@ -83,39 +82,36 @@ where
                 operations_v1
             WHERE
                 public_key = ?
-                AND log_id IN ?
+                AND log_id IN ( { } )
             GROUP BY
                 public_key
             ",
         )
-        .bind(author.to_string())
-        .bind(&encoded_log_ids[..])
-        .fetch_all(&self.pool)
-        .await?;
+        .bind(author.to_string());
 
-        let log_heights = if operations.is_empty() {
+        // We can't directly bind a `Vec<Vec<u8>>` due to a limitation of sqlx
+        // so we use this approach as a work-around.
+        for log_id in encoded_log_ids {
+            query = query.bind(log_id)
+        }
+
+        let log_heights_query = query.fetch_all(&self.pool).await?;
+
+        let log_heights = if log_heights_query.is_empty() {
             None
         } else {
-            Some(
-                operations
-                    .iter()
-                    .map(|row| {
-                        (
-                            decode_cbor(row.log_id.to_string()).unwrap(),
-                            row.seq_num.parse::<u64>().unwrap(),
-                        )
-                    })
-                    .collect(),
-            )
-        };
-        //.for_each(|row| log_heights.insert(row.log_id, row.seq_num).un);
+            let mut log_heights = HashMap::new();
 
-        /*
-        let log_heights: Vec<(PublicKey, u64)> = operations
-            .into_iter()
-            .map(|operation| operation.into())
-            .collect();
-        */
+            for row in log_heights_query {
+                log_heights.insert(
+                    decode_cbor(&row.log_id[..])
+                        .map_err(|err| SqliteError::Decode("log id".to_string(), err.into()))?,
+                    row.seq_num.parse::<u64>().unwrap(),
+                );
+            }
+
+            Some(log_heights)
+        };
 
         Ok(log_heights)
     }
@@ -144,7 +140,7 @@ where
         .bind(author.to_string())
         .bind(calculate_hash(log_id).to_string())
         .bind(after.unwrap_or(0).to_string())
-        .bind(until.unwrap_or(u64::max_value()).to_string())
+        .bind(until.unwrap_or(u64::MAX).to_string())
         .fetch_one(&self.pool)
         .await?;
 
@@ -195,7 +191,7 @@ where
         .bind(author.to_string())
         .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
         .bind(after.unwrap_or(0).to_string())
-        .bind(until.unwrap_or(u64::max_value()).to_string())
+        .bind(until.unwrap_or(u64::MAX).to_string())
         .fetch_all(&self.pool)
         .await?;
 

@@ -40,18 +40,10 @@ impl From<LatestEntryRow> for (Hash, SeqNum) {
 /// A single log height row as it is queried from the database.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
 pub struct LogHeightRow {
-    pub(crate) log_id: String,
+    pub(crate) log_id: Vec<u8>,
     pub(crate) seq_num: String,
 }
 
-// TODO: Is it correct to use `u64` as the log id type here?
-//
-// No. We're waiting for upstream trait bound changes to `LogId`.
-impl From<LogHeightRow> for (u64, SeqNum) {
-    fn from(row: LogHeightRow) -> Self {
-        (row.log_id.parse().unwrap(), row.seq_num.parse().unwrap())
-    }
-}
 /// A single operation row as it is inserted in the database.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
 pub struct OperationRow {
