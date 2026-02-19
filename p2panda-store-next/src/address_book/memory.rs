@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
+use std::fmt::Debug;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -10,6 +11,7 @@ use rand::Rng;
 use rand::seq::IteratorRandom;
 
 use crate::address_book::{AddressBookStore, NodeInfo};
+use crate::memory::MemoryStore;
 
 #[derive(Clone, Debug)]
 pub struct AddressBookMemoryStore<R, ID, N> {
@@ -51,33 +53,34 @@ impl<R, ID, N> AddressBookMemoryStore<R, ID, N> {
     }
 }
 
-impl<R, ID, N> AddressBookStore<ID, N> for AddressBookMemoryStore<R, ID, N>
+impl<R, T, ID, N> AddressBookStore<ID, N> for MemoryStore<R, T, ID, N>
 where
     R: Rng,
-    ID: Clone + Ord,
+    T: Debug,
+    ID: Clone + Debug + Ord,
     N: Clone + NodeInfo<ID>,
 {
     type Error = Infallible;
 
     async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
-        self.update_last_changed(info.id()).await;
-        let mut node_infos = self.node_infos.borrow_mut();
+        self.address_book.update_last_changed(info.id()).await;
+        let mut node_infos = self.address_book.node_infos.borrow_mut();
         Ok(node_infos.insert(info.id(), info).is_none())
     }
 
     async fn node_info(&self, id: &ID) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.borrow();
+        let node_infos = self.address_book.node_infos.borrow();
         Ok(node_infos.get(id).cloned())
     }
 
     async fn node_topics(&self, id: &ID) -> Result<HashSet<[u8; 32]>, Self::Error> {
-        let topics = self.topics.borrow();
+        let topics = self.address_book.topics.borrow();
         let result = topics.get(id).cloned().unwrap_or(HashSet::new());
         Ok(result)
     }
 
     async fn selected_node_infos(&self, ids: &[ID]) -> Result<Vec<N>, Self::Error> {
-        let node_infos = self.node_infos.borrow();
+        let node_infos = self.address_book.node_infos.borrow();
         let result = node_infos
             .iter()
             .filter_map(
@@ -91,7 +94,7 @@ where
     }
 
     async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
-        let node_infos = self.node_infos.borrow();
+        let node_infos = self.address_book.node_infos.borrow();
         Ok(node_infos
             .values()
             .filter(|info| !info.is_stale())
@@ -100,12 +103,12 @@ where
     }
 
     async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
-        let node_infos = self.node_infos.borrow();
+        let node_infos = self.address_book.node_infos.borrow();
         Ok(node_infos.values().filter(|info| !info.is_stale()).count())
     }
 
     async fn all_bootstrap_nodes_len(&self) -> Result<usize, Self::Error> {
-        let node_infos = self.node_infos.borrow();
+        let node_infos = self.address_book.node_infos.borrow();
         Ok(node_infos
             .values()
             .filter(|info| info.is_bootstrap() && !info.is_stale())
@@ -113,14 +116,14 @@ where
     }
 
     async fn remove_node_info(&self, id: &ID) -> Result<bool, Self::Error> {
-        let mut node_infos = self.node_infos.borrow_mut();
+        let mut node_infos = self.address_book.node_infos.borrow_mut();
         Ok(node_infos.remove(id).is_some())
     }
 
     async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
         let mut counter: usize = 0;
-        let mut node_infos = self.node_infos.borrow_mut();
-        let infos_last_changed = self.node_infos_last_changed.borrow();
+        let mut node_infos = self.address_book.node_infos.borrow_mut();
+        let infos_last_changed = self.address_book.node_infos_last_changed.borrow();
         node_infos.retain(|id, _| {
             let last_changed = infos_last_changed
                 .get(id)
@@ -136,15 +139,15 @@ where
     }
 
     async fn set_topics(&self, id: ID, topics: HashSet<[u8; 32]>) -> Result<(), Self::Error> {
-        self.update_last_changed(id.clone()).await;
-        let mut node_topics = self.topics.borrow_mut();
+        self.address_book.update_last_changed(id.clone()).await;
+        let mut node_topics = self.address_book.topics.borrow_mut();
         node_topics.insert(id, HashSet::from_iter(topics.into_iter()));
         Ok(())
     }
 
     async fn node_infos_by_topics(&self, topics: &[[u8; 32]]) -> Result<Vec<N>, Self::Error> {
         let ids: Vec<ID> = {
-            let node_topics = self.topics.borrow();
+            let node_topics = self.address_book.topics.borrow();
             node_topics
                 .iter()
                 .filter_map(|(node_id, node_topics)| {
@@ -167,8 +170,8 @@ where
     }
 
     async fn random_node(&self) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.borrow();
-        let mut rng = self.rng.borrow_mut();
+        let node_infos = self.address_book.node_infos.borrow();
+        let mut rng = self.address_book.rng.borrow_mut();
         let result = node_infos
             .values()
             .filter(|info| !info.is_stale())
@@ -177,8 +180,8 @@ where
     }
 
     async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
-        let node_infos = self.node_infos.borrow();
-        let mut rng = self.rng.borrow_mut();
+        let node_infos = self.address_book.node_infos.borrow();
+        let mut rng = self.address_book.rng.borrow_mut();
         let result = node_infos
             .values()
             .filter(|info| info.is_bootstrap() && !info.is_stale())

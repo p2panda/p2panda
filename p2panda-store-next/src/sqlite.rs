@@ -328,6 +328,9 @@ pub enum DecodeError {
     #[error(transparent)]
     Hash(#[from] p2panda_core::hash::HashError),
 
+    #[error(transparent)]
+    Topic(#[from] p2panda_core::topic::TopicError),
+
     #[error("parsing from string failed")]
     FromStr,
 }
