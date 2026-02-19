@@ -9,7 +9,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::address_book::test_utils::{TestNodeId, TestNodeInfo, current_timestamp};
 use crate::address_book::{AddressBookStore, NodeInfo};
-use crate::sqlite::SqliteStore;
+use crate::{SqliteStore, Transaction};
 
 #[tokio::test]
 async fn insert_node_info() {

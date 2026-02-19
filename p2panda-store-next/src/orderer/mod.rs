@@ -2,6 +2,8 @@
 
 #[cfg(feature = "sqlite")]
 mod sqlite;
+#[cfg(test)]
+mod tests;
 mod traits;
 
 pub use traits::OrdererStore;

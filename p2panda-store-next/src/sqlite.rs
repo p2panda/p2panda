@@ -7,7 +7,7 @@ use sqlx::migrate::{MigrateDatabase, Migrator};
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{Sqlite, migrate};
 use thiserror::Error;
-use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 /// Create SQLite database if it doesn't already exist.
 pub async fn create_database(url: &str) -> Result<(), SqliteError> {
@@ -204,79 +204,6 @@ impl<'a> SqliteStore<'a> {
             .expect("migrations succeeded")
     }
 
-    /// Begins a transaction.
-    ///
-    /// Transactions are strictly serialized, this is expressed in form of a `TransactionPermit`
-    /// processes need to hold when acquiring access to a new transaction. Any concurrent process
-    /// calling it will await here if there's already another process holding a permit, this will
-    /// potentially "slow down" work and should be carefully used.
-    ///
-    /// Any process with a transaction can now start using the `tx` method to execute writes within
-    /// this transaction or perform uncommitted "dirty" reads on it.
-    ///
-    /// It is usually not necessary to acquire a transaction when the logic only requires committed
-    /// _reads_ to the database. Use `execute` instead.
-    pub async fn begin(&self) -> Result<TransactionPermit<'_>, SqliteError> {
-        // Acquire a permit from the semaphore, it will await if currently another process has the
-        // permit. Here we enforce strict serialization of transactions (similar to what SQLite
-        // does under the hood).
-        let permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("if semaphore is closed then the whole struct is gone as well");
-
-        // Access the transaction object which we've placed behind a Mutex. This lock follows a
-        // different logic and only makes sure that mutable access to it is exclusive _within_ a
-        // process "holding" the transaction permit.
-        let mut tx_ref = self.tx.lock().await;
-        assert!(
-            tx_ref.is_none(),
-            "can't have an already existing transaction after an just-acquired permit"
-        );
-
-        let tx = self.pool.begin().await?;
-        tx_ref.replace(tx);
-
-        Ok(TransactionPermit(permit))
-    }
-
-    /// Rolls back the transaction and with that all uncommitted changes.
-    ///
-    /// This takes the permit and frees it after the rollback has finished. Other processes can now
-    /// begin new transactions.
-    pub async fn rollback(&self, permit: TransactionPermit<'_>) -> Result<(), SqliteError> {
-        let Some(tx) = self.tx.lock().await.take() else {
-            panic!("can't have no transaction without dropping permit first")
-        };
-
-        let result = tx.rollback().await.map_err(SqliteError::Sqlite);
-
-        // Always drop the permit, both on successful rollback and error. This will allow other
-        // processes now to begin a new transaction and acquire the permit.
-        drop(permit);
-
-        result
-    }
-
-    /// Commits the transaction.
-    ///
-    /// This takes the permit and frees it after the commit has finished. Other processes can now
-    /// begin new transactions.
-    pub async fn commit(&self, permit: TransactionPermit<'_>) -> Result<(), SqliteError> {
-        let Some(tx) = self.tx.lock().await.take() else {
-            panic!("can't have no transaction without dropping permit first")
-        };
-
-        let result = tx.commit().await.map_err(SqliteError::Sqlite);
-
-        // Always drop the permit, both on successful commit and error. This will allow other
-        // processes now to begin a new transaction and acquire the permit.
-        drop(permit);
-
-        result
-    }
-
     /// Execute SQL query within transaction.
     ///
     /// This method will return an error when no transaction is currently given. Make sure to call
@@ -303,8 +230,88 @@ impl<'a> SqliteStore<'a> {
     }
 }
 
+impl<'a> crate::traits::Transaction for SqliteStore<'a> {
+    type Error = SqliteError;
+
+    type Permit = TransactionPermit;
+
+    /// Begins a transaction.
+    ///
+    /// Transactions are strictly serialized, this is expressed in form of a `TransactionPermit`
+    /// processes need to hold when acquiring access to a new transaction. Any concurrent process
+    /// calling it will await here if there's already another process holding a permit, this will
+    /// potentially "slow down" work and should be carefully used.
+    ///
+    /// Any process with a transaction can now start using the `tx` method to execute writes within
+    /// this transaction or perform uncommitted "dirty" reads on it.
+    ///
+    /// It is usually not necessary to acquire a transaction when the logic only requires committed
+    /// _reads_ to the database. Use `execute` instead.
+    async fn begin(&self) -> Result<TransactionPermit, SqliteError> {
+        // Acquire a permit from the semaphore, it will await if currently another process has the
+        // permit. Here we enforce strict serialization of transactions (similar to what SQLite
+        // does under the hood).
+        let permit = self
+            .semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("if semaphore is closed then the whole struct is gone as well");
+
+        // Access the transaction object which we've placed behind a Mutex. This lock follows a
+        // different logic and only makes sure that mutable access to it is exclusive _within_ a
+        // process "holding" the transaction permit.
+        let mut tx_ref = self.tx.lock().await;
+        assert!(
+            tx_ref.is_none(),
+            "can't have an already existing transaction after an just-acquired permit"
+        );
+
+        let tx = self.pool.begin().await?;
+        tx_ref.replace(tx);
+
+        Ok(TransactionPermit(permit))
+    }
+
+    /// Rolls back the transaction and with that all uncommitted changes.
+    ///
+    /// This takes the permit and frees it after the rollback has finished. Other processes can now
+    /// begin new transactions.
+    async fn rollback(&self, permit: TransactionPermit) -> Result<(), SqliteError> {
+        let Some(tx) = self.tx.lock().await.take() else {
+            panic!("can't have no transaction without dropping permit first")
+        };
+
+        let result = tx.rollback().await.map_err(SqliteError::Sqlite);
+
+        // Always drop the permit, both on successful rollback and error. This will allow other
+        // processes now to begin a new transaction and acquire the permit.
+        drop(permit);
+
+        result
+    }
+
+    /// Commits the transaction.
+    ///
+    /// This takes the permit and frees it after the commit has finished. Other processes can now
+    /// begin new transactions.
+    async fn commit(&self, permit: TransactionPermit) -> Result<(), SqliteError> {
+        let Some(tx) = self.tx.lock().await.take() else {
+            panic!("can't have no transaction without dropping permit first")
+        };
+
+        let result = tx.commit().await.map_err(SqliteError::Sqlite);
+
+        // Always drop the permit, both on successful commit and error. This will allow other
+        // processes now to begin a new transaction and acquire the permit.
+        drop(permit);
+
+        result
+    }
+}
+
 #[allow(unused)]
-pub struct TransactionPermit<'a>(SemaphorePermit<'a>);
+pub struct TransactionPermit(OwnedSemaphorePermit);
 
 #[derive(Debug, Error)]
 pub enum SqliteError {
@@ -355,6 +362,7 @@ mod tests {
     use tokio::pin;
 
     use crate::sqlite::{SqliteError, SqliteStoreBuilder};
+    use crate::traits::Transaction;
 
     #[tokio::test]
     async fn transaction_provider() {
