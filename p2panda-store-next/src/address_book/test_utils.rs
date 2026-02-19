@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::hash::Hash as StdHash;
+
+use p2panda_core::Hash;
 use rand::RngExt;
 use rand_chacha::ChaCha20Rng;
+use serde::{Deserialize, Serialize};
 
 use crate::address_book::memory::current_timestamp;
 use crate::address_book::traits::NodeInfo;
 
-pub type TestNodeId = usize;
+pub type TestNodeId = Hash;
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
 pub struct TestNodeInfo {
     pub id: TestNodeId,
     pub bootstrap: bool,
     pub transports: Option<TestTransportInfo>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
 pub struct TestTransportInfo {
     address: String,
     timestamp: u64,

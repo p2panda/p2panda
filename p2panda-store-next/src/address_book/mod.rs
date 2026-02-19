@@ -2,6 +2,8 @@
 
 #[cfg(feature = "memory")]
 mod memory;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
