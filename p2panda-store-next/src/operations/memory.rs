@@ -7,6 +7,8 @@ use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::rc::Rc;
 
+use p2panda_core::LogId;
+
 use crate::memory::MemoryStore;
 use crate::operations::OperationStore;
 
@@ -30,14 +32,20 @@ impl<T, ID> Default for OperationMemoryStore<T, ID> {
     }
 }
 
-impl<T, ID> OperationStore<T, ID> for MemoryStore<T, ID>
+impl<T, ID, L> OperationStore<T, ID, L> for MemoryStore<T, ID>
 where
     T: Clone + Debug,
     ID: Clone + Eq + Debug + StdHash,
+    L: LogId,
 {
     type Error = Infallible;
 
-    async fn insert_operation(&self, id: &ID, operation: T) -> Result<bool, Self::Error> {
+    async fn insert_operation(
+        &self,
+        id: &ID,
+        operation: T,
+        _log_id: L,
+    ) -> Result<bool, Self::Error> {
         let mut operations = self.operations.operations.borrow_mut();
         Ok(operations.insert(id.clone(), operation).is_none())
     }

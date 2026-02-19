@@ -6,7 +6,7 @@ use std::error::Error;
 ///
 /// The concrete type of an "operation" is generic and implementors can use the same interface for
 /// different approaches: sets, append-only logs, hash-graphs (DAG) etc.
-pub trait OperationStore<T, ID> {
+pub trait OperationStore<T, ID, C> {
     type Error: Error;
 
     /// Insert an operation.
@@ -17,6 +17,7 @@ pub trait OperationStore<T, ID> {
         &self,
         id: &ID,
         operation: T,
+        collection_id: C,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get an operation by id.
