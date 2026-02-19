@@ -100,8 +100,7 @@ where
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
-    use p2panda_store_next::operations::OperationStore;
-    use p2panda_store_next::test_utils::TestMemoryStore;
+    use p2panda_store_next::{operations::OperationStore, sqlite::SqliteStoreBuilder};
     use serde::{Deserialize, Serialize};
     use tokio::task;
     use tokio_stream::StreamExt;
@@ -177,8 +176,14 @@ mod tests {
 
         local
             .run_until(async move {
+                let store = SqliteStoreBuilder::new()
+                    .random_memory_url()
+                    .max_connections(1)
+                    .build()
+                    .await
+                    .unwrap();
+
                 let log_id = Topic::new();
-                let store = TestMemoryStore::<Operation<TestExtension>, Hash>::new();
 
                 // Insert operations into store.
                 store
