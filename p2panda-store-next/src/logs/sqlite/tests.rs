@@ -103,8 +103,8 @@ async fn get_log_heights() {
     .unwrap();
 
     let mut expected_result = HashMap::new();
-    expected_result.insert(log_1.id(), 2);
-    expected_result.insert(log_2.id(), 1);
+    expected_result.insert(log_1.id(), 1);
+    expected_result.insert(log_2.id(), 0);
 
     assert_eq!(result, Some(expected_result));
 }

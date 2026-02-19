@@ -5,25 +5,17 @@ mod models;
 mod tests;
 
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash as StdHash, Hasher};
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
 use sqlx::{query, query_as};
 
 use crate::logs::LogStore;
-use crate::logs::sqlite::models::{ByteCount, LatestEntryRow, LogHeightRow};
+use crate::logs::sqlite::models::{LatestEntryRow, LogHeightRow, LogMeta};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
 pub type SeqNum = u64;
-
-// TODO: We have this in a couple of places in the codebase; can we centralise?
-fn calculate_hash<T: StdHash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
-}
 
 impl<'a, L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore<'a>
 where
@@ -80,6 +72,7 @@ where
         // This query formation approach is required since there is currently no
         // way to directly bind arrays as comma-separated lists in sqlx.
         let params = format!("?{}", ", ?".repeat(encoded_log_ids.len() - 1));
+        println!("{params}");
         let query_str = format!(
             "
             SELECT
@@ -89,9 +82,9 @@ where
                 operations_v1
             WHERE
                 public_key = ?
-                AND log_id IN ( { } )
+                AND log_id IN ( {} )
             GROUP BY
-                public_key
+                log_id
             ",
             params
         );
@@ -130,53 +123,49 @@ where
         after: Option<SeqNum>,
         until: Option<SeqNum>,
     ) -> Result<Option<(u64, u64)>, Self::Error> {
-        let rows = query_as::<_, ByteCount>(
+        // We need to use an inclusive greater-than to ensure our
+        // query includes the operation with sequence number 0.
+        let after_operator = if after.is_none() { ">=" } else { ">" };
+        let query_str = format!(
             "
             SELECT
-                CAST(SUM(CAST(header_size AS NUMERIC)) AS TEXT) AS total_header_size,
-                CAST(SUM(CAST(payload_size AS NUMERIC)) AS TEXT) AS total_payload_size
+                CAST(SUM(CAST(header_size AS NUMERIC)) AS TEXT) AS total_header_bytes,
+                CAST(SUM(CAST(payload_size AS NUMERIC)) AS TEXT) AS total_payload_bytes,
+                CAST(COUNT(*) AS TEXT) AS total_operation_count
             FROM
                 operations_v1
             WHERE
                 public_key = ?
                 AND log_id = ?
-                AND CAST(seq_num AS NUMERIC) > CAST(? as NUMERIC)
+                AND CAST(seq_num AS NUMERIC) {} CAST(? as NUMERIC)
                 AND CAST(seq_num AS NUMERIC) <= CAST(? as NUMERIC)
             ",
-        )
-        .bind(author.to_string())
-        .bind(calculate_hash(log_id).to_string())
-        .bind(after.unwrap_or(0).to_string())
-        .bind(until.unwrap_or(u64::MAX).to_string())
-        .fetch_one(&self.pool)
-        .await?;
+            after_operator
+        );
 
-        // TODO: We need to update the query to be able to return total header_size, total
-        // payload_size _and_ total number of operations whose size was summed.
+        let log_meta: Option<LogMeta> = query_as::<_, LogMeta>(&query_str)
+            .bind(author.to_string())
+            .bind(
+                encode_cbor(&log_id)
+                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+            )
+            .bind(after.unwrap_or(0).to_string())
+            .bind(until.unwrap_or(u64::MAX).to_string())
+            .fetch_optional(&self.pool)
+            .await?;
 
-        /*
-        // Total number of operations returned from the query.
-        let operations: u64 = rows
-            .len()
-            .try_into()
-            // TODO: Error handling; need to map to an appropriate SqliteError type.
-            .unwrap();
+        if let Some(meta) = log_meta {
+            let total_operation_count: u64 = meta.total_operation_count.parse().unwrap();
+            let total_header_bytes: u64 = meta.total_header_bytes.parse().unwrap();
+            let total_payload_bytes: u64 = meta.total_payload_bytes.parse().unwrap();
 
-        let mut bytes = 0;
-        for row in rows {
-            let (header_size, payload_size) = row.into();
-            bytes += header_size;
-            bytes += payload_size;
+            return Ok(Some((
+                total_operation_count,
+                total_header_bytes + total_payload_bytes,
+            )));
         }
 
-        if bytes == 0 {
-            Ok(None)
-        } else {
-            Ok(Some((operations, bytes)))
-        }
-        */
-
-        todo!()
+        return Ok(None);
     }
 
     async fn get_log_entries(

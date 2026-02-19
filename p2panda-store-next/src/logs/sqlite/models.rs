@@ -7,18 +7,10 @@ use crate::logs::sqlite::SeqNum;
 
 /// Database representation of the sum of all header and body byte size.
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
-pub struct ByteCount {
-    pub total_header_size: String,
-    pub total_payload_size: String,
-}
-
-impl From<ByteCount> for (u64, u64) {
-    fn from(count: ByteCount) -> Self {
-        (
-            count.total_header_size.parse().unwrap(),
-            count.total_payload_size.parse().unwrap(),
-        )
-    }
+pub struct LogMeta {
+    pub total_header_bytes: String,
+    pub total_payload_bytes: String,
+    pub total_operation_count: String
 }
 
 #[derive(FromRow, Debug, Clone, PartialEq, Eq)]
