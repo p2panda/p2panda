@@ -4,13 +4,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey};
+use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey, Topic};
 
 #[derive(Clone, Default)]
 pub struct TestLog {
     private_key: PrivateKey,
     backlink: Rc<RefCell<Option<Hash>>>,
     seq_num: Rc<RefCell<u64>>,
+    log_id: Topic,
 }
 
 impl TestLog {
@@ -19,7 +20,12 @@ impl TestLog {
             private_key: PrivateKey::new(),
             backlink: Rc::default(),
             seq_num: Rc::default(),
+            log_id: Topic::new(),
         }
+    }
+
+    pub fn id(&self) -> Topic {
+        self.log_id
     }
 
     pub fn operation<E: Extensions>(&self, body: &[u8], extensions: E) -> Operation<E> {

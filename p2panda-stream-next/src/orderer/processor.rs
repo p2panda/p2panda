@@ -22,7 +22,7 @@ pub struct Orderer<T, ID, S> {
 impl<T, ID, S> Orderer<T, ID, S>
 where
     ID: OperationId,
-    S: Clone + OrdererStore<ID> + OperationStore<T, ID>,
+    S: Clone + OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     pub fn new(store: S) -> Self {
         let inner = CausalOrderer::new(store.clone());
@@ -40,7 +40,7 @@ impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
     T: Digest<ID> + Ordering<ID>,
     ID: OperationId,
-    S: OrdererStore<ID> + OperationStore<T, ID>,
+    S: OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     type Output = T;
 
@@ -84,7 +84,7 @@ pub enum OrdererError<T, ID, S>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    S: OrdererStore<ID> + OperationStore<T, ID>,
+    S: OrdererStore<ID> + OperationStore<T, ID, u64>,
 {
     #[error("could not find item with id {0} in operation store")]
     StoreInconsistency(ID),
@@ -93,13 +93,13 @@ where
     OrdererStore(<S as OrdererStore<ID>>::Error),
 
     #[error("{0}")]
-    OperationStore(<S as OperationStore<T, ID>>::Error),
+    OperationStore(<S as OperationStore<T, ID, u64>>::Error),
 }
 
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
-    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey};
+    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
     use p2panda_store_next::{memory::MemoryStore, operations::OperationStore};
     use serde::{Deserialize, Serialize};
     use tokio::task;
@@ -177,14 +177,19 @@ mod tests {
         local
             .run_until(async move {
                 let store = MemoryStore::<Operation<TestExtension>, Hash>::new();
+                let log_id = Topic::new();
 
                 // Insert operations into store.
                 store
-                    .insert_operation(&operation_panda.hash, operation_panda.clone())
+                    .insert_operation(
+                        &operation_panda.hash,
+                        operation_panda.clone(),
+                        log_id.clone(),
+                    )
                     .await
                     .unwrap();
                 store
-                    .insert_operation(&operation_icebear.hash, operation_icebear.clone())
+                    .insert_operation(&operation_icebear.hash, operation_icebear.clone(), log_id)
                     .await
                     .unwrap();
 
