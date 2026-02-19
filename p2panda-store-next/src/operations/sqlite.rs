@@ -2,15 +2,16 @@
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::hash::{Hash, HashError};
-use p2panda_core::{Extensions, Operation};
+use p2panda_core::{Extensions, LogId, Operation};
 use sqlx::{FromRow, query, query_as};
 
 use crate::operations::OperationStore;
 use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<'a, E> OperationStore<Operation<E>, Hash> for SqliteStore<'a>
+impl<'a, E, L> OperationStore<Operation<E>, Hash, L> for SqliteStore<'a>
 where
     E: Extensions,
+    L: LogId,
 {
     type Error = SqliteError;
 
@@ -18,6 +19,7 @@ where
         &self,
         id: &Hash,
         operation: Operation<E>,
+        log_id: L,
     ) -> Result<bool, Self::Error> {
         let result = self
             .tx(async |tx| {
@@ -27,6 +29,7 @@ where
                     INTO
                         operations_v1 (
                             hash,
+                            log_id,
                             version,
                             public_key,
                             signature,
@@ -38,10 +41,14 @@ where
                             extensions
                         )
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ",
                 )
                 .bind(id.to_hex())
+                .bind(
+                    encode_cbor(&log_id)
+                        .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+                )
                 .bind(operation.header.version.to_string())
                 .bind(operation.header.public_key.to_hex())
                 .bind(operation.header.signature.map(|sig| sig.to_hex()))

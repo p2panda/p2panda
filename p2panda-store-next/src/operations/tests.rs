@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::test_utils::TestLog;
-use p2panda_core::{Hash, Operation};
+use p2panda_core::{Hash, Operation, Topic};
 
 use crate::memory::MemoryStore;
 use crate::operations::OperationStore;
@@ -23,26 +23,26 @@ async fn insert_get_delete_operations_memory() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone())
+            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
             .unwrap()
     );
     // Re-inserting the same operation returns false.
     assert!(
         !store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone())
+            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone())
+            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash.clone(), operation_4.clone())
+            .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
             .await
             .unwrap()
     );
@@ -51,13 +51,13 @@ async fn insert_get_delete_operations_memory() {
     // ~~~
 
     assert!(
-        OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_1.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_1.hash)
             .await
             .unwrap()
     );
     // Operation 2 was not inserted.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_2.hash)
+        !OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_2.hash)
             .await
             .unwrap()
     );
@@ -66,11 +66,13 @@ async fn insert_get_delete_operations_memory() {
     // ~~~
 
     assert_eq!(
-        store.get_operation(&operation_4.hash).await.unwrap(),
+        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_4.hash)
+            .await
+            .unwrap(),
         Some(operation_4.clone())
     );
     assert_eq!(
-        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_2.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_2.hash)
             .await
             .unwrap(),
         None
@@ -80,13 +82,13 @@ async fn insert_get_delete_operations_memory() {
     // ~~~~~~
 
     assert!(
-        OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
     // Deleting the same item again returns false.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        !OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
@@ -115,26 +117,26 @@ async fn insert_get_delete_operations_sqlite() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone())
+            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
             .unwrap()
     );
     // Re-inserting the same operation returns false.
     assert!(
         !store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone())
+            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone())
+            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash.clone(), operation_4.clone())
+            .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
             .await
             .unwrap()
     );
@@ -145,13 +147,13 @@ async fn insert_get_delete_operations_sqlite() {
     // ~~~
 
     assert!(
-        OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_1.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_1.hash)
             .await
             .unwrap()
     );
     // Operation 2 was not inserted.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_2.hash)
+        !OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_2.hash)
             .await
             .unwrap()
     );
@@ -160,11 +162,13 @@ async fn insert_get_delete_operations_sqlite() {
     // ~~~
 
     assert_eq!(
-        store.get_operation(&operation_4.hash).await.unwrap(),
+        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_4.hash)
+            .await
+            .unwrap(),
         Some(operation_4.clone())
     );
     assert_eq!(
-        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_2.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_2.hash)
             .await
             .unwrap(),
         None
@@ -176,13 +180,13 @@ async fn insert_get_delete_operations_sqlite() {
     let permit = store.begin().await.unwrap();
 
     assert!(
-        OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
     // Deleting the same item again returns false.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        !OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
