@@ -49,7 +49,7 @@ where
             ",
         )
         .bind(author.to_string())
-        .bind(calculate_hash(log_id).to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
         .fetch_optional(&self.pool)
         .await?
         {
@@ -101,7 +101,7 @@ where
                     .iter()
                     .map(|row| {
                         (
-                            decode_cbor(row.log_id).map_err(|err| SqliteError::Decode(err))?,
+                            decode_cbor(row.log_id.to_string()).unwrap(),
                             row.seq_num.parse::<u64>().unwrap(),
                         )
                     })
@@ -193,7 +193,7 @@ where
             ",
         )
         .bind(author.to_string())
-        .bind(calculate_hash(log_id).to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
         .bind(after.unwrap_or(0).to_string())
         .bind(until.unwrap_or(u64::max_value()).to_string())
         .fetch_all(&self.pool)
@@ -229,7 +229,7 @@ where
             ",
         )
         .bind(author.to_string())
-        .bind(calculate_hash(log_id).to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
         .bind(until.to_string())
         .execute(&self.pool)
         .await?;
