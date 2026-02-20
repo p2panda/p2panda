@@ -154,7 +154,7 @@ impl From<iroh::EndpointAddr> for NodeInfo {
     }
 }
 
-impl p2panda_store_next::address_book::NodeInfo<NodeId> for NodeInfo {
+impl p2panda_store::address_book::NodeInfo<NodeId> for NodeInfo {
     type Transports = AuthenticatedTransportInfo;
 
     fn id(&self) -> NodeId {

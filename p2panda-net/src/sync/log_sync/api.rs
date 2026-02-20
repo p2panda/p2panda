@@ -4,10 +4,10 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_core::{Extensions, LogId, Operation};
-use p2panda_store::{LogStore, OperationStore};
-use p2panda_sync::protocols::{Logs, TopicLogSyncEvent};
-use p2panda_sync::traits::TopicMap;
+use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_store::logs::LogStore;
+use p2panda_store::topics::TopicStore;
+use p2panda_sync::protocols::TopicLogSyncEvent;
 use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -39,15 +39,18 @@ use crate::sync::log_sync::Builder;
 ///
 /// [`chat.rs`]: https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs
 #[derive(Clone)]
-pub struct LogSync<S, L, E, TM>
+pub struct LogSync<S, L, E>
 where
-    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
+        + TopicStore<TopicId, PublicKey, L>
+        + Clone
+        + Send
+        + 'static,
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     inner: Arc<RwLock<Inner<E>>>,
-    _phantom: PhantomData<(S, L, TM)>,
+    _phantom: PhantomData<(S, L)>,
 }
 
 struct Inner<E>
@@ -58,12 +61,15 @@ where
     actor_ref: ActorRef<ToSyncManager<Operation<E>, TopicLogSyncEvent<E>>>,
 }
 
-impl<S, L, E, TM> LogSync<S, L, E, TM>
+impl<S, L, E> LogSync<S, L, E>
 where
-    S: OperationStore<L, E> + LogStore<L, E> + Send + 'static,
+    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
+        + TopicStore<TopicId, PublicKey, L>
+        + Clone
+        + Send
+        + 'static,
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
-    TM: TopicMap<TopicId, Logs<L>> + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
     pub(crate) fn new(
@@ -75,13 +81,8 @@ where
         }
     }
 
-    pub fn builder(
-        store: S,
-        topic_map: TM,
-        endpoint: Endpoint,
-        gossip: Gossip,
-    ) -> Builder<S, L, E, TM> {
-        Builder::<S, L, E, TM>::new(store, topic_map, endpoint, gossip)
+    pub fn builder(store: S, endpoint: Endpoint, gossip: Gossip) -> Builder<S, L, E> {
+        Builder::<S, L, E>::new(store, endpoint, gossip)
     }
 
     // TODO: Extensions should be generic over a stream handle, not over this struct.

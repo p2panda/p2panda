@@ -8,6 +8,7 @@ mod event_stream;
 mod session_map;
 
 pub use event_stream::ManagerEventStream;
+use p2panda_store::topics::TopicStore;
 pub use session_map::SessionTopicMap;
 
 use std::collections::HashMap;
@@ -20,8 +21,8 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, LogId, Operation, PublicKey};
-use p2panda_store::{LogStore, OperationStore};
+use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -30,8 +31,8 @@ use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
 use crate::manager::event_stream::{ManagerEventStreamState, StreamDebug};
-use crate::protocols::{Logs, TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
-use crate::traits::{Manager, TopicMap};
+use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
+use crate::traits::Manager;
 use crate::{FromSync, SessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
@@ -49,12 +50,11 @@ pub type ToTopicSync<E> = ToSync<Operation<E>>;
 /// any topic subscriptions in order to understand the correct mappings.  
 #[allow(clippy::type_complexity)]
 #[derive(Debug)]
-pub struct TopicSyncManager<T, S, M, L, E>
+pub struct TopicSyncManager<T, S, L, E>
 where
     T: Clone,
     E: Extensions,
 {
-    topic_map: M,
     store: S,
     session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
     from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
@@ -76,14 +76,13 @@ where
     pub live_tx: mpsc::Sender<ToTopicSync<E>>,
 }
 
-impl<T, S, M, L, E> TopicSyncManager<T, S, M, L, E>
+impl<T, S, L, E> TopicSyncManager<T, S, L, E>
 where
     T: Clone,
     E: Extensions,
 {
-    pub fn new(topic_map: M, store: S) -> Self {
+    pub fn new(store: S) -> Self {
         Self {
-            topic_map,
             store,
             manager_tx: Default::default(),
             session_topic_map: Default::default(),
@@ -94,23 +93,26 @@ where
     }
 }
 
-impl<T, S, M, L, E> Manager<T> for TopicSyncManager<T, S, M, L, E>
+impl<T, S, L, E> Manager<T> for TopicSyncManager<T, S, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
-    M: TopicMap<T, Logs<L>> + Send + 'static,
+    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
+        + TopicStore<T, PublicKey, L>
+        + Clone
+        + Send
+        + 'static,
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
 {
-    type Protocol = TopicLogSync<T, S, M, L, E>;
-    type Args = TopicSyncManagerArgs<S, M>;
+    type Protocol = TopicLogSync<T, S, L, E>;
+    type Args = S;
     type Event = TopicLogSyncEvent<E>;
     type Message = Operation<E>;
     type Error = TopicSyncManagerError;
 
     /// Instantiate a manager from arguments.
-    fn from_args(config: Self::Args) -> Self {
-        Self::new(config.topic_map, config.store)
+    fn from_args(store: Self::Args) -> Self {
+        Self::new(store)
     }
 
     /// Instantiate a new sync session.
@@ -148,13 +150,7 @@ where
             None
         };
 
-        TopicLogSync::new(
-            config.topic.clone(),
-            self.store.clone(),
-            self.topic_map.clone(),
-            live_rx,
-            event_tx,
-        )
+        TopicLogSync::new(config.topic.clone(), self.store.clone(), live_rx, event_tx)
     }
 
     /// Retrieve a handle to a running sync session.
@@ -218,13 +214,6 @@ where
     }
 }
 
-/// Configuration object for `TopicSyncManager`.
-#[derive(Clone, Debug)]
-pub struct TopicSyncManagerArgs<S, M> {
-    pub store: S,
-    pub topic_map: M,
-}
-
 /// Error types which can be returned from `TopicSyncManager`.
 #[derive(Debug, Error)]
 pub enum TopicSyncManagerError {
@@ -240,57 +229,52 @@ pub enum TopicSyncManagerError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
     use std::time::Duration;
 
     use assert_matches::assert_matches;
+    use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
-    use p2panda_core::{Body, Operation};
+    use p2panda_core::{Body, Operation, Topic};
+    use p2panda_store::SqliteStore;
 
-    use crate::manager::{TopicSyncManager, TopicSyncManagerArgs};
     use crate::protocols::TopicLogSyncEvent;
     use crate::test_utils::{
-        Peer, TestMemoryStore, TestTopic, TestTopicMap, TestTopicSyncEvent, TestTopicSyncManager,
-        drain_stream, run_protocol, setup_logging,
+        Peer, TestTopicSyncEvent, TestTopicSyncManager, drain_stream, run_protocol, setup_logging,
     };
-    use crate::traits::Manager;
+    use crate::traits::{Manager, Protocol};
     use crate::{FromSync, SessionConfig, ToSync};
 
-    #[test]
-    fn from_args() {
-        let store = TestMemoryStore::new();
-        let topic_map = TestTopicMap::new();
-        let config = TopicSyncManagerArgs { store, topic_map };
-        let _: TestTopicSyncManager = Manager::from_args(config);
+    #[tokio::test]
+    async fn from_args() {
+        let store = SqliteStore::temporary().await;
+        let _: TestTopicSyncManager = Manager::from_args(store);
     }
 
     #[tokio::test]
     async fn manager_e2e() {
         setup_logging();
 
-        const TOPIC_NAME: &str = "messages";
         const LOG_ID: u64 = 0;
         const SESSION_ID: u64 = 0;
 
-        let topic = TestTopic::new(TOPIC_NAME);
+        let topic = Topic::new();
 
         // Setup Peer A
-        let mut peer_a = Peer::new(0);
+        let mut peer_a = Peer::new(0).await;
         let body = Body::new("Hello from Peer A".as_bytes());
         let _ = peer_a.create_operation(&body, LOG_ID).await;
-        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
-        peer_a.insert_topic(&topic, &logs);
-        let mut peer_a_manager =
-            TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+        let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.associate(&topic, &logs).await;
+        let mut peer_a_manager = TestTopicSyncManager::new(peer_a.store.clone());
 
         // Setup Peer B
-        let mut peer_b = Peer::new(1);
+        let mut peer_b = Peer::new(1).await;
         let body = Body::new("Hello from Peer B".as_bytes());
         let _ = peer_b.create_operation(&body, LOG_ID).await;
-        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
-        peer_b.insert_topic(&topic, &logs);
-        let mut peer_b_manager =
-            TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+        let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.associate(&topic, &logs).await;
+        let mut peer_b_manager = TestTopicSyncManager::new(peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
         let config = SessionConfig {
@@ -459,7 +443,6 @@ mod tests {
     async fn live_mode_three_peer_forwarding() {
         setup_logging();
 
-        const TOPIC_NAME: &str = "chat";
         const LOG_ID: u64 = 0;
         const SESSION_AB: u64 = 0;
         const SESSION_AC: u64 = 1;
@@ -467,31 +450,31 @@ mod tests {
         const SESSION_CA: u64 = 3;
 
         // Shared topic
-        let topic = TestTopic::new(TOPIC_NAME);
+        let topic = Topic::new();
 
         // Peer A
-        let mut peer_a = Peer::new(0);
+        let mut peer_a = Peer::new(0).await;
         let body_a = Body::new("Hello from A".as_bytes());
         let (peer_a_header_0, _) = peer_a.create_operation(&body_a, LOG_ID).await;
-        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
-        peer_a.insert_topic(&topic, &logs);
-        let mut manager_a = TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+        let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.associate(&topic, &logs).await;
+        let mut manager_a = TestTopicSyncManager::new(peer_a.store.clone());
 
         // Peer B
-        let mut peer_b = Peer::new(1);
+        let mut peer_b = Peer::new(1).await;
         let body_b = Body::new("Hello from B".as_bytes());
         let (peer_b_header_0, _) = peer_b.create_operation(&body_b, LOG_ID).await;
-        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
-        peer_b.insert_topic(&topic, &logs);
-        let mut manager_b = TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+        let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.associate(&topic, &logs).await;
+        let mut manager_b = TestTopicSyncManager::new(peer_b.store.clone());
 
         // Peer C
-        let mut peer_c = Peer::new(2);
+        let mut peer_c = Peer::new(2).await;
         let body_c = Body::new("Hello from C".as_bytes());
         let (peer_c_header_0, _) = peer_c.create_operation(&body_c, LOG_ID).await;
-        let logs = HashMap::from([(peer_c.id(), vec![LOG_ID])]);
-        peer_c.insert_topic(&topic, &logs);
-        let mut manager_c = TopicSyncManager::new(peer_c.topic_map.clone(), peer_c.store.clone());
+        let logs = BTreeMap::from([(peer_c.id(), vec![LOG_ID])]);
+        peer_c.associate(&topic, &logs).await;
+        let mut manager_c = TestTopicSyncManager::new(peer_c.store.clone());
 
         // Session A -> B (A initiates)
         let mut config = SessionConfig {
@@ -518,12 +501,43 @@ mod tests {
         let mut event_stream_c = manager_c.subscribe();
 
         // Run both protocols concurrently
-        tokio::spawn(async move {
-            run_protocol(session_ab, session_b).await.unwrap();
-        });
-        tokio::spawn(async move {
-            run_protocol(session_ac, session_c).await.unwrap();
-        });
+        {
+            let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
+            let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
+            let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
+            let mut remote_message_rx = remote_message_rx.map(Ok::<_, ()>);
+            tokio::spawn(async move {
+                session_ab
+                    .run(&mut local_message_tx, &mut remote_message_rx)
+                    .await
+                    .unwrap();
+            });
+            tokio::spawn(async move {
+                session_b
+                    .run(&mut remote_message_tx, &mut local_message_rx)
+                    .await
+                    .unwrap();
+            });
+        }
+
+        {
+            let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
+            let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
+            let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
+            let mut remote_message_rx = remote_message_rx.map(Ok::<_, ()>);
+            tokio::spawn(async move {
+                session_ac
+                    .run(&mut local_message_tx, &mut remote_message_rx)
+                    .await
+                    .unwrap();
+            });
+            tokio::spawn(async move {
+                session_c
+                    .run(&mut remote_message_tx, &mut local_message_rx)
+                    .await
+                    .unwrap();
+            });
+        }
 
         // Send live-mode messages from all peers
         let mut handle_ab = manager_a.session_handle(SESSION_AB).await.unwrap();
@@ -620,20 +634,18 @@ mod tests {
 
     #[tokio::test]
     async fn non_blocking_manager_stream() {
-        const TOPIC_NAME: &str = "messages";
         const LOG_ID: u64 = 0;
         const SESSION_ID: u64 = 0;
 
-        let topic = TestTopic::new(TOPIC_NAME);
+        let topic = Topic::new();
 
         // Setup Peer A
-        let mut peer_a = Peer::new(0);
+        let mut peer_a = Peer::new(0).await;
         let body = Body::new("Hello from Peer A".as_bytes());
         let _ = peer_a.create_operation(&body, LOG_ID).await;
-        let logs = HashMap::from([(peer_a.id(), vec![LOG_ID])]);
-        peer_a.insert_topic(&topic, &logs);
-        let mut peer_a_manager =
-            TopicSyncManager::new(peer_a.topic_map.clone(), peer_a.store.clone());
+        let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
+        peer_a.associate(&topic, &logs).await;
+        let mut peer_a_manager = TestTopicSyncManager::new(peer_a.store.clone());
 
         // Spawn a task polling peer a's manager stream.
         let mut peer_a_stream = peer_a_manager.subscribe();
@@ -644,13 +656,12 @@ mod tests {
         });
 
         // Setup Peer B
-        let mut peer_b = Peer::new(1);
+        let mut peer_b = Peer::new(1).await;
         let body = Body::new("Hello from Peer B".as_bytes());
         let _ = peer_b.create_operation(&body, LOG_ID).await;
-        let logs = HashMap::from([(peer_b.id(), vec![LOG_ID])]);
-        peer_b.insert_topic(&topic, &logs);
-        let mut peer_b_manager =
-            TopicSyncManager::new(peer_b.topic_map.clone(), peer_b.store.clone());
+        let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
+        peer_b.associate(&topic, &logs).await;
+        let mut peer_b_manager = TestTopicSyncManager::new(peer_b.store.clone());
 
         // Instantiate sync session for Peer A.
         let config = SessionConfig {

@@ -86,20 +86,17 @@ mod tests {
     use std::collections::HashSet;
 
     use futures::channel::mpsc;
+    use p2panda_core::Topic;
 
     use crate::manager::SessionTopicMap;
-    use crate::test_utils::TestTopic;
 
     const SESSION1: u64 = 1;
     const SESSION2: u64 = 2;
     const SESSION3: u64 = 3;
 
-    const TOPIC_A: &str = "cats";
-    const TOPIC_B: &str = "dogs";
-
     #[test]
     fn default_is_empty() {
-        let map: SessionTopicMap<TestTopic, ()> = SessionTopicMap::default();
+        let map: SessionTopicMap<Topic, ()> = SessionTopicMap::default();
         assert!(map.session_tx_map.is_empty());
         assert!(map.session_topic_map.is_empty());
         assert!(map.topic_session_map.is_empty());
@@ -109,17 +106,15 @@ mod tests {
     fn insert_with_topic() {
         let (tx, _rx) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
+        let topic_a = Topic::new();
 
-        map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx.clone());
+        map.insert_with_topic(SESSION1, topic_a, tx.clone());
 
         // Check session→topic mapping
-        assert_eq!(map.topic(SESSION1), Some(&TestTopic::new(TOPIC_A)));
+        assert_eq!(map.topic(SESSION1), Some(&topic_a));
 
         // Check topic→session mapping
-        assert_eq!(
-            map.sessions(&TestTopic::new(TOPIC_A)),
-            HashSet::from_iter([SESSION1])
-        );
+        assert_eq!(map.sessions(&topic_a), HashSet::from_iter([SESSION1]));
 
         // Channel should be retrievable
         assert!(map.sender(SESSION1).is_some());
@@ -129,10 +124,12 @@ mod tests {
     fn drop_session() {
         let (tx, _rx) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
+        let topic_a = Topic::new();
+        let topic_b = Topic::new();
 
-        map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx.clone());
-        map.insert_with_topic(SESSION2, TestTopic::new(TOPIC_A), tx.clone());
-        map.insert_with_topic(SESSION3, TestTopic::new(TOPIC_B), tx);
+        map.insert_with_topic(SESSION1, topic_a, tx.clone());
+        map.insert_with_topic(SESSION2, topic_a, tx.clone());
+        map.insert_with_topic(SESSION3, topic_b, tx);
 
         // Drop one from topic A
         assert!(map.drop(SESSION1));
@@ -142,7 +139,7 @@ mod tests {
         assert!(!map.session_tx_map.contains_key(&SESSION1));
 
         // Remaining sessions for topic A
-        let sessions = map.sessions(&TestTopic::new(TOPIC_A));
+        let sessions = map.sessions(&topic_a);
         assert_eq!(sessions, HashSet::from([SESSION2]));
 
         // Dropping a non-existent session returns false
@@ -155,10 +152,12 @@ mod tests {
         let (tx2, _rx2) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
 
-        map.insert_with_topic(SESSION1, TestTopic::new(TOPIC_A), tx1);
-        map.insert_with_topic(SESSION2, TestTopic::new(TOPIC_A), tx2);
+        let topic_a = Topic::new();
 
-        let sessions = map.sessions(&TestTopic::new(TOPIC_A));
+        map.insert_with_topic(SESSION1, topic_a, tx1);
+        map.insert_with_topic(SESSION2, topic_a, tx2);
+
+        let sessions = map.sessions(&topic_a);
         assert_eq!(sessions, HashSet::from([SESSION1, SESSION2]));
     }
 }

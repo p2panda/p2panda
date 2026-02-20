@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
-use std::error::Error;
+use std::{collections::BTreeMap, error::Error};
 
 type LogEntries<T> = Vec<(T, Vec<u8>)>;
 
@@ -30,7 +29,7 @@ pub trait LogStore<T, A, L, S, ID> {
         &self,
         author: &A,
         logs: &[L],
-    ) -> impl Future<Output = Result<Option<HashMap<L, S>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<BTreeMap<L, S>>, Self::Error>>;
 
     /// Get the byte and operation count of the entries in a log.
     ///

@@ -6,8 +6,8 @@ use std::fmt::Debug;
 use iroh::endpoint::QuicTransportConfig;
 use p2panda_discovery::psi_hash::{PsiHashDiscoveryProtocol, PsiHashMessage};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
-use p2panda_store_next::SqliteStore;
-use p2panda_store_next::address_book::AddressBookStore;
+use p2panda_store::SqliteStore;
+use p2panda_store::address_book::AddressBookStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 

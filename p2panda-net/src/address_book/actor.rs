@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use p2panda_store_next::address_book::{AddressBookStore, NodeInfo as _};
-use p2panda_store_next::{SqliteError, SqliteStore, tx};
+use p2panda_store::address_book::{AddressBookStore, NodeInfo as _};
+use p2panda_store::{SqliteError, SqliteStore, tx};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::debug;
@@ -380,8 +380,8 @@ impl ThreadLocalActor for AddressBookActor {
 #[cfg(test)]
 mod tests {
     use p2panda_core::PrivateKey;
-    use p2panda_store_next::SqliteStore;
-    use p2panda_store_next::address_book::NodeInfo as _;
+    use p2panda_store::SqliteStore;
+    use p2panda_store::address_book::NodeInfo as _;
     use ractor::call;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 

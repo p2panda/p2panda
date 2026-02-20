@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
 
 - Address book SQLite implementation and refactorings [#1007](https://github.com/p2panda/p2panda/pull/1007)
 - Remove in-memory store in `p2panda-store-next` and use SQLite in `p2panda-stream-next` [#1016](https://github.com/p2panda/p2panda/pull/1016)
+- Use `p2panda-store-next` SQLite stores in `p2panda-net` and `p2panda-sync` [1022](https://github.com/p2panda/p2panda/pull/1022)
 
 ### Fixed
 

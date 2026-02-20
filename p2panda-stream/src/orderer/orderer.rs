@@ -2,8 +2,7 @@
 
 use std::marker::PhantomData;
 
-// @TODO: Change this to p2panda_store when ready.
-use p2panda_store_next::orderer::OrdererStore;
+use p2panda_store::orderer::OrdererStore;
 
 /// Struct for establishing causal / partial order over a set of items which form a dependency
 /// graph.
