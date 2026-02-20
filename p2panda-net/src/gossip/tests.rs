@@ -16,8 +16,8 @@ use crate::test_utils::{setup_logging, test_args};
 #[tokio::test]
 async fn joined_and_left_events_are_received() {
     setup_logging();
-    let (mut ant_args, _) = test_args();
-    let (mut bat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let mut bat_args = test_args();
     let topic = [1; 32];
 
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -97,9 +97,9 @@ async fn join_without_bootstrap() {
     // Assert: Ant's gossip state maps the subscribed topic to the public keys of bat and cat
     // (neighbours)
 
-    let (mut ant_args, _) = test_args();
-    let (bat_args, _) = test_args();
-    let (cat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let bat_args = test_args();
+    let cat_args = test_args();
 
     let topic = [1; 32];
 
@@ -209,8 +209,8 @@ async fn two_peer_gossip() {
     //
     // Assert: Ant and bat can exchange messages
 
-    let (mut ant_args, _) = test_args();
-    let (bat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let bat_args = test_args();
 
     let topic = [7; 32];
 
@@ -293,9 +293,9 @@ async fn third_peer_joins_non_bootstrap() {
     //
     // Assert: Ant, bat and cat can exchange messages
 
-    let (mut ant_args, _) = test_args();
-    let (mut bat_args, _) = test_args();
-    let (cat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let mut bat_args = test_args();
+    let cat_args = test_args();
 
     let topic = [11; 32];
 
@@ -425,9 +425,9 @@ async fn three_peer_gossip_with_rejoin() {
     //
     // Assert: Bat and cat can now exchange messages (proof of healed partition)
 
-    let (mut ant_args, _) = test_args();
-    let (mut bat_args, _) = test_args();
-    let (cat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let mut bat_args = test_args();
+    let cat_args = test_args();
 
     let topic = [9; 32];
 
@@ -583,8 +583,8 @@ async fn leave_overlay_on_drop() {
     // See issue: https://github.com/p2panda/p2panda/issues/967
     setup_logging();
 
-    let (mut ant_args, _) = test_args();
-    let (mut bat_args, _) = test_args();
+    let mut ant_args = test_args();
+    let mut bat_args = test_args();
     let topic = [1; 32];
 
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();

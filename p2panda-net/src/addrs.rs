@@ -26,7 +26,6 @@ use std::net::SocketAddr;
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{PrivateKey, Signature};
-use p2panda_discovery::address_book;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -42,7 +41,7 @@ use crate::timestamp::{HybridTimestamp, Timestamp};
 /// Node information associates configuration, metrics and transport information with a node id.
 /// Since the associated information is mostly for our own local use, we can consider `NodeInfo` to
 /// be private data.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeInfo {
     /// Unique identifier (Ed25519 public key) of this node.
     pub node_id: NodeId,
@@ -155,7 +154,7 @@ impl From<iroh::EndpointAddr> for NodeInfo {
     }
 }
 
-impl address_book::NodeInfo<NodeId> for NodeInfo {
+impl p2panda_store_next::address_book::NodeInfo<NodeId> for NodeInfo {
     type Transports = AuthenticatedTransportInfo;
 
     fn id(&self) -> NodeId {
@@ -206,7 +205,7 @@ pub trait NodeTransportInfo {
 }
 
 /// Transport protocols information we can use to connect to a node.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransportInfo {
     /// Unauthenticated transport info we "trust" to be correct since it came to us via an verified
     /// side-channel (scanning QR code, sharing in a trusted chat group etc.).
@@ -666,7 +665,7 @@ impl Display for TransportAddress {
 /// Metrics which are locally recorded for a node.
 ///
 /// The recorded information can be used to indicate if a node is "stale" or not.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeMetrics {
     failed_connections: usize,
     successful_connections: usize,

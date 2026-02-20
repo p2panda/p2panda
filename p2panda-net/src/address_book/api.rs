@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use p2panda_discovery::address_book::{BoxedAddressBookStore, BoxedError};
+use p2panda_store_next::{SqliteError, SqliteStore};
 use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -261,9 +261,7 @@ impl AddressBook {
         Ok(())
     }
 
-    pub(crate) async fn store(
-        &self,
-    ) -> Result<BoxedAddressBookStore<NodeId, NodeInfo>, AddressBookError> {
+    pub(crate) async fn store(&self) -> Result<SqliteStore<'static>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
             inner.actor_ref.as_ref().expect("actor spawned in builder"),
@@ -299,7 +297,7 @@ pub enum AddressBookError {
 
     /// Address book store failed.
     #[error(transparent)]
-    Store(#[from] BoxedError),
+    Store(#[from] SqliteError),
 
     /// Invalid node info provided.
     #[error(transparent)]

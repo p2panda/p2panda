@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use futures_util::{Stream, StreamExt};
-use p2panda_discovery::address_book::NodeInfo as _;
+use p2panda_store_next::address_book::NodeInfo as _;
 use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::{RwLock, broadcast, mpsc};
