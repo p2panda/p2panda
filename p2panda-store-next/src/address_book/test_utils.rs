@@ -3,14 +3,14 @@
 use std::hash::Hash as StdHash;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use p2panda_core::Hash;
+use p2panda_core::PublicKey;
 use rand::RngExt;
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 
 use crate::address_book::traits::NodeInfo;
 
-pub type TestNodeId = Hash;
+pub type TestNodeId = PublicKey;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
 pub struct TestNodeInfo {

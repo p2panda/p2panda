@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use p2panda_core::Hash;
+use p2panda_core::PrivateKey;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
@@ -17,15 +17,17 @@ async fn insert_node_info() {
 
     let permit = store.begin().await.unwrap();
 
-    let node_info_1 = TestNodeInfo::new(Hash::new(b"turtle"));
-    let result = store.insert_node_info(node_info_1.clone()).await.unwrap();
+    let node_id = PrivateKey::new().public_key();
+    let node_info = TestNodeInfo::new(node_id);
+
+    let result = store.insert_node_info(node_info.clone()).await.unwrap();
+    assert!(result);
 
     store.commit(permit).await.unwrap();
 
-    assert!(result);
     assert_eq!(
-        store.node_info(&node_info_1.id).await.unwrap(),
-        Some(node_info_1.clone())
+        store.node_info(&node_info.id).await.unwrap(),
+        Some(node_info.clone())
     );
 }
 
@@ -33,9 +35,9 @@ async fn insert_node_info() {
 async fn set_and_query_topics() {
     let store = SqliteStore::temporary().await;
 
-    let billie = Hash::new(b"billie");
-    let daphne = Hash::new(b"daphne");
-    let carlos = Hash::new(b"carlos");
+    let billie = PrivateKey::new().public_key();
+    let daphne = PrivateKey::new().public_key();
+    let carlos = PrivateKey::new().public_key();
 
     let cats = [100; 32];
     let dogs = [102; 32];
@@ -93,8 +95,8 @@ async fn set_and_query_topics() {
             .unwrap()
             .into_iter()
             .map(|item: TestNodeInfo| item.id)
-            .collect::<Vec<TestNodeId>>(),
-        vec![billie, carlos]
+            .collect::<HashSet<TestNodeId>>(),
+        HashSet::from_iter([billie, carlos])
     );
 
     assert_eq!(
@@ -104,8 +106,8 @@ async fn set_and_query_topics() {
             .unwrap()
             .into_iter()
             .map(|item: TestNodeInfo| item.id)
-            .collect::<Vec<TestNodeId>>(),
-        vec![daphne, billie, carlos]
+            .collect::<HashSet<TestNodeId>>(),
+        HashSet::from_iter([billie, carlos, daphne])
     );
 
     assert!(
@@ -124,8 +126,8 @@ async fn set_and_query_topics() {
 async fn remove_outdated_node_infos() {
     let store = SqliteStore::temporary().await;
 
-    let billie = Hash::new(b"billie");
-    let daphne = Hash::new(b"daphne");
+    let billie = PrivateKey::new().public_key();
+    let daphne = PrivateKey::new().public_key();
 
     let permit = store.begin().await.unwrap();
 
@@ -182,16 +184,16 @@ async fn sample_random_nodes() {
 
     let permit = store.begin().await.unwrap();
 
-    for id in 0..100 {
-        let id = Hash::new((id as usize).to_ne_bytes());
+    for _ in 0..100 {
+        let id = PrivateKey::new().public_key();
         store
             .insert_node_info(TestNodeInfo::new(id).with_random_address(&mut rng))
             .await
             .unwrap();
     }
 
-    for id in 200..300 {
-        let id = Hash::new((id as usize).to_ne_bytes());
+    for _ in 200..300 {
+        let id = PrivateKey::new().public_key();
         store
             .insert_node_info(TestNodeInfo::new_bootstrap(id).with_random_address(&mut rng))
             .await
