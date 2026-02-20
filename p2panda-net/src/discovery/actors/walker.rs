@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use p2panda_discovery::address_book::{BoxedAddressBookStore, WrappedAddressBookStore};
 use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
+use p2panda_store_next::SqliteStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
 use rand_chacha::ChaCha20Rng;
@@ -87,7 +87,7 @@ pub enum ToDiscoveryWalker {
 
 pub struct DiscoveryWalkerState {
     manager_ref: ActorRef<ToDiscoveryManager>,
-    walker: RandomWalker<ChaCha20Rng, WrappedAddressBookStore<NodeId, NodeInfo>, NodeId, NodeInfo>,
+    walker: RandomWalker<ChaCha20Rng, SqliteStore<'static>, NodeId, NodeInfo>,
     backoff: Backoff,
     walker_reset: Arc<Notify>,
 }
@@ -103,7 +103,7 @@ impl ThreadLocalActor for DiscoveryWalker {
     type Arguments = (
         NodeId,
         DiscoveryConfig,
-        BoxedAddressBookStore<NodeId, NodeInfo>,
+        SqliteStore<'static>,
         ChaCha20Rng,
         Arc<Notify>,
         ActorRef<ToDiscoveryManager>,
@@ -119,7 +119,7 @@ impl ThreadLocalActor for DiscoveryWalker {
             manager_ref,
             walker: RandomWalker::from_config(
                 my_node_id,
-                store.into(),
+                store,
                 rng.clone(),
                 RandomWalkerConfig {
                     reset_walk_probability: config.reset_walk_probability,
@@ -164,8 +164,7 @@ impl ThreadLocalActor for DiscoveryWalker {
                 let node_id = state
                     .walker
                     .next_node(walk_from_here.next_node_args())
-                    .await
-                    .map_err(|err| ActorProcessingErr::from(err.to_string()))?;
+                    .await?;
 
                 match node_id {
                     // Tell manager to launch a discovery session with this node. When session

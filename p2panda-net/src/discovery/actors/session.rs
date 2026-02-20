@@ -4,11 +4,10 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use iroh::endpoint::QuicTransportConfig;
-use p2panda_discovery::address_book::{
-    AddressBookStore, BoxedAddressBookStore, WrappedAddressBookStore,
-};
 use p2panda_discovery::psi_hash::{PsiHashDiscoveryProtocol, PsiHashMessage};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
+use p2panda_store_next::SqliteStore;
+use p2panda_store_next::address_book::AddressBookStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 
@@ -30,7 +29,7 @@ pub enum ToDiscoverySession {
 pub struct DiscoverySessionArguments {
     pub my_node_id: NodeId,
     pub remote_node_id: NodeId,
-    pub store: BoxedAddressBookStore<NodeId, NodeInfo>,
+    pub store: SqliteStore<'static>,
     pub endpoint: Endpoint,
     pub manager_ref: ActorRef<ToDiscoveryManager>,
     pub quic_transport_config: QuicTransportConfig,
@@ -119,17 +118,9 @@ impl ThreadLocalActor for DiscoverySession {
 
         // Run the discovery protocol.
         // TODO: Have a timeout to cancel session if it's running overtime.
-        let protocol = PsiHashDiscoveryProtocol::<
-            WrappedAddressBookStore<NodeId, NodeInfo>,
-            _,
-            NodeId,
-            NodeInfo,
-        >::new(
-            store.clone_box().into(),
-            LocalTopicsProvider {
-                store: WrappedAddressBookStore::from(store),
-                my_node_id,
-            },
+        let protocol = PsiHashDiscoveryProtocol::<SqliteStore<'_>, _, NodeId, NodeInfo>::new(
+            store.clone(),
+            LocalTopicsProvider { store, my_node_id },
             my_node_id,
             remote_node_id,
         );

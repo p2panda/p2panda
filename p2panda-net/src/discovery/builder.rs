@@ -2,6 +2,7 @@
 
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use rand::SeedableRng;
+use rand::rngs::SysRng;
 use rand_chacha::ChaCha20Rng;
 
 use crate::address_book::AddressBook;
@@ -40,7 +41,9 @@ impl Builder {
 
     pub(crate) fn build_args(self) -> DiscoveryManagerArgs {
         let config = self.config.unwrap_or_default();
-        let rng = self.rng.unwrap_or(ChaCha20Rng::from_os_rng());
+        let rng = self
+            .rng
+            .unwrap_or(ChaCha20Rng::try_from_rng(&mut SysRng).expect("enough entropy"));
         (config, rng, self.address_book, self.endpoint)
     }
 

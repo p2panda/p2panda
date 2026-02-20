@@ -46,8 +46,7 @@ use p2panda_net::{
 use p2panda_store::{MemoryStore, OperationStore};
 use p2panda_sync::protocols::{Logs, TopicLogSyncEvent as SyncEvent};
 use p2panda_sync::traits::TopicMap;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha12Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
@@ -147,7 +146,7 @@ async fn main() -> Result<()> {
         let topic_id = hex::decode(topic)?;
         topic_id.try_into().expect("topic id should be 32 bytes")
     } else {
-        let mut rng = ChaCha12Rng::from_os_rng();
+        let mut rng = rand::rng();
         rng.random()
     };
 
