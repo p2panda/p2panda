@@ -4,8 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
 use futures_util::{Sink, Stream};
-
-use crate::address_book::NodeInfo;
+use p2panda_store::address_book::NodeInfo;
 
 /// Peer-Sampling Strategy used for discovery.
 pub trait DiscoveryStrategy<ID, N>
