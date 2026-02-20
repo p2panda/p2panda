@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 
 // @TODO: Change this to p2panda_store when ready.
-use p2panda_store_next::orderer::OrdererTestExt;
-use p2panda_store_next::{SqliteStore, tx_unwrap};
+use p2panda_store::orderer::OrdererTestExt;
+use p2panda_store::{SqliteStore, tx_unwrap};
 
 use crate::orderer::CausalOrderer;
 

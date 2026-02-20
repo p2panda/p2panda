@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_store_next::{SqliteStore, SqliteStoreBuilder};
+use p2panda_store::{SqliteStore, SqliteStoreBuilder};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
 use crate::address_book::actor::AddressBookActor;

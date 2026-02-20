@@ -4,7 +4,7 @@ mod models;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
@@ -62,7 +62,7 @@ where
         &self,
         author: &PublicKey,
         logs: &[L],
-    ) -> Result<Option<HashMap<L, SeqNum>>, Self::Error> {
+    ) -> Result<Option<BTreeMap<L, SeqNum>>, Self::Error> {
         let mut encoded_log_ids = Vec::new();
         for log in logs {
             let encoded_log_id =
@@ -100,7 +100,7 @@ where
         let log_heights = if log_heights_query.is_empty() {
             None
         } else {
-            let mut log_heights = HashMap::new();
+            let mut log_heights = BTreeMap::new();
 
             for row in log_heights_query {
                 let (log_id, seq_num) = row.try_into()?;

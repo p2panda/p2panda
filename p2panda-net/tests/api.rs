@@ -3,8 +3,10 @@
 use futures_util::StreamExt;
 use p2panda_core::PrivateKey;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
-use p2panda_net::test_utils::{TestMemoryStore, TestTopicMap};
+use p2panda_net::sync::SyncSubscription;
 use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery};
+use p2panda_store::SqliteStore;
+use p2panda_sync::protocols::TopicLogSyncEvent;
 
 #[tokio::test]
 async fn modular_api() {
@@ -45,16 +47,15 @@ async fn modular_api() {
         }
     });
 
-    let store = TestMemoryStore::new();
-    let topic_map = TestTopicMap::new();
+    let store = SqliteStore::temporary().await;
 
-    let sync = LogSync::builder(store, topic_map, endpoint, gossip)
+    let sync = LogSync::<_, u64, _>::builder(store, endpoint, gossip)
         .spawn()
         .await
         .unwrap();
 
     let handle = sync.stream([1; 32], true).await.unwrap();
-    let mut rx = handle.subscribe().await.unwrap();
+    let mut rx: SyncSubscription<TopicLogSyncEvent<()>> = handle.subscribe().await.unwrap();
 
     tokio::spawn(async move {
         while let Some(_event) = rx.next().await {

@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use p2panda_store_next::{SqliteError, SqliteStore};
+use p2panda_store::{SqliteError, SqliteStore};
 use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;

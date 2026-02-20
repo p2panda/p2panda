@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 
 use p2panda_core::traits::{Digest, OperationId};
 // @TODO: Change these to p2panda_store when ready.
-use p2panda_store_next::Transaction;
-use p2panda_store_next::operations::OperationStore;
-use p2panda_store_next::orderer::OrdererStore;
+use p2panda_store::Transaction;
+use p2panda_store::operations::OperationStore;
+use p2panda_store::orderer::OrdererStore;
 use thiserror::Error;
 use tokio::sync::{Mutex, Notify};
 
@@ -126,8 +126,8 @@ where
 mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
-    use p2panda_store_next::operations::OperationStore;
-    use p2panda_store_next::{SqliteStore, tx_unwrap};
+    use p2panda_store::operations::OperationStore;
+    use p2panda_store::{SqliteStore, tx_unwrap};
     use serde::{Deserialize, Serialize};
     use tokio::task;
     use tokio_stream::StreamExt;

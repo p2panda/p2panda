@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
-use p2panda_store::{LogStore, OperationStore};
-use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
-use p2panda_sync::protocols::Logs;
-use p2panda_sync::traits::TopicMap;
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
+use p2panda_store::logs::LogStore;
+use p2panda_store::operations::OperationStore;
+use p2panda_store::topics::TopicStore;
+use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
+use p2panda_sync::manager::TopicSyncManager;
 use ractor::thread_local::ThreadLocalActorSpawner;
 use rand::rngs::SysRng;
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use tokio::sync::RwLock;
 
 use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo};
 use crate::discovery::DiscoveryConfig;
@@ -167,7 +165,7 @@ pub struct TestNode {
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
-    pub log_sync: LogSync<TestMemoryStore, TestLogId, TestExtensions, TestTopicMap>,
+    pub log_sync: LogSync<SqliteStore<'static>, TestLogId, TestExtensions>,
 }
 
 impl TestNode {
@@ -179,7 +177,8 @@ impl TestNode {
         let client = TestClient::new(
             // The identity of the "author" or client has a different private key from the node.
             PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
-        );
+        )
+        .await;
 
         let address_book = AddressBook::builder().spawn().await.unwrap();
 
@@ -207,10 +206,8 @@ impl TestNode {
             .await
             .unwrap();
 
-        let (operation_store, topic_map) = client.sync_args();
-
-        let log_sync =
-            LogSync::builder(operation_store, topic_map, endpoint.clone(), gossip.clone())
+        let log_sync: LogSync<SqliteStore<'static>, u64, ()> =
+            LogSync::builder(client.store.clone(), endpoint.clone(), gossip.clone())
                 .spawn()
                 .await
                 .unwrap();
@@ -244,12 +241,8 @@ pub type TestExtensions = ();
 
 pub type TestLogId = u64;
 
-pub type TestMemoryStore = p2panda_store::MemoryStore<TestLogId, TestExtensions>;
-
-pub type TestSyncConfig = TopicSyncManagerArgs<TestMemoryStore, TestTopicMap>;
-
 pub type TestTopicSyncManager =
-    TopicSyncManager<TopicId, TestMemoryStore, TestTopicMap, TestLogId, TestExtensions>;
+    TopicSyncManager<TopicId, SqliteStore<'static>, TestLogId, TestExtensions>;
 
 /// Client abstraction used in tests.
 ///
@@ -257,21 +250,15 @@ pub type TestTopicSyncManager =
 /// protocols.
 #[derive(Clone)]
 pub struct TestClient {
-    pub store: TestMemoryStore,
+    pub store: SqliteStore<'static>,
     pub private_key: PrivateKey,
-    pub topic_map: TestTopicMap,
 }
 
 impl TestClient {
-    pub fn new(private_key: PrivateKey) -> Self {
-        let store = TestMemoryStore::new();
-        let topic_map = TestTopicMap::new();
+    pub async fn new(private_key: PrivateKey) -> Self {
+        let store = SqliteStore::temporary().await;
 
-        Self {
-            store,
-            private_key,
-            topic_map,
-        }
+        Self { store, private_key }
     }
 
     /// The public key of this client.
@@ -287,10 +274,19 @@ impl TestClient {
     ) -> (Header<()>, Vec<u8>, Body) {
         let (header, header_bytes, body) = self.create_operation_no_insert(body, log_id).await;
 
-        self.store
-            .insert_operation(header.hash(), &header, Some(&body), &header_bytes, &log_id)
-            .await
-            .unwrap();
+        let id = header.hash();
+        let operation = Operation {
+            hash: header.hash(),
+            header: header.clone(),
+            body: Some(body.to_owned()),
+        };
+
+        tx_unwrap!(&self.store, {
+            self.store
+                .insert_operation(&id, operation, log_id)
+                .await
+                .unwrap();
+        });
 
         (header, header_bytes, body)
     }
@@ -301,12 +297,17 @@ impl TestClient {
         body: &[u8],
         log_id: u64,
     ) -> (Header<()>, Vec<u8>, Body) {
-        let (seq_num, backlink) = self
-            .store
-            .latest_operation(&self.private_key.public_key(), &log_id)
+        let (seq_num, backlink) =
+            <SqliteStore as LogStore<
+                Operation<TestExtensions>,
+                PublicKey,
+                u64,
+                u64,
+                p2panda_core::Hash,
+            >>::get_latest_entry(&self.store, &self.private_key.public_key(), &log_id)
             .await
             .unwrap()
-            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
+            .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
             .unwrap_or((0, None));
 
         let (header, header_bytes, body) =
@@ -315,12 +316,14 @@ impl TestClient {
         (header, header_bytes, body)
     }
 
-    pub async fn insert_topic(&mut self, topic: &TopicId, logs: HashMap<PublicKey, Vec<u64>>) {
-        self.topic_map.insert(topic, logs).await;
-    }
-
-    pub fn sync_args(&self) -> (TestMemoryStore, TestTopicMap) {
-        (self.store.clone(), self.topic_map.clone())
+    pub async fn associate(&mut self, topic: &TopicId, logs: &HashMap<PublicKey, Vec<u64>>) {
+        let permit = self.store.begin().await.unwrap();
+        for (author, logs) in logs {
+            for log_id in logs {
+                self.store.associate(topic, author, log_id).await.unwrap();
+            }
+        }
+        self.store.commit(permit).await.unwrap();
     }
 }
 
@@ -351,34 +354,4 @@ pub fn create_operation(
     let header_bytes = header.to_bytes();
 
     (header, header_bytes, body)
-}
-
-/// Test topic map.
-#[derive(Clone, Debug)]
-#[allow(clippy::type_complexity)]
-pub struct TestTopicMap(Arc<RwLock<HashMap<TopicId, Logs<TestLogId>>>>);
-
-impl TestTopicMap {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self(Arc::new(RwLock::new(HashMap::new())))
-    }
-
-    pub async fn insert(
-        &mut self,
-        topic: &TopicId,
-        logs: Logs<TestLogId>,
-    ) -> Option<Logs<TestLogId>> {
-        let mut map = self.0.write().await;
-        map.insert(*topic, logs)
-    }
-}
-
-impl TopicMap<TopicId, Logs<TestLogId>> for TestTopicMap {
-    type Error = Infallible;
-
-    async fn get(&self, topic: &TopicId) -> Result<Logs<TestLogId>, Self::Error> {
-        let map = self.0.read().await;
-        Ok(map.get(topic).cloned().unwrap_or_default())
-    }
 }
