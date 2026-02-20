@@ -2,11 +2,11 @@
 
 #[cfg(test)]
 use mock_instant::thread_local::Instant;
+use rand::RngExt;
 use std::time::Duration;
 #[cfg(not(test))]
 use std::time::Instant;
 
-use rand::Rng;
 use rand_chacha::ChaCha20Rng;
 use tracing::trace;
 

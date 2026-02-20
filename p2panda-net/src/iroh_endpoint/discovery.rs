@@ -9,7 +9,7 @@ use iroh::address_lookup::Error as AddressLookupError;
 use iroh::address_lookup::Item as AddressLookupItem;
 use iroh::address_lookup::{AddressLookup, EndpointData, EndpointInfo};
 use p2panda_core::PrivateKey;
-use p2panda_discovery::address_book::NodeInfo as _;
+use p2panda_store_next::address_book::NodeInfo as _;
 use tokio::sync::Semaphore;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{Instrument, error, info_span, trace, warn};
