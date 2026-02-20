@@ -127,7 +127,7 @@ mod tests {
     use futures_util::stream;
     use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
     use p2panda_store_next::operations::OperationStore;
-    use p2panda_store_next::{SqliteStore, Transaction, tx_unwrap};
+    use p2panda_store_next::{SqliteStore, tx_unwrap};
     use serde::{Deserialize, Serialize};
     use tokio::task;
     use tokio_stream::StreamExt;
