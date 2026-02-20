@@ -38,13 +38,9 @@ impl FailingNode {
         node_infos: Vec<NodeInfo>,
         sync_args: FailingSyncArgs,
     ) -> Self {
-        let (args, address_book_store) = test_args_from_seed(seed);
+        let args = test_args_from_seed(seed);
 
-        let address_book = AddressBook::builder()
-            .store(address_book_store)
-            .spawn()
-            .await
-            .unwrap();
+        let address_book = AddressBook::builder().spawn().await.unwrap();
 
         // Pre-populate the address book with known addresses.
         for info in node_infos {

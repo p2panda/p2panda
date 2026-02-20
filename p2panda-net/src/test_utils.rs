@@ -6,13 +6,13 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 
 use p2panda_core::{Body, Hash, Header, PrivateKey, PublicKey};
-use p2panda_discovery::address_book::memory::MemoryStore;
 use p2panda_store::{LogStore, OperationStore};
 use p2panda_sync::manager::{TopicSyncManager, TopicSyncManagerArgs};
 use p2panda_sync::protocols::Logs;
 use p2panda_sync::traits::TopicMap;
 use ractor::thread_local::ThreadLocalActorSpawner;
-use rand::{Rng, SeedableRng};
+use rand::rngs::SysRng;
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::RwLock;
 
@@ -110,7 +110,9 @@ impl ArgsBuilder {
         let private_key = self.private_key.unwrap_or_default();
         ApplicationArguments {
             network_id: self.network_id,
-            rng: self.rng.unwrap_or(ChaCha20Rng::from_os_rng()),
+            rng: self
+                .rng
+                .unwrap_or(ChaCha20Rng::try_from_rng(&mut SysRng).unwrap()),
             public_key: private_key.public_key(),
             private_key,
             iroh_config: self.iroh_config.unwrap_or_default(),
@@ -121,36 +123,24 @@ impl ArgsBuilder {
     }
 }
 
-pub fn test_args() -> (
-    ApplicationArguments,
-    MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-) {
+pub fn test_args() -> ApplicationArguments {
     test_args_from_seed(rand::random())
 }
 
-pub fn test_args_from_seed(
-    seed: [u8; 32],
-) -> (
-    ApplicationArguments,
-    MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-) {
+pub fn test_args_from_seed(seed: [u8; 32]) -> ApplicationArguments {
     let mut rng = ChaCha20Rng::from_seed(seed);
-    let store = MemoryStore::<ChaCha20Rng, NodeId, NodeInfo>::new(rng.clone());
     let private_key_bytes: [u8; 32] = rng.random();
-    (
-        ArgsBuilder::new(TEST_NETWORK_ID)
-            .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
-            .with_iroh_config(IrohConfig {
-                bind_ip_v4: Ipv4Addr::LOCALHOST,
-                bind_port_v4: rng.random_range(49152..65535),
-                bind_ip_v6: Ipv6Addr::LOCALHOST,
-                bind_port_v6: rng.random_range(49152..65535),
-            })
-            .with_rng(rng)
-            .with_mdns_mode(MdnsDiscoveryMode::Passive)
-            .build(),
-        store,
-    )
+    ArgsBuilder::new(TEST_NETWORK_ID)
+        .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
+        .with_iroh_config(IrohConfig {
+            bind_ip_v4: Ipv4Addr::LOCALHOST,
+            bind_port_v4: rng.random_range(49152..65535),
+            bind_ip_v6: Ipv6Addr::LOCALHOST,
+            bind_port_v6: rng.random_range(49152..65535),
+        })
+        .with_rng(rng)
+        .with_mdns_mode(MdnsDiscoveryMode::Passive)
+        .build()
 }
 
 pub fn setup_logging() {
@@ -163,8 +153,8 @@ pub fn setup_logging() {
 
 #[test]
 fn deterministic_args() {
-    let (args_1, _) = test_args_from_seed([0; 32]);
-    let (args_2, _) = test_args_from_seed([0; 32]);
+    let args_1 = test_args_from_seed([0; 32]);
+    let args_2 = test_args_from_seed([0; 32]);
     assert_eq!(args_1.public_key, args_2.public_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
@@ -185,24 +175,13 @@ impl TestNode {
         Self::spawn_with_args(test_args_from_seed(seed)).await
     }
 
-    pub async fn spawn_with_args(
-        args: (
-            ApplicationArguments,
-            MemoryStore<ChaCha20Rng, NodeId, NodeInfo>,
-        ),
-    ) -> Self {
-        let (mut args, address_book_store) = args;
-
+    pub async fn spawn_with_args(mut args: ApplicationArguments) -> Self {
         let client = TestClient::new(
             // The identity of the "author" or client has a different private key from the node.
             PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
         );
 
-        let address_book = AddressBook::builder()
-            .store(address_book_store)
-            .spawn()
-            .await
-            .unwrap();
+        let address_book = AddressBook::builder().spawn().await.unwrap();
 
         let endpoint = Endpoint::builder(address_book.clone())
             .config(args.iroh_config.clone())
