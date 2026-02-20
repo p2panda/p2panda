@@ -4,12 +4,11 @@ use std::collections::HashSet;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
-use rand::Rng;
-use rand::seq::IteratorRandom;
+use p2panda_store::address_book::{AddressBookStore, NodeInfo};
+use rand::{Rng, RngExt, seq::IteratorRandom};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::{DiscoveryResult, DiscoveryStrategy};
 
 #[derive(Debug)]
@@ -241,6 +240,7 @@ where
 pub enum RandomWalkError<S, ID, N>
 where
     S: AddressBookStore<ID, N>,
+    N: NodeInfo<ID>,
 {
     #[error("{0}")]
     Store(S::Error),
@@ -250,17 +250,27 @@ where
 mod tests {
     use std::collections::{HashMap, HashSet};
 
+    use p2panda_core::PrivateKey;
+    use p2panda_store::address_book::AddressBookStore;
+    use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo};
+    use p2panda_store::{SqliteStore, tx_unwrap};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::address_book::AddressBookStore;
-    use crate::test_utils::{TestId, TestInfo, TestStore};
     use crate::traits::{DiscoveryResult, DiscoveryStrategy};
 
     use super::{RandomWalker, RandomWalkerConfig};
 
     #[tokio::test]
     async fn explore_full_graph() {
+        let node_ids = {
+            let mut map = Vec::with_capacity(9);
+            for _ in 0..9 {
+                map.push(PrivateKey::new().public_key());
+            }
+            map
+        };
+
         // Initially node 0 only knows 1 (bootstrap) and explores the rest of the graph through
         // it by traversing their (transitive) neighbors.
         //
@@ -275,30 +285,35 @@ mod tests {
         //    6 7-8
         //
         let graph = HashMap::from([
-            (0, vec![]),
-            (1, vec![2, 3]),
-            (2, vec![4]),
-            (3, vec![5]),
-            (4, vec![]),
-            (5, vec![6, 7, 8]),
-            (6, vec![]),
-            (7, vec![8]),
-            (8, vec![]),
+            (node_ids[0], vec![]),
+            (node_ids[1], vec![node_ids[2], node_ids[3]]),
+            (node_ids[2], vec![node_ids[4]]),
+            (node_ids[3], vec![node_ids[5]]),
+            (node_ids[4], vec![]),
+            (node_ids[5], vec![node_ids[6], node_ids[7], node_ids[8]]),
+            (node_ids[6], vec![]),
+            (node_ids[7], vec![node_ids[8]]),
+            (node_ids[8], vec![]),
         ]);
 
         let rng = ChaCha20Rng::from_seed([1; 32]);
-        let store = TestStore::new(rng.clone());
+        let store = SqliteStore::temporary().await;
 
-        store.insert_node_info(TestInfo::new(0)).await.unwrap();
-        store
-            .insert_node_info(TestInfo::new_bootstrap(1))
-            .await
-            .unwrap();
+        tx_unwrap!(store, {
+            store
+                .insert_node_info(TestNodeInfo::new(node_ids[0]))
+                .await
+                .unwrap();
+            store
+                .insert_node_info(TestNodeInfo::new_bootstrap(node_ids[1]))
+                .await
+                .unwrap();
+        });
 
-        let strategy = RandomWalker::new(0, store, rng);
+        let strategy = RandomWalker::new(node_ids[0], store.clone(), rng);
 
-        let mut visited: HashSet<TestId> = HashSet::new();
-        let mut previous: Option<DiscoveryResult<TestId, TestInfo>> = None;
+        let mut visited: HashSet<TestNodeId> = HashSet::new();
+        let mut previous: Option<DiscoveryResult<TestNodeId, TestNodeInfo>> = None;
 
         for _ in 0..graph.len() - 1 {
             let id = strategy
@@ -321,15 +336,29 @@ mod tests {
         const NUM_NODES: usize = 32;
 
         let rng = ChaCha20Rng::from_seed([1; 32]);
-        let store = TestStore::new(rng.clone());
+        let store = SqliteStore::temporary().await;
 
-        for id in 0..NUM_NODES {
-            store.insert_node_info(TestInfo::new(id)).await.unwrap();
-        }
+        let node_ids = {
+            let mut map = Vec::with_capacity(NUM_NODES);
+            for _ in 0..NUM_NODES {
+                map.push(PrivateKey::new().public_key());
+            }
+            map
+        };
+
+        tx_unwrap!(store, {
+            for idx in 0..NUM_NODES {
+                let node_id = node_ids[idx];
+                store
+                    .insert_node_info(TestNodeInfo::new(node_id))
+                    .await
+                    .unwrap();
+            }
+        });
 
         let strategy = RandomWalker::from_config(
-            0,
-            store,
+            node_ids[0],
+            store.clone(),
             rng,
             RandomWalkerConfig {
                 // Never reset in this test.
@@ -337,8 +366,8 @@ mod tests {
             },
         );
 
-        let mut visited: HashSet<TestId> = HashSet::new();
-        let mut previous: Option<DiscoveryResult<TestId, TestInfo>> = None;
+        let mut visited: HashSet<TestNodeId> = HashSet::new();
+        let mut previous: Option<DiscoveryResult<TestNodeId, TestNodeInfo>> = None;
 
         for _ in 0..NUM_NODES - 1 {
             let id = strategy
@@ -367,14 +396,18 @@ mod tests {
     #[tokio::test]
     async fn never_yield_own_node_info() {
         let rng = ChaCha20Rng::from_seed([1; 32]);
-        let store = TestStore::new(rng.clone());
+        let store = SqliteStore::temporary().await;
 
-        store
-            .insert_node_info(TestInfo::new_bootstrap(0))
-            .await
-            .unwrap();
+        let node_id = PrivateKey::new().public_key();
 
-        let strategy = RandomWalker::new(0, store, rng);
+        tx_unwrap!(store, {
+            store
+                .insert_node_info(TestNodeInfo::new_bootstrap(node_id))
+                .await
+                .unwrap();
+        });
+
+        let strategy = RandomWalker::<_, _, _, TestNodeInfo>::new(node_id, store.clone(), rng);
 
         // This should never return a value and also not hang in an infinite loop if the only item
         // is ourselves in the database.

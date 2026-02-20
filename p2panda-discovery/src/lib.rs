@@ -79,8 +79,6 @@
 //! systems from the
 //! [IPv8](https://py-ipv8.readthedocs.io/en/latest/further-reading/advanced_peer_discovery.html)
 //! project.
-// TODO: Move address book into `p2panda-store` when crate is ready.
-pub mod address_book;
 pub mod psi_hash;
 #[cfg(feature = "random_walk")]
 pub mod random_walk;
