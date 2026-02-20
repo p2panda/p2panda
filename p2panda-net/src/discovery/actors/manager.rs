@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::ProtocolHandler;
 use p2panda_discovery::DiscoveryResult;
-use p2panda_discovery::address_book::NodeInfo as _;
+use p2panda_store_next::address_book::NodeInfo as _;
 use ractor::concurrency::JoinHandle;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};

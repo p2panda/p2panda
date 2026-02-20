@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-// TODO: This will come from `p2panda-store` eventually.
-use p2panda_discovery::address_book::{BoxedAddressBookStore, BoxedError, NodeInfo as _};
+use p2panda_store_next::address_book::{AddressBookStore, NodeInfo as _};
+use p2panda_store_next::{SqliteError, SqliteStore, tx};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::debug;
@@ -106,11 +106,11 @@ pub enum ToAddressBookActor {
     Report(NodeId, ConnectionOutcome),
 
     /// Returns internal address book store.
-    Store(RpcReplyPort<BoxedAddressBookStore<NodeId, NodeInfo>>),
+    Store(RpcReplyPort<SqliteStore<'static>>),
 }
 
 pub struct AddressBookState {
-    store: BoxedAddressBookStore<NodeId, NodeInfo>,
+    store: SqliteStore<'static>,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<TopicId, WatchedTopic>,
     node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
@@ -120,13 +120,14 @@ impl AddressBookState {
     async fn node_infos_by_topics(
         &self,
         topics: Vec<TopicId>,
-    ) -> Result<Vec<NodeInfo>, BoxedError> {
+    ) -> Result<Vec<NodeInfo>, SqliteError> {
         let result = self.store.node_infos_by_topics(&topics).await?;
         Ok(result)
     }
 
-    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, BoxedError> {
-        let topics = self.store.node_topics(node_id).await?;
+    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, SqliteError> {
+        let topics =
+            AddressBookStore::<NodeId, NodeInfo>::node_topics(&self.store, node_id).await?;
         Ok(topics)
     }
 
@@ -134,8 +135,11 @@ impl AddressBookState {
         &self,
         node_id: NodeId,
         topics: HashSet<TopicId>,
-    ) -> Result<(), BoxedError> {
-        self.store.set_topics(node_id, topics.clone()).await?;
+    ) -> Result<(), SqliteError> {
+        tx!(self.store, {
+            AddressBookStore::<NodeId, NodeInfo>::set_topics(&self.store, node_id, topics.clone())
+                .await?;
+        });
 
         // Inform subscribers about potential change in set of interested nodes.
         for topic in &topics {
@@ -156,7 +160,7 @@ impl AddressBookState {
     }
 }
 
-pub type AddressBookActorArgs = (BoxedAddressBookStore<NodeId, NodeInfo>,);
+pub type AddressBookActorArgs = (SqliteStore<'static>,);
 
 #[derive(Default)]
 pub struct AddressBookActor;
@@ -199,7 +203,10 @@ impl ThreadLocalActor for AddressBookActor {
                 }
 
                 // Overwrite any previously given information if it existed.
-                let result = state.store.insert_node_info(node_info.clone()).await?;
+                let result = tx!(
+                    state.store,
+                    state.store.insert_node_info(node_info.clone()).await
+                )?;
 
                 // Inform subscribers about this update. This will only get notified if it really
                 // changed.
@@ -230,7 +237,10 @@ impl ThreadLocalActor for AddressBookActor {
 
                 match node_info.update_transports(transport_info) {
                     Ok(is_newer) => {
-                        state.store.insert_node_info(node_info.clone()).await?;
+                        tx!(state.store, {
+                            state.store.insert_node_info(node_info.clone()).await?;
+                        });
+
                         let _ = reply.send(Ok(is_newer));
                     }
                     Err(err) => {
@@ -280,7 +290,10 @@ impl ThreadLocalActor for AddressBookActor {
                 let _ = reply.send(rx);
             }
             ToAddressBookActor::Report(remote_node_id, outcome) => {
-                let Some(mut node_info) = state.store.node_info(&remote_node_id).await? else {
+                let Some(mut node_info) =
+                    AddressBookStore::<NodeId, NodeInfo>::node_info(&state.store, &remote_node_id)
+                        .await?
+                else {
                     return Ok(());
                 };
 
@@ -310,7 +323,9 @@ impl ThreadLocalActor for AddressBookActor {
                     _ => (),
                 }
 
-                state.store.insert_node_info(node_info).await?;
+                tx!(state.store, {
+                    state.store.insert_node_info(node_info).await?;
+                });
             }
             ToAddressBookActor::NodeInfo(node_id, reply) => {
                 let result = state.store.node_info(&node_id).await?;
@@ -324,27 +339,37 @@ impl ThreadLocalActor for AddressBookActor {
                 state.set_topics(node_id, topics).await?;
             }
             ToAddressBookActor::AddTopic(node_id, topic) => {
-                let mut topics = state.store.node_topics(&node_id).await?;
+                let mut topics =
+                    AddressBookStore::<NodeId, NodeInfo>::node_topics(&state.store, &node_id)
+                        .await?;
                 if topics.insert(topic) {
                     state.set_topics(node_id, topics).await?;
                 }
             }
             ToAddressBookActor::RemoveTopic(node_id, topic) => {
-                let mut topics = state.store.node_topics(&node_id).await?;
+                let mut topics =
+                    AddressBookStore::<NodeId, NodeInfo>::node_topics(&state.store, &node_id)
+                        .await?;
                 if topics.remove(&topic) {
                     state.set_topics(node_id, topics).await?;
                 }
             }
             ToAddressBookActor::RemoveNodeInfo(node_id, reply) => {
-                let result = state.store.remove_node_info(&node_id).await?;
+                let result = tx!(state.store, {
+                    AddressBookStore::<NodeId, NodeInfo>::remove_node_info(&state.store, &node_id)
+                        .await?
+                });
                 let _ = reply.send(result);
             }
             ToAddressBookActor::RemoveOlderThan(duration, reply) => {
-                let result = state.store.remove_older_than(duration).await?;
+                let result = tx!(state.store, {
+                    AddressBookStore::<NodeId, NodeInfo>::remove_older_than(&state.store, duration)
+                        .await?
+                });
                 let _ = reply.send(result);
             }
             ToAddressBookActor::Store(reply) => {
-                let _ = reply.send(state.store.clone_box());
+                let _ = reply.send(state.store.clone());
             }
         }
 
@@ -355,7 +380,8 @@ impl ThreadLocalActor for AddressBookActor {
 #[cfg(test)]
 mod tests {
     use p2panda_core::PrivateKey;
-    use p2panda_discovery::address_book::NodeInfo as _;
+    use p2panda_store_next::SqliteStore;
+    use p2panda_store_next::address_book::NodeInfo as _;
     use ractor::call;
     use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
@@ -368,11 +394,12 @@ mod tests {
 
     #[tokio::test]
     async fn insert_node_and_transport_info() {
-        let (args, store) = test_args();
+        let args = test_args();
+        let store = SqliteStore::temporary().await;
 
         let spawner = ThreadLocalActorSpawner::new();
 
-        let (actor, _handle) = AddressBookActor::spawn(None, (Box::new(store),), spawner)
+        let (actor, _handle) = AddressBookActor::spawn(None, (store,), spawner)
             .await
             .unwrap();
 

@@ -6,11 +6,11 @@ use std::io::Write;
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use rand::{RngCore, rng};
+use p2panda_store::address_book::{AddressBookStore, NodeInfo};
+use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::traits::{DiscoveryProtocol, DiscoveryResult, LocalTopics};
 
 const ALICE_SALT_BYTE: u8 = 0;
@@ -365,6 +365,7 @@ pub enum PsiHashError<S, P, ID, N>
 where
     S: AddressBookStore<ID, N>,
     P: LocalTopics,
+    N: NodeInfo<ID>,
 {
     /// Error reading from the address book store.
     #[error("{0}")]
@@ -397,35 +398,49 @@ mod tests {
 
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
+    use p2panda_core::PrivateKey;
+    use p2panda_store::address_book::AddressBookStore;
+    use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo};
+    use p2panda_store::{SqliteStore, tx_unwrap};
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
 
-    use crate::address_book::AddressBookStore;
-    use crate::test_utils::{TestInfo, TestStore, TestSubscription};
+    use crate::test_utils::TestSubscription;
     use crate::traits::DiscoveryProtocol;
 
     use super::{Config, PsiHashDiscoveryProtocol, PsiHashError, PsiHashMessage};
 
     #[tokio::test]
     async fn topic_discovery() {
-        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let alice = PrivateKey::new().public_key();
+        let bob = PrivateKey::new().public_key();
 
         let mut alice_subscription = TestSubscription::default();
         alice_subscription.topics.insert([1; 32]);
         alice_subscription.topics.insert([2; 32]);
         alice_subscription.topics.insert([98; 32]);
         alice_subscription.topics.insert([99; 32]);
-        let alice_store = TestStore::new(rng.clone());
+        let alice_store = SqliteStore::temporary().await;
 
         let mut bob_subscription = TestSubscription::default();
         bob_subscription.topics.insert([2; 32]);
         bob_subscription.topics.insert([3; 32]);
         bob_subscription.topics.insert([99; 32]);
         bob_subscription.topics.insert([100; 32]);
-        let bob_store = TestStore::new(rng.clone());
+        let bob_store = SqliteStore::temporary().await;
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 1, 0);
+        let alice_protocol = PsiHashDiscoveryProtocol::<_, _, _, TestNodeInfo>::new(
+            alice_store,
+            alice_subscription,
+            alice,
+            bob,
+        );
+        let bob_protocol = PsiHashDiscoveryProtocol::<_, _, _, TestNodeInfo>::new(
+            bob_store,
+            bob_subscription,
+            bob,
+            alice,
+        );
 
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -454,14 +469,20 @@ mod tests {
 
     #[tokio::test]
     async fn topic_out_of_order_alice() {
-        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let alice = PrivateKey::new().public_key();
+        let bob = PrivateKey::new().public_key();
 
         let mut alice_subscription = TestSubscription::default();
         alice_subscription.topics.insert([1; 32]);
         alice_subscription.topics.insert([99; 32]);
-        let alice_store = TestStore::new(rng.clone());
+        let alice_store = SqliteStore::temporary().await;
 
-        let alice_protocol = PsiHashDiscoveryProtocol::new(alice_store, alice_subscription, 0, 1);
+        let alice_protocol = PsiHashDiscoveryProtocol::<_, _, TestNodeId, TestNodeInfo>::new(
+            alice_store,
+            alice_subscription,
+            alice,
+            bob,
+        );
 
         let (mut alice_tx, _alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -482,14 +503,20 @@ mod tests {
 
     #[tokio::test]
     async fn topic_out_of_order_bob() {
-        let rng = ChaCha20Rng::from_seed([1; 32]);
+        let alice = PrivateKey::new().public_key();
+        let bob = PrivateKey::new().public_key();
 
         let mut bob_subscription = TestSubscription::default();
         bob_subscription.topics.insert([1; 32]);
         bob_subscription.topics.insert([99; 32]);
-        let bob_store = TestStore::new(rng.clone());
+        let bob_store = SqliteStore::temporary().await;
 
-        let bob_protocol = PsiHashDiscoveryProtocol::new(bob_store, bob_subscription, 0, 1);
+        let bob_protocol = PsiHashDiscoveryProtocol::<_, _, TestNodeId, TestNodeInfo>::new(
+            bob_store,
+            bob_subscription,
+            alice,
+            bob,
+        );
 
         let (mut bob_tx, _) = mpsc::channel(16);
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
@@ -511,6 +538,11 @@ mod tests {
     async fn transport_info() {
         let mut rng = ChaCha20Rng::from_seed([1; 32]);
 
+        let alice = PrivateKey::new().public_key();
+        let bob = PrivateKey::new().public_key();
+        let charlie = PrivateKey::new().public_key();
+        let daphne = PrivateKey::new().public_key();
+
         // Alice, Bob and Charlie share the same topic [1; 32] while only Bob and Daphne share
         // topic [2; 32]. Alice should _not_ learn transport info about Daphne and only about
         // Charlie.
@@ -524,66 +556,91 @@ mod tests {
         let mut alice_subscription = TestSubscription::default();
         alice_subscription.topics.insert([1; 32]);
 
-        let alice_store = TestStore::new(rng.clone());
+        let alice_store = SqliteStore::temporary().await;
 
-        alice_store
-            .insert_node_info(TestInfo::new(0).with_random_address(&mut rng))
+        tx_unwrap!(alice_store, {
+            alice_store
+                .insert_node_info(TestNodeInfo::new(alice).with_random_address(&mut rng))
+                .await
+                .unwrap();
+
+            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+                &alice_store,
+                alice,
+                HashSet::from_iter([[1; 32]]),
+            )
             .await
             .unwrap();
-        alice_store
-            .set_topics(0, HashSet::from_iter([[1; 32]]))
-            .await
-            .unwrap();
+        });
 
         // Prepare Bob.
         let mut bob_subscription = TestSubscription::default();
         bob_subscription.topics.insert([1; 32]);
         bob_subscription.topics.insert([2; 32]);
 
-        let bob_store = TestStore::new(rng.clone());
+        let bob_store = SqliteStore::temporary().await;
 
-        bob_store
-            .insert_node_info(TestInfo::new(1).with_random_address(&mut rng))
+        tx_unwrap!(bob_store, {
+            bob_store
+                .insert_node_info(TestNodeInfo::new(bob).with_random_address(&mut rng))
+                .await
+                .unwrap();
+
+            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+                &bob_store,
+                bob,
+                HashSet::from_iter([[1; 32], [2; 32]]),
+            )
             .await
             .unwrap();
-        bob_store
-            .set_topics(1, HashSet::from_iter([[1; 32], [2; 32]]))
-            .await
-            .unwrap();
+        });
 
         // "Charlie"
-        bob_store
-            .insert_node_info(TestInfo::new(2).with_random_address(&mut rng))
+        tx_unwrap!(bob_store, {
+            bob_store
+                .insert_node_info(TestNodeInfo::new(charlie).with_random_address(&mut rng))
+                .await
+                .unwrap();
+
+            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+                &bob_store,
+                charlie,
+                HashSet::from_iter([[1; 32]]),
+            )
             .await
             .unwrap();
-        bob_store
-            .set_topics(2, HashSet::from_iter([[1; 32]]))
-            .await
-            .unwrap();
+        });
 
         // "Daphne"
-        bob_store
-            .insert_node_info(TestInfo::new(3).with_random_address(&mut rng))
+        tx_unwrap!(bob_store, {
+            bob_store
+                .insert_node_info(TestNodeInfo::new(daphne).with_random_address(&mut rng))
+                .await
+                .unwrap();
+
+            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+                &bob_store,
+                daphne,
+                HashSet::from_iter([[2; 32]]),
+            )
             .await
             .unwrap();
-        bob_store
-            .set_topics(3, HashSet::from_iter([[2; 32]]))
-            .await
-            .unwrap();
+        });
 
         let config = Config {
             share_nodes_with_common_topics: true,
         };
 
-        let alice_protocol = PsiHashDiscoveryProtocol::with_config(
-            alice_store,
-            alice_subscription,
-            0,
-            1,
-            config.clone(),
-        );
+        let alice_protocol =
+            PsiHashDiscoveryProtocol::<_, _, TestNodeId, TestNodeInfo>::with_config(
+                alice_store,
+                alice_subscription,
+                alice,
+                bob,
+                config.clone(),
+            );
         let bob_protocol =
-            PsiHashDiscoveryProtocol::with_config(bob_store, bob_subscription, 1, 0, config);
+            PsiHashDiscoveryProtocol::with_config(bob_store, bob_subscription, bob, alice, config);
 
         let (mut alice_tx, alice_rx) = mpsc::channel(16);
         let (mut bob_tx, bob_rx) = mpsc::channel(16);
@@ -605,15 +662,15 @@ mod tests {
         let bob_result = bob_handle.await.expect("local task failure");
 
         // Alice learned about Charlie.
-        assert!(alice_result.transport_infos.contains_key(&1)); // Bob
-        assert!(alice_result.transport_infos.contains_key(&2)); // Charlie
+        assert!(alice_result.transport_infos.contains_key(&bob));
+        assert!(alice_result.transport_infos.contains_key(&charlie));
         assert_eq!(alice_result.transport_infos.len(), 2);
 
         // Alice did _not_ learn about Daphne.
-        assert!(!alice_result.transport_infos.contains_key(&3));
+        assert!(!alice_result.transport_infos.contains_key(&daphne));
 
         // Bob only got the info of Alice.
-        assert!(bob_result.transport_infos.contains_key(&0)); // Alice
+        assert!(bob_result.transport_infos.contains_key(&alice));
         assert_eq!(bob_result.transport_infos.len(), 1);
     }
 }

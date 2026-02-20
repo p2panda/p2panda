@@ -1,80 +1,60 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use async_stream::stream;
-use futures_util::Stream;
-use p2panda_core::prune::PruneFlag;
-use p2panda_core::{Body, Extension, Header, PrivateKey, PublicKey, RawOperation};
-use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
+use std::task::Poll;
 
-#[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
-pub struct StreamName(PublicKey, Option<String>);
+use futures_test::task::noop_context;
+use tokio::pin;
+use tokio::sync::Notify;
 
-impl StreamName {
-    pub fn new(public_key: PublicKey, name: Option<&str>) -> Self {
-        Self(public_key, name.map(|value| value.to_owned()))
-    }
+/// Simple async queue which awaits when trying to pop from it while it is empty.
+#[derive(Debug, Default)]
+pub struct AsyncBuffer<T> {
+    queue: VecDeque<T>,
+    notify: Notify,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Extensions {
-    #[serde(rename = "s")]
-    pub stream_name: StreamName,
-
-    #[serde(
-        rename = "p",
-        skip_serializing_if = "PruneFlag::is_not_set",
-        default = "PruneFlag::default"
-    )]
-    pub prune_flag: PruneFlag,
-}
-
-impl Extension<StreamName> for Extensions {
-    fn extract(header: &Header<Self>) -> Option<StreamName> {
-        Some(header.extensions.stream_name.clone())
-    }
-}
-
-impl Extension<PruneFlag> for Extensions {
-    fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-        Some(header.extensions.prune_flag.clone())
-    }
-}
-
-pub fn mock_stream() -> impl Stream<Item = RawOperation> {
-    let private_key = PrivateKey::new();
-    let public_key = private_key.public_key();
-    let body = Body::new(b"Hello, Penguin!");
-
-    let mut backlink = None;
-    let mut seq_num = 0;
-
-    stream! {
-        loop {
-            let extensions = Extensions {
-                stream_name: StreamName::new(public_key, Some("chat")),
-                ..Default::default()
-            };
-
-            let mut header = Header::<Extensions> {
-                public_key,
-                version: 1,
-                signature: None,
-                payload_size: body.size(),
-                payload_hash: Some(body.hash()),
-                timestamp: 0,
-                seq_num,
-                backlink,
-                previous: vec![],
-                extensions: extensions,
-            };
-            header.sign(&private_key);
-
-            let bytes = header.to_bytes();
-
-            backlink = Some(header.hash());
-            seq_num += 1;
-
-            yield (bytes, Some(body.to_bytes()));
+impl<T> AsyncBuffer<T> {
+    pub fn new() -> Self {
+        Self {
+            queue: VecDeque::new(),
+            notify: Notify::new(),
         }
     }
+
+    pub fn push(&mut self, item: T) {
+        self.queue.push_back(item);
+        self.notify.notify_one(); // Wake up any pending recv
+    }
+
+    pub async fn pop(&mut self) -> T {
+        loop {
+            if let Some(item) = self.queue.pop_front() {
+                return item;
+            }
+
+            // Wait for notification that an item was added.
+            self.notify.notified().await;
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn try_pop(&mut self) -> Option<T> {
+        self.queue.pop_front()
+    }
+}
+
+/// Compare the resulting poll state from a future.
+pub fn assert_poll_eq<Fut: Future>(fut: Fut, poll: Poll<Fut::Output>)
+where
+    <Fut as Future>::Output: PartialEq + std::fmt::Debug,
+{
+    assert_eq!(
+        {
+            pin!(fut);
+            let mut cx = noop_context();
+            fut.poll(&mut cx)
+        },
+        poll,
+    );
 }

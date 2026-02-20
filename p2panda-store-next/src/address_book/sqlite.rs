@@ -6,56 +6,69 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Hash, Topic};
+use p2panda_core::{PublicKey, Topic};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, query_scalar};
 
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<'a, N> AddressBookStore<Hash, N> for SqliteStore<'a>
+impl<'a, N> AddressBookStore<PublicKey, N> for SqliteStore<'a>
 where
-    N: NodeInfo<Hash> + Serialize + for<'de> Deserialize<'de>,
+    N: NodeInfo<PublicKey> + Serialize + for<'de> Deserialize<'de>,
 {
     type Error = SqliteError;
 
     async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
-        let result = self
-            .tx(async |tx| {
-                query(
-                    "
-                    INSERT
-                    INTO
-                        node_infos_v1 (
-                            node_id,
-                            node_info,
-                            bootstrap
-                        )
-                    VALUES
-                        (?, ?, ?)
-                    ON CONFLICT(node_id)
-                    DO UPDATE
-                        SET
-                            node_info = EXCLUDED.node_info,
-                            bootstrap = EXCLUDED.bootstrap
-                    ",
-                )
-                .bind(info.id().to_hex())
-                .bind(
-                    encode_cbor(&info)
-                        .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
-                )
-                .bind(info.is_bootstrap())
-                .execute(&mut **tx)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
+        let is_upsert = {
+            let row = self
+                .tx(async |tx| {
+                    query_as::<_, (i32,)>("SELECT COUNT(*) FROM node_infos_v1 WHERE node_id = ?")
+                        .bind(info.id().to_hex())
+                        .fetch_one(&mut **tx)
+                        .await
+                        .map_err(SqliteError::Sqlite)
+                })
+                .await?;
 
-        Ok(result.rows_affected() > 0)
+            row.0 == 1
+        };
+
+        self.tx(async |tx| {
+            query(
+                "
+                INSERT
+                INTO
+                    node_infos_v1 (
+                        node_id,
+                        node_info,
+                        bootstrap
+                    )
+                VALUES
+                    (?, ?, ?)
+                ON CONFLICT(node_id)
+                DO UPDATE
+                    SET
+                        node_info = EXCLUDED.node_info,
+                        bootstrap = EXCLUDED.bootstrap
+                ",
+            )
+            .bind(info.id().to_hex())
+            .bind(
+                encode_cbor(&info)
+                    .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
+            )
+            .bind(info.is_bootstrap())
+            .execute(&mut **tx)
+            .await
+            .map_err(SqliteError::Sqlite)
+        })
+        .await?;
+
+        Ok(!is_upsert)
     }
 
-    async fn remove_node_info(&self, id: &Hash) -> Result<bool, Self::Error> {
+    async fn remove_node_info(&self, id: &PublicKey) -> Result<bool, Self::Error> {
         // Remove node's info.
         let result = self
             .tx(async |tx| {
@@ -136,7 +149,7 @@ where
         Ok(node_ids.len())
     }
 
-    async fn node_info(&self, id: &Hash) -> Result<Option<N>, Self::Error> {
+    async fn node_info(&self, id: &PublicKey) -> Result<Option<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (Vec<u8>,)>(
@@ -159,7 +172,7 @@ where
         decode_node_info(result)
     }
 
-    async fn node_topics(&self, id: &Hash) -> Result<HashSet<[u8; 32]>, Self::Error> {
+    async fn node_topics(&self, id: &PublicKey) -> Result<HashSet<[u8; 32]>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (String,)>(
@@ -251,7 +264,7 @@ where
         Ok(count as usize)
     }
 
-    async fn selected_node_infos(&self, ids: &[Hash]) -> Result<Vec<N>, Self::Error> {
+    async fn selected_node_infos(&self, ids: &[PublicKey]) -> Result<Vec<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (Vec<u8>,)>(&format!(
@@ -274,7 +287,11 @@ where
         decode_node_infos(result)
     }
 
-    async fn set_topics(&self, id: Hash, topics: HashSet<[u8; 32]>) -> Result<(), Self::Error> {
+    async fn set_topics(
+        &self,
+        id: PublicKey,
+        topics: HashSet<[u8; 32]>,
+    ) -> Result<(), Self::Error> {
         // Remove all previous topics set for this node id and replace it with new values. Both
         // updates will be executed inside the same atomic transaction.
         self.tx(async |tx| {
@@ -397,7 +414,11 @@ where
 
 #[cfg(any(test, feature = "test_utils"))]
 impl<'a> SqliteStore<'a> {
-    pub async fn set_last_changed(&self, id: &Hash, timestamp: u64) -> Result<(), SqliteError> {
+    pub async fn set_last_changed(
+        &self,
+        id: &PublicKey,
+        timestamp: u64,
+    ) -> Result<(), SqliteError> {
         self.tx(async |tx| {
             query(
                 "
@@ -439,7 +460,7 @@ fn in_op_str<T: Display>(list: &[T]) -> String {
 /// Deserialize multiple rows containing encoded node info.
 fn decode_node_infos<N>(result: Vec<(Vec<u8>,)>) -> Result<Vec<N>, SqliteError>
 where
-    N: NodeInfo<Hash> + Serialize + for<'a> Deserialize<'a>,
+    N: NodeInfo<PublicKey> + Serialize + for<'a> Deserialize<'a>,
 {
     result
         .iter()
@@ -453,7 +474,7 @@ where
 /// Deserialize single row maybe containing encoded node info.
 fn decode_node_info<N>(result: Option<(Vec<u8>,)>) -> Result<Option<N>, SqliteError>
 where
-    N: NodeInfo<Hash> + Serialize + for<'a> Deserialize<'a>,
+    N: NodeInfo<PublicKey> + Serialize + for<'a> Deserialize<'a>,
 {
     match result {
         Some((bytes,)) => {
