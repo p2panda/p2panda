@@ -75,7 +75,10 @@ async fn gossip_and_sync_with_same_topic() {
         .await;
     penguin
         .client
-        .insert_topic(&topic, HashMap::from([(penguin.client_id(), vec![log_id])]))
+        .associate(
+            &topic,
+            &HashMap::from([(penguin.client_id(), vec![log_id])]),
+        )
         .await;
 
     // Penguin initiates a sync stream for this topic and is ready now to share it's created

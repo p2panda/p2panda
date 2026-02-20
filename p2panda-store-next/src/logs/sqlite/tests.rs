@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use p2panda_core::test_utils::TestLog;
 use p2panda_core::{Operation, PrivateKey};
@@ -103,9 +103,7 @@ async fn get_log_heights() {
     .await
     .unwrap();
 
-    let mut expected_result = HashMap::new();
-    expected_result.insert(log_1.id(), 1);
-    expected_result.insert(log_2.id(), 0);
+    let expected_result = BTreeMap::from([(log_1.id(), 1), (log_2.id(), 0)]);
 
     assert_eq!(result, Some(expected_result));
 }

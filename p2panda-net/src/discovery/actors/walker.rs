@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use p2panda_discovery::random_walk::{RandomWalker, RandomWalkerConfig};
 use p2panda_discovery::{DiscoveryResult, DiscoveryStrategy};
-use p2panda_store_next::SqliteStore;
+use p2panda_store::SqliteStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, cast};
 use rand_chacha::ChaCha20Rng;
