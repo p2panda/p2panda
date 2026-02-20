@@ -20,39 +20,52 @@ where
     type Error = SqliteError;
 
     async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
-        let result = self
-            .tx(async |tx| {
-                query(
-                    "
-                    INSERT
-                    INTO
-                        node_infos_v1 (
-                            node_id,
-                            node_info,
-                            bootstrap
-                        )
-                    VALUES
-                        (?, ?, ?)
-                    ON CONFLICT(node_id)
-                    DO UPDATE
-                        SET
-                            node_info = EXCLUDED.node_info,
-                            bootstrap = EXCLUDED.bootstrap
-                    ",
-                )
-                .bind(info.id().to_hex())
-                .bind(
-                    encode_cbor(&info)
-                        .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
-                )
-                .bind(info.is_bootstrap())
-                .execute(&mut **tx)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
+        let is_upsert = {
+            let row = self
+                .tx(async |tx| {
+                    query_as::<_, (i32,)>("SELECT COUNT(*) FROM node_infos_v1 WHERE node_id = ?")
+                        .bind(info.id().to_hex())
+                        .fetch_one(&mut **tx)
+                        .await
+                        .map_err(SqliteError::Sqlite)
+                })
+                .await?;
 
-        Ok(result.rows_affected() > 0)
+            row.0 == 1
+        };
+
+        self.tx(async |tx| {
+            query(
+                "
+                INSERT
+                INTO
+                    node_infos_v1 (
+                        node_id,
+                        node_info,
+                        bootstrap
+                    )
+                VALUES
+                    (?, ?, ?)
+                ON CONFLICT(node_id)
+                DO UPDATE
+                    SET
+                        node_info = EXCLUDED.node_info,
+                        bootstrap = EXCLUDED.bootstrap
+                ",
+            )
+            .bind(info.id().to_hex())
+            .bind(
+                encode_cbor(&info)
+                    .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
+            )
+            .bind(info.is_bootstrap())
+            .execute(&mut **tx)
+            .await
+            .map_err(SqliteError::Sqlite)
+        })
+        .await?;
+
+        Ok(!is_upsert)
     }
 
     async fn remove_node_info(&self, id: &PublicKey) -> Result<bool, Self::Error> {
