@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{LogId, PublicKey, Topic};
+use p2panda_core::{LogId, PublicKey};
+use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 
 use crate::sqlite::{SqliteError, SqliteStore};
@@ -11,15 +12,16 @@ use crate::topics::TopicStore;
 
 /// SQLite `TopicStore` implementation that can be used to map a topic to a set of (generic)
 /// per-author data identifiers.
-impl<'a, S> TopicStore<Topic, PublicKey, S> for SqliteStore<'a>
+impl<'a, T, S> TopicStore<T, PublicKey, S> for SqliteStore<'a>
 where
+    T: Serialize + for<'de> Deserialize<'de>,
     S: LogId,
 {
     type Error = SqliteError;
 
     async fn associate(
         &self,
-        topic: &Topic,
+        topic: &T,
         author: &PublicKey,
         data_id: &S,
     ) -> Result<bool, SqliteError> {
@@ -38,7 +40,10 @@ where
                         (?, ?, ?)
                     ",
                 )
-                .bind(topic.to_string())
+                .bind(
+                    encode_cbor(&topic)
+                        .map_err(|err| SqliteError::Encode("topic".to_string(), err))?,
+                )
                 .bind(author.to_string())
                 .bind(
                     encode_cbor(&data_id)
@@ -54,7 +59,7 @@ where
 
     async fn remove(
         &self,
-        topic: &Topic,
+        topic: &T,
         author: &PublicKey,
         data_id: &S,
     ) -> Result<bool, SqliteError> {
@@ -70,7 +75,10 @@ where
                         AND data_id = ?
                     ",
                 )
-                .bind(topic.to_string())
+                .bind(
+                    encode_cbor(&topic)
+                        .map_err(|err| SqliteError::Encode("topic".to_string(), err))?,
+                )
                 .bind(author.to_string())
                 .bind(
                     encode_cbor(&data_id)
@@ -84,7 +92,7 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn resolve(&self, topic: &Topic) -> Result<HashMap<PublicKey, Vec<S>>, Self::Error> {
+    async fn resolve(&self, topic: &T) -> Result<BTreeMap<PublicKey, Vec<S>>, Self::Error> {
         let data_ids = self
             .execute(async |pool| {
                 query_as::<_, (String, Vec<u8>)>(
@@ -98,14 +106,17 @@ where
                 topic = ?
             ",
                 )
-                .bind(topic.to_string())
+                .bind(
+                    encode_cbor(&topic)
+                        .map_err(|err| SqliteError::Encode("topic".to_string(), err))?,
+                )
                 .fetch_all(pool)
                 .await
                 .map_err(SqliteError::Sqlite)
             })
             .await?;
 
-        let mut result: HashMap<PublicKey, Vec<S>> = HashMap::new();
+        let mut result: BTreeMap<PublicKey, Vec<S>> = BTreeMap::new();
 
         for (author, data_id) in data_ids {
             let author: PublicKey = author.parse().map_err(|_| {
@@ -113,7 +124,7 @@ where
             })?;
 
             let data_id = decode_cbor(&data_id[..])
-                .map_err(|err| SqliteError::Decode("header".into(), err.into()))?;
+                .map_err(|err| SqliteError::Decode("data id".into(), err.into()))?;
 
             // All items in the returned data set will be unique due to the SQL UNIQUE constraint.
             result.entry(author).or_default().push(data_id);

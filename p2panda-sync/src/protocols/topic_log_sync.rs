@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Two-party sync protocol over a topic associated with a collection of append-only logs.
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
@@ -10,8 +10,9 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Header, LogId, Operation};
-use p2panda_store::{LogStore, OperationStore};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, PublicKey};
+use p2panda_store::logs::LogStore;
+use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,16 +21,16 @@ use tracing::{Level, debug, enabled, trace, warn};
 
 use crate::ToSync;
 use crate::dedup::DEFAULT_BUFFER_CAPACITY;
+use crate::protocols::ShortFormat;
 use crate::protocols::log_sync::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncStatus,
 };
-use crate::protocols::{Logs, ShortFormat};
-use crate::traits::{Protocol, TopicMap};
+use crate::traits::Protocol;
 
 /// Protocol for synchronizing logs which are associated with a generic T topic.
 ///
 /// The mapping of T to a set of logs is handled on the application layer using an implementation
-/// of the `TopicMap` trait.
+/// of the `TopicStore` trait.
 ///
 /// After sync is complete peers optionally enter "live-mode" where concurrently received and
 /// future messages will be sent directly to the application layer and forwarded to any
@@ -40,37 +41,37 @@ use crate::traits::{Protocol, TopicMap};
 /// It is assumed that the T topic has been negotiated between parties prior to initiating this
 /// sync protocol.
 #[derive(Debug)]
-pub struct TopicLogSync<T, S, M, L, E> {
-    pub store: S,
-    pub topic_map: M,
+pub struct TopicLogSync<T, S, L, E> {
     pub topic: T,
+    pub store: S,
     pub event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
     pub live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
 }
 
-impl<T, S, M, L, E> TopicLogSync<T, S, M, L, E>
+impl<T, S, L, E> TopicLogSync<T, S, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<L, E> + OperationStore<L, E>,
-    M: TopicMap<T, Logs<L>>,
+    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
+        + TopicStore<T, PublicKey, L>
+        + Clone
+        + Send
+        + 'static,
     L: LogId,
     E: Extensions,
 {
-    /// Returns a new sync protocol instance, configured with a store and `TopicMap` implementation
+    /// Returns a new sync protocol instance, configured with a store and `TopicStore` implementation
     /// which associates the to-be-synced logs with a given topic.
     pub fn new(
         topic: T,
         store: S,
-        topic_map: M,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
         event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
     ) -> Self {
         Self::new_with_capacity(
             topic,
             store,
-            topic_map,
             live_mode_rx,
             event_tx,
             DEFAULT_BUFFER_CAPACITY,
@@ -81,14 +82,12 @@ where
     pub fn new_with_capacity(
         topic: T,
         store: S,
-        topic_map: M,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
         event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
             topic,
-            topic_map,
             store,
             event_tx,
             live_mode_rx,
@@ -98,11 +97,14 @@ where
     }
 }
 
-impl<T, S, M, L, E> Protocol for TopicLogSync<T, S, M, L, E>
+impl<T, S, L, E> Protocol for TopicLogSync<T, S, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<L, E> + OperationStore<L, E> + Send + 'static,
-    M: TopicMap<T, Logs<L>> + Send + 'static,
+    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
+        + TopicStore<T, PublicKey, L>
+        + Clone
+        + Send
+        + 'static,
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
 {
@@ -124,13 +126,13 @@ where
 
         // Get the log ids which are associated with this topic query.
         let logs = self
-            .topic_map
-            .get(&self.topic)
+            .store
+            .resolve(&self.topic)
             .await
-            .map_err(|err| TopicLogSyncError::TopicMap(err.to_string()))?;
+            .map_err(|err| TopicLogSyncError::TopicStore(err.to_string()))?;
 
         if enabled!(Level::DEBUG) {
-            let display_logs: HashMap<String, usize> =
+            let display_logs: BTreeMap<String, usize> =
                 logs.iter().map(|(k, v)| (k.fmt_short(), v.len())).collect();
             debug!(logs = ?display_logs, "local topic logs retrieved");
         }
@@ -350,7 +352,11 @@ fn sync_channels<'a, L, E>(
 ) -> (
     impl Sink<LogSyncMessage<L>, Error = TopicLogSyncChannelError> + Unpin,
     impl Stream<Item = Result<LogSyncMessage<L>, TopicLogSyncChannelError>> + Unpin,
-) {
+)
+where
+    L: LogId,
+    E: Extensions,
+{
     let log_sync_sink = LogSyncSink::new(sink);
 
     let log_sync_stream = stream.by_ref().map(|message| match message {
@@ -383,8 +389,8 @@ pub enum TopicLogSyncError {
     #[error(transparent)]
     Sync(#[from] LogSyncError),
 
-    #[error("topic map error: {0}")]
-    TopicMap(String),
+    #[error("topic store error: {0}")]
+    TopicStore(String),
 
     #[error("unexpected protocol message: {0}")]
     UnexpectedProtocolMessage(String),
@@ -447,15 +453,24 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
 
 /// Protocol message types.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(bound(deserialize = "L: LogId"))]
 #[serde(tag = "type", content = "value")]
 #[allow(clippy::large_enum_variant)]
-pub enum TopicLogSyncMessage<L, E> {
+pub enum TopicLogSyncMessage<L, E>
+where
+    L: LogId,
+    E: Extensions,
+{
     Sync(LogSyncMessage<L>),
     Live(Header<E>, Option<Body>),
     Close,
 }
 
-impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E> {
+impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E>
+where
+    L: LogId,
+    E: Extensions,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             TopicLogSyncMessage::Sync(_) => "sync",
@@ -486,8 +501,10 @@ impl<S, L, E> LogSyncSink<S, L, E> {
 
 impl<S, L, E> Sink<LogSyncMessage<L>> for LogSyncSink<S, L, E>
 where
+    L: LogId,
     S: Sink<TopicLogSyncMessage<L, E>>,
     S::Error: Debug,
+    E: Extensions,
 {
     type Error = TopicLogSyncChannelError;
 
@@ -523,17 +540,17 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     use assert_matches::assert_matches;
     use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
-    use p2panda_core::{Body, Operation};
+    use p2panda_core::{Body, Operation, Topic};
 
     use crate::ToSync;
     use crate::protocols::{LogSyncError, LogSyncMessage};
     use crate::test_utils::{
-        Peer, TestTopic, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
+        Peer, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
         setup_logging,
     };
     use crate::traits::Protocol;
@@ -542,16 +559,16 @@ pub mod tests {
 
     #[tokio::test]
     async fn sync_session_no_operations() {
-        let topic = TestTopic::new("messages");
-        let mut peer = Peer::new(0);
-        peer.insert_topic(&topic, &HashMap::default());
+        let topic = Topic::new();
+        let mut peer = Peer::new(0).await;
+        peer.associate(&topic, &BTreeMap::default()).await;
 
         let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
         let remote_rx = run_protocol_uni(
             session,
             &[
-                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Done),
             ],
         )
@@ -577,12 +594,13 @@ pub mod tests {
         assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
+        println!("{messages:?}");
         assert_eq!(messages.len(), 2);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
                 0 => assert_eq!(
                     message,
-                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![]))
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default()))
                 ),
                 1 => {
                     assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done));
@@ -595,24 +613,26 @@ pub mod tests {
 
     #[tokio::test]
     async fn sync_operations_accept() {
+        setup_logging();
+
         let log_id = 0;
-        let topic = TestTopic::new("messages");
-        let mut peer = Peer::new(0);
+        let topic = Topic::new();
+        let mut peer = Peer::new(0).await;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
         let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
         let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
 
-        let logs = HashMap::from([(peer.id(), vec![log_id])]);
-        peer.insert_topic(&topic, &logs);
+        let logs = BTreeMap::from([(peer.id(), vec![log_id])]);
+        peer.associate(&topic, &logs).await;
 
         let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
         let remote_rx = run_protocol_uni(
             session,
             &[
-                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Done),
             ],
         )
@@ -643,10 +663,10 @@ pub mod tests {
             match index {
                 0 => assert_eq!(
                     message,
-                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![(
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::from([(
                         peer.id(),
-                        vec![(0, 2)]
-                    )]))
+                        BTreeMap::from([(0, 2)])
+                    )])))
                 ),
                 1 => {
                     let expected_bytes = header_0.payload_size
@@ -700,19 +720,19 @@ pub mod tests {
     #[tokio::test]
     async fn topic_log_sync_full_duplex() {
         setup_logging();
-        let topic = TestTopic::new("messages");
+        let topic = Topic::new();
         let log_id = 0;
 
-        let mut peer_a = Peer::new(0);
-        let mut peer_b = Peer::new(1);
+        let mut peer_a = Peer::new(0).await;
+        let mut peer_b = Peer::new(1).await;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (header_0, _) = peer_a.create_operation(&body, 0).await;
         let (header_1, _) = peer_a.create_operation(&body, 0).await;
         let (header_2, _) = peer_a.create_operation(&body, 0).await;
 
-        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
-        peer_a.insert_topic(&topic, &logs);
+        let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
+        peer_a.associate(&topic, &logs).await;
 
         let (peer_a_session, mut peer_a_events_rx, _) =
             peer_a.topic_sync_protocol(topic.clone(), false);
@@ -788,18 +808,18 @@ pub mod tests {
     #[tokio::test]
     async fn live_mode() {
         let log_id = 0;
-        let topic = TestTopic::new("messages");
-        let mut peer_a = Peer::new(0);
-        let mut peer_b = Peer::new(1);
+        let topic = Topic::new();
+        let mut peer_a = Peer::new(0).await;
+        let mut peer_b = Peer::new(1).await;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
-        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
-        peer_a.insert_topic(&topic, &logs);
+        let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
+        peer_a.associate(&topic, &logs).await;
 
-        let logs = HashMap::default();
-        peer_a.insert_topic(&topic, &logs);
+        let logs = BTreeMap::default();
+        peer_a.associate(&topic, &logs).await;
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
@@ -826,7 +846,7 @@ pub mod tests {
         let remote_rx = run_protocol_uni(
             protocol,
             &[
-                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
                     total_operations: 1,
                     total_bytes: total_bytes as u64,
@@ -914,18 +934,18 @@ pub mod tests {
     #[tokio::test]
     async fn dedup_live_mode_messages() {
         let log_id = 0;
-        let topic = TestTopic::new("messages");
-        let mut peer_a = Peer::new(0);
-        let mut peer_b = Peer::new(1);
+        let topic = Topic::new();
+        let mut peer_a = Peer::new(0).await;
+        let mut peer_b = Peer::new(1).await;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
-        let logs = HashMap::from([(peer_a.id(), vec![log_id])]);
-        peer_a.insert_topic(&topic, &logs);
+        let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
+        peer_a.associate(&topic, &logs).await;
 
-        let logs = HashMap::default();
-        peer_a.insert_topic(&topic, &logs);
+        let logs = BTreeMap::default();
+        peer_a.associate(&topic, &logs).await;
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
@@ -963,7 +983,7 @@ pub mod tests {
         let remote_rx = run_protocol_uni(
             protocol,
             &[
-                TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+                TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
                     total_operations: 1,
                     total_bytes: total_bytes as u64,
@@ -1051,13 +1071,15 @@ pub mod tests {
 
     #[tokio::test]
     async fn unexpected_stream_closure_sync() {
-        let topic = TestTopic::new("messages");
-        let mut peer = Peer::new(0);
-        peer.insert_topic(&topic, &Default::default());
+        let topic = Topic::new();
+        let mut peer = Peer::new(0).await;
+        peer.associate(&topic, &Default::default()).await;
 
         let (session, mut events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
 
-        let messages = [TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![]))];
+        let messages = [TestTopicSyncMessage::Sync(LogSyncMessage::Have(
+            BTreeMap::default(),
+        ))];
 
         let (mut local_message_tx, _remote_message_rx) = mpsc::channel(128);
         let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
@@ -1095,14 +1117,14 @@ pub mod tests {
 
     #[tokio::test]
     async fn unexpected_stream_closure_live_mode() {
-        let topic = TestTopic::new("messages");
-        let mut peer = Peer::new(0);
-        peer.insert_topic(&topic, &Default::default());
+        let topic = Topic::new();
+        let mut peer = Peer::new(0).await;
+        peer.associate(&topic, &Default::default()).await;
 
         let (session, mut events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
 
         let messages = [
-            TestTopicSyncMessage::Sync(LogSyncMessage::Have(vec![])),
+            TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
             TestTopicSyncMessage::Sync(LogSyncMessage::Done),
         ];
 

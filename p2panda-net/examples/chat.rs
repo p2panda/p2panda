@@ -26,7 +26,6 @@
 //! Type into the terminal and press <ENTER> to send messages. Type `/nick <NICKNAME>` and press
 //! <ENTER> to set your desired nickname.
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -43,9 +42,10 @@ use p2panda_net::utils::ShortFormat;
 use p2panda_net::{
     AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
 };
-use p2panda_store::{MemoryStore, OperationStore};
-use p2panda_sync::protocols::{Logs, TopicLogSyncEvent as SyncEvent};
-use p2panda_sync::traits::TopicMap;
+use p2panda_store::operations::OperationStore;
+use p2panda_store::topics::TopicStore;
+use p2panda_store::{SqliteStore, Transaction};
+use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
@@ -102,35 +102,6 @@ struct Args {
     mdns: bool,
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct ChatTopicMap(Arc<RwLock<HashMap<TopicId, Logs<LogId>>>>);
-
-impl ChatTopicMap {
-    async fn insert(&self, topic_id: TopicId, node_id: NodeId, log_id: LogId) {
-        let mut map = self.0.write().await;
-        map.entry(topic_id)
-            .and_modify(|logs| {
-                logs.insert(node_id, vec![log_id]);
-            })
-            .or_insert({
-                let mut value = HashMap::new();
-                value.insert(node_id, vec![log_id]);
-                value
-            });
-    }
-}
-
-impl TopicMap<TopicId, Logs<LogId>> for ChatTopicMap {
-    type Error = Infallible;
-
-    async fn get(&self, topic_query: &TopicId) -> Result<Logs<LogId>, Self::Error> {
-        let map = self.0.read().await;
-        Ok(map.get(topic_query).cloned().unwrap_or_default())
-    }
-}
-
-type ChatStore = MemoryStore<LogId, ()>;
-
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_logging();
@@ -150,11 +121,13 @@ async fn main() -> Result<()> {
         rng.random()
     };
 
-    // Set up sync for p2panda operations.
-    let mut store = ChatStore::new();
+    // Create a temporary SQLite database to store topic associations and operations.
+    let store = SqliteStore::temporary().await;
 
-    let topic_map = ChatTopicMap::default();
-    topic_map.insert(topic_id, public_key, LOG_ID).await;
+    // Associate our local log with the chat topic and commit it to the database.
+    let permit = store.begin().await?;
+    store.associate(&topic_id, &public_key, &LOG_ID).await?;
+    store.commit(permit).await?;
 
     // Prepare address book.
     let address_book = AddressBook::builder().spawn().await?;
@@ -260,7 +233,7 @@ async fn main() -> Result<()> {
         });
     }
 
-    let sync = LogSync::builder(store.clone(), topic_map.clone(), endpoint, gossip)
+    let sync = LogSync::<_, LogId, _>::builder(store.clone(), endpoint, gossip)
         .spawn()
         .await?;
 
@@ -269,7 +242,7 @@ async fn main() -> Result<()> {
 
     // Receive messages from the sync stream.
     {
-        let mut store = store.clone();
+        let store = store.clone();
         let nicknames = Arc::clone(&nicknames);
         tokio::task::spawn(async move {
             while let Some(Ok(from_sync)) = sync_rx.next().await {
@@ -283,7 +256,13 @@ async fn main() -> Result<()> {
                         );
                     }
                     SyncEvent::Operation(operation) => {
-                        if store.has_operation(operation.hash).await.unwrap() {
+                        if <SqliteStore as OperationStore<Operation, Hash, LogId>>::has_operation(
+                            &store,
+                            &operation.hash,
+                        )
+                        .await
+                        .unwrap()
+                        {
                             continue;
                         }
 
@@ -321,20 +300,15 @@ async fn main() -> Result<()> {
                             )
                         }
 
+                        let permit = store.begin().await.unwrap();
+                        let id = operation.hash;
+                        let author = operation.header.public_key;
                         store
-                            .insert_operation(
-                                operation.hash,
-                                &operation.header,
-                                operation.body.as_ref(),
-                                &operation.header.to_bytes(),
-                                &LOG_ID,
-                            )
+                            .insert_operation(&id, *operation, LOG_ID)
                             .await
                             .unwrap();
-
-                        topic_map
-                            .insert(topic_id, operation.header.public_key, LOG_ID)
-                            .await;
+                        store.associate(&topic_id, &author, &LOG_ID).await.unwrap();
+                        store.commit(permit).await.unwrap();
                     }
                     _ => (),
                 }
@@ -353,12 +327,13 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         while let Some(text) = line_rx.recv().await {
             let body = Body::new(text.as_bytes());
-            let (hash, header, header_bytes, operation) =
-                create_operation(&private_key, &body, seq_num, backlink);
+            let (hash, operation) = create_operation(&private_key, &body, seq_num, backlink);
+            let permit = store.begin().await.unwrap();
             store
-                .insert_operation(hash, &header, Some(&body), &header_bytes, &LOG_ID)
+                .insert_operation(&hash, operation.clone(), LOG_ID)
                 .await
                 .unwrap();
+            store.commit(permit).await.unwrap();
 
             sync_tx.publish(operation).await.unwrap();
 
@@ -404,7 +379,7 @@ fn create_operation(
     body: &Body,
     seq_num: u64,
     backlink: Option<Hash>,
-) -> (Hash, Header, Vec<u8>, Operation) {
+) -> (Hash, Operation) {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -424,7 +399,6 @@ fn create_operation(
     };
 
     header.sign(private_key);
-    let header_bytes = header.to_bytes();
     let hash = header.hash();
 
     let operation = Operation {
@@ -433,5 +407,5 @@ fn create_operation(
         body: Some(body.to_owned()),
     };
 
-    (hash, header, header_bytes, operation)
+    (hash, operation)
 }

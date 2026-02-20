@@ -12,7 +12,7 @@ use crate::{Hash, PublicKey};
 
 const TOPIC_LENGTH: usize = 32;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, StdHash)]
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash)]
 pub struct Topic(pub(crate) [u8; TOPIC_LENGTH]);
 
 impl Topic {

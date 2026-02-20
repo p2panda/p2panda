@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use p2panda_core::{PrivateKey, Topic};
 
@@ -38,7 +38,7 @@ async fn update_and_resolve_topic_mapping() {
 
     store.commit(permit).await.unwrap();
 
-    let expected_logs = HashMap::from([(alice, vec![topic]), (bob, vec![topic])]);
+    let expected_logs = BTreeMap::from([(alice, vec![topic]), (bob, vec![topic])]);
 
     let logs = store.resolve(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
@@ -80,7 +80,7 @@ async fn path_based_log_ids() {
 
     store.commit(permit).await.unwrap();
 
-    let expected_logs = HashMap::from([
+    let expected_logs = BTreeMap::from([
         (alice, vec![log_id_kittens, log_id_kittens_sleepy]),
         (bob, vec![log_id_puppies]),
     ]);
@@ -117,7 +117,7 @@ async fn remove_association() {
 
     store.commit(permit).await.unwrap();
 
-    let expected_logs = HashMap::from([(
+    let expected_logs = BTreeMap::from([(
         alice,
         vec![log_id_kittens.clone(), log_id_kittens_sleepy.clone()],
     )]);
@@ -136,7 +136,7 @@ async fn remove_association() {
 
     assert!(result);
 
-    let expected_logs = HashMap::from([(alice, vec![log_id_kittens])]);
+    let expected_logs = BTreeMap::from([(alice, vec![log_id_kittens])]);
 
     let logs = store.resolve(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);

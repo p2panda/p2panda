@@ -6,11 +6,11 @@ use assert_matches::assert_matches;
 use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError, ProtocolHandler};
 use iroh::{Endpoint, protocol::Router};
-use p2panda_core::Operation;
+use p2panda_core::{Operation, Topic};
 use p2panda_net::cbor::{into_cbor_sink, into_cbor_stream};
 use p2panda_sync::FromSync;
 use p2panda_sync::protocols::{Logs, TopicLogSyncEvent as Event};
-use p2panda_sync::test_utils::{Peer, TestTopic, TestTopicSyncMessage};
+use p2panda_sync::test_utils::{Peer, TestTopicSyncMessage};
 use p2panda_sync::traits::Protocol;
 use tokio_stream::StreamExt;
 
@@ -39,12 +39,12 @@ async fn e2e_log_sync() {
         .await;
     alice
         .client
-        .insert_topic(&topic, HashMap::from([(alice.client_id(), vec![log_id])]))
+        .associate(&topic, &HashMap::from([(alice.client_id(), vec![log_id])]))
         .await;
 
     bob.client.create_operation(b"Hello from Bob", log_id).await;
     bob.client
-        .insert_topic(&topic, HashMap::from([(bob.client_id(), vec![log_id])]))
+        .associate(&topic, &HashMap::from([(bob.client_id(), vec![log_id])]))
         .await;
 
     // Alice and Bob create stream for the same topic.
@@ -256,12 +256,12 @@ async fn e2e_three_party_sync() {
         .await;
     alice
         .client
-        .insert_topic(&topic, HashMap::from([(alice.client_id(), vec![log_id])]))
+        .associate(&topic, &HashMap::from([(alice.client_id(), vec![log_id])]))
         .await;
 
     bob.client.create_operation(b"Hello from Bob", log_id).await;
     bob.client
-        .insert_topic(&topic, HashMap::from([(bob.client_id(), vec![log_id])]))
+        .associate(&topic, &HashMap::from([(bob.client_id(), vec![log_id])]))
         .await;
 
     carol
@@ -270,7 +270,7 @@ async fn e2e_three_party_sync() {
         .await;
     carol
         .client
-        .insert_topic(&topic, HashMap::from([(carol.client_id(), vec![log_id])]))
+        .associate(&topic, &HashMap::from([(carol.client_id(), vec![log_id])]))
         .await;
 
     // Alice and Bob create stream for the same topic. Carol is inactive here.
@@ -535,9 +535,9 @@ async fn panic_on_sink_closure_after_error_regression() {
     // transport. Here we use a connection between two iroh endpoints.
     setup_logging();
 
-    let topic = TestTopic::new("messages");
-    let mut peer = Peer::new(0);
-    peer.insert_topic(&topic, &Logs::default());
+    let topic = Topic::new();
+    let mut peer = Peer::new(0).await;
+    peer.associate(&topic, &Logs::default()).await;
 
     let (session, _events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
 

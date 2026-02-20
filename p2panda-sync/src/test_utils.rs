@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Test utilities.
-use std::{collections::HashMap, convert::Infallible};
+use std::collections::BTreeMap;
 
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
-use p2panda_core::{Body, Extension, Hash, Header, Operation, PrivateKey, PublicKey};
-use p2panda_store::{LogStore, MemoryStore, OperationStore};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+use p2panda_store::logs::LogStore;
+use p2panda_store::operations::OperationStore;
+use p2panda_store::topics::TopicStore;
+use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
 use rand::Rng;
 use rand::rngs::StdRng;
-use serde::{Deserialize, Serialize};
 use tokio::join;
 use tokio::sync::broadcast;
 
@@ -20,48 +22,37 @@ use crate::protocols::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, Logs, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
 };
-use crate::traits::{Protocol, TopicMap};
-
-// General test types.
-pub type TestMemoryStore = MemoryStore<u64, LogIdExtension>;
+use crate::traits::Protocol;
 
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
-pub type TestLogSyncEvent = LogSyncEvent<LogIdExtension>;
-pub type TestLogSync = LogSync<u64, LogIdExtension, TestMemoryStore, TestLogSyncEvent>;
+pub type TestLogSyncEvent = LogSyncEvent<()>;
+pub type TestLogSync = LogSync<u64, (), SqliteStore<'static>, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
-pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, LogIdExtension>;
-pub type TestTopicSyncEvent = TopicLogSyncEvent<LogIdExtension>;
-pub type TestTopicSync =
-    TopicLogSync<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, ()>;
+pub type TestTopicSyncEvent = TopicLogSyncEvent<()>;
+pub type TestTopicSync = TopicLogSync<Topic, SqliteStore<'static>, u64, ()>;
 pub type TestTopicSyncError = TopicLogSyncError;
 
-pub type TestTopicSyncManager =
-    TopicSyncManager<TestTopic, TestMemoryStore, TestTopicMap, u64, LogIdExtension>;
+pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore<'static>, u64, ()>;
 
 /// Peer abstraction used in tests.
 ///
 /// Contains a private key, store and topic map, produces sessions for either log or topic sync
 /// protocols.
 pub struct Peer {
-    pub store: TestMemoryStore,
+    pub store: SqliteStore<'static>,
     pub private_key: PrivateKey,
-    pub topic_map: TestTopicMap,
 }
 
 impl Peer {
-    pub fn new(peer_id: u64) -> Self {
-        let store = TestMemoryStore::new();
-        let topic_map = TestTopicMap::new();
+    pub async fn new(peer_id: u64) -> Self {
+        let store = SqliteStore::temporary().await;
         let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(peer_id);
         let private_key = PrivateKey::from_bytes(&rng.random());
-        Self {
-            store,
-            private_key,
-            topic_map,
-        }
+        Self { store, private_key }
     }
 
     /// The public key of this peer.
@@ -72,23 +63,17 @@ impl Peer {
     /// Return a topic sync protocol.
     pub fn topic_sync_protocol(
         &mut self,
-        topic: TestTopic,
+        topic: Topic,
         live_mode: bool,
     ) -> (
         TestTopicSync,
         broadcast::Receiver<TestTopicSyncEvent>,
-        mpsc::Sender<ToSync<Operation<LogIdExtension>>>,
+        mpsc::Sender<ToSync<Operation<()>>>,
     ) {
-        let (event_tx, event_rx) = broadcast::channel(128);
-        let (live_tx, live_rx) = mpsc::channel(128);
+        let (event_tx, event_rx) = broadcast::channel(512);
+        let (live_tx, live_rx) = mpsc::channel(512);
         let live_rx = if live_mode { Some(live_rx) } else { None };
-        let session = TopicLogSync::new(
-            topic,
-            self.store.clone(),
-            self.topic_map.clone(),
-            live_rx,
-            event_tx,
-        );
+        let session = TopicLogSync::new(topic, self.store.clone(), live_rx, event_tx);
         (session, event_rx, live_tx)
     }
 
@@ -97,32 +82,29 @@ impl Peer {
         &mut self,
         logs: &Logs<u64>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
-        let (event_tx, event_rx) = broadcast::channel(128);
+        let (event_tx, event_rx) = broadcast::channel(512);
         let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
     }
 
     /// Create and insert an operation to the store.
-    pub async fn create_operation(
-        &mut self,
-        body: &Body,
-        log_id: u64,
-    ) -> (Header<LogIdExtension>, Vec<u8>) {
-        let (seq_num, backlink) = self
-            .store
-            .latest_operation(&self.private_key.public_key(), &log_id)
-            .await
-            .unwrap()
-            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-            .unwrap_or((0, None));
+    pub async fn create_operation(&mut self, body: &Body, log_id: u64) -> (Header<()>, Vec<u8>) {
+        let (header, header_bytes) = self.create_operation_no_insert(body, log_id).await;
 
-        let (header, header_bytes) =
-            create_operation(&self.private_key, body, seq_num, seq_num, backlink, log_id);
+        let id = header.hash();
+        let operation = Operation {
+            hash: header.hash(),
+            header: header.clone(),
+            body: Some(body.to_owned()),
+        };
 
-        self.store
-            .insert_operation(header.hash(), &header, Some(body), &header_bytes, &log_id)
-            .await
-            .unwrap();
+        tx_unwrap!(&self.store, {
+            self.store
+                .insert_operation(&id, operation, log_id)
+                .await
+                .unwrap();
+        });
+
         (header, header_bytes)
     }
 
@@ -131,23 +113,35 @@ impl Peer {
         &mut self,
         body: &Body,
         log_id: u64,
-    ) -> (Header<LogIdExtension>, Vec<u8>) {
-        let (seq_num, backlink) = self
-            .store
-            .latest_operation(&self.private_key.public_key(), &log_id)
-            .await
-            .unwrap()
-            .map(|(header, _)| (header.seq_num + 1, Some(header.hash())))
-            .unwrap_or((0, None));
+    ) -> (Header<()>, Vec<u8>) {
+        let (seq_num, backlink) = <SqliteStore as LogStore<
+            Operation<()>,
+            PublicKey,
+            u64,
+            u64,
+            p2panda_core::Hash,
+        >>::get_latest_entry(
+            &self.store, &self.private_key.public_key(), &log_id
+        )
+        .await
+        .unwrap()
+        .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
+        .unwrap_or((0, None));
 
         let (header, header_bytes) =
-            create_operation(&self.private_key, body, seq_num, seq_num, backlink, log_id);
+            create_operation(&self.private_key, body, seq_num, rand::random(), backlink);
 
         (header, header_bytes)
     }
 
-    pub fn insert_topic(&mut self, topic: &TestTopic, logs: &HashMap<PublicKey, Vec<u64>>) {
-        self.topic_map.insert(topic, logs.to_owned());
+    pub async fn associate(&mut self, topic: &Topic, logs: &BTreeMap<PublicKey, Vec<u64>>) {
+        let permit = self.store.begin().await.unwrap();
+        for (author, logs) in logs {
+            for log_id in logs {
+                self.store.associate(topic, author, log_id).await.unwrap();
+            }
+        }
+        self.store.commit(permit).await.unwrap();
     }
 }
 
@@ -164,8 +158,8 @@ pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), 
 where
     P: Protocol + Send + 'static,
 {
-    let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
-    let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
+    let (mut local_message_tx, local_message_rx) = mpsc::channel(512);
+    let (mut remote_message_tx, remote_message_rx) = mpsc::channel(512);
     let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
     let mut remote_message_rx = remote_message_rx.map(Ok::<_, ()>);
 
@@ -188,8 +182,8 @@ where
     P: Protocol,
     P::Message: Clone,
 {
-    let (mut local_message_tx, remote_message_rx) = mpsc::channel(128);
-    let (mut remote_message_tx, local_message_rx) = mpsc::channel(128);
+    let (mut local_message_tx, remote_message_rx) = mpsc::channel(512);
+    let (mut remote_message_tx, local_message_rx) = mpsc::channel(512);
     let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
 
     for message in messages {
@@ -214,42 +208,6 @@ where
     items
 }
 
-/// Log id extension.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LogId(u64);
-
-impl From<u64> for LogId {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-
-impl From<LogId> for u64 {
-    fn from(value: LogId) -> Self {
-        value.0
-    }
-}
-
-impl From<u64> for LogIdExtension {
-    fn from(value: u64) -> Self {
-        Self {
-            log_id: value.into(),
-        }
-    }
-}
-
-/// Extensions containing only a log id.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LogIdExtension {
-    pub log_id: LogId,
-}
-
-impl Extension<LogId> for LogIdExtension {
-    fn extract(header: &Header<Self>) -> Option<LogId> {
-        Some(header.extensions.log_id.clone())
-    }
-}
-
 /// Create a single operation.
 pub fn create_operation(
     private_key: &PrivateKey,
@@ -257,9 +215,8 @@ pub fn create_operation(
     seq_num: u64,
     timestamp: u64,
     backlink: Option<Hash>,
-    log_id: u64,
-) -> (Header<LogIdExtension>, Vec<u8>) {
-    let mut header = Header::<LogIdExtension> {
+) -> (Header<()>, Vec<u8>) {
+    let mut header = Header::<()> {
         version: 1,
         public_key: private_key.public_key(),
         signature: None,
@@ -269,47 +226,9 @@ pub fn create_operation(
         seq_num,
         backlink,
         previous: vec![],
-        extensions: log_id.into(),
+        extensions: (),
     };
     header.sign(private_key);
     let header_bytes = header.to_bytes();
     (header, header_bytes)
-}
-
-/// Test topic.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
-pub struct TestTopic(String);
-
-impl TestTopic {
-    pub fn new(name: &str) -> Self {
-        Self(name.to_owned())
-    }
-}
-
-/// Test topic map.
-#[derive(Clone, Debug)]
-pub struct TestTopicMap(HashMap<TestTopic, Logs<u64>>);
-
-impl Default for TestTopicMap {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TestTopicMap {
-    pub fn new() -> Self {
-        TestTopicMap(HashMap::new())
-    }
-
-    pub fn insert(&mut self, topic: &TestTopic, logs: Logs<u64>) -> Option<Logs<u64>> {
-        self.0.insert(topic.clone(), logs)
-    }
-}
-
-impl TopicMap<TestTopic, Logs<u64>> for TestTopicMap {
-    type Error = Infallible;
-
-    async fn get(&self, topic: &TestTopic) -> Result<Logs<u64>, Self::Error> {
-        Ok(self.0.get(topic).cloned().unwrap_or_default())
-    }
 }

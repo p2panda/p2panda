@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::error::Error;
 
 /// Maps a topic to a user defined data type being sent over the wire during sync.
@@ -58,5 +58,6 @@ pub trait TopicStore<T, A, ID> {
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get identifiers for all associated
-    fn resolve(&self, topic: &T) -> impl Future<Output = Result<HashMap<A, Vec<ID>>, Self::Error>>;
+    fn resolve(&self, topic: &T)
+    -> impl Future<Output = Result<BTreeMap<A, Vec<ID>>, Self::Error>>;
 }
