@@ -9,10 +9,15 @@ use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
 use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{EndpointError, IrohConfig, RelayUrl};
 use p2panda_net::iroh_mdns::{MdnsDiscoveryError, MdnsDiscoveryMode};
+use p2panda_net::sync::LogSyncError;
 use p2panda_net::{
-    AddressBook, DEFAULT_NETWORK_ID, Discovery, Endpoint, Gossip, MdnsDiscovery, NetworkId, NodeId,
+    AddressBook, DEFAULT_NETWORK_ID, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery,
+    NetworkId, NodeId,
 };
+use p2panda_store::SqliteStore;
 use thiserror::Error;
+
+use crate::Extensions;
 
 #[derive(Clone)]
 pub struct Network {
@@ -21,21 +26,18 @@ pub struct Network {
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
+    pub log_sync: LogSync<SqliteStore<'static>, u64, Extensions>,
 }
 
 impl Network {
     pub async fn spawn(
         config: NetworkConfig,
         private_key: PrivateKey,
+        store: SqliteStore<'static>,
     ) -> Result<Self, NetworkError> {
-        // TODO: Pass in store.
-
         // TODO: Supervision of actors.
 
-        let address_book = AddressBook::builder()
-            // .store(address_book_store)
-            .spawn()
-            .await?;
+        let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
         for bootstrap in &config.bootstraps {
             address_book.insert_node_info(NodeInfo::new(*bootstrap).bootstrap());
@@ -67,7 +69,9 @@ impl Network {
             .spawn()
             .await?;
 
-        // TODO: Add log sync with topic map and stores.
+        let log_sync = LogSync::builder(store.clone(), endpoint.clone(), gossip.clone())
+            .spawn()
+            .await?;
 
         Ok(Self {
             address_book,
@@ -75,6 +79,7 @@ impl Network {
             mdns,
             discovery,
             gossip,
+            log_sync,
         })
     }
 
@@ -91,7 +96,6 @@ impl Network {
         self.address_book.insert_node_info(node_info).await?;
         Ok(())
     }
-
     // TODO: Do we need methods to get the transport info (with ip addresses etc.)?
 }
 
@@ -136,4 +140,7 @@ pub enum NetworkError {
 
     #[error(transparent)]
     Gossip(#[from] GossipError),
+
+    #[error(transparent)]
+    LogSync(#[from] LogSyncError<Extensions>),
 }
