@@ -6,15 +6,18 @@ use std::task::{Context, Poll};
 
 use futures_util::Stream;
 use p2panda_core::{Hash, PublicKey, Topic};
+use p2panda_net::sync::SyncHandle;
+use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::Header;
+use crate::{Extensions, Header, Operation};
 
 /// Handle onto an eventually-consistent stream, exposes API for publishing messages, subscribing
 /// to the event stream, and committing received messages.
 pub struct StreamHandle<M> {
     topic: Topic,
+    inner: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     _marker: PhantomData<M>,
 }
 
@@ -22,6 +25,17 @@ impl<M> StreamHandle<M>
 where
     M: Serialize + for<'a> Deserialize<'a>,
 {
+    pub(crate) fn new(
+        topic: Topic,
+        handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
+    ) -> Self {
+        Self {
+            topic,
+            inner: handle,
+            _marker: PhantomData,
+        }
+    }
+
     pub fn topic(&self) -> Topic {
         self.topic
     }
