@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::marker::PhantomData;
+
 use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::gossip::GossipError;
+use p2panda_net::sync::LogSyncError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::Extensions;
 pub use crate::builder::NodeBuilder;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::streams::{EphemeralStreamHandle, EventStream, StreamHandle};
@@ -44,7 +48,7 @@ impl Node {
         store: SqliteStore<'static>,
     ) -> Result<Self, NodeError> {
         let public_key = private_key.public_key();
-        let network = Network::spawn(config.network, private_key.clone()).await?;
+        let network = Network::spawn(config.network, private_key.clone(), store.clone()).await?;
 
         Ok(Node {
             private_key,
@@ -54,11 +58,13 @@ impl Node {
         })
     }
 
-    pub async fn stream<M>(&self, _topic: Topic) -> Result<StreamHandle<M>, NodeError>
+    pub async fn stream<M>(&self, topic: Topic) -> Result<StreamHandle<M>, LogSyncError<Extensions>>
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
-        unimplemented!()
+        let handle = self.network.log_sync.stream(topic.into(), true).await?;
+
+        Ok(StreamHandle::new(topic, handle))
     }
 
     pub async fn ephemeral_stream<M>(
@@ -98,19 +104,10 @@ impl Node {
 #[error("error occurred in internal gossip actor: {0}")]
 pub struct EphemeralStreamHandleError(#[from] GossipError);
 
-#[derive(Clone, Debug)]
-pub struct Config {
-    pub auto_commit: bool,
+#[derive(Clone, Default, Debug)]
+pub(crate) struct Config {
+    pub ack_policy: AckPolicy,
     pub network: NetworkConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            auto_commit: true,
-            network: NetworkConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Error)]
