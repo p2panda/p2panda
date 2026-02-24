@@ -115,7 +115,7 @@ impl EncryptionMessage {
             .iter()
             .any(|message| message.recipient == my_id);
 
-        let encryption_args = match auth_message.payload().action {
+        let encryption_args = match auth_message.action() {
             // The auth message is "create" and so a corresponding "create" encryption control
             // message is constructed containing only the next secret members.
             AuthGroupAction::Create { .. } => {
