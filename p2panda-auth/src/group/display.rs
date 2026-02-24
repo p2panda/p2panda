@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 
 use petgraph::algo::toposort;
 use petgraph::dot::{Config, Dot};
@@ -9,8 +9,8 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
-use crate::group::{GroupAction, GroupControlMessage, GroupCrdtState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer};
+use crate::group::{GroupAction, GroupCrdtState, GroupMember, apply_action};
+use crate::traits::{Conditions, IdentityHandle, Operation, OperationId};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_MUTUAL_REMOVE_NODE: &str = "#9a0aad";
@@ -21,14 +21,12 @@ const INDIVIDUAL_NODE: &str = "#EDD7B17F";
 const ADD_MEMBER_EDGE: &str = "#0091187F";
 const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
-impl<ID, OP, C, ORD> GroupCrdtState<ID, OP, C, ORD>
+impl<ID, OP, M, C> GroupCrdtState<ID, OP, M, C>
 where
     ID: IdentityHandle + Ord + Display,
     OP: OperationId + Ord + Display,
+    M: Operation<ID, OP, C>,
     C: Conditions,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Clone + Debug,
-    ORD::State: Clone,
-    ORD::Operation: Clone,
 {
     /// Print an auth group graph in DOT format for visualizing the group operation DAG.
     pub fn display(&self, group_id: ID) -> String {
@@ -80,21 +78,13 @@ where
                 })
                 .unwrap();
 
-            if let GroupControlMessage {
-                action: GroupAction::Add { member, .. },
-                ..
-            } = operation.payload()
-            {
+            if let GroupAction::Add { member, .. } = operation.action() {
                 graph = self.add_member_to_graph(operation_idx, member, graph);
             }
 
-            if let GroupControlMessage {
-                action:
-                    GroupAction::Create {
-                        initial_members, ..
-                    },
-                ..
-            } = operation.payload()
+            if let GroupAction::Create {
+                initial_members, ..
+            } = operation.action()
             {
                 for (member, _access) in initial_members {
                     graph = self.add_member_to_graph(operation_idx, member, graph);
@@ -121,12 +111,10 @@ where
         graph
     }
 
-    fn format_operation(&self, operation: &ORD::Operation) -> String {
-        let control_message = operation.payload();
-
+    fn format_operation(&self, operation: &M) -> String {
         let mut s = String::new();
 
-        let color = if control_message.is_create() {
+        let color = if operation.action().is_create() {
             OP_ROOT_NODE
         } else {
             let groups_y = self
@@ -139,10 +127,10 @@ where
             } else {
                 match apply_action(
                     groups_y,
-                    control_message.group_id(),
+                    operation.group_id(),
                     operation.id(),
                     operation.author(),
-                    &control_message.action,
+                    &operation.action(),
                     &self.inner.ignore,
                 ) {
                     StateChangeResult::Ok { .. } => OP_OK_NODE,
@@ -155,10 +143,7 @@ where
         s += &format!(
             "<<TABLE BGCOLOR=\"{color}\" BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">"
         );
-        s += &format!(
-            "<TR><TD>group</TD><TD>{}</TD></TR>",
-            control_message.group_id()
-        );
+        s += &format!("<TR><TD>group</TD><TD>{}</TD></TR>", operation.group_id());
         s += &format!("<TR><TD>operation id</TD><TD>{}</TD></TR>", operation.id());
         s += &format!("<TR><TD>actor</TD><TD>{}</TD></TR>", operation.author());
         let dependencies = operation.dependencies().clone();
@@ -170,7 +155,7 @@ where
         }
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
-            self.format_control_message(&control_message)
+            self.format_control_message(operation)
         );
         s += &format!(
             "<TR><TD COLSPAN=\"2\">{}</TD></TR>",
@@ -193,11 +178,11 @@ where
         s
     }
 
-    fn format_control_message(&self, message: &GroupControlMessage<ID, C>) -> String {
+    fn format_control_message(&self, message: &M) -> String {
         let mut s = String::new();
         s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
 
-        match &message.action {
+        match &message.action() {
             GroupAction::Create { initial_members } => {
                 s += "<TR><TD>CREATE</TD></TR>";
                 s += "<TR><TD>initial members</TD></TR>";
@@ -259,17 +244,17 @@ where
         s
     }
 
-    fn format_members(&self, operation: &ORD::Operation) -> String {
+    fn format_members(&self, operation: &M) -> String {
         let mut dependencies = HashSet::from_iter(operation.dependencies().clone());
         dependencies.insert(operation.id());
         let mut members = self
             .inner
             .state_at(&dependencies)
             .unwrap()
-            .get(&operation.payload().group_id())
+            .get(&operation.group_id())
             .unwrap()
             .access_levels();
-        members.sort_by(|(id_a, _), (id_b, _)| id_a.cmp(id_b));
+        members.sort_by_key(|(id_a, _)| *id_a);
 
         let mut s = String::new();
         s += "<TABLE BORDER=\"0\" CELLBORDER=\"1\" CELLSPACING=\"0\">";
@@ -317,7 +302,7 @@ where
                     .inner
                     .operations
                     .iter()
-                    .find(|(_, op)| op.payload().is_create() && op.payload().group_id() == group_id)
+                    .find(|(_, op)| op.action().is_create() && op.group_id() == group_id)
                     .unwrap();
                 let (idx, _) = graph
                     .node_references()

@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use crate::traits::{IdentityHandle, OperationId};
 
 /// Interface for implementing a custom group crdt resolver.
-pub trait Resolver<ID, OP, C, M>
+pub trait Resolver<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,

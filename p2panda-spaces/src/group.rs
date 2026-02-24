@@ -6,6 +6,7 @@
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
+use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::PrivateKey;
 use p2panda_encryption::RngError;
@@ -23,8 +24,8 @@ use crate::traits::{
     SpacesMessage, SpacesStore,
 };
 use crate::types::{
-    ActorId, AuthControlMessage, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState,
-    AuthResolver, EncryptionGroupError,
+    ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
+    EncryptionGroupError,
 };
 use crate::utils::{sort_members, typed_member, typed_members};
 
@@ -92,15 +93,19 @@ where
             .await
             .map_err(GroupError::AuthStore)?;
 
-        let control_message = AuthControlMessage {
-            group_id,
-            action: AuthGroupAction::Create {
-                initial_members: initial_members.clone(),
-            },
+        let auth_dependencies = {
+            let manager = manager_ref.inner.read().await;
+            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
+            auth_y.inner.heads().into_iter().collect()
+        };
+
+        let action = AuthGroupAction::Create {
+            initial_members: initial_members.clone(),
         };
 
         let (messages, mut events) =
-            Self::process_local_control(manager_ref.clone(), control_message).await?;
+            Self::process_local_control(manager_ref.clone(), group_id, auth_dependencies, action)
+                .await?;
 
         // Sanity check: there should only one event as this group was only just
         // created and cannot be associated with any space yet.
@@ -126,19 +131,20 @@ where
         member: ActorId,
         access: Access<C>,
     ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, F, M, C, RS>> {
-        let member = {
+        let (group_id, auth_dependencies, action) = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-            typed_member(&auth_y, member)
-        };
-
-        let control_message = AuthControlMessage {
-            group_id: self.id,
-            action: AuthGroupAction::Add { member, access },
+            let member = typed_member(&auth_y, member);
+            (
+                self.id,
+                auth_y.inner.heads().into_iter().collect(),
+                AuthGroupAction::Add { member, access },
+            )
         };
 
         let (messages, events) =
-            Self::process_local_control(self.manager.clone(), control_message).await?;
+            Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action)
+                .await?;
 
         Ok((messages, events))
     }
@@ -151,19 +157,20 @@ where
         &self,
         member: ActorId,
     ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, F, M, C, RS>> {
-        let member = {
+        let (group_id, auth_dependencies, action) = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-            typed_member(&auth_y, member)
-        };
-
-        let control_message = AuthControlMessage {
-            group_id: self.id,
-            action: AuthGroupAction::Remove { member },
+            let member = typed_member(&auth_y, member);
+            (
+                self.id,
+                auth_y.inner.heads().into_iter().collect(),
+                AuthGroupAction::Remove { member },
+            )
         };
 
         let (messages, events) =
-            Self::process_local_control(self.manager.clone(), control_message).await?;
+            Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action)
+                .await?;
 
         Ok((messages, events))
     }
@@ -189,9 +196,6 @@ where
 
         let manager = manager_ref.inner.write().await;
         auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
-        auth_y
-            .orderer_y
-            .add_dependency(message.id(), &auth_message.dependencies());
         manager
             .store
             .set_auth(&auth_y)
@@ -204,19 +208,19 @@ where
     /// Process a local control message.
     async fn process_local_control(
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
-        control_message: AuthControlMessage<C>,
+        group_id: ActorId,
+        auth_dependencies: Vec<OperationId>,
+        group_action: GroupAction<ActorId, C>,
     ) -> Result<(Vec<M>, Vec<Event<ID, C>>), GroupError<ID, S, K, F, M, C, RS>> {
-        let auth_y = {
+        let mut auth_y = {
             let manager = manager_ref.inner.read().await;
             manager.store.auth().await.map_err(GroupError::AuthStore)?
         };
 
-        let (mut auth_y, auth_message) =
-            AuthGroup::prepare(auth_y, &control_message).map_err(GroupError::AuthGroup)?;
-
         let args = SpacesArgs::Auth {
-            control_message: auth_message.payload(),
-            auth_dependencies: auth_message.dependencies(),
+            group_id,
+            auth_dependencies,
+            group_action,
         };
 
         let message = {
@@ -228,9 +232,6 @@ where
         {
             let manager = manager_ref.inner.write().await;
             auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
-            auth_y
-                .orderer_y
-                .add_dependency(auth_message.id(), &auth_message.dependencies());
             manager
                 .store
                 .set_auth(&auth_y)
