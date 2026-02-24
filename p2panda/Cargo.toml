@@ -29,15 +29,20 @@ hex = "0.4.3"
 p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
 p2panda-net = { path = "../p2panda-net", version = "0.5.1" }
 p2panda-store = { path = "../p2panda-store", version = "0.5.1" }
+p2panda-stream = { path = "../p2panda-stream", version = "0.5.1" }
 p2panda-sync = { path = "../p2panda-sync", version = "0.5.1" }
 pin-project = "1.1.10"
 rand = "0.10.0"
 rand_chacha = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
+tokio = { version = "1.49.0", features = ["sync"] }
+tokio-stream = { version = "0.1.18", features = ["sync"], default-features = false }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 p2panda = { path = ".", features = ["test_utils"] }
+p2panda-core = { path = "../p2panda-core", version = "0.5.1", features = ["test_utils"] }
+p2panda-store = { path = "../p2panda-store", version = "0.5.1", features = ["test_utils"] }
 tokio = { version = "1.49.0", features = ["macros", "rt"] }

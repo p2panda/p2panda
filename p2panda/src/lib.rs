@@ -10,6 +10,7 @@ mod builder;
 mod network;
 pub mod node;
 pub mod operation;
+mod processor;
 pub mod streams;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
