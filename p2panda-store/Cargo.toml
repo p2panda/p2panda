@@ -2,16 +2,6 @@
 name = "p2panda-store"
 version = "0.5.1"
 edition = "2024"
-authors = [
-  "adz <x12@adz.garden>",
-  "sandreae <contact@samandreae.com>",
-  "glyph <glyph@mycelial.technology>",
-]
-description = "Store traits and implementations"
-repository = "https://github.com/p2panda/p2panda"
-license = "MIT OR Apache-2.0"
-readme = "README.md"
-keywords = ["sqlite", "storage"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -20,21 +10,32 @@ all-features = true
 workspace = true
 
 [features]
-default = ["memory"]
-memory = []
-sqlite = ["dep:ciborium", "dep:sqlx", "dep:hex"]
-test_utils = ["dep:rand"]
+default = ["sqlite", "macros"]
+sqlite = [
+  "dep:p2panda-core",
+  "dep:serde",
+  "dep:sqlx",
+  "dep:thiserror",
+  "dep:tokio",
+]
+macros = []
+test_utils = [
+  "dep:rand",
+  "dep:rand_chacha",
+  "sqlite",
+]
 
 [dependencies]
-ciborium = { version = "0.2.2", optional = true }
-hex = { version = "0.4.3", optional = true }
-p2panda-core = { path = "../p2panda-core", version = "0.5.1" }
-rand = { version = "0.8.5", optional = true }
-sqlx = { version = "0.8.3", optional = true, features = ["sqlite", "runtime-tokio"] }
-thiserror = "2.0.12"
-trait-variant = "0.1.2"
+p2panda-core = { path = "../p2panda-core", version = "0.5.1", optional = true, default-features = false }
+rand = { version = "0.10.0", optional = true }
+rand_chacha = { version = "0.10.0", optional = true }
+serde = { version = "1.0.228", optional = true }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
+thiserror = { version = "2.0.16", optional = true }
+tokio = { version = "1.47.1", features = ["sync"], optional = true }
 
 [dev-dependencies]
-rand = "0.8.5"
-serde = "1.0.219"
-tokio = { version = "1.44.2", features = ["rt", "macros"] }
+futures-test = "0.3.31"
+p2panda-core = { path = "../p2panda-core", version = "0.5.1", default-features = false, features = ["test_utils"] }
+p2panda-store = { path = ".", features = ["test_utils"] }
+tokio = { version = "1.47.1", features = ["rt", "macros"] }
