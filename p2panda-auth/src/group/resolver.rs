@@ -8,10 +8,7 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::graph::{concurrent_bubbles, split_bubble};
 use crate::group::crdt::{GroupCrdtInnerError, apply_remove_unsafe};
-use crate::group::{
-    AuthorityGraphs, GroupAction, GroupControlMessage, GroupCrdtInnerState, GroupMember,
-    apply_action,
-};
+use crate::group::{AuthorityGraphs, GroupAction, GroupCrdtInnerState, GroupMember, apply_action};
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.  
@@ -49,18 +46,18 @@ use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver
 /// When an operation is "explicitly" filtered it may cause dependent operations to become
 /// invalid, these operations should not be applied to the group state.
 #[derive(Clone, Debug, Default)]
-pub struct StrongRemove<ID, OP, C, M> {
-    _phantom: PhantomData<(ID, OP, C, M)>,
+pub struct StrongRemove<ID, OP, M, C> {
+    _phantom: PhantomData<(ID, OP, M, C)>,
 }
 
-impl<ID, OP, C, M> Resolver<ID, OP, C, M> for StrongRemove<ID, OP, C, M>
+impl<ID, OP, M, C> Resolver<ID, OP, M, C> for StrongRemove<ID, OP, M, C>
 where
     ID: IdentityHandle + Ord,
     OP: OperationId + Ord,
+    M: Clone + Operation<ID, OP, C>,
     C: Conditions,
-    M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    type State = GroupCrdtInnerState<ID, OP, C, M>;
+    type State = GroupCrdtInnerState<ID, OP, M, C>;
     type Error = GroupCrdtInnerError<OP>;
 
     /// Identify if an operation should trigger a group state rebuild.
@@ -104,12 +101,12 @@ where
     }
 }
 
-impl<ID, OP, C, M> StrongRemove<ID, OP, C, M>
+impl<ID, OP, M, C> StrongRemove<ID, OP, M, C>
 where
     ID: IdentityHandle + Ord,
     OP: OperationId + Ord,
+    M: Clone + Operation<ID, OP, C>,
     C: Conditions,
-    M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
     /// Process a single operation bubble.
     ///
@@ -117,9 +114,9 @@ where
     /// 2) compute operation filter following strong remove rules
     /// 3) resolver group membership state
     fn process_bubble(
-        mut y: GroupCrdtInnerState<ID, OP, C, M>,
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
         bubble: &HashSet<OP>,
-    ) -> GroupCrdtInnerState<ID, OP, C, M> {
+    ) -> GroupCrdtInnerState<ID, OP, M, C> {
         // Remove all non-bubble operations from the graph.
         let bubble_graph = {
             let non_bubble_operations: Vec<_> = y
@@ -160,17 +157,17 @@ where
             return false;
         }
 
-        let group_id = operation.payload().group_id();
+        let group_id = operation.group_id();
         authority_graphs.is_cycle(&group_id, &operation.id())
     }
 
     /// Check if the passed operation re-adds a previously removed member.
     fn is_readd(group_id: ID, removed: ID, operation: &M) -> bool {
-        if group_id != operation.payload().group_id() {
+        if group_id != operation.group_id() {
             return false;
         }
 
-        let GroupAction::Add { member: added, .. } = &operation.payload().action else {
+        let GroupAction::Add { member: added, .. } = &operation.action() else {
             return false;
         };
 
@@ -179,7 +176,7 @@ where
 
     /// Check if an operation is authored by a removed member.
     fn is_removed(group_id: ID, removed: ID, operation: &M) -> bool {
-        if group_id != operation.payload().group_id() {
+        if group_id != operation.group_id() {
             return false;
         }
 
@@ -188,10 +185,10 @@ where
 
     /// Construct an operation filter based on "strong remove" rules.
     fn compute_filter(
-        mut y: GroupCrdtInnerState<ID, OP, C, M>,
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
         bubble: &HashSet<OP>,
         authority_graphs: &mut AuthorityGraphs<ID, OP>,
-    ) -> GroupCrdtInnerState<ID, OP, C, M> {
+    ) -> GroupCrdtInnerState<ID, OP, M, C> {
         // All operations which should be filtered out due to concurrent actions.
         let mut filter = HashSet::new();
 
@@ -217,7 +214,7 @@ where
             }
 
             // Extend the filter with all concurrent operations from the removed author.
-            let group_id = operation.payload().group_id();
+            let group_id = operation.group_id();
             let (mut concurrent, ..) = split_bubble(&y.graph, bubble, *operation_id);
             concurrent.retain(|id| {
                 let concurrent_operation =
@@ -249,7 +246,7 @@ where
         for id in bubble_graph.nodes() {
             let operation = operations.get(&id).expect("all operations present in map");
             let author = operation.author();
-            let group_id = operation.payload().group_id();
+            let group_id = operation.group_id();
 
             // If this is a remove or demote of a manager then add it to the authority graph.
             if let Some(removed) = removed_or_demoted_manager(operation) {
@@ -267,9 +264,9 @@ where
 
     /// Apply an operation to the auth state.
     fn apply_operation(
-        mut y: GroupCrdtInnerState<ID, OP, C, M>,
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
         operation_id: OP,
-    ) -> GroupCrdtInnerState<ID, OP, C, M> {
+    ) -> GroupCrdtInnerState<ID, OP, M, C> {
         let operation = y
             .operations
             .get(&operation_id)
@@ -284,10 +281,10 @@ where
         groups_y = if !y.mutual_removes.contains(&operation_id) {
             apply_action(
                 groups_y,
-                operation.payload().group_id(),
+                operation.group_id(),
                 operation.id(),
                 operation.author(),
-                &operation.payload().action,
+                &operation.action(),
                 &y.ignore,
             )
             .state()
@@ -301,7 +298,7 @@ where
             // changing if support for group managers is introduced.
             apply_remove_unsafe(
                 groups_y,
-                operation.payload().group_id(),
+                operation.group_id(),
                 GroupMember::Individual(removed),
             )
         };
@@ -312,14 +309,14 @@ where
 
 /// Return the member id if this operation removes a member, or demotes a member from having
 /// manager access.
-fn removed_or_demoted_manager<ID, OP, C, M>(operation: &M) -> Option<ID>
+fn removed_or_demoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
     ID: IdentityHandle + Ord,
     OP: OperationId + Ord,
+    M: Clone + Operation<ID, OP, C>,
     C: Conditions,
-    M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    let action = operation.payload().action;
+    let action = operation.action();
     if let GroupAction::Remove { member: removed } = action {
         return Some(removed.id());
     }
@@ -338,14 +335,14 @@ where
 
 /// Return the member id if this operation adds a manager member or promotes a member to have
 /// manager access.
-fn added_or_promoted_manager<ID, OP, C, M>(operation: &M) -> Option<ID>
+fn added_or_promoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
     ID: IdentityHandle + Ord,
     OP: OperationId + Ord,
+    M: Clone + Operation<ID, OP, C>,
     C: Conditions,
-    M: Clone + Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
-    let action = operation.payload().action;
+    let action = operation.action();
     if let GroupAction::Add {
         member: added,
         access,
@@ -371,9 +368,9 @@ where
 mod tests {
     use crate::Access;
     use crate::group::GroupMember;
-    use crate::test_utils::no_ord::TestGroupState;
     use crate::test_utils::{
-        MemberId, add_member, assert_members, create_group, demote_member, remove_member, sync,
+        MemberId, TestGroupState, add_member, assert_members, create_group, demote_member,
+        remove_member, sync,
     };
 
     use super::*;
@@ -401,7 +398,7 @@ mod tests {
         //
         // Both removals should be processed, Claire remains
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -444,7 +441,7 @@ mod tests {
         // All three removals form a cycle
         // Final members: []
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -500,7 +497,7 @@ mod tests {
         // The removals and add forms a transitive cycle
         // Final members: []
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -554,7 +551,7 @@ mod tests {
         //
         // Final members: [Alice (manage), Bob (write), Claire (manage)]
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -604,7 +601,7 @@ mod tests {
         //
         // Final members: [Alice (manage), Bob (write), Claire (manage)]
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(
@@ -665,7 +662,7 @@ mod tests {
         //
         // After merging, only Alice remains (removals win).
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Create initial group with Alice and Bob
         let op0 = create_group(
@@ -727,7 +724,7 @@ mod tests {
         // Filtered: [3]
         // Final members: [Alice, Bob, Claire, Eve]
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates group with Alice, Bob, Claire
         let op0 = create_group(
@@ -811,7 +808,7 @@ mod tests {
         // 6: Frank adds Grace
         // 7: Dave removes Alice
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Create initial group with Alice and Bob
         let op0 = create_group(
@@ -902,7 +899,7 @@ mod tests {
         // Filtered: [2]
         // Final members: [Alice, Claire]
 
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates group with Alice, Bob, Claire
         let op0 = create_group(
@@ -941,7 +938,7 @@ mod tests {
 
     #[test]
     fn filter_only_concurrent_operations() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // 0: Alice creates a group
         let op0 = create_group(

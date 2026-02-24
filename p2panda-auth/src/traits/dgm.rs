@@ -8,7 +8,7 @@ use crate::group::GroupMember;
 use crate::traits::{IdentityHandle, OperationId};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
-pub trait Groups<ID, OP, C, MSG>
+pub trait Groups<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId,
@@ -21,12 +21,11 @@ where
     /// called.
     fn create(
         &mut self,
-        group_id: ID,
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
-    ) -> Result<MSG, Self::Error>;
+    ) -> Result<M, Self::Error>;
 
     /// Process a remotely-authored group action message.
-    fn receive_from_remote(&mut self, remote_operation: MSG) -> Result<(), Self::Error>;
+    fn receive_from_remote(&mut self, remote_operation: M) -> Result<(), Self::Error>;
 
     /// Add a member to the group.
     ///
@@ -38,10 +37,10 @@ where
         adder: ID,
         added: ID,
         access: Access<C>,
-    ) -> Result<MSG, Self::Error>;
+    ) -> Result<M, Self::Error>;
 
     /// Removes a member from the group.
-    fn remove(&mut self, group_id: ID, remover: ID, removed: ID) -> Result<MSG, Self::Error>;
+    fn remove(&mut self, group_id: ID, remover: ID, removed: ID) -> Result<M, Self::Error>;
 
     /// Promote a member to the given access level.
     fn promote(
@@ -50,7 +49,7 @@ where
         promoter: ID,
         promoted: ID,
         access: Access<C>,
-    ) -> Result<MSG, Self::Error>;
+    ) -> Result<M, Self::Error>;
 
     /// Demote a member to the given access level.
     fn demote(
@@ -59,7 +58,7 @@ where
         demoter: ID,
         demoted: ID,
         access: Access<C>,
-    ) -> Result<MSG, Self::Error>;
+    ) -> Result<M, Self::Error>;
 }
 
 /// Interface for querying group membership and access levels.

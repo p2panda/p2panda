@@ -9,7 +9,7 @@ use crate::group::GroupMember;
 /// Actions for creating groups and modifying group membership.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
-pub enum GroupAction<ID, C> {
+pub enum GroupAction<ID, C = ()> {
     Create {
         initial_members: Vec<(GroupMember<ID>, Access<C>)>,
     },

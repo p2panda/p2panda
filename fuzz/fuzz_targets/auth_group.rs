@@ -11,13 +11,10 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_auth::group::{
-    GroupAction, GroupControlMessage, GroupCrdtError, GroupCrdtState, GroupMember,
+use p2panda_auth::group::{GroupAction, GroupCrdtError, GroupCrdtState, GroupMember};
+use p2panda_auth::test_utils::{
+    MemberId, MessageId, TestGroup, TestGroupError, TestGroupState, TestOperation,
 };
-use p2panda_auth::test_utils::partial_ord::{
-    TestGroup, TestGroupError, TestGroupState, TestOrderer,
-};
-use p2panda_auth::test_utils::{MemberId, MessageId, TestOperation};
 use p2panda_auth::traits::Operation as OperationTrait;
 use p2panda_auth::{Access, AccessLevel};
 use rand::rngs::StdRng;
@@ -182,8 +179,7 @@ impl Member {
         rng: &mut StdRng,
     ) -> Self {
         let auth_heads_ref = Rc::new(RefCell::new(vec![]));
-        let orderer_y = TestOrderer::init(my_id, auth_heads_ref.clone(), StdRng::from_rng(rng));
-        let groups_y = GroupCrdtState::new(orderer_y);
+        let groups_y = GroupCrdtState::new();
 
         let mut member = Member {
             my_id,
@@ -241,18 +237,20 @@ impl Member {
         initial_members: Vec<(GroupMember<MemberId>, Access<()>)>,
         operations: &mut HashMap<MessageId, (Suggestion, TestOperation)>,
     ) {
-        let control_message = GroupControlMessage {
-            group_id,
-            action: GroupAction::Create {
-                initial_members: initial_members.clone(),
-            },
+        let action = GroupAction::Create {
+            initial_members: initial_members.clone(),
         };
 
-        let (groups_y_i, operation) =
-            TestGroup::prepare(self.groups_y.clone(), &control_message).unwrap();
-        let groups_y_ii = TestGroup::process(groups_y_i, &operation).unwrap();
+        let dependencies = self.groups_y.inner.heads();
+        let operation = TestOperation {
+            id: rand::random(),
+            author: self.id(),
+            dependencies: dependencies.into_iter().collect(),
+            group_id,
+            action,
+        };
 
-        self.groups_y = groups_y_ii;
+        self.groups_y = TestGroup::process(self.groups_y.clone(), &operation).unwrap();
         self.auth_heads_ref
             .replace(self.groups_y.inner.heads().into_iter().collect());
 
@@ -305,25 +303,26 @@ impl Member {
     pub fn process_local(
         &mut self,
         group_id: MemberId,
-        operation: &TestGroupAction,
+        action: &TestGroupAction,
     ) -> Result<Option<TestOperation>, TestGroupError> {
-        let result = match operation {
+        let result = match action {
             TestGroupAction::Noop => Ok(None),
             TestGroupAction::Action(action) => {
-                let control_message = GroupControlMessage {
+                let dependencies = self.groups_y.inner.heads();
+                let operation = TestOperation {
+                    id: rand::random(),
+                    author: self.id(),
+                    dependencies: dependencies.into_iter().collect(),
                     group_id,
-                    action: action.clone(),
+                    action: action.to_owned(),
                 };
 
-                let (groups_y_i, operation) =
-                    TestGroup::prepare(self.groups_y.clone(), &control_message).unwrap();
-                let groups_y_ii = match TestGroup::process(groups_y_i.clone(), &operation) {
+                let groups_y_i = match TestGroup::process(self.groups_y.clone(), &operation) {
                     Ok(y) => y,
                     Err(err) => {
                         // The fuzz tests may suggest operations which cause a cycle so we ignore
                         // these errors.
                         if let GroupCrdtError::GroupCycle(_, _, _) = err {
-                            self.groups_y = groups_y_i;
                             return Ok(None);
                         } else {
                             self.report(group_id, true);
@@ -332,7 +331,7 @@ impl Member {
                         }
                     }
                 };
-                self.groups_y = groups_y_ii;
+                self.groups_y = groups_y_i;
                 self.auth_heads_ref
                     .replace(self.groups_y.inner.heads().into_iter().collect());
 
