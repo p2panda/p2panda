@@ -119,6 +119,11 @@ where
         Ok(())
     }
 
+    /// Take the store from the orderer.
+    pub fn store(self) -> S {
+        self.store
+    }
+
     /// Recursively check if any pending items now have their dependencies met.
     async fn process_pending(&mut self, key: K) -> Result<(), PartialOrderError> {
         // Get all items which depend on the passed key.
