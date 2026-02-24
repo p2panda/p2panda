@@ -91,7 +91,7 @@ impl Node {
         self.public_key
     }
 
-    pub fn commit(&self, _message_id: Hash) {
+    pub fn ack(&self, _message_id: Hash) {
         unimplemented!()
     }
 }
@@ -103,6 +103,16 @@ impl Node {
 #[derive(Error, Debug)]
 #[error("error occurred in internal gossip actor: {0}")]
 pub struct EphemeralStreamHandleError(#[from] GossipError);
+
+#[derive(Clone, Default, Debug)]
+pub enum AckPolicy {
+    /// Each individual message must be acknowledged.
+    Explicit,
+
+    /// No manual acknowledgment needed, node assumes acknowledgment on delivery.
+    #[default]
+    Automatic,
+}
 
 #[derive(Clone, Default, Debug)]
 pub(crate) struct Config {
