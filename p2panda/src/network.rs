@@ -33,7 +33,6 @@ impl Network {
         // TODO: Supervision of actors.
 
         let address_book = AddressBook::builder()
-            // TODO: Move address book store into p2panda-store-next
             // .store(address_book_store)
             .spawn()
             .await?;
