@@ -14,7 +14,7 @@ use thiserror::Error;
 use crate::{Extensions, Header, Operation};
 
 /// Handle onto an eventually-consistent stream, exposes API for publishing messages, subscribing
-/// to the event stream, and committing received messages.
+/// to the event stream, and acknowledging received messages.
 pub struct StreamHandle<M> {
     topic: Topic,
     inner: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
@@ -50,10 +50,10 @@ where
         unimplemented!()
     }
 
-    /// Manually commit a message.
+    /// Explicitly acknowledge message.
     // TODO: Implementing this is not a priority right now.
-    pub async fn commit(&self, _message_id: Hash) -> Result<(), StreamError> {
-        // This is a no-op if messages are automatically committed (which is the default).
+    pub async fn ack(&self, _message_id: Hash) -> Result<(), StreamError> {
+        // This is a no-op if messages are automatically acked (which is the default).
         unimplemented!()
     }
 
@@ -108,7 +108,7 @@ impl<M> Message<M> {
         &self.body
     }
 
-    pub fn commit(&self) {
+    pub fn ack(&self) {
         unimplemented!()
     }
 }
