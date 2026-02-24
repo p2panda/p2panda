@@ -12,7 +12,7 @@ use p2panda_store::sqlite::SqliteStoreBuilder;
 
 use crate::Node;
 use crate::network::NetworkConfig;
-use crate::node::{Config, NodeError};
+use crate::node::{AckPolicy, Config, NodeError};
 
 #[derive(Default)]
 pub struct NodeBuilder {
@@ -47,8 +47,8 @@ impl NodeBuilder {
         self
     }
 
-    pub fn auto_commit(mut self, value: bool) -> Self {
-        self.config.auto_commit = value;
+    pub fn ack_policy(mut self, value: AckPolicy) -> Self {
+        self.config.ack_policy = value;
         self
     }
 
