@@ -41,7 +41,7 @@ impl NodeBuilder {
     }
 
     // TODO: Check if this is sufficient for Reflection to run custom migrations. Are we exporting
-    // the p2panda one's already in p2panda-store-next?
+    // the p2panda one's already in p2panda-store?
     pub fn default_migrations(mut self, value: bool) -> Self {
         self.store = self.store.run_default_migrations(value);
         self
