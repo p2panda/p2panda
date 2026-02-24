@@ -215,12 +215,7 @@ pub(crate) fn auth_message_to_group_event<ID, C>(
 where
     C: Conditions,
 {
-    let args = match auth_message {
-        AuthMessage::Args(auth_args) => auth_args,
-        AuthMessage::Forged { args, .. } => args,
-    };
-
-    let group_id = args.control_message.group_id();
+    let group_id = auth_message.group_id();
     let mut group_actors: Vec<_> = auth_y
         .root_members(group_id)
         .into_iter()
@@ -236,7 +231,7 @@ where
         group_actors,
     };
 
-    let group_event = match args.control_message.action.clone() {
+    let group_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => GroupEvent::Created {
             group_id,
             initial_members: context.group_actors.clone(),
@@ -271,16 +266,11 @@ where
     C: Conditions,
     M: AuthoredMessage + SpacesMessage<ID, C>,
 {
-    let auth_args = match auth_message {
-        AuthMessage::Args(auth_args) => auth_args,
-        AuthMessage::Forged { args, .. } => args,
-    };
-
     let SpacesArgs::SpaceMembership { space_id, .. } = space_message.args() else {
         panic!("unexpected message type");
     };
     let space_id = *space_id;
-    let group_id = auth_args.control_message.group_id();
+    let group_id = auth_message.group_id();
 
     let context = SpaceContext {
         auth_author: auth_message.author(),
@@ -289,7 +279,7 @@ where
         members: next_members.clone(),
     };
 
-    let space_event = match auth_args.control_message.action.clone() {
+    let space_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
             space_id,
             initial_members: next_members,
