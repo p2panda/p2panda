@@ -2,11 +2,12 @@
 
 use std::fmt::Debug;
 
+use p2panda_auth::group::GroupAction;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::{crypto::xchacha20::XAeadNonce, key_bundle::LongTermKeyBundle};
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ActorId, AuthControlMessage, EncryptionDirectMessage, OperationId};
+use crate::types::{ActorId, EncryptionDirectMessage, OperationId};
 
 /// Enum representing all possible message types.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -18,8 +19,11 @@ pub enum SpacesArgs<ID, C> {
 
     /// System message containing an auth control message.
     Auth {
-        /// "Control message" describing group operation ("add member", "remove member", etc.).
-        control_message: AuthControlMessage<C>,
+        /// id of the group this message applies to.
+        group_id: ActorId,
+
+        /// Action to be applied to this group.
+        group_action: GroupAction<ActorId, C>,
 
         /// Auth dependencies. These are the latest heads of the global auth control message graph.
         auth_dependencies: Vec<OperationId>,

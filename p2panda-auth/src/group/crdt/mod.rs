@@ -9,16 +9,12 @@ use std::marker::PhantomData;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
-use serde::de::DeserializeOwned;
-#[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::access::Access;
-use crate::group::{
-    GroupAction, GroupControlMessage, GroupMember, GroupMembersState, GroupMembershipError,
-};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Orderer, Resolver};
+use crate::group::{GroupAction, GroupMember, GroupMembersState, GroupMembershipError};
+use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
 /// Max depth of group nesting allowed.
 ///
@@ -36,12 +32,11 @@ pub enum GroupCrdtInnerError<OP> {
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
-pub enum GroupCrdtError<ID, OP, C, RS, ORD>
+pub enum GroupCrdtError<ID, OP, M, C, RS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ID, OP, C, ORD::Operation>,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
+    RS: Resolver<ID, OP, M, C>,
 {
     #[error(transparent)]
     Inner(#[from] GroupCrdtInnerError<OP>),
@@ -58,9 +53,6 @@ where
     #[error("attempted to add group {0} with manage access")]
     ManagerGroupsNotAllowed(ID),
 
-    #[error("orderer error: {0}")]
-    Orderer(ORD::Error),
-
     #[error("resolver error: {0}")]
     Resolver(RS::Error),
 }
@@ -72,7 +64,7 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
-pub struct GroupCrdtInnerState<ID, OP, C, M>
+pub struct GroupCrdtInnerState<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -93,7 +85,7 @@ where
     pub graph: DiGraphMap<OP, ()>,
 }
 
-impl<ID, OP, C, M> Default for GroupCrdtInnerState<ID, OP, C, M>
+impl<ID, OP, M, C> Default for GroupCrdtInnerState<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
@@ -109,12 +101,12 @@ where
     }
 }
 
-impl<ID, OP, C, M> GroupCrdtInnerState<ID, OP, C, M>
+impl<ID, OP, M, C> GroupCrdtInnerState<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
+    M: Operation<ID, OP, C>,
     C: Conditions,
-    M: Operation<ID, OP, GroupControlMessage<ID, C>>,
 {
     /// Current tips for the groups operation graph.
     pub fn heads(&self) -> HashSet<OP> {
@@ -248,13 +240,12 @@ where
     }
 
     pub(crate) fn would_create_cycle(&self, operation: &M) -> bool {
-        let control_message = operation.payload();
-        let parent_group_id = control_message.group_id();
+        let parent_group_id = operation.group_id();
 
         if let GroupAction::Add {
             member: GroupMember::Group(child_group_id),
             ..
-        } = &operation.payload().action
+        } = &operation.action()
         {
             let states = self.current_state();
             let mut stack = vec![*child_group_id];
@@ -289,42 +280,54 @@ where
 #[cfg_attr(
     any(test, feature = "serde"),
     derive(Deserialize, Serialize),
-    serde(bound = "
-            ID: DeserializeOwned + Serialize, 
-            OP: DeserializeOwned + Serialize, 
-            C: DeserializeOwned + Serialize, 
-            ORD::Operation: DeserializeOwned + Serialize,
-            ORD::State: DeserializeOwned + Serialize
-        ")
+    serde(bound(
+        deserialize = "
+            ID: Deserialize<'de>, 
+            OP: Deserialize<'de>, 
+            M: Deserialize<'de>, 
+            C: Deserialize<'de>, 
+        ",
+        serialize = "
+            ID: Serialize, 
+            OP: Serialize, 
+            M: Serialize, 
+            C: Serialize, 
+        "
+    ))
 )]
-pub struct GroupCrdtState<ID, OP, C, ORD>
+pub struct GroupCrdtState<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
 {
     /// Inner groups state.
-    pub inner: GroupCrdtInnerState<ID, OP, C, ORD::Operation>,
-
-    /// State for the orderer.
-    pub orderer_y: ORD::State,
+    pub inner: GroupCrdtInnerState<ID, OP, M, C>,
 }
 
-impl<ID, OP, C, ORD> GroupCrdtState<ID, OP, C, ORD>
+impl<ID, OP, M, C> Default for GroupCrdtState<ID, OP, M, C>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
+    M: Operation<ID, OP, C>,
     C: Conditions,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
+{
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
+}
+
+impl<ID, OP, M, C> GroupCrdtState<ID, OP, M, C>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    M: Operation<ID, OP, C>,
+    C: Conditions,
 {
     /// Instantiate a new state.
-    pub fn new(orderer_y: ORD::State) -> Self {
-        Self {
-            inner: GroupCrdtInnerState::default(),
-            orderer_y,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Get all direct members of a group.
@@ -392,55 +395,34 @@ where
 /// - ORD: orderer which exposes an API for creating and processing operations
 ///   with meta-data which allow them to be processed in partial order.
 #[derive(Clone, Debug, Default)]
-pub struct GroupCrdt<ID, OP, C, RS, ORD> {
-    _phantom: PhantomData<(ID, OP, C, RS, ORD)>,
+pub struct GroupCrdt<ID, OP, M, C, RS> {
+    _phantom: PhantomData<(ID, OP, M, C, RS)>,
 }
 
-impl<ID, OP, C, RS, ORD> GroupCrdt<ID, OP, C, RS, ORD>
+impl<ID, OP, M, C, RS> GroupCrdt<ID, OP, M, C, RS>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
+    M: Operation<ID, OP, C> + Clone,
     C: Conditions,
-    RS: Resolver<ID, OP, C, ORD::Operation, State = GroupCrdtInnerState<ID, OP, C, ORD::Operation>>,
-    ORD: Orderer<ID, OP, GroupControlMessage<ID, C>> + Debug,
-    ORD::Operation: Clone,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
 {
-    pub fn init(orderer_y: ORD::State) -> GroupCrdtState<ID, OP, C, ORD> {
+    pub fn init() -> GroupCrdtState<ID, OP, M, C> {
         GroupCrdtState {
             inner: GroupCrdtInnerState::default(),
-            orderer_y,
         }
-    }
-
-    /// Prepare a next operation to be processed locally and sent to remote
-    /// peers. An ORD implementation needs to ensure "dependencies" are
-    /// populated correctly so that a partial-order of all operations in the
-    /// system can be established.
-    #[allow(clippy::type_complexity)]
-    pub fn prepare(
-        mut y: GroupCrdtState<ID, OP, C, ORD>,
-        action: &GroupControlMessage<ID, C>,
-    ) -> Result<(GroupCrdtState<ID, OP, C, ORD>, ORD::Operation), GroupCrdtError<ID, OP, C, RS, ORD>>
-    {
-        // Get the next operation from our global orderer.
-        let ordering_y = y.orderer_y;
-        let (ordering_y, operation) =
-            ORD::next_message(ordering_y, action).map_err(GroupCrdtError::Orderer)?;
-        y.orderer_y = ordering_y;
-        Ok((y, operation))
     }
 
     /// Process an operation created locally or received from a remote peer.
     #[allow(clippy::type_complexity)]
     pub fn process(
-        mut y: GroupCrdtState<ID, OP, C, ORD>,
-        operation: &ORD::Operation,
-    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
+        mut y: GroupCrdtState<ID, OP, M, C>,
+        operation: &M,
+    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
         let operation_id = operation.id();
         let actor = operation.author();
-        let control_message = operation.payload();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
-        let group_id = control_message.group_id();
+        let group_id = operation.group_id();
         let rebuild_required =
             RS::rebuild_required(&y.inner, operation).map_err(GroupCrdtError::Resolver)?;
 
@@ -466,7 +448,7 @@ where
             group_id,
             operation_id,
             actor,
-            &control_message.action,
+            &operation.action(),
             &y.inner.ignore,
         )
         .state()
@@ -490,15 +472,15 @@ where
     /// actually required.
     #[allow(clippy::type_complexity)]
     pub(crate) fn validate(
-        y: GroupCrdtState<ID, OP, C, ORD>,
-        operation: &ORD::Operation,
-    ) -> Result<GroupCrdtState<ID, OP, C, ORD>, GroupCrdtError<ID, OP, C, RS, ORD>> {
+        y: GroupCrdtState<ID, OP, M, C>,
+        operation: &M,
+    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
         // Detect already processed operations.
         if y.inner.operations.contains_key(&operation.id()) {
             // The operation has already been processed.
             return Err(GroupCrdtError::DuplicateOperation(
                 operation.id(),
-                operation.payload().group_id(),
+                operation.group_id(),
             ));
         }
 
@@ -508,7 +490,7 @@ where
         // @TODO: To support this behavior updates in the StrongRemove resolver
         // so that cross-group concurrent remove cycles are detected. Related to
         // issue: https://github.com/p2panda/p2panda/issues/779
-        match &operation.payload().action {
+        match &operation.action() {
             GroupAction::Add { member, access } | GroupAction::Promote { member, access } => {
                 if member.is_group() && access.is_manage() {
                     return Err(GroupCrdtError::ManagerGroupsNotAllowed(member.id()));
@@ -559,12 +541,12 @@ where
 
         // Detect if this operation would cause a nested group cycle.
         if temp_y.inner.would_create_cycle(operation) {
-            let parent_group = operation.payload().group_id();
+            let parent_group = operation.group_id();
 
             // Only adds cause a cycle, we just access the member id here.
             let GroupAction::Add {
                 member: sub_group, ..
-            } = operation.payload().action
+            } = operation.action()
             else {
                 unreachable!()
             };
@@ -579,10 +561,10 @@ where
         // Apply the operation onto the temporary state.
         let result = apply_action(
             temp_y.inner.current_state(),
-            operation.payload().group_id(),
+            operation.group_id(),
             operation.id(),
             operation.author(),
-            &operation.payload().action,
+            &operation.action(),
             &temp_y.inner.ignore,
         );
 
@@ -612,9 +594,9 @@ where
     ///
     /// NOTE: this method _does not_ process the operation so no new state is derived.
     fn add_operation(
-        mut y: GroupCrdtState<ID, OP, C, ORD>,
-        operation: &ORD::Operation,
-    ) -> GroupCrdtState<ID, OP, C, ORD> {
+        mut y: GroupCrdtState<ID, OP, M, C>,
+        operation: &M,
+    ) -> GroupCrdtState<ID, OP, M, C> {
         let operation_id = operation.id();
         let dependencies = operation.dependencies();
 
@@ -773,9 +755,9 @@ where
 pub(crate) mod tests {
     use crate::Access;
     use crate::group::{GroupCrdtError, GroupMember, GroupMembershipError};
-    use crate::test_utils::no_ord::{TestGroup, TestGroupState};
     use crate::test_utils::{
-        add_member, create_group, demote_member, promote_member, remove_member,
+        TestGroup, TestGroupState, add_member, create_group, demote_member, promote_member,
+        remove_member,
     };
     use crate::traits::Operation;
 
@@ -792,7 +774,7 @@ pub(crate) mod tests {
 
     #[test]
     fn group_operations() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -858,7 +840,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_removal() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -921,7 +903,7 @@ pub(crate) mod tests {
 
     #[test]
     fn mutual_concurrent_removal() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -994,7 +976,7 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_groups() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1042,7 +1024,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_unauthorized_add() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1079,7 +1061,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_remove_non_member() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1098,7 +1080,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_promote_non_member() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1124,7 +1106,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_add_manager_group() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1150,7 +1132,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_demote_non_member() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1176,7 +1158,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_add_existing_member() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1202,7 +1184,7 @@ pub(crate) mod tests {
 
     #[test]
     fn error_on_remove_nonexistent_subgroup() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         let op1 = create_group(
             ALICE,
@@ -1221,7 +1203,7 @@ pub(crate) mod tests {
 
     #[test]
     fn deeply_nested_groups_with_removals() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // Create G1
         let op1 = create_group(
@@ -1322,7 +1304,7 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_groups_with_concurrent_removal_and_promotion() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // Create G1
         let op1 = create_group(
@@ -1447,7 +1429,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_removal_ooo_processing() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // Alice creates group
         let op1 = create_group(
@@ -1500,7 +1482,7 @@ pub(crate) mod tests {
 
     #[test]
     fn concurrent_add_with_insufficient_access() {
-        let y0 = TestGroupState::new(());
+        let y0 = TestGroupState::new();
 
         // Alice creates the group
         let op1 = create_group(
@@ -1564,7 +1546,7 @@ pub(crate) mod tests {
 
     #[test]
     fn add_group_with_concurrent_change() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // Create Group 1 with Alice as manager
         let op1 = create_group(
@@ -1639,7 +1621,7 @@ pub(crate) mod tests {
 
     #[test]
     fn nested_group_cycle_error() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
 
         // Create group G1 with ALICE as manager
         let op1 = create_group(
@@ -1684,7 +1666,7 @@ pub(crate) mod tests {
 
     #[test]
     fn serde_to_from_bytes() {
-        let y = TestGroupState::new(());
+        let y = TestGroupState::new();
         let op1 = create_group(
             ALICE,
             0,

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::group::GroupAction;
+
 /// Interface to express required information from operations processed by any auth graph
 /// implementation.
 ///
 /// Applications implementing these traits should authenticate the original sender of each
 /// operation.
-pub trait Operation<ID, OP, P> {
+pub trait Operation<ID, OP, C = ()> {
     /// Id of this operation.
     fn id(&self) -> OP;
 
@@ -15,6 +17,9 @@ pub trait Operation<ID, OP, P> {
     /// Auth dependencies.
     fn dependencies(&self) -> Vec<OP>;
 
-    /// Payload of this operation.
-    fn payload(&self) -> P;
+    /// The id of the group the action applies to.
+    fn group_id(&self) -> ID;
+
+    /// The group action.
+    fn action(&self) -> GroupAction<ID, C>;
 }

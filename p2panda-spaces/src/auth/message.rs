@@ -1,28 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
+use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::SpacesArgs;
 use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
-use crate::types::{ActorId, AuthControlMessage, OperationId};
+use crate::types::{ActorId, OperationId};
 
-/// Arguments which are returned from p2panda-auth APIs.
 #[derive(Clone, Debug)]
-pub struct AuthArgs<C> {
-    pub(crate) dependencies: Vec<OperationId>,
-    pub(crate) control_message: AuthControlMessage<C>,
-}
-
-/// Message which can be processed by p2panda-auth APIs.
-#[derive(Clone, Debug)]
-#[allow(clippy::large_enum_variant)]
-pub enum AuthMessage<C> {
-    Args(AuthArgs<C>),
-    Forged {
-        author: ActorId,
-        operation_id: OperationId,
-        args: AuthArgs<C>,
-    },
+pub struct AuthMessage<C> {
+    operation_id: OperationId,
+    author: ActorId,
+    dependencies: Vec<OperationId>,
+    group_id: ActorId,
+    action: GroupAction<ActorId, C>,
 }
 
 impl<C> AuthMessage<C>
@@ -35,68 +28,44 @@ where
         M: AuthoredMessage + SpacesMessage<ID, C>,
     {
         let SpacesArgs::Auth {
-            control_message,
+            group_id,
+            group_action,
             auth_dependencies,
         } = message.args()
         else {
             panic!("unexpected message type")
         };
-        AuthMessage::Forged {
-            author: message.author(),
+        AuthMessage {
             operation_id: message.id(),
-            args: AuthArgs {
-                dependencies: auth_dependencies.clone(),
-                control_message: control_message.to_owned(),
-            },
+            author: message.author(),
+            dependencies: auth_dependencies.to_owned(),
+            group_id: *group_id,
+            action: group_action.to_owned(),
         }
     }
 }
 
-impl<C> AuthOperation<ActorId, OperationId, AuthControlMessage<C>> for AuthMessage<C>
+impl<C> AuthOperation<ActorId, OperationId, C> for AuthMessage<C>
 where
     C: Conditions,
 {
     fn id(&self) -> OperationId {
-        match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
-            AuthMessage::Forged { operation_id, .. } => *operation_id,
-        }
+        self.operation_id.to_owned()
     }
 
     fn author(&self) -> ActorId {
-        match self {
-            AuthMessage::Args(_) => {
-                // Nothing of this will ever be called at this stage where we're just preparing the
-                // arguments for a future message to be forged.
-                unreachable!()
-            }
-            AuthMessage::Forged { author, .. } => *author,
-        }
+        self.author.to_owned()
     }
 
     fn dependencies(&self) -> Vec<OperationId> {
-        match self {
-            AuthMessage::Args(args) => args.dependencies.clone(),
-            AuthMessage::Forged {
-                args: AuthArgs { dependencies, .. },
-                ..
-            } => dependencies.clone(),
-        }
+        self.dependencies.to_owned()
     }
 
-    fn payload(&self) -> AuthControlMessage<C> {
-        match self {
-            AuthMessage::Args(args) => args.control_message.clone(),
-            AuthMessage::Forged {
-                args: AuthArgs {
-                    control_message, ..
-                },
-                ..
-            } => control_message.clone(),
-        }
+    fn group_id(&self) -> ActorId {
+        self.group_id.to_owned()
+    }
+
+    fn action(&self) -> p2panda_auth::group::GroupAction<ActorId, C> {
+        self.action.to_owned()
     }
 }

@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
-use crate::auth::orderer::AuthOrderer;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
 
@@ -172,28 +171,26 @@ pub enum OperationIdError {
 // ~~~ Auth ~~~
 
 pub type AuthGroup<C, RS> =
-    p2panda_auth::group::GroupCrdt<ActorId, OperationId, C, RS, AuthOrderer>;
+    p2panda_auth::group::GroupCrdt<ActorId, OperationId, AuthMessage<C>, C, RS>;
 
 pub type AuthGroupState<C> =
-    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, C, AuthOrderer>;
+    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, AuthMessage<C>, C>;
 
 pub type AuthGroupError<C, RS> =
-    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, C, RS, AuthOrderer>;
-
-pub type AuthControlMessage<C> = p2panda_auth::group::GroupControlMessage<ActorId, C>;
+    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, AuthMessage<C>, C, RS>;
 
 pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 
 pub type StrongRemoveResolver<C> =
-    p2panda_auth::group::resolver::StrongRemove<ActorId, OperationId, C, AuthMessage<C>>;
+    p2panda_auth::group::resolver::StrongRemove<ActorId, OperationId, AuthMessage<C>, C>;
 
 pub trait AuthResolver<C>:
     Resolver<
         ActorId,
         OperationId,
-        C,
         AuthMessage<C>,
-        State = AuthInnerState<ActorId, OperationId, C, AuthMessage<C>>,
+        C,
+        State = AuthInnerState<ActorId, OperationId, AuthMessage<C>, C>,
     >
 {
 }

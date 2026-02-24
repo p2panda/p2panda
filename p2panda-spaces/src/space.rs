@@ -13,7 +13,6 @@ use petgraph::algo::toposort;
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
-use crate::auth::orderer::AuthOrdererState;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
@@ -461,7 +460,7 @@ where
 
         let mut direct_messages = vec![];
         let encryption_y = {
-            match &auth_message.payload().action {
+            match &auth_message.action() {
                 AuthGroupAction::Create { .. } => {
                     let (encryption_y, message) =
                         EncryptionGroup::create(encryption_y, next_members.clone(), rng)
@@ -631,12 +630,6 @@ where
                 // Encryption orderer state is empty when we're initializing a new encryption
                 // state.
                 let encryption_orderer_y = EncryptionOrdererState::new();
-
-                // Auth orderer inside of a space is never used, AuthGroup::prepare is never
-                // called and we expect messages in a space to arrive based on space
-                // dependencies being satisfied.
-                let auth_orderer_y = AuthOrdererState::new();
-
                 let encryption_y = EncryptionGroup::init(
                     my_id,
                     key_manager_y,
@@ -645,12 +638,7 @@ where
                     encryption_orderer_y,
                 );
 
-                SpaceState::from_state(
-                    space_id,
-                    group_id,
-                    AuthGroupState::new(auth_orderer_y),
-                    encryption_y,
-                )
+                SpaceState::from_state(space_id, group_id, AuthGroupState::new(), encryption_y)
             }
         };
 
