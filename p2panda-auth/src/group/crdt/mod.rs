@@ -62,7 +62,10 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 /// Inner state object for `GroupCrdt` which contains the actual groups state,
 /// including operation graph and membership snapshots.
 #[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[cfg_attr(
+    any(test, feature = "test_utils", feature = "processor"),
+    derive(Clone)
+)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct GroupCrdtInnerState<ID, OP, M, C>
 where
@@ -276,7 +279,10 @@ where
 /// State object for `GroupCrdt` containing an orderer state and the inner
 /// state.
 #[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[cfg_attr(
+    any(test, feature = "test_utils", feature = "processor"),
+    derive(Clone)
+)]
 #[cfg_attr(
     any(test, feature = "serde"),
     derive(Deserialize, Serialize),
@@ -352,6 +358,11 @@ where
     /// Returns `true` if the passed group exists in the current state.
     pub fn has_group(&self, group_id: ID) -> bool {
         self.inner.current_state().contains_key(&group_id)
+    }
+
+    /// Current tips for the groups operation graph.
+    pub fn heads(&self) -> Vec<OP> {
+        self.inner.heads().into_iter().collect()
     }
 }
 
