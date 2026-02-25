@@ -7,15 +7,13 @@ mod tests;
 use std::collections::BTreeMap;
 
 use p2panda_core::cbor::encode_cbor;
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
 use sqlx::{query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LatestEntryRow, LogHeightRow, LogMetaRow};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
-
-pub type SeqNum = u64;
 
 impl<'a, L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore<'a>
 where
