@@ -5,13 +5,13 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use p2panda_core::PrivateKey;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::gossip::GossipConfig;
-use p2panda_net::iroh_endpoint::{IrohConfig, RelayUrl};
+use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::sqlite::SqliteStoreBuilder;
 
 use crate::Node;
-use crate::network::NetworkConfig;
+use crate::forge::OperationForge;
 use crate::node::{AckPolicy, Config, NodeError};
 
 #[derive(Default)]
@@ -105,7 +105,8 @@ impl NodeBuilder {
     pub async fn spawn(self) -> Result<Node, NodeError> {
         let private_key = self.private_key.unwrap_or_default();
         let store = self.store.build().await?;
+        let forge = OperationForge::from_private_key(private_key, store.clone());
 
-        Node::spawn_inner(self.config, private_key, store).await
+        Node::spawn_inner(self.config, store, forge).await
     }
 }

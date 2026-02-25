@@ -7,6 +7,7 @@
 // TODO: Check error type size.
 
 mod builder;
+mod forge;
 mod network;
 pub mod node;
 pub mod operation;
