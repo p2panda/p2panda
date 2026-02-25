@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::cbor::decode_cbor;
-use p2panda_core::{Hash, HashError, LogId};
+use p2panda_core::{Hash, HashError, LogId, SeqNum};
 use sqlx::FromRow;
 
-use crate::logs::sqlite::SeqNum;
 use crate::sqlite::{DecodeError, SqliteError};
 
 /// Database representation of the sum of all header and body byte size.

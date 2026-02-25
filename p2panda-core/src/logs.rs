@@ -33,7 +33,8 @@ pub trait LogId: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'
 
 impl<T> LogId for T where T: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de> {}
 
-type SeqNum = u64;
+/// Sequence number of an entry in an append-only log.
+pub type SeqNum = u64;
 
 /// Map of log heights grouped by author.
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
