@@ -40,7 +40,9 @@ impl Network {
         let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
         for bootstrap in &config.bootstraps {
-            address_book.insert_node_info(NodeInfo::new(*bootstrap).bootstrap());
+            address_book
+                .insert_node_info(NodeInfo::new(*bootstrap).bootstrap())
+                .await?;
         }
 
         let mut endpoint = Endpoint::builder(address_book.clone())

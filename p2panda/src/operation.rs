@@ -6,8 +6,17 @@ pub type Header = p2panda_core::Header<Extensions>;
 
 pub type Operation = p2panda_core::Operation<Extensions>;
 
+/// Versioning for internal extensions format.
+pub(crate) const VERSION: u64 = 0;
+
 // TODO: Make sure encoding is canonical over map keys (sort it before serializing).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Extensions {
-    version: u64,
+    pub version: u64,
+}
+
+impl Default for Extensions {
+    fn default() -> Self {
+        Self { version: VERSION }
+    }
 }

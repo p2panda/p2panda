@@ -5,12 +5,14 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures_util::Stream;
+use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::{Hash, PublicKey, Topic};
 use p2panda_net::sync::SyncHandle;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::{Extensions, Header, Operation};
 
 /// Handle onto an eventually-consistent stream, exposes API for publishing messages, subscribing
@@ -18,6 +20,7 @@ use crate::{Extensions, Header, Operation};
 pub struct StreamHandle<M> {
     topic: Topic,
     inner: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
+    forge: OperationForge,
     _marker: PhantomData<M>,
 }
 
@@ -28,10 +31,12 @@ where
     pub(crate) fn new(
         topic: Topic,
         handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
+        forge: OperationForge,
     ) -> Self {
         Self {
             topic,
             inner: handle,
+            forge,
             _marker: PhantomData,
         }
     }
@@ -41,8 +46,29 @@ where
     }
 
     /// Publish a message.
-    pub async fn publish(&self, _message: M) -> Result<Hash, StreamError> {
-        unimplemented!()
+    pub async fn publish(&mut self, message: M) -> Result<Hash, PublishError> {
+        let extensions = Extensions::default();
+
+        let encoded_message = encode_cbor(&message)?;
+
+        let operation = self
+            .forge
+            .create_operation(
+                self.topic(),
+                self.topic().into(),
+                Some(encoded_message),
+                extensions,
+            )
+            .await?
+            .ok_or(PublishError::DuplicateOperation)?;
+        let hash = operation.hash;
+
+        self.inner
+            .publish(operation)
+            .await
+            .map_err(|err| PublishError::SyncHandle(err.to_string()))?;
+
+        Ok(hash)
     }
 
     /// Subscribe to the message stream.
@@ -140,3 +166,18 @@ where
 
 #[derive(Debug, Error)]
 pub enum StreamError {}
+
+#[derive(Debug, Error)]
+pub enum PublishError {
+    #[error("an error occurred while serializing the message for publication: {0}")]
+    MessageEncoding(#[from] EncodeError),
+
+    #[error("an error occurred while creating an operation in the forge: {0}")]
+    Forge(#[from] ForgeError),
+
+    #[error("message already exists in the forge")]
+    DuplicateOperation,
+
+    #[error("an error occurred while publishing an operation to the log sync stream: {0}")]
+    SyncHandle(String),
+}
