@@ -37,7 +37,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
+tokio = { version = "1.49.0", features = ["macros", "rt"] }
 
 [dev-dependencies]
 p2panda = { path = ".", features = ["test_utils"] }
-tokio = { version = "1.49.0", features = ["macros", "rt"] }

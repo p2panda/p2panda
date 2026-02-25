@@ -69,13 +69,11 @@ impl Node {
         })
     }
 
-    pub async fn stream<M>(&self, topic: Topic) -> Result<StreamHandle<M>, LogSyncError<Extensions>>
+    pub fn stream<M>(&self, topic: Topic) -> StreamHandle<M>
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
-        let handle = self.network.log_sync.stream(topic.into(), true).await?;
-
-        Ok(StreamHandle::new(topic, handle))
+        StreamHandle::new(self.network.clone(), topic)
     }
 
     pub async fn ephemeral_stream<M>(
