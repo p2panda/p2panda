@@ -22,7 +22,7 @@ pub struct NodeBuilder {
 }
 
 impl NodeBuilder {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         NodeBuilder {
             private_key: None,
             config: Config::default(),

@@ -76,7 +76,7 @@ pub enum StreamEvent<M> {
     Message(Message<M>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message<M> {
     header: Header,
     topic: Topic,

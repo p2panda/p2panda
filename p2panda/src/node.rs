@@ -2,13 +2,16 @@
 
 use std::marker::PhantomData;
 
-use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
-use p2panda_net::NodeId;
+pub use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
 use p2panda_net::gossip::GossipError;
 use p2panda_net::sync::LogSyncError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use p2panda_net::iroh_endpoint::RelayUrl;
+pub use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
+pub use p2panda_net::{NetworkId, NodeId};
 
 use crate::Extensions;
 pub use crate::builder::NodeBuilder;
@@ -21,6 +24,14 @@ pub struct Node {
     public_key: PublicKey,
     store: SqliteStore<'static>,
     network: Network,
+}
+
+// FIXME: Actually implement debug for everything
+use std::fmt;
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Node").finish()
+    }
 }
 
 impl Node {

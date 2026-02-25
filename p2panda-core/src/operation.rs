@@ -169,7 +169,7 @@ impl<E> Digest<Hash> for Operation<E> {
 /// // Sign the header with the author's private key.
 /// header.sign(&private_key);
 /// ```
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
