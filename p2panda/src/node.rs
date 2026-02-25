@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::marker::PhantomData;
-
-use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
+use p2panda_core::{Hash, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::gossip::GossipError;
 use p2panda_net::sync::LogSyncError;
@@ -12,14 +10,14 @@ use thiserror::Error;
 
 use crate::Extensions;
 pub use crate::builder::NodeBuilder;
+use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::streams::{EphemeralStreamHandle, EventStream, StreamHandle};
 
 // TODO: Can we expose network or will this explode the API surface for GObject unnecessarily?
 pub struct Node {
-    private_key: PrivateKey,
-    public_key: PublicKey,
     store: SqliteStore<'static>,
+    forge: OperationForge,
     network: Network,
 }
 
@@ -29,31 +27,30 @@ impl Node {
     }
 
     pub async fn spawn() -> Result<Self, NodeError> {
-        // Generates new private key using CSPRNG from system.
-        let private_key = PrivateKey::new();
-
         // Initialises an in-memory SQLite database.
         let store = SqliteStoreBuilder::default().build().await?;
+
+        // Create a forge with a new internally-generated private key.
+        let forge = OperationForge::new(store.clone());
 
         // Use default config, this will _not_ include a bootstrap and relay and reduces the
         // functionality of p2panda to only work on local-area networks.
         let config = Config::default();
 
-        Node::spawn_inner(config, private_key, store).await
+        Node::spawn_inner(config, store, forge).await
     }
 
     pub(crate) async fn spawn_inner(
         config: Config,
-        private_key: PrivateKey,
         store: SqliteStore<'static>,
+        forge: OperationForge,
     ) -> Result<Self, NodeError> {
-        let public_key = private_key.public_key();
-        let network = Network::spawn(config.network, private_key.clone(), store.clone()).await?;
+        let network =
+            Network::spawn(config.network, forge.private_key().clone(), store.clone()).await?;
 
         Ok(Node {
-            private_key,
-            public_key,
             store,
+            forge,
             network,
         })
     }
@@ -63,8 +60,9 @@ impl Node {
         M: Serialize + for<'a> Deserialize<'a>,
     {
         let handle = self.network.log_sync.stream(topic.into(), true).await?;
+        let forge = self.forge.clone();
 
-        Ok(StreamHandle::new(topic, handle))
+        Ok(StreamHandle::new(topic, handle, forge))
     }
 
     pub async fn ephemeral_stream<M>(
@@ -78,7 +76,7 @@ impl Node {
 
         Ok(EphemeralStreamHandle::new(
             topic,
-            self.private_key.clone(),
+            self.forge.private_key().clone(),
             handle,
         ))
     }
@@ -88,7 +86,7 @@ impl Node {
     }
 
     pub fn id(&self) -> NodeId {
-        self.public_key
+        self.forge.public_key()
     }
 
     pub fn ack(&self, _message_id: Hash) {
