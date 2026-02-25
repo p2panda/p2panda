@@ -94,7 +94,7 @@ pub mod traits;
 pub use extensions::{Extension, Extensions};
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, PrivateKey, PublicKey, Signature};
-pub use logs::LogId;
+pub use logs::{LogId, SeqNum};
 pub use operation::{
     Body, Header, Operation, OperationError, RawOperation, validate_backlink, validate_header,
     validate_operation,
