@@ -330,6 +330,10 @@ impl Body {
         self.0.clone()
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
     /// BLAKE3 hash of the body bytes.
     pub fn hash(&self) -> Hash {
         Hash::new(&self.0)
