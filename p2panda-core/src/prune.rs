@@ -79,15 +79,24 @@ pub fn validate_prunable_backlink<E>(
 where
     E: Extensions,
 {
-    // If no pruning flag is set, we expect the log to have integrity with the previously given
-    // operation
-    if !prune_flag && header.seq_num > 0 {
-        match past_header {
-            Some(past_header) => validate_backlink(past_header, header),
-            None => Err(OperationError::BacklinkMissing),
+    if header.seq_num > 0 {
+        // If no pruning flag is set, we expect the log to have integrity with the previously given
+        // operation.
+        if !prune_flag {
+            match past_header {
+                Some(past_header) => validate_backlink(past_header, header),
+                None => Err(OperationError::BacklinkMissing),
+            }
+        } else {
+            Ok(())
         }
     } else {
-        Ok(())
+        // Operation is at the beginning of log but we've already progressed and assume a strictly
+        // growing sequence.
+        match past_header {
+            Some(past_header) => validate_backlink(past_header, header),
+            None => Ok(()),
+        }
     }
 }
 
@@ -129,6 +138,31 @@ mod tests {
         // Everything is fine at the beginning of the log
         assert!(validate_prunable_backlink(None, &header, false).is_ok());
         assert!(validate_prunable_backlink(None, &header, true).is_ok());
+    }
+
+    #[test]
+    fn strictly_growing_log() {
+        let private_key = PrivateKey::new();
+
+        let mut header_0 = Header::<()> {
+            public_key: private_key.public_key(),
+            ..Default::default()
+        };
+        header_0.sign(&private_key);
+
+        let mut header_1 = Header::<()> {
+            public_key: private_key.public_key(),
+            seq_num: 1,
+            backlink: Some(header_0.hash()),
+            ..Default::default()
+        };
+        header_1.sign(&private_key);
+
+        // log reached seq_num 1 and got pruned.
+        assert!(validate_prunable_backlink(Some(&header_0), &header_1, true).is_ok());
+
+        // We receive operation with seq_num 0 again, even though we've advanced already to 1.
+        assert!(validate_prunable_backlink(Some(&header_1), &header_0, false).is_err());
     }
 
     #[test]
