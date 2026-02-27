@@ -26,26 +26,26 @@ async fn insert_get_delete_operations() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
-    // Re-inserting the same operation returns false.
+    // Re-inserting the same operation errors.
     assert!(
-        !store
+        store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_err()
     );
     assert!(
         store
             .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();

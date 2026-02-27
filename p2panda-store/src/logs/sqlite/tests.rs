@@ -30,14 +30,14 @@ async fn get_latest_entry() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     assert!(
         store
             .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();
@@ -78,19 +78,19 @@ async fn get_log_heights() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log_1.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log_1.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log_2.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();
@@ -128,14 +128,14 @@ async fn get_log_size() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     assert!(
         store
             .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();
@@ -184,31 +184,31 @@ async fn get_log_entries() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_5.hash.clone(), operation_5.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();
@@ -258,31 +258,31 @@ async fn prune_entries() {
         store
             .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
     assert!(
         store
             .insert_operation(&operation_5.hash.clone(), operation_5.clone(), log.id())
             .await
-            .unwrap()
+            .is_ok()
     );
 
     store.commit(permit).await.unwrap();

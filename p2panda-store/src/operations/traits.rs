@@ -11,14 +11,13 @@ pub trait OperationStore<T, ID, C> {
 
     /// Insert an operation.
     ///
-    /// Returns `true` when the insert occurred, or `false` when the operation already existed and
-    /// no insertion occurred.
+    /// Returns with an error when the operation already existed and no insertion occurred.
     fn insert_operation(
         &self,
         id: &ID,
         operation: T,
         collection_id: C,
-    ) -> impl Future<Output = Result<bool, Self::Error>>;
+    ) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Get an operation by id.
     fn get_operation(&self, id: &ID) -> impl Future<Output = Result<Option<T>, Self::Error>>;

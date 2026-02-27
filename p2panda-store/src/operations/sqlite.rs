@@ -20,13 +20,16 @@ where
         id: &Hash,
         operation: Operation<E>,
         log_id: L,
-    ) -> Result<bool, Self::Error> {
-        let result = self
-            .tx(async |tx| {
-                query(
-                    "
-                    INSERT OR IGNORE
-                    INTO
+    ) -> Result<(), Self::Error> {
+        self.tx(async |tx| {
+            // If care is not taken to compose operation extensions which provide content
+            // uniqueness, it's possible for two operations to have the same hash id, even if they
+            // are inserted into different logs. This would break expected uniqueness guarantees
+            // in the store and elsewhere. This query will therefore return error if an operation
+            // with the same hash has already been inserted.
+            query(
+                "
+                    INSERT INTO
                         operations_v1 (
                             hash,
                             log_id,
@@ -45,36 +48,36 @@ where
                     VALUES
                         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ",
-                )
-                .bind(id.to_hex())
-                .bind(
-                    encode_cbor(&log_id)
-                        .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-                )
-                .bind(operation.header.version.to_string())
-                .bind(operation.header.public_key.to_hex())
-                .bind(operation.header.signature.map(|sig| sig.to_hex()))
-                .bind(operation.header.payload_size.to_string())
-                .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))
-                .bind(operation.header.timestamp.to_string())
-                .bind(operation.header.seq_num.to_string())
-                .bind(
-                    encode_cbor(&operation.header)
-                        .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
-                )
-                .bind(operation.header.to_bytes().len().to_string())
-                .bind(operation.body.map(|body| body.to_bytes()))
-                .bind(
-                    encode_cbor(&operation.header.extensions)
-                        .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
-                )
-                .execute(&mut **tx)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
+            )
+            .bind(id.to_hex())
+            .bind(
+                encode_cbor(&log_id)
+                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+            )
+            .bind(operation.header.version.to_string())
+            .bind(operation.header.public_key.to_hex())
+            .bind(operation.header.signature.map(|sig| sig.to_hex()))
+            .bind(operation.header.payload_size.to_string())
+            .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))
+            .bind(operation.header.timestamp.to_string())
+            .bind(operation.header.seq_num.to_string())
+            .bind(
+                encode_cbor(&operation.header)
+                    .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
+            )
+            .bind(operation.header.to_bytes().len().to_string())
+            .bind(operation.body.map(|body| body.to_bytes()))
+            .bind(
+                encode_cbor(&operation.header.extensions)
+                    .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(SqliteError::Sqlite)
+        })
+        .await?;
 
-        Ok(result.rows_affected() > 0)
+        Ok(())
     }
 
     async fn get_operation(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
