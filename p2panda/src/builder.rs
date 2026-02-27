@@ -8,11 +8,13 @@ use p2panda_net::gossip::GossipConfig;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{NetworkId, NodeId};
+use p2panda_store::SqliteStore;
 use p2panda_store::sqlite::SqliteStoreBuilder;
 
 use crate::Node;
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, Config, NodeError};
+use crate::processor::{Pipeline, TaskTracker};
 
 #[derive(Default)]
 pub struct NodeBuilder {
@@ -107,6 +109,9 @@ impl NodeBuilder {
         let store = self.store.build().await?;
         let forge = OperationForge::from_private_key(private_key, store.clone());
 
-        Node::spawn_inner(self.config, store, forge).await
+        let tasks = TaskTracker::new();
+        let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
+
+        Node::spawn_inner(self.config, store, forge, pipeline).await
     }
 }
