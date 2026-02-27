@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use p2panda::streams::EphemeralMessage;
+use p2panda::{
+    streams::{EphemeralMessage, Message, StreamEvent},
+    test_utils::setup_logging,
+};
 use p2panda_core::{PrivateKey, Topic};
 use tokio::task::JoinHandle;
 
@@ -21,7 +24,7 @@ async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[tokio::test]
-async fn ephemeral_messaging() {
+async fn ephemeral_stream() {
     let chat_id = Topic::new();
 
     let panda = p2panda::spawn().await.unwrap();
@@ -66,4 +69,35 @@ async fn ephemeral_messaging() {
 
     // Icebear received the message before panda.
     assert!(icebears_received_msg.timestamp() < pandas_received_msg.timestamp())
+}
+
+#[tokio::test]
+async fn eventually_consistent_stream() {
+    setup_logging();
+
+    let chat_id = Topic::new();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda joins the chat and sends a message to icebear.
+    let mut panda_chat = panda.stream::<String>(chat_id).await.unwrap();
+    panda_chat.publish("Hello, Icebear!".into()).await.unwrap();
+
+    // Icebear joins the chat and waits for a message of panda, to then answer.
+    let icebear_chat = icebear.stream::<String>(chat_id).await.unwrap();
+    let mut rx = icebear_chat.subscribe().await.unwrap();
+
+    let mut received_message: Option<Message<String>> = None;
+
+    while let Some(event) = rx.next().await {
+        if let StreamEvent::Message(message) = event {
+            received_message = Some(message);
+            break;
+        }
+    }
+
+    let received_message = received_message.expect("icebear should have received message");
+    assert_eq!(received_message.body(), &"Hello, Icebear!".to_string());
+    assert_eq!(received_message.author(), panda.id());
 }

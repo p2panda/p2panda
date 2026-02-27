@@ -3,7 +3,6 @@
 use p2panda_core::{Hash, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::gossip::GossipError;
-use p2panda_net::sync::LogSyncError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -12,12 +11,19 @@ use crate::Extensions;
 pub use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
+use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{EphemeralStreamHandle, EventStream, StreamHandle};
 
 // TODO: Can we expose network or will this explode the API surface for GObject unnecessarily?
 pub struct Node {
+    config: Config,
+    #[allow(unused)]
     store: SqliteStore<'static>,
     forge: OperationForge,
+    // NOTE: One single pipeline is currently used to handle _all_ incoming operations,
+    // independent of number of streams. While this is sufficient for most applications for now we
+    // might want to make the number of processors configurable to avoid head-of-line blocking.
+    pipeline: Pipeline<Topic, Extensions, Topic>,
     network: Network,
 }
 
@@ -37,32 +43,55 @@ impl Node {
         // functionality of p2panda to only work on local-area networks.
         let config = Config::default();
 
-        Node::spawn_inner(config, store, forge).await
+        // Prepare manager which orchestrates processing of incoming operations.
+        let tasks = TaskTracker::new();
+        let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
+
+        Node::spawn_inner(config, store, forge, pipeline).await
     }
 
     pub(crate) async fn spawn_inner(
         config: Config,
         store: SqliteStore<'static>,
         forge: OperationForge,
+        pipeline: Pipeline<Topic, Extensions, Topic>,
     ) -> Result<Self, NodeError> {
-        let network =
-            Network::spawn(config.network, forge.private_key().clone(), store.clone()).await?;
+        let network = Network::spawn(
+            config.network.clone(),
+            forge.private_key().clone(),
+            store.clone(),
+        )
+        .await?;
 
         Ok(Node {
+            config,
             store,
             forge,
+            pipeline,
             network,
         })
     }
 
-    pub async fn stream<M>(&self, topic: Topic) -> Result<StreamHandle<M>, LogSyncError<Extensions>>
+    pub async fn stream<M>(&self, topic: Topic) -> Result<StreamHandle<M>, StreamHandleError>
     where
-        M: Serialize + for<'a> Deserialize<'a>,
+        M: Clone + Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        let handle = self.network.log_sync.stream(topic, true).await?;
-        let forge = self.forge.clone();
+        let sync_handle = self
+            .network
+            .log_sync
+            .stream(topic, true)
+            .await
+            .map_err(|err| StreamHandleError(err.to_string()))?;
 
-        Ok(StreamHandle::new(topic, handle, forge))
+        StreamHandle::new(
+            topic,
+            self.config.ack_policy.clone(),
+            sync_handle,
+            self.forge.clone(),
+            self.pipeline.clone(),
+        )
+        .await
+        .map_err(|err| StreamHandleError(err.to_string()))
     }
 
     pub async fn ephemeral_stream<M>(
@@ -102,7 +131,15 @@ impl Node {
 #[error("error occurred in internal gossip actor: {0}")]
 pub struct EphemeralStreamHandleError(#[from] GossipError);
 
-#[derive(Clone, Default, Debug)]
+/// Broken / closed communication channel with the internal log sync actor in `p2panda-net`. This
+/// can be due to the actor crashing.
+///
+/// Users may re-attempt creating a new stream handle in case the actor restarted later.
+#[derive(Error, Debug)]
+#[error("error occurred in internal log sync actor: {0}")]
+pub struct StreamHandleError(String);
+
+#[derive(Clone, Default, Debug, PartialEq)]
 pub enum AckPolicy {
     /// Each individual message must be acknowledged.
     Explicit,
