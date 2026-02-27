@@ -13,6 +13,8 @@ Highlights are marked with a pancake 🥞
 
 - Add `LogStore` trait and SQLite implementation [#1004](https://github.com/p2panda/p2panda/pull/1004)
 - Add `TopicStore` trait and SQLite implementation [#1011](https://github.com/p2panda/p2panda/pull/1011)
+- `Ingest` processor to insert operations and associate them with topic in store [#1044](https://github.com/p2panda/p2panda/pull/1044)
+- `as_bytes` method for `Body` [#1044](https://github.com/p2panda/p2panda/pull/1044)
 
 ### Changed
 
@@ -23,6 +25,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
+- Enforce strictly growing operations log in backlink validation method [#1044](https://github.com/p2panda/p2panda/pull/1044)
 
 ## [0.5.1] - 09/02/2026
 
