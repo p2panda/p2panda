@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use p2panda_core::PrivateKey;
+use p2panda_core::{PrivateKey, Topic};
 use p2panda_net::address_book::AddressBookError;
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
@@ -20,13 +20,14 @@ use thiserror::Error;
 use crate::Extensions;
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct Network {
     pub address_book: AddressBook,
     pub mdns: MdnsDiscovery,
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
-    pub log_sync: LogSync<SqliteStore<'static>, u64, Extensions>,
+    pub log_sync: LogSync<SqliteStore<'static>, Topic, Extensions>,
 }
 
 impl Network {
@@ -85,19 +86,23 @@ impl Network {
         })
     }
 
+    #[allow(unused)]
     pub fn id(&self) -> NodeId {
         self.endpoint.node_id()
     }
 
+    #[allow(unused)]
     pub fn network_id(&self) -> NetworkId {
         self.endpoint.network_id()
     }
 
+    #[allow(unused)]
     pub async fn insert_bootstrap(&self, node_id: NodeId) -> Result<(), NetworkError> {
         let node_info = NodeInfo::new(node_id).bootstrap();
         self.address_book.insert_node_info(node_info).await?;
         Ok(())
     }
+
     // TODO: Do we need methods to get the transport info (with ip addresses etc.)?
 }
 
