@@ -3,7 +3,6 @@
 use std::marker::PhantomData;
 
 use p2panda_core::traits::{Digest, OperationId};
-// @TODO: Change these to p2panda_store when ready.
 use p2panda_store::Transaction;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::orderer::OrdererStore;
