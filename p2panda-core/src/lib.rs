@@ -32,8 +32,6 @@
 //! different authors and/or processes. Operations contain information which can be used for
 //! establishing order depending on one's use case:
 //! - `timestamp`: UNIX timestamp describing when the operation was created.
-//! - `previous`: List of hashes referring to the previously observed operations to establish
-//!   cryptographically secure partial-ordering.
 //!
 //! Custom extension fields can be defined by users of this library to introduce additional
 //! functionality depending on their particular use cases. p2panda provides our own extensions
@@ -70,7 +68,6 @@
 //!     timestamp: 1733170247,
 //!     seq_num: 0,
 //!     backlink: None,
-//!     previous: vec![],
 //!     extensions: (),
 //! };
 //!

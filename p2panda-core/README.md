@@ -62,7 +62,6 @@ let mut header = Header {
     timestamp: 1733170247,
     seq_num: 0,
     backlink: None,
-    previous: vec![],
     extensions: (),
 };
 

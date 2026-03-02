@@ -107,7 +107,6 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             timestamp,
             seq_num,
             backlink,
-            previous: vec![],
             extensions,
         };
 
