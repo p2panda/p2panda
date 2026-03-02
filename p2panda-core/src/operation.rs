@@ -14,9 +14,8 @@
 //!
 //! Operations have a `backlink` and `seq_num` field in the header. These are used to form a linked
 //! list of operations, where every subsequent operation points to the previous one by referencing
-//! its cryptographically secured hash. The `previous` field can be used to point at operations by
-//! _other_ authors when multi-writer causal partial-ordering is required. The `timestamp` field
-//! can be used when verifiable causal ordering is not required.
+//! its cryptographically secured hash. The `timestamp` field can be used when verifiable causal
+//! ordering is not required.
 //!
 //! [Header extensions](crate::extensions) can be used to add additional information, like
 //! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
@@ -44,7 +43,6 @@
 //!     timestamp: 1733170247,
 //!     seq_num: 0,
 //!     backlink: None,
-//!     previous: vec![],
 //!     extensions: (),
 //! };
 //!
@@ -84,7 +82,6 @@
 //!     timestamp: 1733170247,
 //!     seq_num: 0,
 //!     backlink: None,
-//!     previous: vec![],
 //!     extensions,
 //! };
 //!
@@ -162,7 +159,6 @@ impl<E> Digest<Hash> for Operation<E> {
 ///     timestamp: 1733170247,
 ///     seq_num: 0,
 ///     backlink: None,
-///     previous: vec![],
 ///     extensions: (),
 /// };
 ///
@@ -202,11 +198,6 @@ pub struct Header<E = ()> {
     /// operation in log.
     pub backlink: Option<Hash>,
 
-    /// List of hashes of the operations we refer to as the "previous" ones. These are operations
-    /// from other authors. Can be left empty if no partial ordering is required or no other
-    /// author has been observed yet.
-    pub previous: Vec<Hash>,
-
     /// Custom meta data.
     pub extensions: E,
 }
@@ -222,7 +213,6 @@ impl<E: Default> Default for Header<E> {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: E::default(),
         }
     }
@@ -526,7 +516,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: (),
         };
 
@@ -548,7 +537,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: None::<CustomExtensions>,
         };
         assert!(!header.verify());
@@ -577,7 +565,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: (),
         };
         header_0.sign(&private_key);
@@ -592,7 +579,6 @@ mod tests {
             timestamp: 0,
             seq_num: 1,
             backlink: Some(header_0.hash()),
-            previous: vec![],
             extensions: (),
         };
         header_1.sign(&private_key);
@@ -615,7 +601,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: (),
         };
 
@@ -729,7 +714,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: extensions.clone(),
         };
 

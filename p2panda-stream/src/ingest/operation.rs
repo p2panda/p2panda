@@ -236,7 +236,6 @@ mod tests {
             timestamp: 0,
             seq_num: 12, // we'll be missing 11 operations between the first and this one
             backlink: Some(Hash::new(b"mock operation")),
-            previous: vec![],
             extensions: (),
         };
         header.sign(&private_key);
@@ -267,7 +266,6 @@ mod tests {
             timestamp: 0,
             seq_num: 1,
             backlink: Some(Hash::new(b"mock operation")),
-            previous: vec![],
             extensions: (),
         };
         header.sign(&private_key);
@@ -292,7 +290,6 @@ mod tests {
             timestamp: 0,
             seq_num: 0,
             backlink: None,
-            previous: vec![],
             extensions: (),
         };
         header.sign(&private_key);
