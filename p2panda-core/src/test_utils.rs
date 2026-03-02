@@ -58,7 +58,6 @@ impl TestLog {
             timestamp,
             seq_num: *seq_num,
             backlink: *backlink,
-            previous: vec![],
             extensions,
         };
         header.sign(&self.private_key);

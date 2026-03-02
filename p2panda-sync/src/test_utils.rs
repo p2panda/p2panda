@@ -225,7 +225,6 @@ pub fn create_operation(
         timestamp,
         seq_num,
         backlink,
-        previous: vec![],
         extensions: (),
     };
     header.sign(private_key);

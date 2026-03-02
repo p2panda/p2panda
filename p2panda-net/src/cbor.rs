@@ -280,7 +280,6 @@ mod tests {
                 timestamp: Timestamp::now().into(),
                 seq_num,
                 backlink,
-                previous: vec![],
                 extensions: (),
             };
             header.sign(private_key);

@@ -53,7 +53,6 @@ fn main() {
         timestamp: 0,
         seq_num: 0,
         backlink: None,
-        previous: vec![],
         extensions: extensions.clone(),
     };
 
