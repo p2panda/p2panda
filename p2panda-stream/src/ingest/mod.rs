@@ -2,6 +2,8 @@
 
 mod operation;
 mod processor;
+mod traits;
 
 pub use operation::{IngestError, ingest_operation};
-pub use processor::{Ingest, IngestArguments};
+pub use processor::Ingest;
+pub use traits::IngestArgs;

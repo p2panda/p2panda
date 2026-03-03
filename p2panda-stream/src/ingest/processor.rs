@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
@@ -13,26 +14,16 @@ use tokio::sync::Notify;
 
 use crate::Processor;
 use crate::ingest::operation::{IngestError, ingest_operation};
+use crate::ingest::traits::IngestArgs;
 
-// TODO: Instead of using this concrete data type here we could introduce generics with trait
-// bounds. For this to work we need to make the validation methods generic as well.
-//
-// See issue: https://github.com/p2panda/p2panda/issues/1038
-pub struct IngestArguments<L, E, TP> {
-    pub operation: Operation<E>,
-    pub log_id: L,
-    pub topic: TP,
-    pub prune_flag: bool,
-}
-
-pub struct Ingest<S, L, E, TP> {
+pub struct Ingest<S, T, L, E, TP> {
     store: S,
     notify: Notify,
-    queue: RefCell<VecDeque<Operation<E>>>,
-    _marker: PhantomData<(L, TP)>,
+    queue: RefCell<VecDeque<T>>,
+    _marker: PhantomData<(L, E, TP)>,
 }
 
-impl<S, L, E, TP> Ingest<S, L, E, TP>
+impl<S, T, L, E, TP> Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash, L>
@@ -51,30 +42,32 @@ where
     }
 }
 
-impl<S, L, E, TP> Processor<IngestArguments<L, E, TP>> for Ingest<S, L, E, TP>
+impl<S, T, L, E, TP> Processor<T> for Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash, L>
         + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
         + TopicStore<TP, PublicKey, L>,
+    // TODO: remove Clone after https://github.com/p2panda/p2panda/issues/1040
+    T: IngestArgs<L, TP, E> + Clone,
     L: LogId,
     E: Extensions,
 {
-    type Output = Operation<E>;
+    type Output = T;
 
     type Error = IngestError;
 
-    async fn process(&self, args: IngestArguments<L, E, TP>) -> Result<(), Self::Error> {
+    async fn process(&self, args: T) -> Result<(), Self::Error> {
         ingest_operation(
             &self.store,
-            args.operation.clone(),
-            args.log_id,
-            args.topic,
-            args.prune_flag,
+            args.operation().borrow(),
+            args.log_id(),
+            args.topic(),
+            args.prune_flag(),
         )
         .await?;
 
-        self.queue.borrow_mut().push_back(args.operation);
+        self.queue.borrow_mut().push_back(args);
         self.notify.notify_one(); // Wake up any pending recv.
 
         Ok(())
@@ -94,16 +87,45 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Borrow;
+
     use futures_util::stream;
-    use p2panda_core::Topic;
     use p2panda_core::test_utils::TestLog;
+    use p2panda_core::{Operation, Topic};
     use p2panda_store::SqliteStore;
     use tokio::task;
     use tokio_stream::StreamExt;
 
     use crate::StreamLayerExt;
+    use crate::ingest::traits::IngestArgs;
 
-    use super::{Ingest, IngestArguments};
+    use super::Ingest;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct IngestArguments {
+        pub operation: Operation,
+        pub log_id: usize,
+        pub topic: Topic,
+        pub prune_flag: bool,
+    }
+
+    impl IngestArgs<usize, Topic, ()> for IngestArguments {
+        fn log_id(&self) -> usize {
+            self.log_id
+        }
+
+        fn topic(&self) -> Topic {
+            self.topic
+        }
+
+        fn prune_flag(&self) -> bool {
+            self.prune_flag
+        }
+
+        fn operation(&self) -> impl Borrow<Operation> {
+            &self.operation
+        }
+    }
 
     #[tokio::test]
     async fn ingest_incoming_operations() {
@@ -113,7 +135,7 @@ mod tests {
         local
             .run_until(async move {
                 let store = SqliteStore::temporary().await;
-                let ingest = Ingest::new(store);
+                let ingest: Ingest<SqliteStore<'_>, IngestArguments, _, _, _> = Ingest::new(store);
 
                 let operation_0 = log.operation(b"Hi", ());
                 let operation_1 = log.operation(b"Ha", ());
@@ -144,14 +166,14 @@ mod tests {
                 ])
                 .layer(ingest);
 
-                let operation = stream.next().await.unwrap().unwrap();
-                assert_eq!(operation, operation_0);
+                let args = stream.next().await.unwrap().unwrap();
+                assert_eq!(args.operation, operation_0);
 
-                let operation = stream.next().await.unwrap().unwrap();
-                assert_eq!(operation, operation_1);
+                let args = stream.next().await.unwrap().unwrap();
+                assert_eq!(args.operation, operation_1);
 
-                let operation = stream.next().await.unwrap().unwrap();
-                assert_eq!(operation, operation_2);
+                let args = stream.next().await.unwrap().unwrap();
+                assert_eq!(args.operation, operation_2);
             })
             .await;
     }
