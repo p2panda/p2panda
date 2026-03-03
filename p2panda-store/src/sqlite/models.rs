@@ -56,7 +56,8 @@ where
         let mut row_previous = row.previous;
         let mut previous = Vec::new();
         while !row_previous.is_empty() {
-            let (hex, rest) = row_previous.split_at(32);
+            // Each byte is 2 hex characters, so we split at 64 = 32 * 2.
+            let (hex, rest) = row_previous.split_at(32 * 2);
             // We assume database values are valid and therefore we're safe to unwrap.
             previous.push(Hash::from_str(hex).unwrap());
             row_previous = rest.to_string();
