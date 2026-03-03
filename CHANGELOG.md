@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Fixed
 
+- Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
 
 ## [0.5.1] - 09/02/2026
