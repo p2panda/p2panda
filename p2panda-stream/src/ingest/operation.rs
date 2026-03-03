@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Methods to handle p2panda operations.
+use std::borrow::Borrow;
+
 use p2panda_core::prune::validate_prunable_backlink;
 use p2panda_core::{
     Extensions, Hash, LogId, Operation, OperationError, PublicKey, SeqNum, validate_operation,
@@ -15,9 +17,9 @@ use thiserror::Error;
 ///
 /// Returns true if the operation was inserted to the store, false if the operation is valid but
 /// already existed.
-pub async fn ingest_operation<S, L, E, TP>(
+pub async fn ingest_operation<S, T, L, E, TP>(
     store: &S,
-    operation: Operation<E>,
+    operation: &T,
     log_id: L,
     topic: TP,
     prune_flag: bool,
@@ -27,11 +29,15 @@ where
         + OperationStore<Operation<E>, Hash, L>
         + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
         + TopicStore<TP, PublicKey, L>,
+    // TODO: remove Clone after https://github.com/p2panda/p2panda/issues/1040
+    T: Borrow<Operation<E>> + Clone,
     L: LogId,
     E: Extensions,
 {
+    let operation: &Operation<E> = operation.borrow();
+
     // Validate operation format.
-    validate_operation(&operation)?;
+    validate_operation(operation)?;
 
     // Ignore insertion if operation already exists.
     let already_exists = store
@@ -76,7 +82,7 @@ where
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
     store
-        .insert_operation(&id, operation, log_id.clone())
+        .insert_operation(&id, operation.to_owned(), log_id.clone())
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -122,7 +128,7 @@ mod tests {
 
         for i in 0..128 {
             let operation = log.operation(format!("{i}").as_bytes(), ());
-            let result = ingest_operation(&store, operation, 1, 1, false).await;
+            let result = ingest_operation(&store, &operation, 1, 1, false).await;
             assert!(result.is_ok());
         }
     }
@@ -133,13 +139,13 @@ mod tests {
         let log = TestLog::new();
         let operation = log.operation(b"same same", ());
 
-        let result = ingest_operation(&store, operation.clone(), 1, 1, false)
+        let result = ingest_operation(&store, &operation, 1, 1, false)
             .await
             .unwrap();
         assert!(result);
 
         // Inserting duplicates is ok and are silently ignored.
-        let result = ingest_operation(&store, operation, 1, 1, false)
+        let result = ingest_operation(&store, &operation, 1, 1, false)
             .await
             .unwrap();
         assert!(!result);
@@ -156,27 +162,27 @@ mod tests {
         let dogs = [2; 32];
         let cats = [3; 32];
 
-        ingest_operation(&store, log_0.operation(b"Do", ()), 0, dogs, false)
+        ingest_operation(&store, &log_0.operation(b"Do", ()), 0, dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, log_0.operation(b"Re", ()), 0, dogs, false)
+        ingest_operation(&store, &log_0.operation(b"Re", ()), 0, dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, log_1.operation(b"Mi", ()), 1, dogs, false)
+        ingest_operation(&store, &log_1.operation(b"Mi", ()), 1, dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, log_2.operation(b"Fa", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"Fa", ()), 2, cats, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, log_2.operation(b"So", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"So", ()), 2, cats, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, log_2.operation(b"La", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"La", ()), 2, cats, false)
             .await
             .unwrap();
 
@@ -246,7 +252,7 @@ mod tests {
             body: None,
         };
 
-        let result = ingest_operation(&store, operation, 1, 1, false).await;
+        let result = ingest_operation(&store, &operation, 1, 1, false).await;
         assert!(result.is_err());
     }
 
@@ -277,7 +283,7 @@ mod tests {
         };
 
         let prune_flag = true; // Ingest does not do any pruning, but the flag affects validation.
-        let result = ingest_operation(&store, operation, 1, 1, prune_flag).await;
+        let result = ingest_operation(&store, &operation, 1, 1, prune_flag).await;
         assert!(result.is_ok());
 
         // 2. Create an operation which is from an "outdated" seq from before the log was pruned.
@@ -300,7 +306,7 @@ mod tests {
             body: None,
         };
 
-        let result = ingest_operation(&store, operation, 1, 1, false).await;
+        let result = ingest_operation(&store, &operation, 1, 1, false).await;
         assert!(result.is_err());
     }
 }
