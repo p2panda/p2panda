@@ -997,11 +997,15 @@ mod tests {
 
         let body_0 = Body::new("hello!".as_bytes());
         let body_1 = Body::new("hello again!".as_bytes());
+        let body_2 = Body::new("hello?!?!".as_bytes());
 
         let (hash_0, header_0, header_bytes_0) =
             create_operation(&private_key, &body_0, 0, 0, None);
         let (hash_1, header_1, header_bytes_1) =
             create_operation(&private_key, &body_1, 1, 0, Some(hash_0));
+        let (hash_2, mut header_2, header_bytes_2) =
+            create_operation(&private_key, &body_2, 2, 0, Some(hash_1));
+        header_2.previous = vec![hash_0];
 
         store
             .insert_operation(hash_0, &header_0, Some(&body_0), &header_bytes_0, &log_id)
@@ -1011,6 +1015,10 @@ mod tests {
             .insert_operation(hash_1, &header_1, Some(&body_1), &header_bytes_1, &log_id)
             .await
             .expect("no errors");
+        store
+            .insert_operation(hash_2, &header_2, Some(&body_2), &header_bytes_2, &log_id)
+            .await
+            .expect("no errors");
 
         let (latest_header, latest_body) = store
             .latest_operation(&private_key.public_key(), &log_id)
@@ -1018,8 +1026,8 @@ mod tests {
             .expect("no errors")
             .expect("there's an operation");
 
-        assert_eq!(latest_header.hash(), header_1.hash());
-        assert_eq!(latest_body, Some(body_1));
+        assert_eq!(latest_header.hash(), header_2.hash());
+        assert_eq!(latest_body, Some(body_2));
     }
 
     #[tokio::test]
