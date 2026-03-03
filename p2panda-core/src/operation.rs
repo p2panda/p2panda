@@ -90,6 +90,8 @@
 //! let prune_flag: PruneFlag = header.extension().unwrap();
 //! assert!(prune_flag.is_set())
 //! ```
+use std::borrow::Borrow;
+
 use thiserror::Error;
 
 use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
@@ -393,10 +395,11 @@ pub enum OperationError {
 /// * If `payload_hash` is set the `payload_size` is > `0` otherwise it is zero
 /// * If `backlink` is set then `seq_num` is > `0` otherwise it is zero
 /// * If provided the body bytes hash and size match those claimed in the header
-pub fn validate_operation<E>(operation: &Operation<E>) -> Result<(), OperationError>
+pub fn validate_operation<E>(operation: impl Borrow<Operation<E>>) -> Result<(), OperationError>
 where
     E: Extensions,
 {
+    let operation = operation.borrow();
     validate_header(&operation.header)?;
 
     let claimed_payload_size = operation.header.payload_size;
@@ -464,12 +467,15 @@ where
 /// * Current headers seq number increments from the past one by exactly `1`
 /// * Backlink hash contained in the current header matches the hash of the past header
 pub fn validate_backlink<E>(
-    past_header: &Header<E>,
-    header: &Header<E>,
+    past_header: impl Borrow<Header<E>>,
+    header: impl Borrow<Header<E>>,
 ) -> Result<(), OperationError>
 where
     E: Extensions,
 {
+    let past_header = past_header.borrow();
+    let header = header.borrow();
+
     if past_header.public_key != header.public_key {
         return Err(OperationError::TooManyAuthors);
     }
