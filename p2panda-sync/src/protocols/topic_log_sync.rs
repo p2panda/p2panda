@@ -594,7 +594,6 @@ pub mod tests {
         assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
-        println!("{messages:?}");
         assert_eq!(messages.len(), 2);
         for (index, message) in messages.into_iter().enumerate() {
             match index {

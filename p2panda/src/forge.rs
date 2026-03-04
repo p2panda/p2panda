@@ -54,7 +54,7 @@ impl OperationForge {
     }
 }
 
-type LogId = [u8; 32];
+pub type LogId = Topic;
 
 impl Forge<Topic, LogId, Extensions> for OperationForge {
     type Error = ForgeError;
@@ -84,7 +84,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         let (seq_num, backlink) = <SqliteStore<'static> as LogStore<
             Operation,
             PublicKey,
-            [u8; 32],
+            LogId,
             SeqNum,
             Hash,
         >>::get_latest_entry(
@@ -119,10 +119,10 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             body,
         };
 
-        // Acquire a store permit, associate the topic with the log, insert the
-        // operation and commit the transaction.
+        // Acquire a store permit, associate the topic with the log, insert the operation and
+        // commit the transaction.
         let inserted = tx!(self.store, {
-            <SqliteStore<'static> as TopicStore<Topic, PublicKey, [u8; 32]>>::associate(
+            <SqliteStore<'static> as TopicStore<Topic, PublicKey, LogId>>::associate(
                 &self.store,
                 &topic,
                 &self.private_key.public_key(),
@@ -152,7 +152,7 @@ pub enum ForgeError {
 mod tests {
     use std::collections::BTreeMap;
 
-    use p2panda_core::{Body, Operation, Topic};
+    use p2panda_core::{Operation, Topic};
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
 
@@ -167,8 +167,8 @@ mod tests {
         let mut forge = OperationForge::new(store.clone());
 
         let topic = Topic::new();
-        let log_id: [u8; 32] = Topic::new().into();
-        let extensions = Extensions { version: 1 };
+        let log_id = Topic::new();
+        let extensions = Extensions::default();
 
         forge
             .create_operation(
@@ -191,8 +191,6 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-
-        let public_key = forge.public_key();
 
         let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_heights(
             &store,
