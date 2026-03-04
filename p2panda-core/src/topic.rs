@@ -12,6 +12,17 @@ use crate::{Hash, PublicKey};
 
 const TOPIC_LENGTH: usize = 32;
 
+/// Identifier for a gossip- or sync topic.
+///
+/// A topic identifier is required when subscribing or publishing to a stream.
+///
+/// Topics usually describe concrete data which nodes want to exchange over, for example a document
+/// id or chat group id and so forth. Applications usually want to share topics via a secure side
+/// channel.
+///
+/// **WARNING:** Sensitive topics have to be treated like secret values and generated using a
+/// cryptographically secure pseudorandom number generator (CSPRNG). Otherwise they can be easily
+/// guessed by third parties or leaked during discovery.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash)]
 pub struct Topic(pub(crate) [u8; TOPIC_LENGTH]);
 
