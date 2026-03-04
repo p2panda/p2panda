@@ -48,13 +48,13 @@ impl TestNode {
         let store = SqliteStore::temporary().await;
 
         let mut subscription = TestSubscription::default();
-        subscription.topics.insert([7; 32]);
+        subscription.topics.insert([7; 32].into());
 
         tx_unwrap!(store, {
             <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &store,
                 id,
-                HashSet::from_iter([[7; 32]]),
+                HashSet::from_iter([[7; 32].into()]),
             )
             .await
             .unwrap();

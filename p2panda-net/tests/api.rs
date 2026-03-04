@@ -37,7 +37,7 @@ async fn modular_api() {
         .await
         .unwrap();
 
-    let handle = gossip.stream([1; 32]).await.unwrap();
+    let handle = gossip.stream([1; 32].into()).await.unwrap();
     handle.publish(b"Hello, Panda!").await.unwrap();
     let mut rx = handle.subscribe();
 
@@ -54,7 +54,7 @@ async fn modular_api() {
         .await
         .unwrap();
 
-    let handle = sync.stream([1; 32], true).await.unwrap();
+    let handle = sync.stream([1; 32].into(), true).await.unwrap();
     let mut rx: SyncSubscription<TopicLogSyncEvent<()>> = handle.subscribe().await.unwrap();
 
     tokio::spawn(async move {

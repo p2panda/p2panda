@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 
+use p2panda_core::Topic;
 use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo, TestTransportInfo};
 
 use crate::DiscoveryResult;
@@ -10,13 +11,13 @@ use crate::traits::LocalTopics;
 
 #[derive(Clone, Default, Debug)]
 pub struct TestSubscription {
-    pub topics: HashSet<[u8; 32]>,
+    pub topics: HashSet<Topic>,
 }
 
 impl LocalTopics for TestSubscription {
     type Error = Infallible;
 
-    async fn topics(&self) -> Result<HashSet<[u8; 32]>, Self::Error> {
+    async fn topics(&self) -> Result<HashSet<Topic>, Self::Error> {
         Ok(self.topics.clone())
     }
 }

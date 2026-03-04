@@ -14,9 +14,18 @@ async fn add_topic_bug() {
         NodeId::from_str("008136727520488c3755a66e968a1d2ded11eab83d8f5692011963aed788ae15")
             .unwrap();
 
-    address_book.add_topic(node_id, [1; 32]).await.unwrap();
-    address_book.add_topic(node_id, [2; 32]).await.unwrap();
-    address_book.add_topic(node_id, [3; 32]).await.unwrap();
+    address_book
+        .add_topic(node_id, [1; 32].into())
+        .await
+        .unwrap();
+    address_book
+        .add_topic(node_id, [2; 32].into())
+        .await
+        .unwrap();
+    address_book
+        .add_topic(node_id, [3; 32].into())
+        .await
+        .unwrap();
 
     let mut watcher = address_book
         .watch_node_topics(node_id, false)
@@ -25,6 +34,6 @@ async fn add_topic_bug() {
 
     assert_eq!(
         watcher.recv().await.unwrap().value,
-        HashSet::from_iter([[1; 32], [2; 32], [3; 32]])
+        HashSet::from_iter([[1; 32].into(), [2; 32].into(), [3; 32].into()])
     );
 }

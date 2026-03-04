@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use p2panda_core::Topic;
 use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -16,6 +17,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
@@ -23,7 +25,6 @@ use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
 use crate::sync::handle::SyncHandle;
 use crate::test_utils::{ApplicationArguments, setup_logging, test_args_from_seed};
-use crate::{NodeId, TopicId};
 
 const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 
@@ -167,7 +168,7 @@ struct DummySyncManager<C, P> {
     pub _marker: PhantomData<P>,
 }
 
-impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncArgs, FailingSyncProtocol> {
+impl SyncManagerTrait<Topic> for DummySyncManager<FailingSyncArgs, FailingSyncProtocol> {
     type Protocol = FailingSyncProtocol;
     type Event = DummySyncEvent;
     type Args = FailingSyncArgs;
@@ -187,7 +188,7 @@ impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncArgs, FailingSync
     async fn session(
         &mut self,
         session_id: u64,
-        config: &p2panda_sync::SessionConfig<TopicId>,
+        config: &p2panda_sync::SessionConfig<Topic>,
     ) -> Self::Protocol {
         self.event_tx
             .send(FromSync {
@@ -222,7 +223,7 @@ impl SyncManagerTrait<TopicId> for DummySyncManager<FailingSyncArgs, FailingSync
 async fn failed_sync_session_retry() {
     setup_logging();
 
-    let topic = [0; 32];
+    let topic = [0; 32].into();
 
     for (alice_behavior, bob_behavior) in [
         (SyncBehaviour::Panic, SyncBehaviour::Wait),

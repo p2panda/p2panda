@@ -6,6 +6,7 @@ use std::io::Write;
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
+use p2panda_core::Topic;
 use p2panda_store::address_book::{AddressBookStore, NodeInfo};
 use rand::{Rng, rng};
 use serde::{Deserialize, Serialize};
@@ -34,11 +35,11 @@ where
     /// Bob sends back his half of the salt, along with his topics hashed using the combined salt.
     BobSaltHalfAndHashedData {
         bob_salt_half: [u8; 32],
-        topics_for_alice: HashSet<[u8; 32]>,
+        topics_for_alice: HashSet<Topic>,
     },
 
     /// Alice replies with her own hashed topics.
-    AliceHashedData { topics_for_bob: HashSet<[u8; 32]> },
+    AliceHashedData { topics_for_bob: HashSet<Topic> },
 
     /// Both peers then also exchange a list of other nodes they are aware of for peer discovery.
     Nodes {
@@ -106,7 +107,7 @@ impl<S, P, ID, N> PsiHashDiscoveryProtocol<S, P, ID, N> {
     /// We don't share any node infos outside of this scope for privacy reasons.
     async fn gather_transport_infos(
         &self,
-        topics: Vec<[u8; 32]>,
+        topics: Vec<Topic>,
     ) -> Result<BTreeMap<ID, N::Transports>, PsiHashError<S, P, ID, N>>
     where
         S: AddressBookStore<ID, N>,
@@ -189,7 +190,7 @@ where
             return Err(PsiHashError::UnexpectedMessage);
         };
 
-        let my_topics: Vec<[u8; 32]> = self
+        let my_topics: Vec<Topic> = self
             .subscription
             .topics()
             .await
@@ -206,7 +207,7 @@ where
             compute_intersection(&my_topics, &topics_for_alice, &bob_final_salt)?;
 
         // Alice needs to hash their data with their salt and send to Bob so they can do the same.
-        let topics_for_bob: HashSet<[u8; 32]> =
+        let topics_for_bob: HashSet<Topic> =
             HashSet::from_iter(hash_vector(&my_topics, &alice_final_salt)?.into_iter());
 
         tx.send(PsiHashMessage::AliceHashedData { topics_for_bob })
@@ -256,7 +257,7 @@ where
         let alice_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &ALICE_SALT_BYTE);
         let bob_final_salt = combine_salt(&alice_salt_half, &bob_salt_half, &BOB_SALT_BYTE);
 
-        let my_topics: Vec<[u8; 32]> = self
+        let my_topics: Vec<Topic> = self
             .subscription
             .topics()
             .await
@@ -264,7 +265,7 @@ where
             .into_iter()
             .collect();
 
-        let topics_for_alice: HashSet<[u8; 32]> =
+        let topics_for_alice: HashSet<Topic> =
             HashSet::from_iter(hash_vector(&my_topics, &bob_final_salt)?.into_iter());
 
         tx.send(PsiHashMessage::BobSaltHalfAndHashedData {
@@ -311,12 +312,12 @@ where
 
 /// Compute intersection between our vector of topics and a hashed set from the peer as a set.
 fn compute_intersection(
-    local_topics: &[[u8; 32]],
-    remote_hashes: &HashSet<[u8; 32]>,
+    local_topics: &[Topic],
+    remote_hashes: &HashSet<Topic>,
     salt: &[u8; 65],
-) -> Result<HashSet<[u8; 32]>, std::io::Error> {
+) -> Result<HashSet<Topic>, std::io::Error> {
     let local_topics_hashed = hash_vector(local_topics, salt)?;
-    let mut intersection: HashSet<[u8; 32]> = HashSet::new();
+    let mut intersection: HashSet<Topic> = HashSet::new();
     for (i, local_hash) in local_topics_hashed.iter().enumerate() {
         if remote_hashes.contains(local_hash) {
             intersection.insert(local_topics[i]);
@@ -326,8 +327,15 @@ fn compute_intersection(
 }
 
 /// Hash a vector of topics.
-fn hash_vector(topics: &[[u8; 32]], salt: &[u8; 65]) -> Result<Vec<[u8; 32]>, std::io::Error> {
-    topics.iter().map(|topic| hash(topic, salt)).collect()
+fn hash_vector(topics: &[Topic], salt: &[u8; 65]) -> Result<Vec<Topic>, std::io::Error> {
+    topics
+        .iter()
+        .map(|topic| hash(topic.as_bytes(), salt))
+        .map(|result| match result {
+            Ok(topic) => Ok(topic.into()),
+            Err(err) => Err(err),
+        })
+        .collect()
 }
 
 /// Hash a topic with a salt using blake3.
@@ -416,17 +424,17 @@ mod tests {
         let bob = PrivateKey::new().public_key();
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.topics.insert([1; 32]);
-        alice_subscription.topics.insert([2; 32]);
-        alice_subscription.topics.insert([98; 32]);
-        alice_subscription.topics.insert([99; 32]);
+        alice_subscription.topics.insert([1; 32].into());
+        alice_subscription.topics.insert([2; 32].into());
+        alice_subscription.topics.insert([98; 32].into());
+        alice_subscription.topics.insert([99; 32].into());
         let alice_store = SqliteStore::temporary().await;
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.topics.insert([2; 32]);
-        bob_subscription.topics.insert([3; 32]);
-        bob_subscription.topics.insert([99; 32]);
-        bob_subscription.topics.insert([100; 32]);
+        bob_subscription.topics.insert([2; 32].into());
+        bob_subscription.topics.insert([3; 32].into());
+        bob_subscription.topics.insert([99; 32].into());
+        bob_subscription.topics.insert([100; 32].into());
         let bob_store = SqliteStore::temporary().await;
 
         let alice_protocol = PsiHashDiscoveryProtocol::<_, _, _, TestNodeInfo>::new(
@@ -462,7 +470,7 @@ mod tests {
         // Wait until Bob has finished and store their results.
         let bob_result = bob_handle.await.expect("local task failure");
 
-        let expected = HashSet::from_iter([[2; 32], [99; 32]]);
+        let expected = HashSet::from_iter([[2; 32].into(), [99; 32].into()]);
         assert_eq!(alice_result.topics, expected);
         assert_eq!(bob_result.topics, expected);
     }
@@ -473,8 +481,8 @@ mod tests {
         let bob = PrivateKey::new().public_key();
 
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.topics.insert([1; 32]);
-        alice_subscription.topics.insert([99; 32]);
+        alice_subscription.topics.insert([1; 32].into());
+        alice_subscription.topics.insert([99; 32].into());
         let alice_store = SqliteStore::temporary().await;
 
         let alice_protocol = PsiHashDiscoveryProtocol::<_, _, TestNodeId, TestNodeInfo>::new(
@@ -507,8 +515,8 @@ mod tests {
         let bob = PrivateKey::new().public_key();
 
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.topics.insert([1; 32]);
-        bob_subscription.topics.insert([99; 32]);
+        bob_subscription.topics.insert([1; 32].into());
+        bob_subscription.topics.insert([99; 32].into());
         let bob_store = SqliteStore::temporary().await;
 
         let bob_protocol = PsiHashDiscoveryProtocol::<_, _, TestNodeId, TestNodeInfo>::new(
@@ -554,7 +562,7 @@ mod tests {
 
         // Prepare Alice.
         let mut alice_subscription = TestSubscription::default();
-        alice_subscription.topics.insert([1; 32]);
+        alice_subscription.topics.insert([1; 32].into());
 
         let alice_store = SqliteStore::temporary().await;
 
@@ -567,7 +575,7 @@ mod tests {
             <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &alice_store,
                 alice,
-                HashSet::from_iter([[1; 32]]),
+                HashSet::from_iter([[1; 32].into()]),
             )
             .await
             .unwrap();
@@ -575,8 +583,8 @@ mod tests {
 
         // Prepare Bob.
         let mut bob_subscription = TestSubscription::default();
-        bob_subscription.topics.insert([1; 32]);
-        bob_subscription.topics.insert([2; 32]);
+        bob_subscription.topics.insert([1; 32].into());
+        bob_subscription.topics.insert([2; 32].into());
 
         let bob_store = SqliteStore::temporary().await;
 
@@ -589,7 +597,7 @@ mod tests {
             <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 bob,
-                HashSet::from_iter([[1; 32], [2; 32]]),
+                HashSet::from_iter([[1; 32].into(), [2; 32].into()]),
             )
             .await
             .unwrap();
@@ -605,7 +613,7 @@ mod tests {
             <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 charlie,
-                HashSet::from_iter([[1; 32]]),
+                HashSet::from_iter([[1; 32].into()]),
             )
             .await
             .unwrap();
@@ -621,7 +629,7 @@ mod tests {
             <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 daphne,
-                HashSet::from_iter([[2; 32]]),
+                HashSet::from_iter([[2; 32].into()]),
             )
             .await
             .unwrap();

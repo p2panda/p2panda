@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, Topic};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
@@ -12,7 +12,6 @@ use ractor::{ActorRef, call};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
-use crate::TopicId;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::ToSyncManager;
@@ -42,7 +41,7 @@ use crate::sync::log_sync::Builder;
 pub struct LogSync<S, L, E>
 where
     S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<TopicId, PublicKey, L>
+        + TopicStore<Topic, PublicKey, L>
         + Clone
         + Send
         + 'static,
@@ -64,7 +63,7 @@ where
 impl<S, L, E> LogSync<S, L, E>
 where
     S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<TopicId, PublicKey, L>
+        + TopicStore<Topic, PublicKey, L>
         + Clone
         + Send
         + 'static,
@@ -88,7 +87,7 @@ where
     // TODO: Extensions should be generic over a stream handle, not over this struct.
     pub async fn stream(
         &self,
-        topic: TopicId,
+        topic: Topic,
         live_mode: bool,
     ) -> Result<SyncHandle<Operation<E>, TopicLogSyncEvent<E>>, LogSyncError<E>> {
         let inner = self.inner.read().await;

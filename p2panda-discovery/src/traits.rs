@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 
 use futures_util::{Sink, Stream};
+use p2panda_core::Topic;
 use p2panda_store::address_book::NodeInfo;
 
 /// Peer-Sampling Strategy used for discovery.
@@ -60,7 +61,7 @@ where
     pub transport_infos: BTreeMap<ID, N::Transports>,
 
     /// Topics this node is currently "interested in".
-    pub topics: HashSet<[u8; 32]>,
+    pub topics: HashSet<Topic>,
 }
 
 impl<ID, N> DiscoveryResult<ID, N>
@@ -81,5 +82,5 @@ where
 pub trait LocalTopics {
     type Error;
 
-    fn topics(&self) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
+    fn topics(&self) -> impl Future<Output = Result<HashSet<Topic>, Self::Error>>;
 }
