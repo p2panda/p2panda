@@ -7,7 +7,7 @@ use p2panda_core::{LogId, PublicKey};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 
-use crate::sqlite::{SqliteError, SqliteStore};
+use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 use crate::topics::TopicStore;
 
 /// SQLite `TopicStore` implementation that can be used to map a topic to a set of (generic)
@@ -97,14 +97,14 @@ where
             .execute(async |pool| {
                 query_as::<_, (String, Vec<u8>)>(
                     "
-            SELECT
-                author,
-                data_id
-            FROM
-                topics_v1
-            WHERE
-                topic = ?
-            ",
+                    SELECT
+                        author,
+                        data_id
+                    FROM
+                        topics_v1
+                    WHERE
+                        topic = ?
+                    ",
                 )
                 .bind(
                     encode_cbor(&topic)
@@ -119,12 +119,12 @@ where
         let mut result: BTreeMap<PublicKey, Vec<S>> = BTreeMap::new();
 
         for (author, data_id) in data_ids {
-            let author: PublicKey = author.parse().map_err(|_| {
-                SqliteError::Decode("author".into(), crate::sqlite::DecodeError::FromStr)
-            })?;
+            let author: PublicKey = author
+                .parse()
+                .map_err(|_| SqliteError::Decode("author".into(), DecodeError::FromStr))?;
 
             let data_id = decode_cbor(&data_id[..])
-                .map_err(|err| SqliteError::Decode("data id".into(), err.into()))?;
+                .map_err(|err| SqliteError::Decode("data_id".into(), err.into()))?;
 
             // All items in the returned data set will be unique due to the SQL UNIQUE constraint.
             result.entry(author).or_default().push(data_id);
