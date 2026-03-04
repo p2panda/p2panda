@@ -39,11 +39,11 @@ async fn set_and_query_topics() {
     let daphne = PrivateKey::new().public_key();
     let carlos = PrivateKey::new().public_key();
 
-    let cats = [100; 32];
-    let dogs = [102; 32];
-    let rain = [104; 32];
-    let frogs = [106; 32];
-    let trains = [200; 32];
+    let cats = [100; 32].into();
+    let dogs = [102; 32].into();
+    let rain = [104; 32].into();
+    let frogs = [106; 32].into();
+    let trains = [200; 32].into();
 
     let permit = store.begin().await.unwrap();
 

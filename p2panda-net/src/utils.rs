@@ -3,6 +3,8 @@
 //! Formatting, conversion and connectivity status utilities.
 use std::net::{IpAddr, SocketAddr};
 
+use p2panda_core::Topic;
+
 use crate::NodeId;
 
 /// Returns a displayable string representing the underlying value in a short format, easy to read
@@ -26,6 +28,12 @@ impl ShortFormat for iroh::EndpointId {
 impl ShortFormat for [u8; 32] {
     fn fmt_short(&self) -> String {
         hex::encode(&self[0..5]).to_string()
+    }
+}
+
+impl ShortFormat for Topic {
+    fn fmt_short(&self) -> String {
+        self.to_string()[0..10].to_string()
     }
 }
 

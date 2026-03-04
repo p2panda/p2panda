@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 
 use futures_channel::mpsc;
 use iroh::endpoint::{Connection, VarInt};
+use p2panda_core::Topic;
 use p2panda_sync::protocols::{
     TopicHandshakeEvent, TopicHandshakeInitiator, TopicHandshakeMessage,
 };
@@ -17,21 +18,21 @@ use tracing::Instrument;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::iroh_endpoint::Endpoint;
 use crate::utils::ShortFormat;
-use crate::{NodeId, ProtocolId, TopicId};
+use crate::{NodeId, ProtocolId};
 
 pub type SyncSessionId = u64;
 
 pub enum SyncSessionMessage<P> {
     Initiate {
         node_id: NodeId,
-        topic: TopicId,
+        topic: Topic,
         session_id: u64,
         protocol: P,
         protocol_id: ProtocolId,
     },
     Accept {
         connection: Connection,
-        topic: TopicId,
+        topic: Topic,
         session_id: u64,
         protocol: P,
     },
@@ -87,13 +88,13 @@ where
 
                 // First run the TopicHandshake protocol.
                 let (tx, rx) = connection.open_bi().await?;
-                let mut tx = into_cbor_sink::<TopicHandshakeMessage<TopicId>, _>(tx);
-                let mut rx = into_cbor_stream::<TopicHandshakeMessage<TopicId>, _>(rx);
+                let mut tx = into_cbor_sink::<TopicHandshakeMessage<Topic>, _>(tx);
+                let mut rx = into_cbor_stream::<TopicHandshakeMessage<Topic>, _>(rx);
 
                 // We don't need to observe these events here as the topic is returned as output
                 // when the protocol completes, so these channels are actually only just to satisfy
                 // the API.
-                let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<TopicId>>(128);
+                let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
                 let topic_handshake = TopicHandshakeInitiator::new(topic, event_tx);
                 topic_handshake.run(&mut tx, &mut rx).await?;
 

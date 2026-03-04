@@ -55,7 +55,7 @@ where
             .forge
             .create_operation(
                 self.topic(),
-                self.topic().into(),
+                self.topic(),
                 Some(encoded_message),
                 extensions,
             )

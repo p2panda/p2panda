@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::{Stream, StreamExt};
+use p2panda_core::Topic;
 use p2panda_sync::FromSync;
 use ractor::{ActorRef, call};
 use thiserror::Error;
@@ -8,7 +9,6 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
-use crate::TopicId;
 use crate::sync::actors::{ToSyncManager, ToTopicManager};
 
 /// Handle to a sync stream.
@@ -19,7 +19,7 @@ where
     M: Clone + Send + 'static,
     E: Clone + Send + 'static,
 {
-    topic: TopicId,
+    topic: Topic,
     manager_ref: ActorRef<ToSyncManager<M, E>>,
     topic_manager_ref: ActorRef<ToTopicManager<M>>,
 }
@@ -30,7 +30,7 @@ where
     E: Clone + Send + 'static,
 {
     pub(crate) fn new(
-        topic: TopicId,
+        topic: Topic,
         manager_ref: ActorRef<ToSyncManager<M, E>>,
         topic_manager_ref: ActorRef<ToTopicManager<M>>,
     ) -> Self {
@@ -66,7 +66,7 @@ where
     }
 
     /// Returns the topic of the stream.
-    pub fn topic(&self) -> TopicId {
+    pub fn topic(&self) -> Topic {
         self.topic
     }
 
@@ -100,7 +100,7 @@ where
 ///
 /// The stream can be used to receive messages from the stream.
 pub struct SyncSubscription<E> {
-    topic: TopicId,
+    topic: Topic,
     // Messages sent directly from the topic manager.
     from_sync_rx: BroadcastStream<FromSync<E>>,
 }
@@ -109,7 +109,7 @@ impl<E> SyncSubscription<E>
 where
     E: Clone + Send + 'static,
 {
-    pub(crate) fn new(topic: TopicId, from_sync_rx: broadcast::Receiver<FromSync<E>>) -> Self {
+    pub(crate) fn new(topic: Topic, from_sync_rx: broadcast::Receiver<FromSync<E>>) -> Self {
         Self {
             topic,
             from_sync_rx: BroadcastStream::new(from_sync_rx),
@@ -117,7 +117,7 @@ where
     }
 
     /// Returns the topic of the stream.
-    pub fn topic(&self) -> TopicId {
+    pub fn topic(&self) -> Topic {
         self.topic
     }
 }

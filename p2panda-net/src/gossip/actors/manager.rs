@@ -4,11 +4,13 @@ use std::collections::{HashMap, HashSet};
 
 use iroh_gossip::net::Gossip as IrohGossip;
 use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
+use p2panda_core::Topic;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::gossip::GossipConfig;
 use crate::gossip::actors::session::{GossipSession, ToGossipSession};
@@ -16,7 +18,6 @@ use crate::gossip::events::GossipEvent;
 use crate::hash_protocol_id_with_network_id;
 use crate::iroh_endpoint::{Endpoint, from_public_key};
 use crate::utils::ShortFormat;
-use crate::{NodeId, TopicId};
 
 pub enum ToGossipManager {
     /// Accept incoming "gossip protocol" connection requests.
@@ -28,23 +29,23 @@ pub enum ToGossipManager {
     /// gossip overlay. The reason we return the second sender is because it's a broadcast channel
     /// and we need the sender in order to produce receivers by calling `.subscribe()`.
     Subscribe(
-        TopicId,
+        Topic,
         Vec<NodeId>,
         #[allow(clippy::type_complexity)]
         RpcReplyPort<(mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>)>,
     ),
 
     /// Unsubscribe from the given topic.
-    Unsubscribe(TopicId),
+    Unsubscribe(Topic),
 
     /// Join a set of nodes on the given gossip topic.
     ///
     /// This event requires a prior subscription to the topic via the `ToGossip::Subscribe`.
-    JoinNodes(TopicId, Vec<NodeId>),
+    JoinNodes(Topic, Vec<NodeId>),
 
     /// Joined a topic by connecting to the given nodes.
     Joined {
-        topic: TopicId,
+        topic: Topic,
         nodes: Vec<NodeId>,
         session_id: ActorId,
     },
@@ -67,7 +68,7 @@ pub enum ToGossipManager {
         #[allow(unused)]
         delivered_from: NodeId,
         delivery_scope: IrohDeliveryScope,
-        topic: TopicId,
+        topic: Topic,
         #[allow(unused)]
         session_id: ActorId,
     },
@@ -78,13 +79,13 @@ pub enum ToGossipManager {
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
-type GossipSenders = HashMap<TopicId, (mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>)>;
+type GossipSenders = HashMap<Topic, (mpsc::Sender<Vec<u8>>, broadcast::Sender<Vec<u8>>)>;
 
 /// Actor references and channels for gossip sessions.
 #[derive(Default)]
 pub struct Sessions {
-    pub sessions_by_actor_id: HashMap<ActorId, TopicId>,
-    pub sessions_by_topic: HashMap<TopicId, ActorRef<ToGossipSession>>,
+    pub sessions_by_actor_id: HashMap<ActorId, Topic>,
+    pub sessions_by_topic: HashMap<Topic, ActorRef<ToGossipSession>>,
     pub gossip_senders: GossipSenders,
     pub gossip_joined_senders: HashMap<ActorId, oneshot::Sender<()>>,
 }
@@ -96,12 +97,12 @@ pub struct GossipManagerState {
     pool: ThreadLocalActorSpawner,
     gossip: Option<IrohGossip>,
     sessions: Sessions,
-    neighbours: HashMap<TopicId, HashSet<NodeId>>,
+    neighbours: HashMap<Topic, HashSet<NodeId>>,
     events_tx: broadcast::Sender<GossipEvent>,
 }
 
 impl GossipManagerState {
-    fn drop_topic_state(&mut self, actor_id: &ActorId, topic: &TopicId) {
+    fn drop_topic_state(&mut self, actor_id: &ActorId, topic: &Topic) {
         self.sessions.sessions_by_actor_id.remove(actor_id);
         self.sessions.sessions_by_topic.remove(topic);
         self.sessions.gossip_senders.remove(topic);

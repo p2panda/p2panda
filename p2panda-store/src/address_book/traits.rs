@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::time::Duration;
 
+use p2panda_core::Topic;
+
 /// Node informations which can be stored in an address book, aiding discovery, sync, peer sampling
 /// or other protocols.
 ///
@@ -77,7 +79,7 @@ where
     fn node_info(&self, id: &ID) -> impl Future<Output = Result<Option<N>, Self::Error>>;
 
     /// Returns topics of a node.
-    fn node_topics(&self, id: &ID) -> impl Future<Output = Result<HashSet<[u8; 32]>, Self::Error>>;
+    fn node_topics(&self, id: &ID) -> impl Future<Output = Result<HashSet<Topic>, Self::Error>>;
 
     /// Returns a list of all known node informations.
     fn all_node_infos(&self) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
@@ -98,14 +100,14 @@ where
     fn set_topics(
         &self,
         id: ID,
-        topics: HashSet<[u8; 32]>,
+        topics: HashSet<Topic>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
     fn node_infos_by_topics(
         &self,
-        topics: &[[u8; 32]],
+        topics: &[Topic],
     ) -> impl Future<Output = Result<Vec<N>, Self::Error>>;
 
     /// Returns information from a randomly picked node or `None` when no information exists in the

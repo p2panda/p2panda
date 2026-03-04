@@ -4,20 +4,21 @@
 //! interested in the associated topics.
 use std::collections::HashSet;
 
+use p2panda_core::Topic;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tracing::trace;
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::actors::session::ToGossipSession;
 use crate::iroh_endpoint::from_public_key;
 use crate::watchers::WatcherReceiver;
-use crate::{NodeId, TopicId};
 
 pub enum ToGossipHealer {
     /// Subscribe to changes regarding nodes for our topics of interest.
-    SubscribeToAddressBook(TopicId),
+    SubscribeToAddressBook(Topic),
 
     /// Wait for an event on the address book subscription channel.
     WaitForEvent,
@@ -40,7 +41,7 @@ impl ThreadLocalActor for GossipHealer {
 
     type Msg = ToGossipHealer;
 
-    type Arguments = (NodeId, AddressBook, TopicId, ActorRef<ToGossipSession>);
+    type Arguments = (NodeId, AddressBook, Topic, ActorRef<ToGossipSession>);
 
     async fn pre_start(
         &self,

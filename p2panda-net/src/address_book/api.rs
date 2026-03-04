@@ -3,17 +3,18 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use p2panda_core::Topic;
 use p2panda_store::{SqliteError, SqliteStore};
 use ractor::{ActorRef, call, cast};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+use crate::NodeId;
 use crate::address_book::Builder;
 use crate::address_book::actor::ToAddressBookActor;
 use crate::address_book::report::ConnectionOutcome;
 use crate::addrs::{NodeInfo, NodeInfoError, TransportInfo};
 use crate::watchers::{UpdatesOnly, WatcherReceiver};
-use crate::{NodeId, TopicId};
 
 /// Manage node information, bootstraps and their associated transport addresses and topics.
 ///
@@ -143,7 +144,7 @@ impl AddressBook {
 
     pub async fn node_infos_by_topics(
         &self,
-        topics: impl IntoIterator<Item = TopicId>,
+        topics: impl IntoIterator<Item = Topic>,
     ) -> Result<Vec<NodeInfo>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
@@ -158,7 +159,7 @@ impl AddressBook {
     pub async fn set_topics(
         &self,
         node_id: NodeId,
-        topics: impl IntoIterator<Item = TopicId>,
+        topics: impl IntoIterator<Item = Topic>,
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
@@ -169,7 +170,7 @@ impl AddressBook {
         Ok(())
     }
 
-    pub async fn add_topic(&self, node_id: NodeId, topic: TopicId) -> Result<(), AddressBookError> {
+    pub async fn add_topic(&self, node_id: NodeId, topic: Topic) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
             inner.actor_ref.as_ref().expect("actor spawned in builder"),
@@ -182,7 +183,7 @@ impl AddressBook {
     pub async fn remove_topic(
         &self,
         node_id: NodeId,
-        topic: TopicId,
+        topic: Topic,
     ) -> Result<(), AddressBookError> {
         let inner = self.inner.read().await;
         cast!(
@@ -213,7 +214,7 @@ impl AddressBook {
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic.
     pub async fn watch_topic(
         &self,
-        topic_id: TopicId,
+        topic_id: Topic,
         updates_only: UpdatesOnly,
     ) -> Result<WatcherReceiver<HashSet<NodeId>>, AddressBookError> {
         let inner = self.inner.read().await;
@@ -232,7 +233,7 @@ impl AddressBook {
         &self,
         node_id: NodeId,
         updates_only: UpdatesOnly,
-    ) -> Result<WatcherReceiver<HashSet<TopicId>>, AddressBookError> {
+    ) -> Result<WatcherReceiver<HashSet<Topic>>, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
             inner.actor_ref.as_ref().expect("actor spawned in builder"),
