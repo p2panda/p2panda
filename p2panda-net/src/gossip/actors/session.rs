@@ -9,11 +9,13 @@
 use std::time::Duration;
 
 use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
+use p2panda_core::Topic;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
+use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::gossip::actors::ToGossipManager;
 use crate::gossip::actors::healer::{GossipHealer, ToGossipHealer};
@@ -23,7 +25,6 @@ use crate::gossip::actors::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::gossip::actors::sender::{GossipSender, ToGossipSender};
 use crate::iroh_endpoint::to_public_key;
 use crate::utils::ShortFormat;
-use crate::{NodeId, TopicId};
 
 pub enum ToGossipSession {
     /// An event received from the gossip overlay.
@@ -37,7 +38,7 @@ pub enum ToGossipSession {
 }
 
 pub struct GossipSessionState {
-    topic: TopicId,
+    topic: Topic,
     #[allow(unused)]
     gossip_healer_actor: ActorRef<ToGossipHealer>,
     gossip_joiner_actor: ActorRef<ToGossipJoiner>,
@@ -57,7 +58,7 @@ impl ThreadLocalActor for GossipSession {
     type Arguments = (
         NodeId,
         AddressBook,
-        TopicId,
+        Topic,
         IrohGossipTopic,
         mpsc::Receiver<Vec<u8>>,
         oneshot::Receiver<()>,

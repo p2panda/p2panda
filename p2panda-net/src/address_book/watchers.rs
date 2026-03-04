@@ -3,12 +3,13 @@
 use std::cell::RefCell;
 use std::collections::HashSet;
 
+use p2panda_core::Topic;
 use tracing::debug;
 
+use crate::NodeId;
 use crate::addrs::NodeInfo;
 use crate::utils::ShortFormat;
 use crate::watchers::{UpdateResult, Watched, WatchedValue};
-use crate::{NodeId, TopicId};
 
 /// Watch for changes of a node's info.
 #[derive(Default)]
@@ -56,12 +57,12 @@ impl Watched for WatchedNodeInfo {
 
 /// Watch for changes of nodes being interested in a topic.
 pub struct WatchedTopic {
-    topic: TopicId,
+    topic: Topic,
     node_ids: RefCell<HashSet<NodeId>>,
 }
 
 impl WatchedTopic {
-    pub fn from_node_ids(topic: TopicId, node_ids: HashSet<NodeId>) -> Self {
+    pub fn from_node_ids(topic: Topic, node_ids: HashSet<NodeId>) -> Self {
         Self {
             topic,
             node_ids: RefCell::new(node_ids),
@@ -114,11 +115,11 @@ impl Watched for WatchedTopic {
 /// Watch for changes of topics for a node.
 pub struct WatchedNodeTopics {
     node_id: NodeId,
-    topic_ids: RefCell<HashSet<TopicId>>,
+    topic_ids: RefCell<HashSet<Topic>>,
 }
 
 impl WatchedNodeTopics {
-    pub fn from_topics(node_id: NodeId, topic_ids: HashSet<TopicId>) -> Self {
+    pub fn from_topics(node_id: NodeId, topic_ids: HashSet<Topic>) -> Self {
         Self {
             node_id,
             topic_ids: RefCell::new(topic_ids),
@@ -127,14 +128,14 @@ impl WatchedNodeTopics {
 }
 
 impl Watched for WatchedNodeTopics {
-    type Value = HashSet<TopicId>;
+    type Value = HashSet<Topic>;
 
     fn current(&self) -> Self::Value {
         self.topic_ids.borrow().clone()
     }
 
     fn update_if_changed(&self, cmp: &Self::Value) -> UpdateResult<Self::Value> {
-        let difference: HashSet<TopicId> = self
+        let difference: HashSet<Topic> = self
             .topic_ids
             .borrow()
             .symmetric_difference(cmp)

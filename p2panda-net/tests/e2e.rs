@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use futures_util::StreamExt;
-use p2panda_core::Body;
+use p2panda_core::{Body, Topic};
 use p2panda_net::test_utils::{TestNode, setup_logging};
 use p2panda_sync::protocols::TopicLogSyncEvent;
 
@@ -13,7 +13,7 @@ async fn gossip_and_sync_with_same_topic() {
 
     // We're running the same topic for both gossip and sync sessions, and even though they are the
     // same, they should be correctly treating different parts of the system.
-    let topic = [1; 32];
+    let topic: Topic = [1; 32].into();
 
     // ฅ՞•ﻌ•՞ฅ <- Panda
     // =======

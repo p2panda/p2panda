@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use iroh::endpoint::QuicTransportConfig;
+use p2panda_core::Topic;
 use p2panda_discovery::psi_hash::{PsiHashDiscoveryProtocol, PsiHashMessage};
 use p2panda_discovery::traits::{self, DiscoveryProtocol as _};
 use p2panda_store::SqliteStore;
@@ -11,11 +12,11 @@ use p2panda_store::address_book::AddressBookStore;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 
+use crate::NodeId;
 use crate::addrs::NodeInfo;
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::discovery::actors::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
 use crate::iroh_endpoint::Endpoint;
-use crate::{NodeId, TopicId};
 
 pub type DiscoverySessionId = u64;
 
@@ -160,7 +161,7 @@ where
 {
     type Error = <S as AddressBookStore<NodeId, NodeInfo>>::Error;
 
-    async fn topics(&self) -> Result<HashSet<TopicId>, Self::Error> {
+    async fn topics(&self) -> Result<HashSet<Topic>, Self::Error> {
         self.store.node_topics(&self.my_node_id).await
     }
 }

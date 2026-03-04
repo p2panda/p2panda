@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use assert_matches::assert_matches;
+use iroh::Endpoint;
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
-use iroh::{Endpoint, protocol::Router};
+use iroh::protocol::{AcceptError, ProtocolHandler, Router};
 use p2panda_core::{Operation, Topic};
 use p2panda_net::cbor::{into_cbor_sink, into_cbor_stream};
 use p2panda_sync::FromSync;
@@ -20,7 +20,7 @@ use crate::test_utils::{TestNode, setup_logging};
 async fn e2e_log_sync() {
     setup_logging();
 
-    let topic = [0; 32];
+    let topic: Topic = [0; 32].into();
     let log_id = 0;
 
     let mut alice = TestNode::spawn([10; 32]).await;
@@ -229,7 +229,7 @@ async fn e2e_log_sync() {
 async fn e2e_three_party_sync() {
     setup_logging();
 
-    let topic = [0; 32];
+    let topic: Topic = [0; 32].into();
     let log_id = 0;
 
     // Spawn nodes.
@@ -481,7 +481,7 @@ async fn e2e_three_party_sync() {
 async fn unsubscribe_from_gossip_after_drop() {
     setup_logging();
 
-    let sync_topic = [0; 32];
+    let sync_topic: Topic = [0; 32].into();
 
     let alice = TestNode::spawn([73; 32]).await;
     let alice_handle = alice.log_sync.stream(sync_topic, true).await.unwrap();

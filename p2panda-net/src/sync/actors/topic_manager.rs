@@ -8,6 +8,7 @@ use std::pin::Pin;
 
 use futures_util::{Sink, SinkExt};
 use iroh::endpoint::Connection;
+use p2panda_core::Topic;
 use p2panda_sync::manager::SessionTopicMap;
 use p2panda_sync::traits::Manager as SyncManagerTrait;
 use p2panda_sync::{FromSync, SessionConfig, ToSync};
@@ -21,15 +22,15 @@ use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::poller::{SyncPoller, ToSyncPoller};
 use crate::sync::actors::session::{SyncSession, SyncSessionId, SyncSessionMessage};
 use crate::utils::ShortFormat;
-use crate::{NodeId, ProtocolId, TopicId};
+use crate::{NodeId, ProtocolId};
 
 const RETRY_RATE: Duration = Duration::from_secs(5);
 
 type SessionSink<M> = Pin<
     Box<
         dyn Sink<
-                ToSync<<M as SyncManagerTrait<TopicId>>::Message>,
-                Error = <M as SyncManagerTrait<TopicId>>::Error,
+                ToSync<<M as SyncManagerTrait<Topic>>::Message>,
+                Error = <M as SyncManagerTrait<Topic>>::Error,
             >,
     >,
 >;
@@ -39,14 +40,14 @@ pub enum ToTopicManager<T> {
     /// Initiate a sync session with this peer over the given topic
     Initiate {
         node_id: NodeId,
-        topic: TopicId,
+        topic: Topic,
         live_mode: bool,
     },
 
     /// Accept a sync session on this connection.
     Accept {
         node_id: NodeId,
-        topic: TopicId,
+        topic: Topic,
         live_mode: bool,
         connection: Connection,
     },
@@ -67,12 +68,12 @@ pub enum ToTopicManager<T> {
 
 pub struct TopicManagerState<M>
 where
-    M: SyncManagerTrait<TopicId>,
+    M: SyncManagerTrait<Topic>,
 {
-    topic: TopicId,
+    topic: Topic,
     manager: M,
     protocol_id: ProtocolId,
-    session_topic_map: SessionTopicMap<TopicId, SessionSink<M>>,
+    session_topic_map: SessionTopicMap<Topic, SessionSink<M>>,
     node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
     active_sync_set: HashSet<NodeId>,
     actor_session_id_map: HashMap<ActorId, SyncSessionId>,
@@ -97,7 +98,7 @@ impl<M> Default for TopicManager<M> {
 
 impl<M> ThreadLocalActor for TopicManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: SyncManagerTrait<Topic> + Send + 'static,
 {
     type State = TopicManagerState<M>;
 
@@ -105,7 +106,7 @@ where
 
     type Arguments = (
         ProtocolId,
-        TopicId,
+        Topic,
         M::Args,
         broadcast::Sender<FromSync<M::Event>>,
         Endpoint,
@@ -470,17 +471,17 @@ where
 
 impl<M> TopicManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
-    <M as SyncManagerTrait<TopicId>>::Error: StdError + Send + Sync + 'static,
+    M: SyncManagerTrait<Topic> + Send + 'static,
+    <M as SyncManagerTrait<Topic>>::Error: StdError + Send + Sync + 'static,
 {
     /// Initiate a session and update related manager state mappings.
     async fn new_session(
         state: &mut TopicManagerState<M>,
         actor_id: ActorId,
         node_id: NodeId,
-        topic: TopicId,
-        config: SessionConfig<TopicId>,
-    ) -> (u64, <M as SyncManagerTrait<TopicId>>::Protocol) {
+        topic: Topic,
+        config: SessionConfig<Topic>,
+    ) -> (u64, <M as SyncManagerTrait<Topic>>::Protocol) {
         let session_id: SyncSessionId = state.next_session_id;
         state.next_session_id += 1;
 
