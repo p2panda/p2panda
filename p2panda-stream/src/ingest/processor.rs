@@ -55,17 +55,22 @@ where
 {
     type Output = T;
 
-    type Error = IngestError;
+    type Error = (T, IngestError);
 
     async fn process(&self, args: T) -> Result<(), Self::Error> {
-        ingest_operation(
+        let result = ingest_operation(
             &self.store,
             args.operation().borrow(),
             args.log_id(),
             args.topic(),
             args.prune_flag(),
         )
-        .await?;
+        .await;
+
+        // Return the input arguments next to the error to allow mapping it back to it's source.
+        if let Err(err) = result {
+            return Err((args, err));
+        }
 
         self.queue.borrow_mut().push_back(args);
         self.notify.notify_one(); // Wake up any pending recv.
