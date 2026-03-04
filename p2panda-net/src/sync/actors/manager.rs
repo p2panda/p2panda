@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use iroh::endpoint::Connection;
 use iroh::protocol::ProtocolHandler;
+use p2panda_core::Topic;
 use p2panda_sync::FromSync;
 use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage};
 use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
@@ -24,14 +25,14 @@ use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::{Endpoint, to_public_key};
 use crate::sync::actors::{ToTopicManager, TopicManager};
 use crate::utils::ShortFormat;
-use crate::{NodeId, ProtocolId, TopicId};
+use crate::{NodeId, ProtocolId};
 
 type IsLiveModeEnabled = bool;
 
 /// Constant to mix a given topic with to derive a new one.
 ///
 /// This value was generated randomly to guarantee no collisions.
-const GOSSIP_TOPIC_MIX_VALUE: TopicId = [
+const GOSSIP_TOPIC_MIX_VALUE: [u8; 32] = [
     253, 6, 251, 217, 173, 228, 215, 244, 130, 181, 150, 142, 220, 244, 49, 219, 35, 94, 163, 197,
     229, 93, 143, 227, 97, 61, 38, 202, 63, 250, 26, 233,
 ];
@@ -39,48 +40,48 @@ const GOSSIP_TOPIC_MIX_VALUE: TopicId = [
 pub enum ToSyncManager<M, E> {
     /// Create stream for this topic and return related manager.
     Create(
-        TopicId,
+        Topic,
         IsLiveModeEnabled,
         RpcReplyPort<ActorRef<ToTopicManager<M>>>,
     ),
 
     /// Subscribe to the given topic to receive incoming sync events.
     Subscribe(
-        TopicId,
+        Topic,
         RpcReplyPort<Option<broadcast::Receiver<FromSync<E>>>>,
     ),
 
     /// Close all streams for the given topic.
-    Close(TopicId),
+    Close(Topic),
 
     /// Initiate sync session.
-    InitiateSync(TopicId, NodeId),
+    InitiateSync(Topic, NodeId),
 
     /// Accept sync session.
-    Accept(NodeId, TopicId, Connection),
+    Accept(NodeId, Topic, Connection),
 
     /// End sync session.
-    EndSync(TopicId, NodeId),
+    EndSync(Topic, NodeId),
 
     /// Register iroh connection handler.
     RegisterProtocol,
 }
 
 /// Mapping of topic to the receiver channel from the associated sync manager.
-type TopicManagerReceivers<E> = HashMap<TopicId, broadcast::Receiver<FromSync<E>>>;
+type TopicManagerReceivers<E> = HashMap<Topic, broadcast::Receiver<FromSync<E>>>;
 
 /// Mapping of the topic to the regarding manager.
 struct TopicManagers<T> {
-    topic_manager_map: HashMap<TopicId, (ActorRef<ToTopicManager<T>>, IsLiveModeEnabled)>,
-    actor_topic_map: HashMap<ActorId, TopicId>,
+    topic_manager_map: HashMap<Topic, (ActorRef<ToTopicManager<T>>, IsLiveModeEnabled)>,
+    actor_topic_map: HashMap<ActorId, Topic>,
 }
 
 /// Mapping of topic to the regarding gossip overlays dealing with the membership handling.
-type GossipHandles = HashMap<TopicId, (GossipHandle, JoinHandle<()>)>;
+type GossipHandles = HashMap<Topic, (GossipHandle, JoinHandle<()>)>;
 
 /// Mapping between the "mixed" topic (key) used for gossip and it's "original" version (value)
 /// used by sync.
-type GossipTopicMap = Arc<RwLock<HashMap<TopicId, TopicId>>>;
+type GossipTopicMap = Arc<RwLock<HashMap<Topic, Topic>>>;
 
 impl<T> Default for TopicManagers<T> {
     fn default() -> Self {
@@ -93,7 +94,7 @@ impl<T> Default for TopicManagers<T> {
 
 pub struct SyncManagerState<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: SyncManagerTrait<Topic> + Send + 'static,
 {
     protocol_id: ProtocolId,
     endpoint: Endpoint,
@@ -108,10 +109,10 @@ where
 
 impl<M> SyncManagerState<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: SyncManagerTrait<Topic> + Send + 'static,
 {
     /// Drop all internal state associated with the given topic.
-    fn drop_topic_state(&mut self, topic: &TopicId) {
+    fn drop_topic_state(&mut self, topic: &Topic) {
         self.topic_managers.topic_manager_map.remove(topic);
         self.sync_receivers.remove(topic);
 
@@ -130,7 +131,7 @@ where
     async fn spawn_membership_task(
         &mut self,
         myself: &ActorRef<ToSyncManager<M::Message, M::Event>>,
-        topic: TopicId,
+        topic: Topic,
     ) -> Result<(), ActorProcessingErr> {
         // To avoid collisions when topics are re-used across the application for different
         // purposes (membership algorithms aiding sync protocols or ephemeral messaging gossip
@@ -220,7 +221,7 @@ impl<M> Default for SyncManager<M> {
 
 impl<M> ThreadLocalActor for SyncManager<M>
 where
-    M: SyncManagerTrait<TopicId> + Send + 'static,
+    M: SyncManagerTrait<Topic> + Send + 'static,
 {
     type State = SyncManagerState<M>;
 
@@ -520,15 +521,15 @@ where
 
         // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<TopicHandshakeMessage<TopicId>, _>(tx);
-        let mut rx = into_cbor_stream::<TopicHandshakeMessage<TopicId>, _>(rx);
+        let mut tx = into_cbor_sink::<TopicHandshakeMessage<Topic>, _>(tx);
+        let mut rx = into_cbor_stream::<TopicHandshakeMessage<Topic>, _>(rx);
 
         // Channels for sending and receiving protocol events.
         //
         // We don't need to observe these events here as the topic is returned as output when the
         // protocol completes, so these channels exist only to satisfy the API.
         let (event_tx, _event_rx) =
-            futures_channel::mpsc::channel::<TopicHandshakeEvent<TopicId>>(128);
+            futures_channel::mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
         let protocol = TopicHandshakeAcceptor::new(event_tx);
         let topic = protocol
             .run(&mut tx, &mut rx)
@@ -546,6 +547,6 @@ where
 }
 
 /// Hash the concatenation of a topic with a given value to derive new topic.
-fn derive_topic(topic: TopicId, value: impl AsRef<[u8]>) -> TopicId {
-    p2panda_core::Hash::new([topic.as_ref(), value.as_ref()].concat()).into()
+fn derive_topic(topic: Topic, value: impl AsRef<[u8]>) -> Topic {
+    p2panda_core::Hash::new([topic.as_bytes(), value.as_ref()].concat()).into()
 }

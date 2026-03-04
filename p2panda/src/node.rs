@@ -59,7 +59,7 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
-        let handle = self.network.log_sync.stream(topic.into(), true).await?;
+        let handle = self.network.log_sync.stream(topic, true).await?;
         let forge = self.forge.clone();
 
         Ok(StreamHandle::new(topic, handle, forge))
@@ -72,7 +72,7 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
-        let handle = self.network.gossip.stream(topic.into()).await?;
+        let handle = self.network.gossip.stream(topic).await?;
 
         Ok(EphemeralStreamHandle::new(
             topic,

@@ -281,19 +281,6 @@ pub use sync::LogSync;
 /// identify it and encrypt network traffic for this node only.
 pub type NodeId = p2panda_core::PublicKey;
 
-/// Identifier for an gossip- or sync topic.
-///
-/// A topic identifier is required when subscribing or publishing to a stream.
-///
-/// Topics usually describe concrete data which nodes want to exchange over, for example a document
-/// id or chat group id and so forth. Applications usually want to share topics via a secure side
-/// channel.
-///
-/// **WARNING:** Sensitive topics have to be treated like secret values and generated using a
-/// cryptographically secure pseudorandom number generator (CSPRNG). Otherwise they can be easily
-/// guessed by third parties or leaked during discovery.
-pub type TopicId = [u8; 32];
-
 /// Identifier for a network.
 ///
 /// The network identifier is used to achieve separation and prevent interoperability between

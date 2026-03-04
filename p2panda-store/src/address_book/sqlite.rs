@@ -172,7 +172,7 @@ where
         decode_node_info(result)
     }
 
-    async fn node_topics(&self, id: &PublicKey) -> Result<HashSet<[u8; 32]>, Self::Error> {
+    async fn node_topics(&self, id: &PublicKey) -> Result<HashSet<Topic>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (String,)>(
@@ -196,7 +196,6 @@ where
             .iter()
             .map(|item| {
                 Topic::from_str(&item.0)
-                    .map(|topic| topic.into())
                     .map_err(|err| SqliteError::Decode("topic_id".to_string(), err.into()))
             })
             .collect()
@@ -287,11 +286,7 @@ where
         decode_node_infos(result)
     }
 
-    async fn set_topics(
-        &self,
-        id: PublicKey,
-        topics: HashSet<[u8; 32]>,
-    ) -> Result<(), Self::Error> {
+    async fn set_topics(&self, id: PublicKey, topics: HashSet<Topic>) -> Result<(), Self::Error> {
         // Remove all previous topics set for this node id and replace it with new values. Both
         // updates will be executed inside the same atomic transaction.
         self.tx(async |tx| {
@@ -325,7 +320,7 @@ where
                     ",
                 )
                 .bind(id.to_hex())
-                .bind(Topic::from(topic).to_string())
+                .bind(topic.to_string())
                 .execute(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
@@ -336,9 +331,7 @@ where
         Ok(())
     }
 
-    async fn node_infos_by_topics(&self, topics: &[[u8; 32]]) -> Result<Vec<N>, Self::Error> {
-        let topics: Vec<Topic> = topics.iter().map(|topic| Topic::from(*topic)).collect();
-
+    async fn node_infos_by_topics(&self, topics: &[Topic]) -> Result<Vec<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (Vec<u8>,)>(&format!(
@@ -354,7 +347,7 @@ where
                     GROUP BY
                         node_infos_v1.node_id
                     ",
-                    in_op_str(&topics)
+                    in_op_str(topics)
                 ))
                 .fetch_all(pool)
                 .await

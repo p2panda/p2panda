@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -18,9 +18,7 @@ use crate::addrs::{NodeInfo, NodeMetrics, TransportAddress, TrustedTransportInfo
 use crate::discovery::DiscoveryConfig;
 use crate::iroh_endpoint::IrohConfig;
 use crate::iroh_mdns::MdnsDiscoveryMode;
-use crate::{
-    AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NetworkId, NodeId, TopicId,
-};
+use crate::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NetworkId, NodeId};
 
 pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 
@@ -242,7 +240,7 @@ pub type TestExtensions = ();
 pub type TestLogId = u64;
 
 pub type TestTopicSyncManager =
-    TopicSyncManager<TopicId, SqliteStore<'static>, TestLogId, TestExtensions>;
+    TopicSyncManager<Topic, SqliteStore<'static>, TestLogId, TestExtensions>;
 
 /// Client abstraction used in tests.
 ///
@@ -316,7 +314,7 @@ impl TestClient {
         (header, header_bytes, body)
     }
 
-    pub async fn associate(&mut self, topic: &TopicId, logs: &HashMap<PublicKey, Vec<u64>>) {
+    pub async fn associate(&mut self, topic: &Topic, logs: &HashMap<PublicKey, Vec<u64>>) {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {

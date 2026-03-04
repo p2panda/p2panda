@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use futures_util::{Stream, StreamExt};
+use p2panda_core::Topic;
 use p2panda_store::address_book::NodeInfo as _;
 use ractor::{ActorRef, call};
 use thiserror::Error;
@@ -13,18 +14,18 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::trace;
 
+use crate::NodeId;
 use crate::address_book::{AddressBook, AddressBookError};
 use crate::gossip::actors::ToGossipManager;
 use crate::gossip::builder::Builder;
 use crate::gossip::events::GossipEvent;
 use crate::iroh_endpoint::Endpoint;
 use crate::utils::ShortFormat;
-use crate::{NodeId, TopicId};
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
 /// gossip overlay.
 type GossipSenders = HashMap<
-    TopicId,
+    Topic,
     (
         mpsc::Sender<Vec<u8>>,
         broadcast::Sender<Vec<u8>>,
@@ -53,7 +54,7 @@ type GossipSenders = HashMap<
 /// let gossip = Gossip::builder(address_book, endpoint).spawn().await?;
 ///
 /// // Join overlay with given topic.
-/// let handle = gossip.stream([1; 32]).await?;
+/// let handle = gossip.stream([1; 32].into()).await?;
 ///
 /// // Publish a message.
 /// handle.publish(b"Hello, Panda!").await?;
@@ -138,7 +139,7 @@ impl Gossip {
 
     /// Join gossip overlay for this topic and return a handle to publish messages to it or receive
     /// messages from the network.
-    pub async fn stream(&self, topic: TopicId) -> Result<GossipHandle, GossipError> {
+    pub async fn stream(&self, topic: Topic) -> Result<GossipHandle, GossipError> {
         // Check if there's already a handle for this topic and clone it.
         //
         // If this handle exists but the topic counter is zero we know that all previous handles
@@ -248,7 +249,7 @@ pub enum GossipError {
 /// network for a specific topic.
 #[derive(Clone)]
 pub struct GossipHandle {
-    topic: TopicId,
+    topic: Topic,
     to_topic_tx: mpsc::Sender<Vec<u8>>,
     from_gossip_tx: broadcast::Sender<Vec<u8>>,
     _guard: TopicDropGuard,
@@ -256,7 +257,7 @@ pub struct GossipHandle {
 
 impl GossipHandle {
     fn new(
-        topic: TopicId,
+        topic: Topic,
         to_topic_tx: mpsc::Sender<Vec<u8>>,
         from_gossip_tx: broadcast::Sender<Vec<u8>>,
         _guard: TopicDropGuard,
@@ -290,7 +291,7 @@ impl GossipHandle {
     }
 
     /// Returns the topic of the stream.
-    pub fn topic(&self) -> TopicId {
+    pub fn topic(&self) -> Topic {
         self.topic
     }
 }
@@ -300,7 +301,7 @@ impl GossipHandle {
 /// The stream can be used to receive messages from the stream.
 #[derive(Debug)]
 pub struct GossipSubscription {
-    topic: TopicId,
+    topic: Topic,
     from_topic_rx: BroadcastStream<Vec<u8>>,
     _guard: TopicDropGuard,
 }
@@ -308,7 +309,7 @@ pub struct GossipSubscription {
 impl GossipSubscription {
     /// Returns a handle to an ephemeral messaging stream subscriber.
     fn new(
-        topic: TopicId,
+        topic: Topic,
         from_topic_rx: broadcast::Receiver<Vec<u8>>,
         _guard: TopicDropGuard,
     ) -> Self {
@@ -320,7 +321,7 @@ impl GossipSubscription {
     }
 
     /// Returns the topic of the stream.
-    pub fn topic(&self) -> TopicId {
+    pub fn topic(&self) -> Topic {
         self.topic
     }
 }
@@ -342,7 +343,7 @@ impl Stream for GossipSubscription {
 /// it. The gossip overlay will be left then for this topic.
 #[derive(Debug)]
 struct TopicDropGuard {
-    topic: TopicId,
+    topic: Topic,
     counter: Arc<AtomicUsize>,
     actor_ref: ActorRef<ToGossipManager>,
     ignore_drop: bool,
@@ -355,7 +356,7 @@ struct TopicDropGuard {
 const INITIAL_COUNTER: usize = 1;
 
 impl TopicDropGuard {
-    fn new(topic: TopicId, actor_ref: ActorRef<ToGossipManager>) -> Self {
+    fn new(topic: Topic, actor_ref: ActorRef<ToGossipManager>) -> Self {
         trace!(
             topic = topic.fmt_short(),
             counter = INITIAL_COUNTER,
@@ -480,7 +481,7 @@ mod tests {
             GossipManager::spawn(None, args, thread_pool).await.unwrap()
         };
 
-        let guard_1 = TopicDropGuard::new([1; 32], actor_ref);
+        let guard_1 = TopicDropGuard::new([1; 32].into(), actor_ref);
         assert_eq!(guard_1.counter(), 1);
         let _guard_2 = guard_1.clone();
         assert_eq!(guard_1.counter(), 2);

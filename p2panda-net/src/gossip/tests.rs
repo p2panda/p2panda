@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use futures_test::task::noop_context;
 use futures_util::TryStreamExt;
+use p2panda_core::Topic;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
@@ -18,7 +19,7 @@ async fn joined_and_left_events_are_received() {
     setup_logging();
     let mut ant_args = test_args();
     let mut bat_args = test_args();
-    let topic = [1; 32];
+    let topic: Topic = [1; 32].into();
 
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
     let bat_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -101,7 +102,7 @@ async fn join_without_bootstrap() {
     let bat_args = test_args();
     let cat_args = test_args();
 
-    let topic = [1; 32];
+    let topic: Topic = [1; 32].into();
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -212,7 +213,7 @@ async fn two_peer_gossip() {
     let mut ant_args = test_args();
     let bat_args = test_args();
 
-    let topic = [7; 32];
+    let topic: Topic = [7; 32].into();
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -297,7 +298,7 @@ async fn third_peer_joins_non_bootstrap() {
     let mut bat_args = test_args();
     let cat_args = test_args();
 
-    let topic = [11; 32];
+    let topic: Topic = [11; 32].into();
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -429,7 +430,7 @@ async fn three_peer_gossip_with_rejoin() {
     let mut bat_args = test_args();
     let cat_args = test_args();
 
-    let topic = [9; 32];
+    let topic: Topic = [9; 32].into();
 
     // Create address books.
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
@@ -585,7 +586,7 @@ async fn leave_overlay_on_drop() {
 
     let mut ant_args = test_args();
     let mut bat_args = test_args();
-    let topic = [1; 32];
+    let topic: Topic = [1; 32].into();
 
     let ant_address_book = AddressBook::builder().spawn().await.unwrap();
     let bat_address_book = AddressBook::builder().spawn().await.unwrap();

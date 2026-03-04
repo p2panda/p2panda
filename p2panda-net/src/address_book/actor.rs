@@ -3,18 +3,19 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use p2panda_core::Topic;
 use p2panda_store::address_book::{AddressBookStore, NodeInfo as _};
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort};
 use tracing::debug;
 
+use crate::NodeId;
 use crate::address_book::report::ConnectionOutcome;
 use crate::address_book::watchers::{WatchedNodeInfo, WatchedNodeTopics, WatchedTopic};
 use crate::addrs::{NodeInfo, NodeInfoError, NodeTransportInfo, TransportInfo};
 use crate::utils::ShortFormat;
 use crate::watchers::{UpdatesOnly, WatcherReceiver, WatcherSet};
-use crate::{NodeId, TopicId};
 
 pub enum ToAddressBookActor {
     /// Returns information about a node.
@@ -24,7 +25,7 @@ pub enum ToAddressBookActor {
 
     /// Returns a list of informations about nodes which are all interested in at least one of the
     /// given topics in this set.
-    NodeInfosByTopics(Vec<TopicId>, RpcReplyPort<Vec<NodeInfo>>),
+    NodeInfosByTopics(Vec<Topic>, RpcReplyPort<Vec<NodeInfo>>),
 
     /// Inserts or updates node information into address book. Use this method if adding node
     /// information from a local configuration, trusted, external source, etc.
@@ -56,13 +57,13 @@ pub enum ToAddressBookActor {
     ///
     /// Topics are usually shared privately and directly with nodes, this is why implementers
     /// usually want to simply overwrite the previous topic set (_not_ extend it).
-    SetTopics(NodeId, HashSet<TopicId>),
+    SetTopics(NodeId, HashSet<Topic>),
 
     /// Add a topic to set of this node.
-    AddTopic(NodeId, TopicId),
+    AddTopic(NodeId, Topic),
 
     /// Remove topic from set of this node.
-    RemoveTopic(NodeId, TopicId),
+    RemoveTopic(NodeId, Topic),
 
     /// Removes information for a node. Returns `true` if entry was removed and `false` if it does not
     /// exist.
@@ -90,7 +91,7 @@ pub enum ToAddressBookActor {
 
     /// Subscribes to channel informing us about changes of the set of nodes interested in a topic.
     WatchTopic(
-        TopicId,
+        Topic,
         UpdatesOnly,
         RpcReplyPort<WatcherReceiver<HashSet<NodeId>>>,
     ),
@@ -99,7 +100,7 @@ pub enum ToAddressBookActor {
     WatchNodeTopics(
         NodeId,
         UpdatesOnly,
-        RpcReplyPort<WatcherReceiver<HashSet<TopicId>>>,
+        RpcReplyPort<WatcherReceiver<HashSet<Topic>>>,
     ),
 
     /// Report outcomes of incoming or outgoing connections.
@@ -112,30 +113,23 @@ pub enum ToAddressBookActor {
 pub struct AddressBookState {
     store: SqliteStore<'static>,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
-    topic_watchers: WatcherSet<TopicId, WatchedTopic>,
+    topic_watchers: WatcherSet<Topic, WatchedTopic>,
     node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
 }
 
 impl AddressBookState {
-    async fn node_infos_by_topics(
-        &self,
-        topics: Vec<TopicId>,
-    ) -> Result<Vec<NodeInfo>, SqliteError> {
+    async fn node_infos_by_topics(&self, topics: Vec<Topic>) -> Result<Vec<NodeInfo>, SqliteError> {
         let result = self.store.node_infos_by_topics(&topics).await?;
         Ok(result)
     }
 
-    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<TopicId>, SqliteError> {
+    async fn topics_for_node(&self, node_id: &NodeId) -> Result<HashSet<Topic>, SqliteError> {
         let topics =
             AddressBookStore::<NodeId, NodeInfo>::node_topics(&self.store, node_id).await?;
         Ok(topics)
     }
 
-    async fn set_topics(
-        &self,
-        node_id: NodeId,
-        topics: HashSet<TopicId>,
-    ) -> Result<(), SqliteError> {
+    async fn set_topics(&self, node_id: NodeId, topics: HashSet<Topic>) -> Result<(), SqliteError> {
         tx!(self.store, {
             AddressBookStore::<NodeId, NodeInfo>::set_topics(&self.store, node_id, topics.clone())
                 .await?;

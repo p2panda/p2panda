@@ -34,19 +34,16 @@ use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::iroh_endpoint::from_public_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
-use p2panda_net::{
-    AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId, TopicId,
-};
+use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId};
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteStore, Transaction};
 use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
-use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
@@ -113,12 +110,10 @@ async fn main() -> Result<()> {
 
     // Retrieve the chat topic ID from the provided arguments, otherwise generate a new, random,
     // cryptographically-secure identifier.
-    let topic_id: TopicId = if let Some(topic) = args.chat_topic_id {
-        let topic_id = hex::decode(topic)?;
-        topic_id.try_into().expect("topic id should be 32 bytes")
+    let topic: Topic = if let Some(topic_str) = args.chat_topic_id {
+        topic_str.parse().expect("topic id should be 32 bytes")
     } else {
-        let mut rng = rand::rng();
-        rng.random()
+        Topic::new()
     };
 
     // Create a temporary SQLite database to store topic associations and operations.
@@ -126,7 +121,7 @@ async fn main() -> Result<()> {
 
     // Associate our local log with the chat topic and commit it to the database.
     let permit = store.begin().await?;
-    store.associate(&topic_id, &public_key, &LOG_ID).await?;
+    store.associate(&topic, &public_key, &LOG_ID).await?;
     store.commit(permit).await?;
 
     // Prepare address book.
@@ -148,7 +143,7 @@ async fn main() -> Result<()> {
         .await?;
 
     println!("network id: {}", endpoint.network_id().fmt_short());
-    println!("chat topic id: {}", hex::encode(topic_id));
+    println!("chat topic: {}", topic);
     println!("public key: {}", public_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
@@ -171,7 +166,7 @@ async fn main() -> Result<()> {
         .await?;
 
     // Subscribe to gossip overlay to receive and publish (ephemeral) messages.
-    let heartbeat_tx = gossip.stream(topic_id).await?;
+    let heartbeat_tx = gossip.stream(topic).await?;
     let mut heartbeat_rx = heartbeat_tx.subscribe();
 
     let final_heartbeat_tx = heartbeat_tx.clone();
@@ -237,7 +232,7 @@ async fn main() -> Result<()> {
         .spawn()
         .await?;
 
-    let sync_tx = sync.stream(topic_id, true).await?;
+    let sync_tx = sync.stream(topic, true).await?;
     let mut sync_rx = sync_tx.subscribe().await?;
 
     // Receive messages from the sync stream.
@@ -307,7 +302,7 @@ async fn main() -> Result<()> {
                             .insert_operation(&id, *operation, LOG_ID)
                             .await
                             .unwrap();
-                        store.associate(&topic_id, &author, &LOG_ID).await.unwrap();
+                        store.associate(&topic, &author, &LOG_ID).await.unwrap();
                         store.commit(permit).await.unwrap();
                     }
                     _ => (),

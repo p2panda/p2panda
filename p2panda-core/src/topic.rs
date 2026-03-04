@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::{Hash, PublicKey};
 
-const TOPIC_LENGTH: usize = 32;
+pub const TOPIC_LENGTH: usize = 32;
 
 /// Identifier for a gossip- or sync topic.
 ///
@@ -34,6 +34,14 @@ impl Topic {
 
     pub fn from_rng<R: Rng>(rng: &mut R) -> Self {
         Self(rng.r#gen())
+    }
+
+    pub fn as_bytes(&self) -> &[u8; TOPIC_LENGTH] {
+        &self.0
+    }
+
+    pub fn to_bytes(self) -> [u8; TOPIC_LENGTH] {
+        self.0
     }
 }
 

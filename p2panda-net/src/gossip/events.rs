@@ -2,23 +2,25 @@
 
 use std::collections::HashSet;
 
-use crate::{NodeId, TopicId};
+use p2panda_core::Topic;
+
+use crate::NodeId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GossipEvent {
     Joined {
-        topic: TopicId,
+        topic: Topic,
         nodes: HashSet<NodeId>,
     },
     NeighbourUp {
         node: NodeId,
-        topic: TopicId,
+        topic: Topic,
     },
     NeighbourDown {
         node: NodeId,
-        topic: TopicId,
+        topic: Topic,
     },
     Left {
-        topic: TopicId,
+        topic: Topic,
     },
 }
