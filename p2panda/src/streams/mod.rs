@@ -5,7 +5,10 @@ mod event_stream;
 mod stream;
 
 pub use ephemeral_stream::{
-    EphemeralMessage, EphemeralStreamHandle, EphemeralStreamSubscription, PublishError,
+    EphemeralMessage, EphemeralStreamPublisher, EphemeralStreamSubscription, PublishError,
+    ephemeral_stream,
 };
 pub use event_stream::{EventStream, SystemEvent};
-pub use stream::{Message, StreamError, StreamEvent, StreamHandle, StreamSubscription};
+pub use stream::{
+    AckError, Message, StreamEvent, StreamPublisher, StreamSubscription, processed_stream,
+};
