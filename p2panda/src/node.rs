@@ -7,10 +7,11 @@ use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::Extensions;
 pub use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
+use crate::offset::Offset;
+use crate::operation::Extensions;
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, EventStream, StreamPublisher,
@@ -75,9 +76,28 @@ impl Node {
         })
     }
 
+    /// Eventually consistent publish and subscribe stream of messages.
     pub async fn stream<M>(
         &self,
         topic: impl Into<Topic>,
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), StreamHandleError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
+        self.stream_from(topic, Offset::Frontier).await
+    }
+
+    /// Eventually consistent publish and subscribe stream of messages with a custom offset.
+    ///
+    /// Setting an offset is useful if the application doesn't keep any materialised state around
+    /// and needs to repeat all messages on start.
+    ///
+    /// Another use-case is the roll-out of an application update where all state needs to be
+    /// re-materialised.
+    pub async fn stream_from<M>(
+        &self,
+        topic: impl Into<Topic>,
+        offset: Offset,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), StreamHandleError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -98,6 +118,7 @@ impl Node {
             sync_handle,
             self.forge.clone(),
             self.pipeline.clone(),
+            offset,
         )
         .await
         .map_err(|err| StreamHandleError(err.to_string()))?;
