@@ -249,7 +249,6 @@ pub mod sync;
 #[cfg(any(test, feature = "test_utils"))]
 #[doc(hidden)]
 pub mod test_utils;
-pub mod timestamp;
 pub mod utils;
 pub mod watchers;
 

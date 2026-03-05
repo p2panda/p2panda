@@ -27,14 +27,14 @@
 //! <ENTER> to set your desired nickname.
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Timestamp, Topic};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::iroh_endpoint::from_public_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
@@ -375,18 +375,13 @@ fn create_operation(
     seq_num: u64,
     backlink: Option<Hash>,
 ) -> (Hash, Operation) {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
     let mut header = Header {
         version: 1,
         public_key: private_key.public_key(),
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp,
+        timestamp: Timestamp::now(),
         seq_num,
         backlink,
         extensions: (),

@@ -48,7 +48,7 @@ extensible depending on your application requirements.
 ### Create and sign operation
 
 ```rust
-use p2panda_core::{Body, Header, PrivateKey};
+use p2panda_core::{Body, Header, PrivateKey, Timestamp};
 
 let private_key = PrivateKey::new();
 
@@ -59,7 +59,7 @@ let mut header = Header {
     signature: None,
     payload_size: body.size(),
     payload_hash: Some(body.hash()),
-    timestamp: 1733170247,
+    timestamp: Timestamp::now(),
     seq_num: 0,
     backlink: None,
     extensions: (),

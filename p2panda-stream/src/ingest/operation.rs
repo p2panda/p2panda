@@ -114,7 +114,7 @@ pub enum IngestError {
 #[cfg(test)]
 mod tests {
     use p2panda_core::test_utils::TestLog;
-    use p2panda_core::{Hash, Header, Operation, PrivateKey, PublicKey, SeqNum};
+    use p2panda_core::{Hash, Header, Operation, PrivateKey, PublicKey, SeqNum, Timestamp};
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
     use p2panda_store::topics::TopicStore;
@@ -239,7 +239,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 12, // we'll be missing 11 operations between the first and this one
             backlink: Some(Hash::new(b"mock operation")),
             extensions: (),
@@ -269,7 +269,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 1,
             backlink: Some(Hash::new(b"mock operation")),
             extensions: (),
@@ -293,7 +293,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: (),

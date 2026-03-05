@@ -3,7 +3,7 @@
 //! We create a new body containing a data payload, as well as a header, and then sign the header
 //! with an Ed25519 private key. The signed header and body are then used to create an operation.
 //! Finally, we validate the operation.
-use p2panda_core::{Body, Header, Operation, PrivateKey, validate_operation};
+use p2panda_core::{Body, Header, Operation, PrivateKey, Timestamp, validate_operation};
 
 fn main() {
     // Create a new Ed25519 signing key.
@@ -19,7 +19,7 @@ fn main() {
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp: 0,
+        timestamp: Timestamp::now(),
         seq_num: 0,
         backlink: None,
         extensions: None::<()>,
