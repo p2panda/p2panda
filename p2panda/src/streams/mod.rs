@@ -9,6 +9,4 @@ pub use ephemeral_stream::{
     ephemeral_stream,
 };
 pub use event_stream::{EventStream, SystemEvent};
-pub use stream::{
-    AckError, Message, StreamEvent, StreamPublisher, StreamSubscription, processed_stream,
-};
+pub use stream::{Message, StreamEvent, StreamPublisher, StreamSubscription, processed_stream};

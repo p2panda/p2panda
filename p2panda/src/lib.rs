@@ -4,6 +4,7 @@ mod builder;
 mod forge;
 mod network;
 pub mod node;
+mod offset;
 pub mod operation;
 mod processor;
 pub mod streams;
@@ -11,6 +12,7 @@ pub mod streams;
 pub mod test_utils;
 
 pub use node::Node;
+pub use offset::Offset;
 pub use operation::{Extensions, Header, Operation};
 pub use processor::{Event, EventError, ProcessorStatus};
 
