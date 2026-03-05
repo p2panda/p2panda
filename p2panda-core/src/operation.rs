@@ -29,7 +29,7 @@
 //! ### Construct and sign a header
 //!
 //! ```
-//! use p2panda_core::{Body, Header, PrivateKey};
+//! use p2panda_core::{Body, Header, PrivateKey, Timestamp};
 //!
 //! let private_key = PrivateKey::new();
 //!
@@ -40,7 +40,7 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: 1733170247,
+//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions: (),
@@ -52,7 +52,7 @@
 //! ### Custom extensions
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, PrivateKey, PruneFlag};
+//! use p2panda_core::{Body, Extension, Header, PrivateKey, PruneFlag, Timestamp};
 //! use serde::{Serialize, Deserialize};
 //!
 //! let private_key = PrivateKey::new();
@@ -79,7 +79,7 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: 1733170247,
+//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions,
@@ -97,6 +97,7 @@ use thiserror::Error;
 use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::timestamp::Timestamp;
 use crate::traits::Digest;
 use crate::{Extension, Extensions};
 
@@ -147,7 +148,7 @@ impl<E> Digest<Hash> for Operation<E> {
 /// ## Example
 ///
 /// ```
-/// use p2panda_core::{Body, Header, Operation, PrivateKey};
+/// use p2panda_core::{Body, Header, Operation, PrivateKey, Timestamp};
 ///
 /// let private_key = PrivateKey::new();
 ///
@@ -158,7 +159,7 @@ impl<E> Digest<Hash> for Operation<E> {
 ///     signature: None,
 ///     payload_size: body.size(),
 ///     payload_hash: Some(body.hash()),
-///     timestamp: 1733170247,
+///     timestamp: Timestamp::now(),
 ///     seq_num: 0,
 ///     backlink: None,
 ///     extensions: (),
@@ -190,7 +191,7 @@ pub struct Header<E = ()> {
     pub payload_hash: Option<Hash>,
 
     /// Time in microseconds since the Unix epoch.
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
 
     /// Number of operations this author has published to this log, begins with 0 and is always
     /// incremented by 1 with each new operation by the same author.
@@ -212,7 +213,7 @@ impl<E: Default> Default for Header<E> {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: E::default(),
@@ -519,7 +520,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -540,7 +541,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: None::<CustomExtensions>,
@@ -568,7 +569,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -582,7 +583,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: Timestamp::now(),
             seq_num: 1,
             backlink: Some(header_0.hash()),
             extensions: (),
@@ -604,7 +605,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -717,7 +718,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: extensions.clone(),

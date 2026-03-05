@@ -25,6 +25,7 @@ use std::mem;
 use std::net::SocketAddr;
 
 use p2panda_core::cbor::encode_cbor;
+use p2panda_core::timestamp::{HybridTimestamp, Timestamp};
 use p2panda_core::{PrivateKey, Signature};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -34,7 +35,6 @@ use crate::NodeId;
 use crate::iroh_endpoint::from_public_key;
 #[cfg(feature = "iroh_endpoint")]
 use crate::iroh_endpoint::to_public_key;
-use crate::timestamp::{HybridTimestamp, Timestamp};
 
 /// Record of a node we store locally in the address book.
 ///

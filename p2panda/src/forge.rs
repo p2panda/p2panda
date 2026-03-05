@@ -3,7 +3,7 @@
 use std::error::Error as StdError;
 use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
-use p2panda_core::{Body, Hash, PrivateKey, PublicKey, SeqNum, Topic};
+use p2panda_core::{Body, Hash, PrivateKey, PublicKey, SeqNum, Timestamp, Topic};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -96,15 +96,13 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 
         let body: Option<Body> = body.map(|bytes| bytes.into());
 
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-
         let mut header = Header {
             version: 1,
             public_key: self.private_key.public_key(),
             signature: None,
             payload_size: body.as_ref().map(|body| body.size()).unwrap_or(0),
             payload_hash: body.as_ref().map(|body| body.hash()),
-            timestamp,
+            timestamp: Timestamp::now(),
             seq_num,
             backlink,
             extensions,
@@ -143,9 +141,6 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 pub enum ForgeError {
     #[error(transparent)]
     Sqlite(#[from] SqliteError),
-
-    #[error(transparent)]
-    SystemTime(#[from] SystemTimeError),
 }
 
 #[cfg(test)]

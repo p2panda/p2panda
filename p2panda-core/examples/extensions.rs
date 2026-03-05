@@ -5,7 +5,7 @@
 //! `Extension` trait to define the means of extracting each value from a p2panda header.
 use serde::{Deserialize, Serialize};
 
-use p2panda_core::{Body, Extension, Hash, Header, PrivateKey};
+use p2panda_core::{Body, Extension, Hash, Header, PrivateKey, Timestamp};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct LogId(Hash);
@@ -50,7 +50,7 @@ fn main() {
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp: 0,
+        timestamp: Timestamp::now(),
         seq_num: 0,
         backlink: None,
         extensions: extensions.clone(),
