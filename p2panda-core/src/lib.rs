@@ -49,7 +49,7 @@
 //! ## Example
 //!
 //! ```
-//! use p2panda_core::{Body, Header, Operation, PrivateKey};
+//! use p2panda_core::{Body, Header, Operation, PrivateKey, Timestamp};
 //!
 //! // Every operation is cryptographically authenticated by an author by signing it with an
 //! // Ed25519 key pair. This method generates a new private key for us which needs to be securely
@@ -65,7 +65,7 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: 1733170247,
+//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions: (),
@@ -85,6 +85,7 @@ pub mod prune;
 mod serde;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
+pub mod timestamp;
 pub mod topic;
 pub mod traits;
 
@@ -98,4 +99,5 @@ pub use operation::{
 };
 #[cfg(feature = "prune")]
 pub use prune::PruneFlag;
+pub use timestamp::Timestamp;
 pub use topic::Topic;

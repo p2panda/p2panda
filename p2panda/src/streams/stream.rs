@@ -123,7 +123,7 @@ impl<M> Message<M> {
     }
 
     pub fn timestamp(&self) -> u64 {
-        self.header.timestamp
+        self.header.timestamp.into()
     }
 
     pub fn header(&self) -> &Header {

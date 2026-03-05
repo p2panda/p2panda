@@ -12,6 +12,7 @@ use crate::Topic;
 use crate::hash::{Hash, HashError};
 use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
 use crate::operation::{Body, Header};
+use crate::timestamp::Timestamp;
 use crate::topic::TopicError;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -221,7 +222,7 @@ where
                     }
                 };
 
-                let timestamp: u64 = seq
+                let timestamp: Timestamp = seq
                     .next_element()?
                     .ok_or(SerdeError::custom("timestamp missing"))?;
 
@@ -439,7 +440,7 @@ mod tests {
                 public_key: private_key.public_key(),
                 payload_size: 123,
                 payload_hash: Some(Hash::new(vec![1, 2, 3])),
-                timestamp: 0,
+                timestamp: 0.into(),
                 seq_num: 0,
                 backlink: None,
                 extensions: extensions.clone(),
@@ -454,7 +455,7 @@ mod tests {
                 public_key: private_key.public_key(),
                 payload_size: 0,
                 payload_hash: None,
-                timestamp: 0,
+                timestamp: 0.into(),
                 seq_num: 0,
                 backlink: None,
                 extensions: extensions,
@@ -475,7 +476,7 @@ mod tests {
             signature: None,
             payload_size: 2829099,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -492,7 +493,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: Some(Hash::new([0, 1, 2])),
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -509,7 +510,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: Some(Hash::new([0, 1, 2])),
             extensions: (),
@@ -526,7 +527,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 10,
             backlink: None,
             extensions: (),
@@ -554,7 +555,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -584,7 +585,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -611,7 +612,7 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -639,7 +640,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 1,
             backlink: Some(header_0.hash()),
             extensions: (),
@@ -671,7 +672,7 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0,
+            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),

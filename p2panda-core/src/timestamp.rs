@@ -21,10 +21,11 @@ use thiserror::Error;
 /// This is using microseconds instead leap seconds for larger precision (unlike standard UNIX
 /// timestamps).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[serde(transparent)]
 pub struct Timestamp(u64);
 
 impl Timestamp {
-    #[cfg(test)]
     pub fn new(value: u64) -> Self {
         Self(value)
     }
@@ -41,7 +42,6 @@ impl From<Timestamp> for u64 {
     }
 }
 
-#[cfg(test)]
 impl From<u64> for Timestamp {
     fn from(value: u64) -> Self {
         Self(value)
@@ -70,6 +70,7 @@ impl Display for Timestamp {
 #[derive(
     Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, StdHash, Serialize, Deserialize,
 )]
+#[serde(transparent)]
 pub struct LamportTimestamp(u64);
 
 impl LamportTimestamp {
@@ -162,7 +163,6 @@ impl Display for HybridTimestamp {
     }
 }
 
-#[cfg(test)]
 impl From<u64> for HybridTimestamp {
     fn from(value: u64) -> Self {
         Self(Timestamp::new(value), LamportTimestamp::default())

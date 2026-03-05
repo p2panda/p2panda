@@ -2,8 +2,8 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::timestamp::Timestamp;
 use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
 
 #[derive(Clone, Default)]
@@ -41,11 +41,6 @@ impl TestLog {
     pub fn operation<E: Extensions>(&self, body: &[u8], extensions: E) -> Operation<E> {
         let body = Body::from(body);
 
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH!")
-            .as_secs();
-
         let mut seq_num = self.seq_num.borrow_mut();
         let mut backlink = self.backlink.borrow_mut();
 
@@ -55,7 +50,7 @@ impl TestLog {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp,
+            timestamp: Timestamp::now(),
             seq_num: *seq_num,
             backlink: *backlink,
             extensions,
