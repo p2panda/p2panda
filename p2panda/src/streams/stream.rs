@@ -23,7 +23,7 @@ use tracing::warn;
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
 use crate::processor::{Event, Pipeline};
-use crate::{Extensions, Header, Operation};
+use crate::{Extensions, Header, Offset, Operation};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -36,6 +36,7 @@ pub async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     forge: OperationForge,
     pipeline: Pipeline<Topic, Extensions, Topic>,
+    _offset: Offset,
 ) -> Result<
     (StreamPublisher<M>, StreamSubscription<M>),
     SyncHandleError<Operation, TopicLogSyncEvent<Extensions>>,
@@ -46,6 +47,9 @@ where
     let mut sync_stream = sync_handle.subscribe().await?;
 
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
+
+    // TODO: Get offset from database and re-play events first before we move on to new events.
+    // This will be required by applications like Reflection.
 
     let sync_task = tokio::spawn(async move {
         while let Some(result) = sync_stream.next().await {
@@ -211,22 +215,8 @@ pub struct StreamSubscription<M> {
 impl<M> StreamSubscription<M> {
     /// Explicitly acknowledge message.
     // TODO: Implementing this is not a priority right now.
-    pub async fn ack(&self, _message_id: Hash) -> Result<(), AckError> {
+    pub async fn ack(&self, _message_id: Hash) {
         // This is a no-op if messages are automatically acked (which is the default).
-        unimplemented!()
-    }
-
-    /// Repeat streaming all known messages again.
-    ///
-    /// This can be useful if the application doesn't keep any materialised state around and needs
-    /// to repeat all messages on start.
-    ///
-    /// Another use-case is the roll-out of an application update where all state needs to be
-    /// re-materialised.
-    // TODO: This will be required by applications like Reflection.
-    //
-    // Method will likely move somewhere else. See: https://github.com/p2panda/p2panda/issues/1042
-    pub async fn replay(&self) {
         unimplemented!()
     }
 }
@@ -302,9 +292,6 @@ impl<M> Message<M> {
         // TODO
     }
 }
-
-#[derive(Debug, Error)]
-pub enum AckError {}
 
 #[derive(Debug, Error)]
 pub enum PublishError {
