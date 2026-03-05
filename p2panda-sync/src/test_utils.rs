@@ -222,7 +222,7 @@ pub fn create_operation(
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp,
+        timestamp: timestamp.into(),
         seq_num,
         backlink,
         extensions: (),

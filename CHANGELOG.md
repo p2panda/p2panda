@@ -25,6 +25,7 @@ Highlights are marked with a pancake 🥞
 - Use `p2panda-store-next` SQLite stores in `p2panda-net` and `p2panda-sync` [#1022](https://github.com/p2panda/p2panda/pull/1022)
 - Use `Topic` everywhere [#1058](https://github.com/p2panda/p2panda/pull/1058)
 - More generic API for ingest & operation validation [#1050](https://github.com/p2panda/p2panda/pull/1050)
+- Use `Timestamp` in `Header` [#1062](https://github.com/p2panda/p2panda/pull/1062)
 
 ### Fixed
 

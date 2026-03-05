@@ -4,11 +4,13 @@ use std::str::FromStr;
 
 use iroh::address_lookup::UserData;
 use iroh::endpoint_info::MaxLengthExceededError;
-use p2panda_core::{IdentityError, Signature};
+use p2panda_core::{
+    IdentityError, Signature,
+    timestamp::{HybridTimestamp, HybridTimestampError},
+};
 use thiserror::Error;
 
 use crate::addrs::{AuthenticatedTransportInfo, NodeTransportInfo, TransportAddress};
-use crate::timestamp::{HybridTimestamp, HybridTimestampError};
 
 /// Helper to bring additional transport info (signature and timestamp) into iroh's user data
 /// struct.

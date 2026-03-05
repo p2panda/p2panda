@@ -7,9 +7,9 @@ use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt, ready};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
+use p2panda_core::timestamp::{HybridTimestamp, LamportTimestamp, Timestamp};
 use p2panda_core::{PrivateKey, PublicKey, Signature, Topic};
 use p2panda_net::gossip::{GossipHandle, GossipSubscription};
-use p2panda_net::timestamp::{HybridTimestamp, LamportTimestamp, Timestamp};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -322,7 +322,7 @@ where
 #[cfg(test)]
 mod tests {
     use p2panda_core::PrivateKey;
-    use p2panda_net::timestamp::HybridTimestamp;
+    use p2panda_core::timestamp::HybridTimestamp;
 
     use super::WrappedMessage;
 
