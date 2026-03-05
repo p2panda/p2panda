@@ -4,19 +4,17 @@ mod builder;
 mod forge;
 mod network;
 pub mod node;
-mod offset;
 pub mod operation;
-mod processor;
+pub mod processor;
 pub mod streams;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 
+pub use builder::NodeBuilder;
+#[doc(inline)]
 pub use node::Node;
-pub use offset::Offset;
-pub use operation::{Extensions, Header, Operation};
-pub use processor::{Event, EventError, ProcessorStatus};
 
-pub async fn spawn() -> Result<Node, node::NodeError> {
+pub async fn spawn() -> Result<Node, node::SpawnError> {
     Node::spawn().await
 }
 

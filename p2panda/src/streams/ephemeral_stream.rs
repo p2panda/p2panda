@@ -190,7 +190,8 @@ where
     }
 }
 
-pub fn ephemeral_stream<M>(
+/// Returns publish and subscribe halfs of an ephemeral messaging stream for a given topic.
+pub(crate) fn ephemeral_stream<M>(
     topic: Topic,
     forge: OperationForge,
     handle: GossipHandle,

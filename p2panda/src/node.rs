@@ -2,20 +2,18 @@
 
 use p2panda_core::{Hash, Topic};
 use p2panda_net::NodeId;
-use p2panda_net::gossip::GossipError;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub use crate::builder::NodeBuilder;
+use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
-use crate::offset::Offset;
 use crate::operation::Extensions;
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, EventStream, StreamPublisher,
-    StreamSubscription, ephemeral_stream, processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Offset, StreamPublisher,
+    StreamSubscription, SystemEventStream, ephemeral_stream, processed_stream,
 };
 
 // TODO: Can we expose network or will this explode the API surface for GObject unnecessarily?
@@ -36,7 +34,7 @@ impl Node {
         NodeBuilder::new()
     }
 
-    pub async fn spawn() -> Result<Self, NodeError> {
+    pub async fn spawn() -> Result<Self, SpawnError> {
         // Initialises an in-memory SQLite database.
         let store = SqliteStoreBuilder::default().build().await?;
 
@@ -51,7 +49,9 @@ impl Node {
         let tasks = TaskTracker::new();
         let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
 
-        Node::spawn_inner(config, store, forge, pipeline).await
+        let node = Node::spawn_inner(config, store, forge, pipeline).await?;
+
+        Ok(node)
     }
 
     pub(crate) async fn spawn_inner(
@@ -59,7 +59,7 @@ impl Node {
         store: SqliteStore<'static>,
         forge: OperationForge,
         pipeline: Pipeline<Topic, Extensions, Topic>,
-    ) -> Result<Self, NodeError> {
+    ) -> Result<Self, NetworkError> {
         let network = Network::spawn(
             config.network.clone(),
             forge.private_key().clone(),
@@ -80,7 +80,7 @@ impl Node {
     pub async fn stream<M>(
         &self,
         topic: impl Into<Topic>,
-    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), StreamHandleError>
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -98,7 +98,7 @@ impl Node {
         &self,
         topic: impl Into<Topic>,
         offset: Offset,
-    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), StreamHandleError>
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -110,7 +110,7 @@ impl Node {
             .log_sync
             .stream(topic, live_mode)
             .await
-            .map_err(|err| StreamHandleError(err.to_string()))?;
+            .map_err(|err| CreateStreamError(err.to_string()))?;
 
         let (tx, rx) = processed_stream(
             topic,
@@ -121,7 +121,7 @@ impl Node {
             offset,
         )
         .await
-        .map_err(|err| StreamHandleError(err.to_string()))?;
+        .map_err(|err| CreateStreamError(err.to_string()))?;
 
         Ok((tx, rx))
     }
@@ -129,20 +129,22 @@ impl Node {
     pub async fn ephemeral_stream<M>(
         &self,
         topic: impl Into<Topic>,
-    ) -> Result<
-        (EphemeralStreamPublisher<M>, EphemeralStreamSubscription<M>),
-        EphemeralStreamHandleError,
-    >
+    ) -> Result<(EphemeralStreamPublisher<M>, EphemeralStreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
         let topic = topic.into();
-        let handle = self.network.gossip.stream(topic).await?;
+        let handle = self
+            .network
+            .gossip
+            .stream(topic)
+            .await
+            .map_err(|err| CreateStreamError(err.to_string()))?;
 
         Ok(ephemeral_stream(topic, self.forge.clone(), handle))
     }
 
-    pub async fn events(&self) -> Result<EventStream, NodeError> {
+    pub async fn events(&self) -> Result<SystemEventStream, CreateStreamError> {
         unimplemented!()
     }
 
@@ -154,22 +156,6 @@ impl Node {
         unimplemented!()
     }
 }
-
-/// Broken / closed communication channel with the internal gossip actor in `p2panda-net`. This can
-/// be due to the actor crashing.
-///
-/// Users may re-attempt creating a new ephemeral stream handle in case the actor restarted later.
-#[derive(Error, Debug)]
-#[error("error occurred in internal gossip actor: {0}")]
-pub struct EphemeralStreamHandleError(#[from] GossipError);
-
-/// Broken / closed communication channel with the internal log sync actor in `p2panda-net`. This
-/// can be due to the actor crashing.
-///
-/// Users may re-attempt creating a new stream handle in case the actor restarted later.
-#[derive(Error, Debug)]
-#[error("error occurred in internal log sync actor: {0}")]
-pub struct StreamHandleError(String);
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub enum AckPolicy {
@@ -188,10 +174,18 @@ pub(crate) struct Config {
 }
 
 #[derive(Debug, Error)]
-pub enum NodeError {
+pub enum SpawnError {
     #[error(transparent)]
     Network(#[from] NetworkError),
 
     #[error(transparent)]
     Store(#[from] SqliteError),
 }
+
+/// Broken / closed communication channel with the internal actor in `p2panda-net` prevented
+/// creation of stream. This can be due to the actor crashing.
+///
+/// Users may re-attempt creating a new stream in case the actor restarted later.
+#[derive(Error, Debug)]
+#[error("error occurred in internal actor: {0}")]
+pub struct CreateStreamError(String);

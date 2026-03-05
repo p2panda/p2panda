@@ -2,11 +2,14 @@
 
 mod ephemeral_stream;
 mod event_stream;
+mod offset;
 mod stream;
 
+pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
     EphemeralMessage, EphemeralStreamPublisher, EphemeralStreamSubscription, PublishError,
-    ephemeral_stream,
 };
-pub use event_stream::{EventStream, SystemEvent};
-pub use stream::{Message, StreamEvent, StreamPublisher, StreamSubscription, processed_stream};
+pub use event_stream::{SystemEvent, SystemEventStream};
+pub use offset::Offset;
+pub(crate) use stream::processed_stream;
+pub use stream::{ProcessedOperation, StreamEvent, StreamPublisher, StreamSubscription};
