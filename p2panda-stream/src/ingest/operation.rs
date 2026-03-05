@@ -39,9 +39,14 @@ where
     // Validate operation format.
     validate_operation(operation)?;
 
+    let permit = store
+        .begin()
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
     // Ignore insertion if operation already exists.
     let already_exists = store
-        .has_operation(&operation.hash)
+        .has_operation_tx(&operation.hash)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
     if already_exists {
@@ -53,13 +58,13 @@ where
         // TODO: This is not returning the "latest entry". See related issue:
         // https://github.com/p2panda/p2panda/issues/1039
         let latest = store
-            .get_latest_entry(&operation.header.public_key, &log_id)
+            .get_latest_entry_tx(&operation.header.public_key, &log_id)
             .await
             .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
         let latest_operation = match latest {
             Some(latest) => store
-                .get_operation(&latest.0)
+                .get_operation_tx(&latest.0)
                 .await
                 .map_err(|err| IngestError::StoreError(err.to_string()))?,
             None => None,
@@ -75,11 +80,6 @@ where
     // Insert operation into store and associate its log with the given topic.
     let id = operation.hash;
     let public_key = operation.header.public_key;
-
-    let permit = store
-        .begin()
-        .await
-        .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
     store
         .insert_operation(&id, operation.to_owned(), log_id.clone())

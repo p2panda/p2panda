@@ -8,6 +8,26 @@ use sqlx::{FromRow, query, query_as};
 use crate::operations::OperationStore;
 use crate::sqlite::{SqliteError, SqliteStore};
 
+const GET_OPERATION: &str = "
+    SELECT
+        hash,
+        header,
+        body
+    FROM
+        operations_v1
+    WHERE
+        hash = ?
+";
+
+const HAS_OPERATION: &str = "
+    SELECT
+        1
+    FROM
+        operations_v1
+    WHERE
+        hash = ?
+";
+
 impl<'a, E, L> OperationStore<Operation<E>, Hash, L> for SqliteStore<'a>
 where
     E: Extensions,
@@ -80,22 +100,32 @@ where
     async fn get_operation(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
         let result = self
             .execute(async |pool| {
-                query_as::<_, OperationRow>(
-                    "
-                    SELECT
-                        hash,
-                        header,
-                        body
-                    FROM
-                        operations_v1
-                    WHERE
-                        hash = ?
-                    ",
-                )
-                .bind(id.to_hex())
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
+                query_as::<_, OperationRow>(GET_OPERATION)
+                    .bind(id.to_hex())
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        match result {
+            Some(row) => Ok(Some(row.try_into()?)),
+            None => Ok(None),
+        }
+    }
+
+    // TODO: In the future we may be able to remove this `_tx` variant of the query by instead
+    // requiring that API users exlicitly handle transactions themselves.
+    //
+    // See: https://github.com/p2panda/p2panda/issues/1065
+    async fn get_operation_tx(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
+        let result = self
+            .tx(async |tx| {
+                query_as::<_, OperationRow>(GET_OPERATION)
+                    .bind(id.to_hex())
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(SqliteError::Sqlite)
             })
             .await?;
 
@@ -108,20 +138,25 @@ where
     async fn has_operation(&self, id: &Hash) -> Result<bool, Self::Error> {
         let result = self
             .execute(async |pool| {
-                query(
-                    "
-                    SELECT
-                        1
-                    FROM
-                        operations_v1
-                    WHERE
-                        hash = ?
-                    ",
-                )
-                .bind(id.to_hex())
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
+                query(HAS_OPERATION)
+                    .bind(id.to_hex())
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        Ok(result.is_some())
+    }
+
+    async fn has_operation_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
+        let result = self
+            .tx(async |tx| {
+                query(HAS_OPERATION)
+                    .bind(id.to_hex())
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(SqliteError::Sqlite)
             })
             .await?;
 

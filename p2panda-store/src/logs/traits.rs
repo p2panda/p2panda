@@ -20,6 +20,19 @@ pub trait LogStore<T, A, L, S, ID> {
         log_id: &L,
     ) -> impl Future<Output = Result<Option<(ID, S)>, Self::Error>>;
 
+    /// Get the ID and sequence number of the latest entry in a log.
+    ///
+    /// This method must be called within the context of a transaction. Failure to do so will
+    /// result in an error. See the documentation for the `Transaction` trait and the
+    /// corresponding implementation for `SqliteStore` to learn more.
+    ///
+    /// Returns None when the author or a log with the requested id was not found.
+    fn get_latest_entry_tx(
+        &self,
+        author: &A,
+        log_id: &L,
+    ) -> impl Future<Output = Result<Option<(ID, S)>, Self::Error>>;
+
     /// Get current heights for a set of logs.
     ///
     /// Returns the sequence number for the latest entry in every requested log.
