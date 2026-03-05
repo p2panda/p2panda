@@ -38,7 +38,7 @@ use std::error::Error;
 /// If we implement `T` to express that we're interested in syncing over a specific chat group,
 /// for example "Chat Group 2" we would implement `TopicStore` to give us all append-only logs of
 /// all members inside this group, that is the entries inside logs `A2`, `B2` and `C2`.
-pub trait TopicStore<T, A, ID> {
+pub trait TopicStore<T, A, S> {
     type Error: Error;
 
     /// Associate an author and data id pair with a topic.
@@ -46,7 +46,7 @@ pub trait TopicStore<T, A, ID> {
         &self,
         topic: &T,
         author: &A,
-        data_id: &ID,
+        data_id: &S,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Remove an association with a topic.
@@ -54,10 +54,9 @@ pub trait TopicStore<T, A, ID> {
         &self,
         topic: &T,
         author: &A,
-        data_id: &ID,
+        data_id: &S,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get identifiers for all associated
-    fn resolve(&self, topic: &T)
-    -> impl Future<Output = Result<BTreeMap<A, Vec<ID>>, Self::Error>>;
+    fn resolve(&self, topic: &T) -> impl Future<Output = Result<BTreeMap<A, Vec<S>>, Self::Error>>;
 }
