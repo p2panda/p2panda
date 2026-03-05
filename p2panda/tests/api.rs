@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use p2panda::{
-    streams::{EphemeralMessage, Message, StreamEvent},
-    test_utils::setup_logging,
-};
+use p2panda::streams::{EphemeralMessage, ProcessedOperation, StreamEvent};
+use p2panda::test_utils::setup_logging;
 use p2panda_core::{PrivateKey, Topic};
 use tokio::task::JoinHandle;
 
@@ -80,19 +78,19 @@ async fn eventually_consistent_stream() {
     let (mut panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
     panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
 
-    // Icebear joins the chat and waits for a message of panda, to then answer.
+    // Icebear joins the chat and waits for a message of panda.
     let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 
-    let mut received_message: Option<Message<String>> = None;
+    let mut received: Option<ProcessedOperation<String>> = None;
 
     while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Message(message) = event {
-            received_message = Some(message);
+        if let StreamEvent::Processed(processed) = event {
+            received = Some(processed);
             break;
         }
     }
 
-    let received_message = received_message.expect("icebear should have received message");
-    assert_eq!(received_message.body(), &"Hello, Icebear!".to_string());
-    assert_eq!(received_message.author(), panda.id());
+    let received = received.expect("icebear should have received operation");
+    assert_eq!(received.message(), &"Hello, Icebear!".to_string());
+    assert_eq!(received.author(), panda.id());
 }

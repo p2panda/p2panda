@@ -22,15 +22,18 @@ use tracing::warn;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
+use crate::operation::{Extensions, Operation};
 use crate::processor::{Event, Pipeline};
-use crate::{Extensions, Header, Offset, Operation};
+use crate::streams::Offset;
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
 /// the sync backend.
 const BUFFER_SIZE: usize = 16;
 
-pub async fn processed_stream<M>(
+/// Returns publish and subscribe halfs of an eventually consistent messaging stream for a given
+/// topic.
+pub(crate) async fn processed_stream<M>(
     topic: Topic,
     ack_policy: AckPolicy,
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
@@ -69,24 +72,24 @@ where
 
                     // Send operation to processor task and wait for result. This blocks the sync
                     // stream and makes sure that all events are handled in same order.
-                    let processed_event = pipeline
+                    let event = pipeline
                         .process(Event::new(*operation, log_id, topic))
                         .await;
 
                     // Do not forward operations which failed processing on system-level. We do
                     // _not_ forward the error to application-level, only log an error.
-                    if processed_event.is_failed() {
+                    if event.is_failed() {
                         warn!(
-                            id = %processed_event.hash(),
+                            id = %event.hash(),
                             "processing operation failed: {}",
-                            processed_event.failure_reason().expect("error")
+                            event.failure_reason().expect("error")
                         );
 
                         continue;
                     }
 
                     // Do not forward operations to the application-layer if there's no body.
-                    let Some(body) = processed_event.body() else {
+                    let Some(body) = event.body() else {
                         continue;
                     };
 
@@ -102,13 +105,13 @@ where
                     // TODO: Is this mixing up concerns? We can only handle bytes on our end and
                     // let the users do decoding on application layer?
                     let event = match decode_cbor::<M, _>(body.as_bytes()) {
-                        Ok(message) => StreamEvent::Message(Message {
-                            processed_event,
+                        Ok(message) => StreamEvent::Processed(ProcessedOperation {
+                            event,
                             topic,
-                            body: message,
+                            message,
                         }),
                         Err(err) => StreamEvent::DecodingFailed {
-                            processed_event,
+                            event,
                             topic,
                             error: err,
                         },
@@ -234,7 +237,7 @@ where
 
 #[derive(Clone, Debug)]
 pub enum StreamEvent<M> {
-    Message(Message<M>),
+    Processed(ProcessedOperation<M>),
     SyncStarted {
         remote_node_id: NodeId,
         session_id: u64,
@@ -248,48 +251,46 @@ pub enum StreamEvent<M> {
         session_id: u64,
     },
     DecodingFailed {
-        processed_event: Event<Topic, Extensions, Topic>,
+        event: Event<Topic, Extensions, Topic>,
         topic: Topic,
         error: DecodeError,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Message<M> {
-    processed_event: Event<Topic, Extensions, Topic>,
+pub struct ProcessedOperation<M> {
+    event: Event<Topic, Extensions, Topic>,
     topic: Topic,
-    body: M,
+    message: M,
 }
 
-impl<M> Message<M> {
+impl<M> ProcessedOperation<M> {
     pub fn topic(&self) -> Topic {
         self.topic
     }
 
     pub fn id(&self) -> Hash {
-        self.processed_event.hash()
+        self.event.hash()
     }
 
     pub fn author(&self) -> PublicKey {
-        self.processed_event.author()
+        self.event.header().public_key
     }
 
     pub fn timestamp(&self) -> u64 {
-        self.processed_event.header().timestamp.into()
+        self.event.header().timestamp.into()
     }
 
-    pub fn header(&self) -> &Header {
-        self.processed_event.header()
+    pub fn message(&self) -> &M {
+        &self.message
     }
 
-    // TODO: Consider better naming here. It is confusing that I have to call body on Message to
-    // receive M (the "message") from an operation.
-    pub fn body(&self) -> &M {
-        &self.body
+    pub fn processed(&self) -> &Event<Topic, Extensions, Topic> {
+        &self.event
     }
 
     pub async fn ack(&self) {
-        // TODO
+        unimplemented!()
     }
 }
 

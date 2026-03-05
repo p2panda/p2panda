@@ -13,7 +13,7 @@ use p2panda_store::sqlite::SqliteStoreBuilder;
 
 use crate::Node;
 use crate::forge::OperationForge;
-use crate::node::{AckPolicy, Config, NodeError};
+use crate::node::{AckPolicy, Config, SpawnError};
 use crate::processor::{Pipeline, TaskTracker};
 
 #[derive(Default)]
@@ -104,7 +104,7 @@ impl NodeBuilder {
         self
     }
 
-    pub async fn spawn(self) -> Result<Node, NodeError> {
+    pub async fn spawn(self) -> Result<Node, SpawnError> {
         let private_key = self.private_key.unwrap_or_default();
         let store = self.store.build().await?;
         let forge = OperationForge::from_private_key(private_key, store.clone());
@@ -112,6 +112,8 @@ impl NodeBuilder {
         let tasks = TaskTracker::new();
         let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
 
-        Node::spawn_inner(self.config, store, forge, pipeline).await
+        let node = Node::spawn_inner(self.config, store, forge, pipeline).await?;
+
+        Ok(node)
     }
 }

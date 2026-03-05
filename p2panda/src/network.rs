@@ -17,7 +17,7 @@ use p2panda_net::{
 use p2panda_store::SqliteStore;
 use thiserror::Error;
 
-use crate::Extensions;
+use crate::operation::Extensions;
 
 #[derive(Clone)]
 #[allow(unused)]
