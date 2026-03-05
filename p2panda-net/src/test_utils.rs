@@ -295,21 +295,23 @@ impl TestClient {
         body: &[u8],
         log_id: u64,
     ) -> (Header<()>, Vec<u8>, Body) {
-        let (seq_num, backlink) =
-            <SqliteStore as LogStore<
+        let (header, header_bytes, body) = tx_unwrap!(&self.store, {
+            let (seq_num, backlink) = <SqliteStore as LogStore<
                 Operation<TestExtensions>,
                 PublicKey,
                 u64,
                 u64,
                 p2panda_core::Hash,
-            >>::get_latest_entry(&self.store, &self.private_key.public_key(), &log_id)
+            >>::get_latest_entry_tx(
+                &self.store, &self.private_key.public_key(), &log_id
+            )
             .await
             .unwrap()
             .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
             .unwrap_or((0, None));
 
-        let (header, header_bytes, body) =
-            create_operation(&self.private_key, body, seq_num, seq_num, backlink);
+            create_operation(&self.private_key, body, seq_num, seq_num, backlink)
+        });
 
         (header, header_bytes, body)
     }
