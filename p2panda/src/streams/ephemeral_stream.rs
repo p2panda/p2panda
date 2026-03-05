@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
 
+use crate::forge::{Forge, OperationForge};
+
 /// Message specification version to create and encode messages for ephemeral streams.
 const MESSAGE_VERSION: u64 = 1;
 
@@ -188,31 +190,43 @@ where
     }
 }
 
-/// Handle onto an ephemeral stream, exposes API for publishing messages and subscribing to the
-/// event stream.
-#[derive(Clone)]
-pub struct EphemeralStreamHandle<M> {
+pub fn ephemeral_stream<M>(
     topic: Topic,
-    private_key: PrivateKey,
+    forge: OperationForge,
+    handle: GossipHandle,
+) -> (EphemeralStreamPublisher<M>, EphemeralStreamSubscription<M>) {
+    let subscription = handle.subscribe();
+
+    let tx = EphemeralStreamPublisher {
+        topic,
+        forge,
+        inner: handle,
+        timestamp: Arc::new(Mutex::new(HybridTimestamp::now())),
+        _marker: PhantomData,
+    };
+
+    let rx = EphemeralStreamSubscription {
+        topic,
+        inner: subscription,
+        _marker: PhantomData,
+    };
+
+    (tx, rx)
+}
+
+#[derive(Clone)]
+pub struct EphemeralStreamPublisher<M> {
+    topic: Topic,
+    forge: OperationForge,
     inner: GossipHandle,
     timestamp: Arc<Mutex<HybridTimestamp>>,
     _marker: PhantomData<M>,
 }
 
-impl<M> EphemeralStreamHandle<M>
+impl<M> EphemeralStreamPublisher<M>
 where
     M: Serialize + for<'a> Deserialize<'a>,
 {
-    pub(crate) fn new(topic: Topic, private_key: PrivateKey, handle: GossipHandle) -> Self {
-        Self {
-            topic,
-            private_key,
-            inner: handle,
-            timestamp: Arc::new(Mutex::new(HybridTimestamp::now())),
-            _marker: PhantomData,
-        }
-    }
-
     pub fn topic(&self) -> Topic {
         self.topic
     }
@@ -234,7 +248,7 @@ where
         };
 
         let bytes = {
-            let wrapped = WrappedMessage::new(message, timestamp, &self.private_key)?;
+            let wrapped = WrappedMessage::new(message, timestamp, self.forge.private_key())?;
             wrapped.to_bytes()?
         };
 
@@ -244,14 +258,6 @@ where
             .map_err(|_err| PublishError::BrokenChannel)?;
 
         Ok(())
-    }
-
-    pub async fn subscribe(&self) -> EphemeralStreamSubscription<M> {
-        EphemeralStreamSubscription {
-            topic: self.topic,
-            inner: self.inner.subscribe(),
-            _marker: PhantomData,
-        }
     }
 }
 
