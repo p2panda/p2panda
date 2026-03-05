@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 
 use p2panda_core::traits::Digest;
-use p2panda_core::{Body, Hash, Header, LogId, Operation, PublicKey};
+use p2panda_core::{Body, Hash, Header, LogId, Operation};
 use p2panda_stream::ingest::{IngestArgs, IngestError};
 use thiserror::Error;
 
@@ -25,10 +25,10 @@ pub enum ProcessorStatus<R, F> {
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
     /// Input arguments for the processing pipeline.
-    pub input: (Operation<E>, L, TP),
+    input: (Operation<E>, L, TP),
 
     /// Status of the "ingest" processor.
-    pub ingest: ProcessorStatus<(), IngestError>,
+    pub(crate) ingest: ProcessorStatus<(), IngestError>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -36,7 +36,7 @@ where
     L: LogId,
     TP: Clone,
 {
-    pub fn new(operation: Operation<E>, log_id: L, topic: TP) -> Self {
+    pub(crate) fn new(operation: Operation<E>, log_id: L, topic: TP) -> Self {
         Self {
             input: (operation, log_id, topic),
             ingest: ProcessorStatus::Pending,
@@ -49,10 +49,6 @@ where
 
     pub fn body(&self) -> Option<&Body> {
         self.input.0.body.as_ref()
-    }
-
-    pub fn author(&self) -> PublicKey {
-        self.input.0.header.public_key
     }
 
     /// Returns true if event has been successfully processed by the whole pipeline.

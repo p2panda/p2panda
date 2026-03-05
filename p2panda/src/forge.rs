@@ -150,8 +150,8 @@ mod tests {
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
 
-    use crate::Extensions;
     use crate::forge::Forge;
+    use crate::operation::Extensions;
 
     use super::OperationForge;
 
