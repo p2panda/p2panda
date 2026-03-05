@@ -80,45 +80,53 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         body: Option<Vec<u8>>,
         extensions: Extensions,
     ) -> Result<Option<Operation>, Self::Error> {
-        let (seq_num, backlink) = <SqliteStore<'static> as LogStore<
-            Operation,
-            PublicKey,
-            LogId,
-            SeqNum,
-            Hash,
-        >>::get_latest_entry(
-            &self.store, &self.private_key.public_key(), &log_id
-        )
-        .await?
-        .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
-        .unwrap_or((0, None));
-
+        // Perform prerequisite computations outside of the locked transaction.
+        let payload_size = body.as_ref().map(|bytes| bytes.len()).unwrap_or(0) as u64;
         let body: Option<Body> = body.map(|bytes| bytes.into());
+        let payload_hash = body.as_ref().map(|body| body.hash());
 
-        let mut header = Header {
-            version: 1,
-            public_key: self.private_key.public_key(),
-            signature: None,
-            payload_size: body.as_ref().map(|body| body.size()).unwrap_or(0),
-            payload_hash: body.as_ref().map(|body| body.hash()),
-            timestamp: Timestamp::now(),
-            seq_num,
-            backlink,
-            extensions,
-        };
+        // Acquire a lock on the store for the duration of the read to write cycle.
+        //
+        // This is to ensure that the data returned from the `get_latest_entry()` query does not
+        // become stale before the call to `insert_operation()`.
+        //
+        // Here we acquire a store permit, query the latest log entry, associate the topic with
+        // the log, insert the operation and commit the transaction before dropping the permit.
+        let operation = tx!(self.store, {
+            let (seq_num, backlink) = <SqliteStore<'static> as LogStore<
+                Operation,
+                PublicKey,
+                LogId,
+                SeqNum,
+                Hash,
+            >>::get_latest_entry_tx(
+                &self.store, &self.private_key.public_key(), &log_id
+            )
+            .await?
+            .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
+            .unwrap_or((0, None));
 
-        header.sign(&self.private_key);
-        let hash = header.hash();
+            let mut header = Header {
+                version: 1,
+                public_key: self.private_key.public_key(),
+                signature: None,
+                payload_size,
+                payload_hash,
+                timestamp: Timestamp::now(),
+                seq_num,
+                backlink,
+                extensions,
+            };
 
-        let operation = Operation {
-            hash,
-            header: header.clone(),
-            body,
-        };
+            header.sign(&self.private_key);
+            let hash = header.hash();
 
-        // Acquire a store permit, associate the topic with the log, insert the operation and
-        // commit the transaction.
-        let inserted = tx!(self.store, {
+            let operation = Operation {
+                hash,
+                header: header.clone(),
+                body,
+            };
+
             <SqliteStore<'static> as TopicStore<Topic, PublicKey, LogId>>::associate(
                 &self.store,
                 &topic,
@@ -130,9 +138,10 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             self.store
                 .insert_operation(&hash.clone(), operation.clone(), log_id)
                 .await?
+                .then_some(operation)
         });
 
-        Ok(inserted.then_some(operation))
+        Ok(operation)
     }
 }
 

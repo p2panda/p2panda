@@ -40,15 +40,15 @@ async fn get_latest_entry() {
             .unwrap()
     );
 
-    store.commit(permit).await.unwrap();
-
-    let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_latest_entry(
+    let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_latest_entry_tx(
         &store,
         &log.author(),
         &log.id(),
     )
     .await
     .unwrap();
+
+    store.commit(permit).await.unwrap();
 
     assert_eq!(result, Some((operation_2.hash, operation_2.header.seq_num)));
 }
