@@ -15,6 +15,19 @@ use crate::logs::sqlite::models::{LatestEntryRow, LogHeightRow, LogMetaRow};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
+const GET_LATEST_ENTRY: &str = "
+    SELECT
+        hash,
+        seq_num
+    FROM
+        operations_v1
+    WHERE
+        public_key = ?
+        AND log_id = ?
+    ORDER BY
+        CAST(seq_num AS NUMERIC) DESC LIMIT 1
+";
+
 impl<'a, L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore<'a>
 where
     E: Extensions,
@@ -28,25 +41,51 @@ where
         author: &PublicKey,
         log_id: &L,
     ) -> Result<Option<(Hash, SeqNum)>, Self::Error> {
-        if let Some(latest_entry) = query_as::<_, LatestEntryRow>(
-            "
-            SELECT
-                hash,
-                seq_num
-            FROM
-                operations_v1
-            WHERE
-                public_key = ?
-                AND log_id = ?
-            ORDER BY
-                CAST(seq_num AS NUMERIC) DESC LIMIT 1
-            ",
-        )
-        .bind(author.to_string())
-        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
-        .fetch_optional(&self.pool)
-        .await?
+        if let Some(latest_entry) = query_as::<_, LatestEntryRow>(GET_LATEST_ENTRY)
+            .bind(author.to_string())
+            .bind(
+                encode_cbor(&log_id)
+                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+            )
+            .fetch_optional(&self.pool)
+            .await?
         {
+            let hash_seq_num = latest_entry.try_into()?;
+
+            Ok(Some(hash_seq_num))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Retrieve the hash and sequence number of the latest entry in an author's log.
+    ///
+    /// This variant of the method is intended to be used in situations where atomicity of database
+    /// operations is needed. It requires a transaction context with an acquired permit.
+    // TODO: In the future we may be able to remove this `_tx` variant of the query by instead
+    // requiring that API users exlicitly handle transactions themselves.
+    //
+    // See: https://github.com/p2panda/p2panda/issues/1065
+    async fn get_latest_entry_tx(
+        &self,
+        author: &PublicKey,
+        log_id: &L,
+    ) -> Result<Option<(Hash, SeqNum)>, Self::Error> {
+        let result = self
+            .tx(async |tx| {
+                query_as::<_, LatestEntryRow>(GET_LATEST_ENTRY)
+                    .bind(author.to_string())
+                    .bind(
+                        encode_cbor(&log_id)
+                            .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+                    )
+                    .fetch_optional(&mut **tx)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        if let Some(latest_entry) = result {
             let hash_seq_num = latest_entry.try_into()?;
 
             Ok(Some(hash_seq_num))

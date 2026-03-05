@@ -23,10 +23,26 @@ pub trait OperationStore<T, ID, C> {
     /// Get an operation by id.
     fn get_operation(&self, id: &ID) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
+    /// Get an operation by id.
+    ///
+    /// This method must be called within the context of a transaction. Failure to do so will
+    /// result in an error. See the documentation for the `Transaction` trait and the
+    /// corresponding implementation for `SqliteStore` to learn more.
+    fn get_operation_tx(&self, id: &ID) -> impl Future<Output = Result<Option<T>, Self::Error>>;
+
     /// Query the existence of an operation.
     ///
     /// Returns `true` if the operation was found in the store and `false` if not.
     fn has_operation(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
+
+    /// Query the existence of an operation.
+    ///
+    /// This method must be called within the context of a transaction. Failure to do so will
+    /// result in an error. See the documentation for the `Transaction` trait and the
+    /// corresponding implementation for `SqliteStore` to learn more.
+    ///
+    /// Returns `true` if the operation was found in the store and `false` if not.
+    fn has_operation_tx(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Delete an operation.
     ///
