@@ -7,6 +7,7 @@
 //!
 //! [CBOR]: https://cbor.io/
 use std::io::Read;
+use std::sync::Arc;
 
 use ciborium::de::Error as DeserializeError;
 use ciborium::ser::Error as SerializeError;
@@ -52,13 +53,13 @@ impl From<SerializeError<std::io::Error>> for EncodeError {
 }
 
 /// An error occurred during CBOR deserialization.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum DecodeError {
     /// An error occurred while reading bytes.
     ///
     /// Contains the underlying error returned while reading.
     #[error("an error occurred while reading bytes: {0}")]
-    Io(std::io::Error),
+    Io(Arc<std::io::Error>),
 
     /// An error occurred while parsing bytes.
     ///
@@ -83,7 +84,7 @@ pub enum DecodeError {
 impl From<DeserializeError<std::io::Error>> for DecodeError {
     fn from(value: DeserializeError<std::io::Error>) -> Self {
         match value {
-            DeserializeError::Io(err) => DecodeError::Io(err),
+            DeserializeError::Io(err) => DecodeError::Io(Arc::new(err)),
             DeserializeError::Syntax(offset) => DecodeError::Syntax(offset),
             DeserializeError::Semantic(offset, description) => {
                 DecodeError::Semantic(offset, description)
