@@ -32,26 +32,22 @@ async fn ephemeral_stream() {
 
     // Panda joins the chat and sends a message to icebear, then waits for an answer.
     let panda_task: JoinHandle<EphemeralMessage<String>> = {
-        let chat = panda.ephemeral_stream(chat_id).await.unwrap();
+        let (tx, mut rx) = panda.ephemeral_stream(chat_id).await.unwrap();
 
         tokio::spawn(async move {
-            chat.publish("Hello, Icebear!".into()).await.unwrap();
-
-            let mut rx = chat.subscribe().await;
+            tx.publish("Hello, Icebear!".into()).await.unwrap();
             let message = rx.next().await.unwrap();
-
             message
         })
     };
 
     // Icebear joins the chat and waits for a message of panda, to then answer.
     let icebear_task: JoinHandle<EphemeralMessage<String>> = {
-        let chat = icebear.ephemeral_stream(chat_id).await.unwrap();
-        let mut rx = chat.subscribe().await;
+        let (tx, mut rx) = icebear.ephemeral_stream(chat_id).await.unwrap();
 
         tokio::spawn(async move {
             let message = rx.next().await.unwrap();
-            chat.publish("Hi, Panda!".into()).await.unwrap();
+            tx.publish("Hi, Panda!".into()).await.unwrap();
             message
         })
     };
@@ -81,16 +77,15 @@ async fn eventually_consistent_stream() {
     let icebear = p2panda::builder().spawn().await.unwrap();
 
     // Panda joins the chat and sends a message to icebear.
-    let mut panda_chat = panda.stream::<String>(chat_id).await.unwrap();
-    panda_chat.publish("Hello, Icebear!".into()).await.unwrap();
+    let (mut panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
 
     // Icebear joins the chat and waits for a message of panda, to then answer.
-    let icebear_chat = icebear.stream::<String>(chat_id).await.unwrap();
-    let mut rx = icebear_chat.subscribe().await.unwrap();
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 
     let mut received_message: Option<Message<String>> = None;
 
-    while let Some(event) = rx.next().await {
+    while let Some(event) = icebear_rx.next().await {
         if let StreamEvent::Message(message) = event {
             received_message = Some(message);
             break;

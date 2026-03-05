@@ -12,7 +12,10 @@ pub use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::processor::{Pipeline, TaskTracker};
-use crate::streams::{EphemeralStreamHandle, EventStream, StreamHandle};
+use crate::streams::{
+    EphemeralStreamPublisher, EphemeralStreamSubscription, EventStream, StreamPublisher,
+    StreamSubscription, ephemeral_stream, processed_stream,
+};
 
 // TODO: Can we expose network or will this explode the API surface for GObject unnecessarily?
 pub struct Node {
@@ -72,18 +75,24 @@ impl Node {
         })
     }
 
-    pub async fn stream<M>(&self, topic: Topic) -> Result<StreamHandle<M>, StreamHandleError>
+    pub async fn stream<M>(
+        &self,
+        topic: impl Into<Topic>,
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), StreamHandleError>
     where
-        M: Clone + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
+        let live_mode = true;
+        let topic = topic.into();
+
         let sync_handle = self
             .network
             .log_sync
-            .stream(topic, true)
+            .stream(topic, live_mode)
             .await
             .map_err(|err| StreamHandleError(err.to_string()))?;
 
-        StreamHandle::new(
+        let (tx, rx) = processed_stream(
             topic,
             self.config.ack_policy.clone(),
             sync_handle,
@@ -91,23 +100,25 @@ impl Node {
             self.pipeline.clone(),
         )
         .await
-        .map_err(|err| StreamHandleError(err.to_string()))
+        .map_err(|err| StreamHandleError(err.to_string()))?;
+
+        Ok((tx, rx))
     }
 
     pub async fn ephemeral_stream<M>(
         &self,
-        topic: Topic,
-    ) -> Result<EphemeralStreamHandle<M>, EphemeralStreamHandleError>
+        topic: impl Into<Topic>,
+    ) -> Result<
+        (EphemeralStreamPublisher<M>, EphemeralStreamSubscription<M>),
+        EphemeralStreamHandleError,
+    >
     where
         M: Serialize + for<'a> Deserialize<'a>,
     {
+        let topic = topic.into();
         let handle = self.network.gossip.stream(topic).await?;
 
-        Ok(EphemeralStreamHandle::new(
-            topic,
-            self.forge.private_key().clone(),
-            handle,
-        ))
+        Ok(ephemeral_stream(topic, self.forge.clone(), handle))
     }
 
     pub async fn events(&self) -> Result<EventStream, NodeError> {

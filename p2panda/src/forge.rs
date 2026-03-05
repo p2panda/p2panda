@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
-use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
 use p2panda_core::{Body, Hash, PrivateKey, PublicKey, SeqNum, Timestamp, Topic};
 use p2panda_store::logs::LogStore;
