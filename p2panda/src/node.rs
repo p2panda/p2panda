@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
 use p2panda_core::{Hash, Topic};
 use p2panda_net::NodeId;
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
@@ -114,8 +116,9 @@ impl Node {
 
         let (tx, rx) = processed_stream(
             topic,
-            self.config.ack_policy.clone(),
+            self.config.ack_policy,
             sync_handle,
+            self.store.clone(),
             self.forge.clone(),
             self.pipeline.clone(),
             offset,
@@ -157,7 +160,7 @@ impl Node {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub enum AckPolicy {
     /// Each individual message must be acknowledged.
     Explicit,
