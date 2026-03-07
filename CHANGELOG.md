@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
 - `Ingest` processor to insert operations and associate them with topic in store [#1044](https://github.com/p2panda/p2panda/pull/1044)
 - `as_bytes` method for `Body` [#1044](https://github.com/p2panda/p2panda/pull/1044)
 - Event processing pipeline in Node stream [#1045](https://github.com/p2panda/p2panda/pull/1045)
+- Replay all operations for a topic based on offset [#1064](https://github.com/p2panda/p2panda/pull/1064)
 
 ### Changed
 
