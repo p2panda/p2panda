@@ -3,6 +3,7 @@
 mod ephemeral_stream;
 mod event_stream;
 mod offset;
+mod replay;
 mod stream;
 
 pub(crate) use ephemeral_stream::ephemeral_stream;

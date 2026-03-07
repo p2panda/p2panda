@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -11,6 +12,7 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, PublicKey, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::sync::{SyncHandle, SyncHandleError};
+use p2panda_store::SqliteStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -25,6 +27,7 @@ use crate::node::AckPolicy;
 use crate::operation::{Extensions, Operation};
 use crate::processor::{Event, Pipeline};
 use crate::streams::Offset;
+use crate::streams::replay::replay_from_start;
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -37,9 +40,10 @@ pub(crate) async fn processed_stream<M>(
     topic: Topic,
     ack_policy: AckPolicy,
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
+    store: SqliteStore,
     forge: OperationForge,
     pipeline: Pipeline<Topic, Extensions, Topic>,
-    _offset: Offset,
+    offset: Offset,
 ) -> Result<
     (StreamPublisher<M>, StreamSubscription<M>),
     SyncHandleError<Operation, TopicLogSyncEvent<Extensions>>,
@@ -51,10 +55,32 @@ where
 
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
 
-    // TODO: Get offset from database and re-play events first before we move on to new events.
-    // This will be required by applications like Reflection.
-
     let sync_task = tokio::spawn(async move {
+        // In the case where a full replay of the topic stream is requested, then spawn a replay
+        // task and await it's completion. This will block processing of the sync stream until it
+        // is complete.
+        if offset == Offset::Start {
+            // Errors occurring in the replay task which be returned to the user
+            let result = replay_from_start(
+                topic,
+                store.clone(),
+                app_tx.clone(),
+                pipeline.clone(),
+                ack_policy,
+            )
+            .await;
+
+            if let Err(err) = result {
+                warn!("error occurred in replay task: {err:?}");
+                let _ = app_tx
+                    .send(StreamEvent::ReplayFailed {
+                        topic,
+                        error: err.to_string(),
+                    })
+                    .await;
+            }
+        }
+
         while let Some(result) = sync_stream.next().await {
             // Ignore internal broadcast channel error, this only indicates that the channel
             // dropped a message which we can't do much about on this layer anymore. In the future
@@ -67,61 +93,10 @@ where
 
             let event = match from_sync.event {
                 TopicLogSyncEvent::Operation(operation) => {
-                    // TODO: Extract log id from operation extensions instead.
-                    let log_id = topic;
-
-                    // Send operation to processor task and wait for result. This blocks the sync
-                    // stream and makes sure that all events are handled in same order.
-                    let event = pipeline
-                        .process(Event::new(*operation, log_id, topic))
-                        .await;
-
-                    // Do not forward operations which failed processing on system-level. We do
-                    // _not_ forward the error to application-level, only log an error.
-                    if event.is_failed() {
-                        warn!(
-                            id = %event.hash(),
-                            "processing operation failed: {}",
-                            event.failure_reason().expect("error")
-                        );
-
-                        continue;
+                    match process_operation::<M>(*operation, topic, &pipeline, ack_policy).await {
+                        Some(event) => event,
+                        None => continue,
                     }
-
-                    // Do not forward operations to the application-layer if there's no body.
-                    let Some(body) = event.body() else {
-                        continue;
-                    };
-
-                    // Attempt decoding application-layer message. This takes place _after_
-                    // system-level processing completed and the operation was ingested.
-                    //
-                    // In case decoding fails due to an application bug, users have the option to
-                    // re-play this persisted operation and attempt decoding again.
-                    //
-                    // If application data is malformed users can choose to remove the payload of
-                    // the operation or delete the whole log altogether.
-                    //
-                    // TODO: Is this mixing up concerns? We can only handle bytes on our end and
-                    // let the users do decoding on application layer?
-                    let event = match decode_cbor::<M, _>(body.as_bytes()) {
-                        Ok(message) => StreamEvent::Processed(ProcessedOperation {
-                            event,
-                            topic,
-                            message,
-                        }),
-                        Err(err) => StreamEvent::DecodingFailed {
-                            event,
-                            topic,
-                            error: err,
-                        },
-                    };
-
-                    if ack_policy == AckPolicy::Automatic {
-                        // TODO: Automatically acknowledge this message.
-                    }
-
-                    event
                 }
                 // TODO: Correctly handle log sync events.
                 TopicLogSyncEvent::SyncStatus(metrics) => StreamEvent::SyncStarted {
@@ -163,6 +138,68 @@ where
     };
 
     Ok((tx, rx))
+}
+
+pub(crate) async fn process_operation<M>(
+    operation: Operation,
+    topic: Topic,
+    pipeline: &Pipeline<Topic, Extensions, Topic>,
+    ack_policy: AckPolicy,
+) -> Option<StreamEvent<M>>
+where
+    M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+{
+    // TODO: Extract log id from operation extensions instead.
+    let log_id = topic;
+
+    // Send operation to processor task and wait for result. This blocks the sync
+    // stream and makes sure that all events are handled in same order.
+    let event = pipeline.process(Event::new(operation, log_id, topic)).await;
+
+    // Do not forward operations which failed processing on system-level. We do
+    // _not_ forward the error to application-level, only log an error.
+    if event.is_failed() {
+        warn!(
+            id = %event.hash(),
+            "processing operation failed: {}",
+            event.failure_reason().expect("error")
+        );
+
+        return None;
+    }
+
+    // Do not forward operations to the application-layer if there's no body.
+    let body = event.body()?;
+
+    // Attempt decoding application-layer message. This takes place _after_
+    // system-level processing completed and the operation was ingested.
+    //
+    // In case decoding fails due to an application bug, users have the option to
+    // re-play this persisted operation and attempt decoding again.
+    //
+    // If application data is malformed users can choose to remove the payload of
+    // the operation or delete the whole log altogether.
+    //
+    // TODO: Is this mixing up concerns? We can only handle bytes on our end and
+    // let the users do decoding on application layer?
+    let event = match decode_cbor::<M, _>(body.as_bytes()) {
+        Ok(message) => StreamEvent::Processed(ProcessedOperation {
+            event,
+            topic,
+            message,
+        }),
+        Err(err) => StreamEvent::DecodingFailed {
+            event,
+            topic,
+            error: err,
+        },
+    };
+
+    if ack_policy == AckPolicy::Automatic {
+        // TODO: Automatically acknowledge this message.
+    }
+
+    Some(event)
 }
 
 #[derive(Clone)]
@@ -254,6 +291,10 @@ pub enum StreamEvent<M> {
         event: Event<Topic, Extensions, Topic>,
         topic: Topic,
         error: DecodeError,
+    },
+    ReplayFailed {
+        topic: Topic,
+        error: String,
     },
 }
 
