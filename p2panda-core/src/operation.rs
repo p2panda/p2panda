@@ -112,6 +112,21 @@ pub struct Operation<E = ()> {
     pub body: Option<Body>,
 }
 
+impl<E> Operation<E>
+where
+    E: Extensions,
+{
+    /// Get a reference to the operation header.
+    pub fn header(&self) -> &Header<E> {
+        &self.header
+    }
+
+    /// Get a reference to the operation body.
+    pub fn body(&self) -> Option<&Body> {
+        self.body.as_ref()
+    }
+}
+
 impl<E> PartialEq for Operation<E> {
     fn eq(&self, other: &Self) -> bool {
         self.hash.eq(&other.hash)

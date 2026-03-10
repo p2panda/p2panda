@@ -209,19 +209,11 @@ mod tests {
                     let log_id = Topic::new();
 
                     store
-                        .insert_operation(
-                            &operation_panda.hash,
-                            operation_panda.clone(),
-                            log_id.clone(),
-                        )
+                        .insert_operation(&operation_panda.hash, &operation_panda, &log_id)
                         .await
                         .unwrap();
                     store
-                        .insert_operation(
-                            &operation_icebear.hash,
-                            operation_icebear.clone(),
-                            log_id,
-                        )
+                        .insert_operation(&operation_icebear.hash, &operation_icebear, &log_id)
                         .await
                         .unwrap();
                 });

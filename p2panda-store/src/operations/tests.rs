@@ -24,26 +24,26 @@ async fn insert_get_delete_operations() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     // Re-inserting the same operation returns false.
     assert!(
         !store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
+            .insert_operation(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
+            .insert_operation(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );

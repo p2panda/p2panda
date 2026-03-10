@@ -38,8 +38,8 @@ where
     async fn insert_operation(
         &self,
         id: &Hash,
-        operation: Operation<E>,
-        log_id: L,
+        operation: &Operation<E>,
+        log_id: &L,
     ) -> Result<bool, Self::Error> {
         let result = self
             .tx(async |tx| {
@@ -59,11 +59,10 @@ where
                             seq_num,
                             header,
                             header_size,
-                            body,
-                            extensions
+                            body
                         )
                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ",
                 )
                 .bind(id.to_hex())
@@ -83,11 +82,7 @@ where
                         .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
                 )
                 .bind(operation.header.to_bytes().len().to_string())
-                .bind(operation.body.map(|body| body.to_bytes()))
-                .bind(
-                    encode_cbor(&operation.header.extensions)
-                        .map_err(|err| SqliteError::Encode("extensions".to_string(), err))?,
-                )
+                .bind(operation.body().map(|body| body.to_bytes()))
                 .execute(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)

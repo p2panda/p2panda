@@ -11,14 +11,14 @@ type LogEntries<T> = Vec<(T, Vec<u8>)>;
 pub trait LogStore<T, A, L, S, ID> {
     type Error: Error;
 
-    /// Get the ID and sequence number of the latest entry in a log.
+    /// Get the latest entry in a log.
     ///
     /// Returns None when the author or a log with the requested id was not found.
     fn get_latest_entry(
         &self,
         author: &A,
         log_id: &L,
-    ) -> impl Future<Output = Result<Option<(ID, S)>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
     /// Get the ID and sequence number of the latest entry in a log.
     ///
@@ -31,7 +31,7 @@ pub trait LogStore<T, A, L, S, ID> {
         &self,
         author: &A,
         log_id: &L,
-    ) -> impl Future<Output = Result<Option<(ID, S)>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
     /// Get current heights for a set of logs.
     ///

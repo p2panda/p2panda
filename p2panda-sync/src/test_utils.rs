@@ -100,7 +100,7 @@ impl Peer {
 
         tx_unwrap!(&self.store, {
             self.store
-                .insert_operation(&id, operation, log_id)
+                .insert_operation(&id, &operation, &log_id)
                 .await
                 .unwrap();
         });
@@ -125,7 +125,7 @@ impl Peer {
         )
         .await
         .unwrap()
-        .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
+        .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
         .unwrap_or((0, None));
 
         let (header, header_bytes) =
