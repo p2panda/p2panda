@@ -151,10 +151,13 @@ where
 {
     // TODO: Extract log id from operation extensions instead.
     let log_id = topic;
+    let prune_flag = operation.header.extensions.prune_flag;
 
     // Send operation to processor task and wait for result. This blocks the sync
     // stream and makes sure that all events are handled in same order.
-    let event = pipeline.process(Event::new(operation, log_id, topic)).await;
+    let event = pipeline
+        .process(Event::new(operation, log_id, topic, prune_flag))
+        .await;
 
     // Do not forward operations which failed processing on system-level. We do
     // _not_ forward the error to application-level, only log an error.
@@ -220,16 +223,39 @@ where
 
     /// Publish a message.
     pub async fn publish(&mut self, message: M) -> Result<Hash, PublishError> {
-        let encoded_message = encode_cbor(&message)?;
+        self.publish_inner(Some(message), false).await
+    }
+
+    /// Deletes all our previously published messages in this stream.
+    ///
+    /// This signals to all other nodes that they should remove them as well.
+    ///
+    /// An message can be optionally added when pruning, allowing to publish a "snapshot"
+    /// / state-based CRDT of the current state, so nodes can still consistently re-create all
+    /// state, even if previous messages are gone.
+    ///
+    /// Internally we're applying append-only log prefix deletion, meaning that the log's prefix
+    /// gets pruned - from before the point where the prune flag was set.
+    pub async fn prune(&mut self, message: Option<M>) -> Result<Hash, PublishError> {
+        self.publish_inner(message, true).await
+    }
+
+    async fn publish_inner(
+        &mut self,
+        message: Option<M>,
+        prune_flag: bool,
+    ) -> Result<Hash, PublishError> {
+        let mut extensions = Extensions::default();
+        extensions.prune_flag = prune_flag.into();
+
+        let message = match message {
+            Some(message) => Some(encode_cbor(&message)?),
+            None => None,
+        };
 
         let operation = self
             .forge
-            .create_operation(
-                self.topic(),
-                self.topic(),
-                Some(encoded_message),
-                Extensions::default(),
-            )
+            .create_operation(self.topic(), self.topic(), message, extensions)
             .await?
             .ok_or(PublishError::DuplicateOperation)?;
         let hash = operation.hash;

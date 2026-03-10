@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Extensions, Header, OperationError, validate_backlink};
 
 /// Flag indicating that all preceding operations in a log can be deleted.
-#[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PruneFlag(bool);
 

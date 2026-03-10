@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 
 use p2panda_core::traits::Digest;
-use p2panda_core::{Body, Hash, Header, LogId, Operation};
+use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag};
 use p2panda_stream::ingest::{IngestArgs, IngestError};
 use thiserror::Error;
 
@@ -25,7 +25,7 @@ pub enum ProcessorStatus<R, F> {
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
     /// Input arguments for the processing pipeline.
-    input: (Operation<E>, L, TP),
+    input: (Operation<E>, L, TP, PruneFlag),
 
     /// Status of the "ingest" processor.
     pub(crate) ingest: ProcessorStatus<(), IngestError>,
@@ -36,9 +36,14 @@ where
     L: LogId,
     TP: Clone,
 {
-    pub(crate) fn new(operation: Operation<E>, log_id: L, topic: TP) -> Self {
+    pub(crate) fn new(
+        operation: Operation<E>,
+        log_id: L,
+        topic: TP,
+        prune_flag: PruneFlag,
+    ) -> Self {
         Self {
-            input: (operation, log_id, topic),
+            input: (operation, log_id, topic, prune_flag),
             ingest: ProcessorStatus::Pending,
         }
     }
@@ -91,7 +96,7 @@ where
     }
 
     fn prune_flag(&self) -> bool {
-        false
+        self.input.3.is_set()
     }
 
     fn operation(&self) -> impl Borrow<Operation<E>> {

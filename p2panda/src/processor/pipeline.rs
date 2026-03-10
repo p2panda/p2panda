@@ -161,7 +161,7 @@ where
 mod tests {
     use p2panda_core::test_utils::TestLog;
     use p2panda_core::traits::Digest;
-    use p2panda_core::{PrivateKey, Topic};
+    use p2panda_core::{PrivateKey, PruneFlag, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::processor::TaskTracker;
@@ -181,7 +181,12 @@ mod tests {
 
         // Expect operation to be processed successfully.
         let result = processor
-            .process(Event::new(operation.clone(), topic, topic))
+            .process(Event::new(
+                operation.clone(),
+                topic,
+                topic,
+                PruneFlag::default(),
+            ))
             .await;
 
         assert_eq!(result.hash(), operation.hash());
@@ -192,7 +197,12 @@ mod tests {
         operation.header.public_key = PrivateKey::new().public_key();
 
         let result = processor
-            .process(Event::new(operation.clone(), topic, topic))
+            .process(Event::new(
+                operation.clone(),
+                topic,
+                topic,
+                PruneFlag::default(),
+            ))
             .await;
 
         assert_eq!(result.hash(), operation.hash());
