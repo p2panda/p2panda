@@ -11,14 +11,15 @@ use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
 use sqlx::{query, query_as};
 
 use crate::logs::LogStore;
-use crate::logs::sqlite::models::{LatestEntryRow, LogHeightRow, LogMetaRow};
+use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
 const GET_LATEST_ENTRY: &str = "
     SELECT
         hash,
-        seq_num
+        header,
+        body
     FROM
         operations_v1
     WHERE
@@ -35,13 +36,13 @@ where
 {
     type Error = SqliteError;
 
-    /// Retrieve the hash and sequence number of the latest entry in an author's log.
+    /// Retrieve the latest entry in an author's log.
     async fn get_latest_entry(
         &self,
         author: &PublicKey,
         log_id: &L,
-    ) -> Result<Option<(Hash, SeqNum)>, Self::Error> {
-        if let Some(latest_entry) = query_as::<_, LatestEntryRow>(GET_LATEST_ENTRY)
+    ) -> Result<Option<Operation<E>>, Self::Error> {
+        if let Some(latest) = query_as::<_, OperationRow>(GET_LATEST_ENTRY)
             .bind(author.to_string())
             .bind(
                 encode_cbor(&log_id)
@@ -50,15 +51,15 @@ where
             .fetch_optional(&self.pool)
             .await?
         {
-            let hash_seq_num = latest_entry.try_into()?;
+            let operation = latest.try_into()?;
 
-            Ok(Some(hash_seq_num))
+            Ok(Some(operation))
         } else {
             Ok(None)
         }
     }
 
-    /// Retrieve the hash and sequence number of the latest entry in an author's log.
+    /// Retrieve the latest entry in an author's log.
     ///
     /// This variant of the method is intended to be used in situations where atomicity of database
     /// operations is needed. It requires a transaction context with an acquired permit.
@@ -70,10 +71,10 @@ where
         &self,
         author: &PublicKey,
         log_id: &L,
-    ) -> Result<Option<(Hash, SeqNum)>, Self::Error> {
+    ) -> Result<Option<Operation<E>>, Self::Error> {
         let result = self
             .tx(async |tx| {
-                query_as::<_, LatestEntryRow>(GET_LATEST_ENTRY)
+                query_as::<_, OperationRow>(GET_LATEST_ENTRY)
                     .bind(author.to_string())
                     .bind(
                         encode_cbor(&log_id)
@@ -85,8 +86,8 @@ where
             })
             .await?;
 
-        if let Some(latest_entry) = result {
-            let hash_seq_num = latest_entry.try_into()?;
+        if let Some(latest) = result {
+            let hash_seq_num = latest.try_into()?;
 
             Ok(Some(hash_seq_num))
         } else {
@@ -246,7 +247,8 @@ where
 
         let mut entries = Vec::new();
         for operation in operations {
-            entries.push((operation.clone().try_into()?, operation.header))
+            let header = operation.header.clone();
+            entries.push((operation.try_into()?, header))
         }
 
         if entries.is_empty() {

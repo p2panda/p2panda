@@ -48,8 +48,7 @@ where
         + OperationStore<Operation<E>, Hash, L>
         + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
         + TopicStore<TP, PublicKey, L>,
-    // TODO: remove Clone after https://github.com/p2panda/p2panda/issues/1040
-    T: IngestArgs<L, TP, E> + Clone,
+    T: IngestArgs<L, TP, E>,
     L: LogId,
     E: Extensions,
 {
