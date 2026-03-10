@@ -29,8 +29,7 @@ where
         + OperationStore<Operation<E>, Hash, L>
         + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
         + TopicStore<TP, PublicKey, L>,
-    // TODO: remove Clone after https://github.com/p2panda/p2panda/issues/1040
-    T: Borrow<Operation<E>> + Clone,
+    T: Borrow<Operation<E>>,
     L: LogId,
     E: Extensions,
 {
@@ -60,24 +59,11 @@ where
     }
 
     // Validate log integrity.
-    let past_header = {
-        // TODO: This is not returning the "latest entry". See related issue:
-        // https://github.com/p2panda/p2panda/issues/1039
-        let latest = store
-            .get_latest_entry_tx(&operation.header.public_key, &log_id)
-            .await
-            .map_err(|err| IngestError::StoreError(err.to_string()))?;
-
-        let latest_operation = match latest {
-            Some(latest) => store
-                .get_operation_tx(&latest.0)
-                .await
-                .map_err(|err| IngestError::StoreError(err.to_string()))?,
-            None => None,
-        };
-
-        latest_operation.map(|operation| operation.header)
-    };
+    let past_header = store
+        .get_latest_entry_tx(&operation.header.public_key, &log_id)
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?
+        .map(|operation| operation.header);
 
     // If no pruning flag is set, we expect the log to have integrity with the previously given
     // operation.
@@ -88,7 +74,7 @@ where
     let public_key = operation.header.public_key;
 
     store
-        .insert_operation(&id, operation.to_owned(), log_id.clone())
+        .insert_operation(&id, operation, &log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -200,7 +186,7 @@ mod tests {
         assert_eq!(*authors.get(&log_0.author()).unwrap(), [0]);
         assert_eq!(*authors.get(&log_1.author()).unwrap(), [1]);
 
-        let (_hash, seq_num) = <SqliteStore as LogStore<
+        let operation = <SqliteStore as LogStore<
             Operation<()>,
             PublicKey,
             usize,
@@ -210,7 +196,7 @@ mod tests {
         .await
         .unwrap()
         .unwrap();
-        assert_eq!(seq_num, 1);
+        assert_eq!(operation.header.seq_num, 1);
 
         // Topic "cats" contains one log: 2 with four operations.
         let authors =
@@ -219,7 +205,7 @@ mod tests {
                 .unwrap();
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
-        let (_hash, seq_num) = <SqliteStore as LogStore<
+        let operation = <SqliteStore as LogStore<
             Operation<()>,
             PublicKey,
             usize,
@@ -229,7 +215,7 @@ mod tests {
         .await
         .unwrap()
         .unwrap();
-        assert_eq!(seq_num, 2);
+        assert_eq!(operation.header.seq_num, 2);
     }
 
     #[tokio::test]

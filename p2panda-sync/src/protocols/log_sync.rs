@@ -987,7 +987,7 @@ mod tests {
                 &peer_a.store,
                 peer_a
                     .store
-                    .insert_operation(&id, operation, 0)
+                    .insert_operation(&id, &operation, &0)
                     .await
                     .unwrap()
             );

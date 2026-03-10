@@ -28,14 +28,14 @@ async fn get_latest_entry() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
 
     assert!(
         store
-            .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
+            .insert_operation(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
@@ -50,7 +50,7 @@ async fn get_latest_entry() {
 
     store.commit(permit).await.unwrap();
 
-    assert_eq!(result, Some((operation_2.hash, operation_2.header.seq_num)));
+    assert_eq!(result, Some(operation_2));
 }
 
 #[tokio::test]
@@ -76,19 +76,19 @@ async fn get_log_heights() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log_1.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log_1.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log_1.id())
+            .insert_operation(&operation_2.hash, &operation_2, &log_1.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log_2.id())
+            .insert_operation(&operation_3.hash, &operation_3, &log_2.id())
             .await
             .unwrap()
     );
@@ -126,14 +126,14 @@ async fn get_log_size() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
 
     assert!(
         store
-            .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
+            .insert_operation(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
@@ -181,31 +181,31 @@ async fn get_log_entries() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
+            .insert_operation(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
+            .insert_operation(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
+            .insert_operation(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_5.hash.clone(), operation_5.clone(), log.id())
+            .insert_operation(&operation_5.hash, &operation_5, &log.id())
             .await
             .unwrap()
     );
@@ -255,31 +255,31 @@ async fn prune_entries() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash.clone(), operation_1.clone(), log.id())
+            .insert_operation(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash.clone(), operation_2.clone(), log.id())
+            .insert_operation(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash.clone(), operation_3.clone(), log.id())
+            .insert_operation(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash.clone(), operation_4.clone(), log.id())
+            .insert_operation(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_5.hash.clone(), operation_5.clone(), log.id())
+            .insert_operation(&operation_5.hash, &operation_5, &log.id())
             .await
             .unwrap()
     );

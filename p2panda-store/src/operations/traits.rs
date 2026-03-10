@@ -16,8 +16,8 @@ pub trait OperationStore<T, ID, C> {
     fn insert_operation(
         &self,
         id: &ID,
-        operation: T,
-        collection_id: C,
+        operation: &T,
+        collection_id: &C,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get an operation by id.
