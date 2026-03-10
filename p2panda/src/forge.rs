@@ -103,7 +103,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 &self.store, &self.private_key.public_key(), &log_id
             )
             .await?
-            .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
             let mut header = Header {
@@ -136,7 +136,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             .await?;
 
             self.store
-                .insert_operation(&hash.clone(), operation.clone(), log_id)
+                .insert_operation(&hash, &operation, &log_id)
                 .await?
                 .then_some(operation)
         });

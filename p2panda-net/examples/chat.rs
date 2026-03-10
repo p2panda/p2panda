@@ -299,7 +299,7 @@ async fn main() -> Result<()> {
                         let id = operation.hash;
                         let author = operation.header.public_key;
                         store
-                            .insert_operation(&id, *operation, LOG_ID)
+                            .insert_operation(&id, &operation, &LOG_ID)
                             .await
                             .unwrap();
                         store.associate(&topic, &author, &LOG_ID).await.unwrap();
@@ -325,7 +325,7 @@ async fn main() -> Result<()> {
             let (hash, operation) = create_operation(&private_key, &body, seq_num, backlink);
             let permit = store.begin().await.unwrap();
             store
-                .insert_operation(&hash, operation.clone(), LOG_ID)
+                .insert_operation(&hash, &operation, &LOG_ID)
                 .await
                 .unwrap();
             store.commit(permit).await.unwrap();

@@ -280,7 +280,7 @@ impl TestClient {
 
         tx_unwrap!(&self.store, {
             self.store
-                .insert_operation(&id, operation, log_id)
+                .insert_operation(&id, &operation, &log_id)
                 .await
                 .unwrap();
         });
@@ -306,7 +306,7 @@ impl TestClient {
             )
             .await
             .unwrap()
-            .map(|(hash, seq_num)| (seq_num + 1, Some(hash)))
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
             create_operation(&self.private_key, body, seq_num, seq_num, backlink)

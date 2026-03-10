@@ -30,6 +30,7 @@ Highlights are marked with a pancake 🥞
 - More generic API for ingest & operation validation [#1050](https://github.com/p2panda/p2panda/pull/1050)
 - Use `Timestamp` in `Header` [#1062](https://github.com/p2panda/p2panda/pull/1062)
 - Node API improvements [#1061](https://github.com/p2panda/p2panda/pull/1061)
+- Minor store improvements [#1068](https://github.com/p2panda/p2panda/pull/1068)
 
 ### Fixed
 
