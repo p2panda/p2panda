@@ -31,7 +31,7 @@ pub trait Forge<T, C, E> {
 #[derive(Clone, Debug)]
 pub struct OperationForge {
     private_key: PrivateKey,
-    store: SqliteStore<'static>,
+    store: SqliteStore,
 }
 
 impl OperationForge {
@@ -40,7 +40,7 @@ impl OperationForge {
     ///
     /// The forge holds the private key used to sign operations. This method generates a new key
     /// using CSPRNG from the system.
-    pub fn new(store: SqliteStore<'static>) -> Self {
+    pub fn new(store: SqliteStore) -> Self {
         Self {
             private_key: PrivateKey::new(),
             store,
@@ -48,7 +48,7 @@ impl OperationForge {
     }
 
     /// Create a forge using an existing private key.
-    pub fn from_private_key(private_key: PrivateKey, store: SqliteStore<'static>) -> Self {
+    pub fn from_private_key(private_key: PrivateKey, store: SqliteStore) -> Self {
         Self { private_key, store }
     }
 }
@@ -93,7 +93,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         // Here we acquire a store permit, query the latest log entry, associate the topic with
         // the log, insert the operation and commit the transaction before dropping the permit.
         let operation = tx!(self.store, {
-            let (seq_num, backlink) = <SqliteStore<'static> as LogStore<
+            let (seq_num, backlink) = <SqliteStore as LogStore<
                 Operation,
                 PublicKey,
                 LogId,
@@ -127,7 +127,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 body,
             };
 
-            <SqliteStore<'static> as TopicStore<Topic, PublicKey, LogId>>::associate(
+            <SqliteStore as TopicStore<Topic, PublicKey, LogId>>::associate(
                 &self.store,
                 &topic,
                 &self.private_key.public_key(),
@@ -195,7 +195,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_heights(
+        let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
             &store,
             &forge.public_key(),
             &[log_id],

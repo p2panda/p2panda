@@ -30,7 +30,7 @@ pub enum ToDiscoverySession {
 pub struct DiscoverySessionArguments {
     pub my_node_id: NodeId,
     pub remote_node_id: NodeId,
-    pub store: SqliteStore<'static>,
+    pub store: SqliteStore,
     pub endpoint: Endpoint,
     pub manager_ref: ActorRef<ToDiscoveryManager>,
     pub quic_transport_config: QuicTransportConfig,
@@ -119,7 +119,7 @@ impl ThreadLocalActor for DiscoverySession {
 
         // Run the discovery protocol.
         // TODO: Have a timeout to cancel session if it's running overtime.
-        let protocol = PsiHashDiscoveryProtocol::<SqliteStore<'_>, _, NodeId, NodeInfo>::new(
+        let protocol = PsiHashDiscoveryProtocol::<SqliteStore, _, NodeId, NodeInfo>::new(
             store.clone(),
             LocalTopicsProvider { store, my_node_id },
             my_node_id,

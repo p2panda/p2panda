@@ -140,7 +140,7 @@ mod tests {
         local
             .run_until(async move {
                 let store = SqliteStore::temporary().await;
-                let ingest: Ingest<SqliteStore<'_>, IngestArguments, _, _, _> = Ingest::new(store);
+                let ingest: Ingest<SqliteStore, IngestArguments, _, _, _> = Ingest::new(store);
 
                 let operation_0 = log.operation(b"Hi", ());
                 let operation_1 = log.operation(b"Ha", ());

@@ -28,7 +28,7 @@ const HAS_OPERATION: &str = "
         hash = ?
 ";
 
-impl<'a, E, L> OperationStore<Operation<E>, Hash, L> for SqliteStore<'a>
+impl<E, L> OperationStore<Operation<E>, Hash, L> for SqliteStore
 where
     E: Extensions,
     L: LogId,

@@ -87,7 +87,7 @@ pub enum ToDiscoveryWalker {
 
 pub struct DiscoveryWalkerState {
     manager_ref: ActorRef<ToDiscoveryManager>,
-    walker: RandomWalker<ChaCha20Rng, SqliteStore<'static>, NodeId, NodeInfo>,
+    walker: RandomWalker<ChaCha20Rng, SqliteStore, NodeId, NodeInfo>,
     backoff: Backoff,
     walker_reset: Arc<Notify>,
 }
@@ -103,7 +103,7 @@ impl ThreadLocalActor for DiscoveryWalker {
     type Arguments = (
         NodeId,
         DiscoveryConfig,
-        SqliteStore<'static>,
+        SqliteStore,
         ChaCha20Rng,
         Arc<Notify>,
         ActorRef<ToDiscoveryManager>,

@@ -262,7 +262,7 @@ impl AddressBook {
         Ok(())
     }
 
-    pub(crate) async fn store(&self) -> Result<SqliteStore<'static>, AddressBookError> {
+    pub(crate) async fn store(&self) -> Result<SqliteStore, AddressBookError> {
         let inner = self.inner.read().await;
         let result = call!(
             inner.actor_ref.as_ref().expect("actor spawned in builder"),

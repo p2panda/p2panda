@@ -105,7 +105,7 @@ impl SqliteStoreBuilder {
         self
     }
 
-    pub async fn build<'a>(self) -> Result<SqliteStore<'a>, SqliteError> {
+    pub async fn build(self) -> Result<SqliteStore, SqliteError> {
         if self.create_database {
             create_database(&self.url).await?;
         }
@@ -175,13 +175,13 @@ pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 /// handled internally now. Like this it is possible to separate the "logic" from the "storage"
 /// layer and keep the code clean.
 #[derive(Clone, Debug)]
-pub struct SqliteStore<'a> {
-    tx: Arc<Mutex<Option<Transaction<'a>>>>,
+pub struct SqliteStore {
+    tx: Arc<Mutex<Option<Transaction<'static>>>>,
     pub(crate) pool: sqlx::SqlitePool,
     semaphore: Arc<Semaphore>,
 }
 
-impl<'a> SqliteStore<'a> {
+impl SqliteStore {
     pub(crate) fn new(pool: sqlx::SqlitePool) -> Self {
         Self {
             tx: Arc::default(),
@@ -230,7 +230,7 @@ impl<'a> SqliteStore<'a> {
     }
 }
 
-impl<'a> crate::traits::Transaction for SqliteStore<'a> {
+impl crate::traits::Transaction for SqliteStore {
     type Error = SqliteError;
 
     type Permit = TransactionPermit;
@@ -266,11 +266,10 @@ impl<'a> crate::traits::Transaction for SqliteStore<'a> {
             tx_ref.is_none(),
             "can't have an already existing transaction after an just-acquired permit"
         );
-
         let tx = self.pool.begin().await?;
         tx_ref.replace(tx);
 
-        Ok(TransactionPermit(permit))
+        Ok(TransactionPermit::new(permit, self.tx.clone()))
     }
 
     /// Rolls back the transaction and with that all uncommitted changes.
@@ -286,7 +285,7 @@ impl<'a> crate::traits::Transaction for SqliteStore<'a> {
 
         // Always drop the permit, both on successful rollback and error. This will allow other
         // processes now to begin a new transaction and acquire the permit.
-        drop(permit);
+        permit.mark_committed_and_drop();
 
         result
     }
@@ -304,14 +303,54 @@ impl<'a> crate::traits::Transaction for SqliteStore<'a> {
 
         // Always drop the permit, both on successful commit and error. This will allow other
         // processes now to begin a new transaction and acquire the permit.
-        drop(permit);
+        permit.mark_committed_and_drop();
 
         result
     }
 }
 
-#[allow(unused)]
-pub struct TransactionPermit(OwnedSemaphorePermit);
+pub struct TransactionPermit {
+    permit: Arc<OwnedSemaphorePermit>,
+    tx: Arc<Mutex<Option<Transaction<'static>>>>,
+    committed: bool,
+}
+
+impl TransactionPermit {
+    pub(super) fn new(
+        permit: OwnedSemaphorePermit,
+        tx: Arc<Mutex<Option<Transaction<'static>>>>,
+    ) -> Self {
+        Self {
+            permit: Arc::new(permit),
+            tx,
+            committed: false,
+        }
+    }
+
+    pub(super) fn mark_committed_and_drop(mut self) {
+        self.committed = true;
+        drop(self)
+    }
+}
+
+impl Drop for TransactionPermit {
+    fn drop(&mut self) {
+        // If the permit was never used (due to an early return / error / etc.) we automatically
+        // roll-back the transaction.
+        if !self.committed {
+            let permit = self.permit.clone();
+            let tx = self.tx.clone();
+
+            tokio::spawn(async move {
+                if let Some(tx) = tx.lock().await.take() {
+                    let _ = tx.rollback().await;
+                }
+
+                drop(permit); // Semaphore released only after rollback completes.
+            });
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum SqliteError {
@@ -358,20 +397,15 @@ mod tests {
     use std::task::Poll;
 
     use futures_test::task::noop_context;
-    use sqlx::{Executor, query, query_as};
+    use sqlx::{Executor, query, query_as, query_scalar};
     use tokio::pin;
 
-    use crate::sqlite::{SqliteError, SqliteStoreBuilder};
+    use crate::sqlite::{SqliteError, SqliteStore};
     use crate::traits::Transaction;
 
     #[tokio::test]
     async fn transaction_provider() {
-        let pool = SqliteStoreBuilder::new()
-            .run_default_migrations(false)
-            .random_memory_url()
-            .build()
-            .await
-            .unwrap();
+        let pool = SqliteStore::temporary().await;
 
         // Executing with an in-existant transaction should throw error.
         assert!(matches!(
@@ -407,14 +441,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serialized_transactions() {
-        let pool_1 = SqliteStoreBuilder::new()
-            .run_default_migrations(false)
-            .max_connections(1)
-            .random_memory_url()
-            .build()
+    async fn early_permit_drop_causing_rollback() {
+        let pool = SqliteStore::temporary().await;
+
+        // Create test-table schema.
+        pool.execute(async |pool| {
+            pool.execute("CREATE TABLE test(x INTEGER)").await?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        let permit = pool.begin().await.unwrap();
+
+        pool.tx(async |tx| {
+            query("INSERT INTO test (x) VALUES (10)")
+                .execute(&mut **tx)
+                .await?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // Permit was dropped prematurely without committing.
+        drop(permit);
+
+        // It is okay to start another permit.
+        assert!(pool.begin().await.is_ok());
+
+        // The data was not written as the transaction got rolled back.
+        let count: i64 = pool
+            .execute(async |pool| {
+                query_scalar("SELECT COUNT(*) FROM test")
+                    .fetch_one(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
             .await
             .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn serialized_transactions() {
+        let pool_1 = SqliteStore::temporary().await;
 
         let pool_2 = pool_1.clone();
 
