@@ -12,9 +12,13 @@ workspace = true
 [features]
 default = [
   "ingest",
+  "log_prune",
   "orderer",
 ]
 ingest = [
+  "dep:p2panda-core",
+]
+log_prune = [
   "dep:p2panda-core",
 ]
 orderer = [
