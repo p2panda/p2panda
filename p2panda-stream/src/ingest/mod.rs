@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+mod args;
 mod operation;
 mod processor;
-mod traits;
 
+pub use args::IngestArgs;
 pub use operation::{IngestError, ingest_operation};
-pub use processor::Ingest;
-pub use traits::IngestArgs;
+pub use processor::{Ingest, IngestResult};

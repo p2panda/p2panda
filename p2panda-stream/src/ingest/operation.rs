@@ -20,8 +20,8 @@ use thiserror::Error;
 pub async fn ingest_operation<S, T, L, E, TP>(
     store: &S,
     operation: &T,
-    log_id: L,
-    topic: TP,
+    log_id: &L,
+    topic: &TP,
     prune_flag: bool,
 ) -> Result<bool, IngestError>
 where
@@ -60,7 +60,7 @@ where
 
     // Validate log integrity.
     let past_header = store
-        .get_latest_entry_tx(&operation.header.public_key, &log_id)
+        .get_latest_entry_tx(&operation.header.public_key, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?
         .map(|operation| operation.header);
@@ -74,11 +74,11 @@ where
     let public_key = operation.header.public_key;
 
     store
-        .insert_operation(&id, operation, &log_id)
+        .insert_operation(&id, operation, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
-    <S as TopicStore<TP, PublicKey, L>>::associate(store, &topic, &public_key, &log_id)
+    <S as TopicStore<TP, PublicKey, L>>::associate(store, topic, &public_key, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -120,7 +120,7 @@ mod tests {
 
         for i in 0..128 {
             let operation = log.operation(format!("{i}").as_bytes(), ());
-            let result = ingest_operation(&store, &operation, 1, 1, false).await;
+            let result = ingest_operation(&store, &operation, &1, &1, false).await;
             assert!(result.is_ok());
         }
     }
@@ -131,13 +131,13 @@ mod tests {
         let log = TestLog::new();
         let operation = log.operation(b"same same", ());
 
-        let result = ingest_operation(&store, &operation, 1, 1, false)
+        let result = ingest_operation(&store, &operation, &1, &1, false)
             .await
             .unwrap();
         assert!(result);
 
         // Inserting duplicates is ok and are silently ignored.
-        let result = ingest_operation(&store, &operation, 1, 1, false)
+        let result = ingest_operation(&store, &operation, &1, &1, false)
             .await
             .unwrap();
         assert!(!result);
@@ -154,27 +154,27 @@ mod tests {
         let dogs = [2; 32];
         let cats = [3; 32];
 
-        ingest_operation(&store, &log_0.operation(b"Do", ()), 0, dogs, false)
+        ingest_operation(&store, &log_0.operation(b"Do", ()), &0, &dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, &log_0.operation(b"Re", ()), 0, dogs, false)
+        ingest_operation(&store, &log_0.operation(b"Re", ()), &0, &dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, &log_1.operation(b"Mi", ()), 1, dogs, false)
+        ingest_operation(&store, &log_1.operation(b"Mi", ()), &1, &dogs, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, &log_2.operation(b"Fa", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"Fa", ()), &2, &cats, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, &log_2.operation(b"So", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"So", ()), &2, &cats, false)
             .await
             .unwrap();
 
-        ingest_operation(&store, &log_2.operation(b"La", ()), 2, cats, false)
+        ingest_operation(&store, &log_2.operation(b"La", ()), &2, &cats, false)
             .await
             .unwrap();
 
@@ -244,7 +244,7 @@ mod tests {
             body: None,
         };
 
-        let result = ingest_operation(&store, &operation, 1, 1, false).await;
+        let result = ingest_operation(&store, &operation, &1, &1, false).await;
         assert!(result.is_err());
     }
 
@@ -275,7 +275,7 @@ mod tests {
         };
 
         let prune_flag = true; // Ingest does not do any pruning, but the flag affects validation.
-        let result = ingest_operation(&store, &operation, 1, 1, prune_flag).await;
+        let result = ingest_operation(&store, &operation, &1, &1, prune_flag).await;
         assert!(result.is_ok());
 
         // 2. Create an operation which is from an "outdated" seq from before the log was pruned.
@@ -298,7 +298,7 @@ mod tests {
             body: None,
         };
 
-        let result = ingest_operation(&store, &operation, 1, 1, false).await;
+        let result = ingest_operation(&store, &operation, &1, &1, false).await;
         assert!(result.is_err());
     }
 }

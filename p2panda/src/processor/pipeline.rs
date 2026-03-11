@@ -106,8 +106,8 @@ where
                     let pipeline = UnboundedReceiverStream::new(pipeline_rx)
                         .layer(ingest)
                         .map(|result| match result {
-                            Ok(mut event) => {
-                                event.ingest = ProcessorStatus::Completed(());
+                            Ok((mut event, result)) => {
+                                event.ingest = ProcessorStatus::Completed(result);
                                 event
                             }
                             Err((mut event, err)) => {
