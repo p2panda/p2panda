@@ -4,7 +4,7 @@ use std::borrow::Borrow;
 
 use p2panda_core::traits::Digest;
 use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, PublicKey, SeqNum};
-use p2panda_stream::ingest::{IngestArgs, IngestError};
+use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
 use thiserror::Error;
 
@@ -25,13 +25,14 @@ pub enum ProcessorStatus<R, F> {
 /// Single event running through the "event processor" pipeline.
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
+    /// p2panda Operation.
     operation: Operation<E>,
 
     /// Input arguments for the "ingest" processor.
-    ingest_args: (L, TP, PruneFlag),
+    ingest_args: IngestArgs<L, TP>,
 
     /// Status of the "ingest" processor.
-    pub(crate) ingest: ProcessorStatus<(), IngestError>,
+    pub(crate) ingest: ProcessorStatus<IngestResult, IngestError>,
 
     /// Input arguments for the "log prune" processor.
     log_prune_args: LogPruneArgs<PublicKey, L, SeqNum>,
@@ -52,7 +53,11 @@ where
         prune_flag: PruneFlag,
     ) -> Self {
         Self {
-            ingest_args: (log_id.clone(), topic, prune_flag),
+            ingest_args: IngestArgs {
+                log_id: log_id.clone(),
+                topic,
+                prune_flag: prune_flag.is_set(),
+            },
             ingest: ProcessorStatus::Pending,
             log_prune_args: if prune_flag.is_set() {
                 LogPruneArgs::PruneEntriesUntil {
@@ -111,25 +116,19 @@ pub enum EventError {
     LogPrune(#[from] LogPruneError),
 }
 
-impl<L, E, TP> IngestArgs<L, TP, E> for Event<L, E, TP>
+impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {
+    fn borrow(&self) -> &Operation<E> {
+        &self.operation
+    }
+}
+
+impl<L, E, TP> Borrow<IngestArgs<L, TP>> for Event<L, E, TP>
 where
     L: LogId,
     TP: Clone,
 {
-    fn log_id(&self) -> L {
-        self.ingest_args.0.clone()
-    }
-
-    fn topic(&self) -> TP {
-        self.ingest_args.1.clone()
-    }
-
-    fn prune_flag(&self) -> bool {
-        self.ingest_args.2.is_set()
-    }
-
-    fn operation(&self) -> impl Borrow<Operation<E>> {
-        &self.operation
+    fn borrow(&self) -> &IngestArgs<L, TP> {
+        &self.ingest_args
     }
 }
 
