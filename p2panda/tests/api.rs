@@ -3,9 +3,11 @@
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use p2panda::operation::Operation;
 use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent};
 use p2panda::test_utils::setup_logging;
 use p2panda_core::{PrivateKey, Topic};
+use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
 
 #[tokio::test]
@@ -139,4 +141,55 @@ async fn replay_stream() {
 
     assert_eq!(received[0].message(), &"Hello, Icebear!".to_string());
     assert_eq!(received[1].message(), &"Hello, Panda!".to_string());
+}
+
+#[tokio::test]
+async fn log_prefix_pruning() {
+    setup_logging();
+
+    let topic = Topic::new();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    let (mut panda_tx, _panda_rx) = panda.stream::<usize>(topic).await.unwrap();
+    panda_tx.publish(1).await.unwrap();
+    panda_tx.publish(2).await.unwrap();
+    panda_tx.publish(3).await.unwrap();
+    panda_tx.prune(Some(4)).await.unwrap();
+
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
+
+    let mut received_messages = 0;
+    while let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::Processed(_) = event {
+            received_messages += 1;
+
+            // Icebear should receive 4 messages from panda.
+            if received_messages == 4 {
+                break;
+            }
+        }
+    }
+
+    // There should only be 1 message in panda's and icebear's database.
+    let _panda_result: Vec<(Operation, Vec<u8>)> = panda
+        .store()
+        .get_log_entries(&panda.id(), &topic, None, None)
+        .await
+        .expect("no store failure")
+        .expect("result to be Some");
+
+    // TODO: Panda is not processing their own operations yet. This is handled in a separate issue.
+    // See here: https://github.com/p2panda/p2panda/issues/1070
+    //
+    // assert_eq!(panda_result.iter().count(), 1);
+
+    let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
+        .store()
+        .get_log_entries(&panda.id(), &topic, None, None)
+        .await
+        .expect("no store failure")
+        .expect("result to be Some");
+    assert_eq!(icebear_result.iter().count(), 1);
 }

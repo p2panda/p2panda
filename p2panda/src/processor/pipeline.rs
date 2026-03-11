@@ -11,6 +11,7 @@ use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
+use p2panda_stream::log_prune::LogPrune;
 use tokio::pin;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
@@ -75,7 +76,8 @@ where
     // NOTE: For parallelizing pipelines some sort of "work stealing" approach will be required.
     pub fn new<S>(store: S, tasks: TaskTracker<Event<L, E, TP>, Hash>) -> Self
     where
-        S: Transaction
+        S: Clone
+            + Transaction
             + OperationStore<Operation<E>, Hash, L>
             + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
             + TopicStore<TP, PublicKey, L>
@@ -97,22 +99,33 @@ where
 
                 local.spawn_local(async move {
                     // Prepare event processing pipeline.
-                    let ingest = Ingest::<S, Event<L, E, TP>, L, E, TP>::new(store);
+                    let ingest = Ingest::<S, Event<L, E, TP>, L, E, TP>::new(store.clone());
+                    let log_prune = LogPrune::<S, Event<L, E, TP>, L, E>::new(store);
 
                     // Receive incoming events through mpsc channel.
-                    let pipeline =
-                        UnboundedReceiverStream::new(pipeline_rx)
-                            .layer(ingest)
-                            .map(|result| match result {
-                                Ok(mut operation) => {
-                                    operation.ingest = ProcessorStatus::Completed(());
-                                    operation
-                                }
-                                Err((mut operation, err)) => {
-                                    operation.ingest = ProcessorStatus::Failed(err);
-                                    operation
-                                }
-                            });
+                    let pipeline = UnboundedReceiverStream::new(pipeline_rx)
+                        .layer(ingest)
+                        .map(|result| match result {
+                            Ok(mut event) => {
+                                event.ingest = ProcessorStatus::Completed(());
+                                event
+                            }
+                            Err((mut event, err)) => {
+                                event.ingest = ProcessorStatus::Failed(err);
+                                event
+                            }
+                        })
+                        .layer(log_prune)
+                        .map(|result| match result {
+                            Ok((mut event, result)) => {
+                                event.log_prune = ProcessorStatus::Completed(result);
+                                event
+                            }
+                            Err((mut event, err)) => {
+                                event.log_prune = ProcessorStatus::Failed(err);
+                                event
+                            }
+                        });
 
                     pin!(pipeline);
 
