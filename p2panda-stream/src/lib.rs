@@ -25,6 +25,8 @@
 //! `Sync` types. Users need to make sure to run this code in a "local" tokio runtime.
 #[cfg(feature = "ingest")]
 pub mod ingest;
+#[cfg(feature = "log_prune")]
+pub mod log_prune;
 #[cfg(feature = "orderer")]
 pub mod orderer;
 mod processors;
