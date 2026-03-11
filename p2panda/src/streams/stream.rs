@@ -230,12 +230,13 @@ where
     ///
     /// This signals to all other nodes that they should remove them as well.
     ///
-    /// An message can be optionally added when pruning, allowing to publish a "snapshot"
-    /// / state-based CRDT of the current state, so nodes can still consistently re-create all
-    /// state, even if previous messages are gone.
+    /// A message can be optionally added when pruning, allowing to publish a "snapshot" /
+    /// state-based CRDT of the current state, so nodes can still consistently re-create all state,
+    /// even if previous messages are gone.
     ///
     /// Internally we're applying append-only log prefix deletion, meaning that the log's prefix
-    /// gets pruned - from before the point where the prune flag was set.
+    /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
+    /// "older" / before the point where the prune flag was set.
     pub async fn prune(&mut self, message: Option<M>) -> Result<Hash, PublishError> {
         self.publish_inner(message, true).await
     }
@@ -245,8 +246,10 @@ where
         message: Option<M>,
         prune_flag: bool,
     ) -> Result<Hash, PublishError> {
-        let mut extensions = Extensions::default();
-        extensions.prune_flag = prune_flag.into();
+        let extensions = Extensions {
+            prune_flag: prune_flag.into(),
+            ..Default::default()
+        };
 
         let message = match message {
             Some(message) => Some(encode_cbor(&message)?),
