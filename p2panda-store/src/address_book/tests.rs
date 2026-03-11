@@ -52,7 +52,7 @@ async fn set_and_query_topics() {
         .await
         .unwrap();
 
-    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
         &store,
         billie,
         HashSet::from_iter([cats, dogs, rain]),
@@ -65,7 +65,7 @@ async fn set_and_query_topics() {
         .await
         .unwrap();
 
-    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
         &store,
         daphne,
         HashSet::from_iter([rain]),
@@ -78,7 +78,7 @@ async fn set_and_query_topics() {
         .await
         .unwrap();
 
-    <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
         &store,
         carlos,
         HashSet::from_iter([dogs, frogs]),
@@ -151,25 +151,24 @@ async fn remove_outdated_node_infos() {
     let permit = store.begin().await.unwrap();
 
     // Expect removing one item from database.
-    let result =
-        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::remove_older_than(
-            &store,
-            Duration::from_secs(60),
-        )
-        .await
-        .unwrap();
+    let result = <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::remove_older_than(
+        &store,
+        Duration::from_secs(60),
+    )
+    .await
+    .unwrap();
     assert_eq!(result, 1);
 
     store.commit(permit).await.unwrap();
 
     assert!(
-        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &billie)
+        <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &billie)
             .await
             .unwrap()
             .is_none(),
     );
     assert!(
-        <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &daphne)
+        <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &daphne)
             .await
             .unwrap()
             .is_some(),
@@ -206,7 +205,7 @@ async fn sample_random_nodes() {
     let mut samples = HashSet::new();
     for _ in 0..100 {
         samples.insert(
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::random_node(&store)
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::random_node(&store)
                 .await
                 .unwrap(),
         );

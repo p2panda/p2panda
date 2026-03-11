@@ -13,7 +13,7 @@ use crate::orderer::OrdererStore;
 use crate::orderer::OrdererTestExt;
 use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 
-impl<'a, ID> OrdererStore<ID> for SqliteStore<'a>
+impl<ID> OrdererStore<ID> for SqliteStore
 where
     ID: Eq + Ord + StdHash + Display + FromStr,
 {
@@ -352,7 +352,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<'a> OrdererTestExt for SqliteStore<'a> {
+impl OrdererTestExt for SqliteStore {
     async fn ready_len(&self) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(

@@ -163,7 +163,7 @@ pub struct TestNode {
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
-    pub log_sync: LogSync<SqliteStore<'static>, TestLogId, TestExtensions>,
+    pub log_sync: LogSync<SqliteStore, TestLogId, TestExtensions>,
 }
 
 impl TestNode {
@@ -204,7 +204,7 @@ impl TestNode {
             .await
             .unwrap();
 
-        let log_sync: LogSync<SqliteStore<'static>, u64, ()> =
+        let log_sync: LogSync<SqliteStore, u64, ()> =
             LogSync::builder(client.store.clone(), endpoint.clone(), gossip.clone())
                 .spawn()
                 .await
@@ -239,8 +239,7 @@ pub type TestExtensions = ();
 
 pub type TestLogId = u64;
 
-pub type TestTopicSyncManager =
-    TopicSyncManager<Topic, SqliteStore<'static>, TestLogId, TestExtensions>;
+pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
 
 /// Client abstraction used in tests.
 ///
@@ -248,7 +247,7 @@ pub type TestTopicSyncManager =
 /// protocols.
 #[derive(Clone)]
 pub struct TestClient {
-    pub store: SqliteStore<'static>,
+    pub store: SqliteStore,
     pub private_key: PrivateKey,
 }
 

@@ -110,7 +110,7 @@ impl NodeBuilder {
         let forge = OperationForge::from_private_key(private_key, store.clone());
 
         let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
+        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
 
         let node = Node::spawn_inner(self.config, store, forge, pipeline).await?;
 

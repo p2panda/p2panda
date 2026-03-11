@@ -13,7 +13,7 @@ use sqlx::{query, query_as, query_scalar};
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<'a, N> AddressBookStore<PublicKey, N> for SqliteStore<'a>
+impl<N> AddressBookStore<PublicKey, N> for SqliteStore
 where
     N: NodeInfo<PublicKey> + Serialize + for<'de> Deserialize<'de>,
 {
@@ -406,7 +406,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<'a> SqliteStore<'a> {
+impl SqliteStore {
     pub async fn set_last_changed(
         &self,
         id: &PublicKey,
