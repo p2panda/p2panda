@@ -18,7 +18,6 @@ use crate::streams::{
     StreamSubscription, SystemEventStream, ephemeral_stream, processed_stream,
 };
 
-// TODO: Can we expose network or will this explode the API surface for GObject unnecessarily?
 pub struct Node {
     config: Config,
     #[allow(unused)]
@@ -157,6 +156,15 @@ impl Node {
 
     pub fn ack(&self, _message_id: Hash) {
         unimplemented!()
+    }
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl Node {
+    // NOTE(adz): This feels like something we would like to have on the regular Node API as well,
+    // I'll leave it here for now until we've made a decision.
+    pub fn store(&self) -> SqliteStore {
+        self.store.clone()
     }
 }
 

@@ -3,8 +3,9 @@
 use std::borrow::Borrow;
 
 use p2panda_core::traits::Digest;
-use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag};
+use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, PublicKey, SeqNum};
 use p2panda_stream::ingest::{IngestArgs, IngestError};
+use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
 use thiserror::Error;
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
@@ -24,11 +25,19 @@ pub enum ProcessorStatus<R, F> {
 /// Single event running through the "event processor" pipeline.
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
-    /// Input arguments for the processing pipeline.
-    input: (Operation<E>, L, TP, PruneFlag),
+    operation: Operation<E>,
+
+    /// Input arguments for the "ingest" processor.
+    ingest_args: (L, TP, PruneFlag),
 
     /// Status of the "ingest" processor.
     pub(crate) ingest: ProcessorStatus<(), IngestError>,
+
+    /// Input arguments for the "log prune" processor.
+    log_prune_args: LogPruneArgs<PublicKey, L, SeqNum>,
+
+    /// Status of the "log prune" processor.
+    pub(crate) log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -43,32 +52,49 @@ where
         prune_flag: PruneFlag,
     ) -> Self {
         Self {
-            input: (operation, log_id, topic, prune_flag),
+            ingest_args: (log_id.clone(), topic, prune_flag),
             ingest: ProcessorStatus::Pending,
+            log_prune_args: if prune_flag.is_set() {
+                LogPruneArgs::PruneEntriesUntil {
+                    author: operation.header.public_key,
+                    log_id,
+                    seq_num: operation.header.seq_num,
+                }
+            } else {
+                LogPruneArgs::Ignore
+            },
+            log_prune: ProcessorStatus::Pending,
+            operation,
         }
     }
 
     pub fn header(&self) -> &Header<E> {
-        &self.input.0.header
+        &self.operation.header
     }
 
     pub fn body(&self) -> Option<&Body> {
-        self.input.0.body.as_ref()
+        self.operation.body.as_ref()
     }
 
     /// Returns true if event has been successfully processed by the whole pipeline.
     pub fn is_completed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Completed(_))
+            && matches!(self.log_prune, ProcessorStatus::Completed(_))
     }
 
     /// Returns true if event failed somewhere during processing.
     pub fn is_failed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Failed(_))
+            || matches!(self.log_prune, ProcessorStatus::Failed(_))
     }
 
     /// Returns the error which occurred during a processing failure or `None`.
     pub fn failure_reason(&self) -> Option<EventError> {
         if let ProcessorStatus::Failed(err) = &self.ingest {
+            return Some(err.to_owned().into());
+        }
+
+        if let ProcessorStatus::Failed(err) = &self.log_prune {
             return Some(err.to_owned().into());
         }
 
@@ -80,6 +106,9 @@ where
 pub enum EventError {
     #[error("ingest processor failed with: {0}")]
     Ingest(#[from] IngestError),
+
+    #[error("log_prune processor failed with: {0}")]
+    LogPrune(#[from] LogPruneError),
 }
 
 impl<L, E, TP> IngestArgs<L, TP, E> for Event<L, E, TP>
@@ -88,31 +117,41 @@ where
     TP: Clone,
 {
     fn log_id(&self) -> L {
-        self.input.1.clone()
+        self.ingest_args.0.clone()
     }
 
     fn topic(&self) -> TP {
-        self.input.2.clone()
+        self.ingest_args.1.clone()
     }
 
     fn prune_flag(&self) -> bool {
-        self.input.3.is_set()
+        self.ingest_args.2.is_set()
     }
 
     fn operation(&self) -> impl Borrow<Operation<E>> {
-        &self.input.0
+        &self.operation
+    }
+}
+
+impl<L, E, TP> Borrow<LogPruneArgs<PublicKey, L, SeqNum>> for Event<L, E, TP>
+where
+    L: LogId,
+    TP: Clone,
+{
+    fn borrow(&self) -> &LogPruneArgs<PublicKey, L, SeqNum> {
+        &self.log_prune_args
     }
 }
 
 impl<L, E, TP> Digest<Hash> for Event<L, E, TP> {
     fn hash(&self) -> Hash {
-        self.input.0.hash
+        self.operation.hash
     }
 }
 
 impl<L, E, TP> PartialEq for Event<L, E, TP> {
     fn eq(&self, other: &Self) -> bool {
-        self.input.0.hash() == other.input.0.hash()
+        self.operation.hash == other.operation.hash
     }
 }
 
