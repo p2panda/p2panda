@@ -107,11 +107,11 @@ pub enum ToAddressBookActor {
     Report(NodeId, ConnectionOutcome),
 
     /// Returns internal address book store.
-    Store(RpcReplyPort<SqliteStore<'static>>),
+    Store(RpcReplyPort<SqliteStore>),
 }
 
 pub struct AddressBookState {
-    store: SqliteStore<'static>,
+    store: SqliteStore,
     node_watchers: WatcherSet<NodeId, WatchedNodeInfo>,
     topic_watchers: WatcherSet<Topic, WatchedTopic>,
     node_topics_watchers: WatcherSet<NodeId, WatchedNodeTopics>,
@@ -154,7 +154,7 @@ impl AddressBookState {
     }
 }
 
-pub type AddressBookActorArgs = (SqliteStore<'static>,);
+pub type AddressBookActorArgs = (SqliteStore,);
 
 #[derive(Default)]
 pub struct AddressBookActor;

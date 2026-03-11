@@ -572,7 +572,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &alice_store,
                 alice,
                 HashSet::from_iter([[1; 32].into()]),
@@ -594,7 +594,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 bob,
                 HashSet::from_iter([[1; 32].into(), [2; 32].into()]),
@@ -610,7 +610,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 charlie,
                 HashSet::from_iter([[1; 32].into()]),
@@ -626,7 +626,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &bob_store,
                 daphne,
                 HashSet::from_iter([[2; 32].into()]),

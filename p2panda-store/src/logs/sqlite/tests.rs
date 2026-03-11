@@ -40,7 +40,7 @@ async fn get_latest_entry() {
             .unwrap()
     );
 
-    let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_latest_entry_tx(
+    let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_latest_entry_tx(
         &store,
         &log.author(),
         &log.id(),
@@ -95,7 +95,7 @@ async fn get_log_heights() {
 
     store.commit(permit).await.unwrap();
 
-    let result = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_heights(
+    let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
         &store,
         &private_key.public_key(),
         &[log_1.id(), log_2.id()],
@@ -140,17 +140,16 @@ async fn get_log_size() {
 
     store.commit(permit).await.unwrap();
 
-    let (operations_num, size) =
-        <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_size(
-            &store,
-            &log.author(),
-            &log.id(),
-            None,
-            None,
-        )
-        .await
-        .unwrap()
-        .unwrap();
+    let (operations_num, size) = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_size(
+        &store,
+        &log.author(),
+        &log.id(),
+        None,
+        None,
+    )
+    .await
+    .unwrap()
+    .unwrap();
 
     assert_eq!(operations_num, 2);
 
@@ -213,7 +212,7 @@ async fn get_log_entries() {
 
     store.commit(permit).await.unwrap();
 
-    let log_entries = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_entries(
+    let log_entries = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_entries(
         &store,
         &log.author(),
         &log.id(),
@@ -287,7 +286,7 @@ async fn prune_entries() {
 
     store.commit(permit).await.unwrap();
 
-    let prune_entries_num = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::prune_entries(
+    let prune_entries_num = <SqliteStore as LogStore<Operation, _, _, _, _>>::prune_entries(
         &store,
         &log.author(),
         &log.id(),
@@ -298,7 +297,7 @@ async fn prune_entries() {
 
     assert_eq!(prune_entries_num, 3);
 
-    let log_entries = <SqliteStore<'_> as LogStore<Operation, _, _, _, _>>::get_log_entries(
+    let log_entries = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_entries(
         &store,
         &log.author(),
         &log.id(),

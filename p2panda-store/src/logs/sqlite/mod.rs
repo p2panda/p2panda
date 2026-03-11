@@ -28,7 +28,7 @@ const GET_LATEST_ENTRY: &str = "
         CAST(seq_num AS NUMERIC) DESC LIMIT 1
 ";
 
-impl<'a, L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore<'a>
+impl<L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore
 where
     E: Extensions,
     L: LogId,

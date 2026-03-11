@@ -23,7 +23,7 @@ use crate::traits::{DiscoveryProtocol, DiscoveryStrategy};
 struct TestWalker {
     #[allow(unused)]
     id: usize,
-    strategy: RandomWalker<ChaCha20Rng, SqliteStore<'static>, TestNodeId, TestNodeInfo>,
+    strategy: RandomWalker<ChaCha20Rng, SqliteStore, TestNodeId, TestNodeInfo>,
     previous_result: Option<DiscoveryResult<TestNodeId, TestNodeInfo>>,
 }
 
@@ -39,7 +39,7 @@ impl TestWalker {
 struct TestNode {
     id: TestNodeId,
     subscription: TestSubscription,
-    store: SqliteStore<'static>,
+    store: SqliteStore,
     walkers: Vec<TestWalker>,
 }
 
@@ -51,7 +51,7 @@ impl TestNode {
         subscription.topics.insert([7; 32].into());
 
         tx_unwrap!(store, {
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &store,
                 id,
                 HashSet::from_iter([[7; 32].into()]),
@@ -128,7 +128,7 @@ impl TestNode {
         }
 
         tx_unwrap!(self.store, {
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &self.store,
                 remote.id,
                 alice_result.topics,
@@ -145,7 +145,7 @@ impl TestNode {
         }
 
         tx_unwrap!(remote.store, {
-            <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
                 &remote.store,
                 self.id,
                 bob_result.topics.clone(),
@@ -274,7 +274,7 @@ async fn peer_discovery_in_network() {
             let my_node = nodes.get(&my_idx).unwrap().read().await;
 
             let all_nodes_len =
-                <SqliteStore<'_> as AddressBookStore<TestNodeId, TestNodeInfo>>::all_nodes_len(
+                <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::all_nodes_len(
                     &my_node.store,
                 )
                 .await
