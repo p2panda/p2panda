@@ -49,7 +49,13 @@ where
         .has_operation_tx(&operation.hash)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
     if already_exists {
+        store
+            .rollback(permit)
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
         return Ok(false);
     }
 
@@ -188,13 +194,13 @@ mod tests {
 
         // Topic "dogs" contains two logs: 0 with two operations and 1 with one operation.
         let authors =
-            <SqliteStore<'_> as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &dogs)
+            <SqliteStore as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &dogs)
                 .await
                 .unwrap();
         assert_eq!(*authors.get(&log_0.author()).unwrap(), [0]);
         assert_eq!(*authors.get(&log_1.author()).unwrap(), [1]);
 
-        let (_hash, seq_num) = <SqliteStore<'_> as LogStore<
+        let (_hash, seq_num) = <SqliteStore as LogStore<
             Operation<()>,
             PublicKey,
             usize,
@@ -208,12 +214,12 @@ mod tests {
 
         // Topic "cats" contains one log: 2 with four operations.
         let authors =
-            <SqliteStore<'_> as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &cats)
+            <SqliteStore as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &cats)
                 .await
                 .unwrap();
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
-        let (_hash, seq_num) = <SqliteStore<'_> as LogStore<
+        let (_hash, seq_num) = <SqliteStore as LogStore<
             Operation<()>,
             PublicKey,
             usize,
