@@ -32,6 +32,7 @@ Highlights are marked with a pancake 🥞
 - Use `Timestamp` in `Header` [#1062](https://github.com/p2panda/p2panda/pull/1062)
 - Node API improvements [#1061](https://github.com/p2panda/p2panda/pull/1061)
 - Minor store improvements [#1068](https://github.com/p2panda/p2panda/pull/1068)
+- Use Borrow to express required args in ingest [#1078](https://github.com/p2panda/p2panda/pull/1078)
 
 ### Fixed
 
