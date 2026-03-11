@@ -13,13 +13,13 @@ use p2panda_store::topics::TopicStore;
 use tokio::sync::Notify;
 
 use crate::Processor;
+use crate::ingest::args::IngestArgs;
 use crate::ingest::operation::{IngestError, ingest_operation};
-use crate::ingest::traits::IngestArgs;
 
 pub struct Ingest<S, T, L, E, TP> {
     store: S,
     notify: Notify,
-    queue: RefCell<VecDeque<T>>,
+    queue: RefCell<VecDeque<(T, IngestResult)>>,
     _marker: PhantomData<(L, E, TP)>,
 }
 
@@ -48,30 +48,38 @@ where
         + OperationStore<Operation<E>, Hash, L>
         + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
         + TopicStore<TP, PublicKey, L>,
-    T: IngestArgs<L, TP, E>,
+    T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
     L: LogId,
     E: Extensions,
 {
-    type Output = T;
+    type Output = (T, IngestResult);
 
     type Error = (T, IngestError);
 
-    async fn process(&self, args: T) -> Result<(), Self::Error> {
+    async fn process(&self, input: T) -> Result<(), Self::Error> {
+        let operation: &Operation<E> = input.borrow();
+        let args: &IngestArgs<L, TP> = input.borrow();
+
         let result = ingest_operation(
             &self.store,
-            args.operation().borrow(),
-            args.log_id(),
-            args.topic(),
-            args.prune_flag(),
+            operation,
+            &args.log_id,
+            &args.topic,
+            args.prune_flag,
         )
         .await;
 
-        // Return the input arguments next to the error to allow mapping it back to it's source.
-        if let Err(err) = result {
-            return Err((args, err));
-        }
+        let result = match result {
+            Ok(true) => IngestResult::Inserted,
+            Ok(false) => IngestResult::AlreadyExists,
+            Err(err) => {
+                // Return the input arguments next to the error to allow mapping it back to it's
+                // source.
+                return Err((input, err));
+            }
+        };
 
-        self.queue.borrow_mut().push_back(args);
+        self.queue.borrow_mut().push_back((input, result));
         self.notify.notify_one(); // Wake up any pending recv.
 
         Ok(())
@@ -89,6 +97,12 @@ where
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IngestResult {
+    AlreadyExists,
+    Inserted,
+}
+
 #[cfg(test)]
 mod tests {
     use std::borrow::Borrow;
@@ -101,32 +115,24 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use crate::StreamLayerExt;
-    use crate::ingest::traits::IngestArgs;
+    use crate::ingest::args::IngestArgs;
 
     use super::Ingest;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    struct IngestArguments {
+    struct Event {
         pub operation: Operation,
-        pub log_id: usize,
-        pub topic: Topic,
-        pub prune_flag: bool,
+        pub args: IngestArgs<usize, Topic>,
     }
 
-    impl IngestArgs<usize, Topic, ()> for IngestArguments {
-        fn log_id(&self) -> usize {
-            self.log_id
+    impl Borrow<IngestArgs<usize, Topic>> for Event {
+        fn borrow(&self) -> &IngestArgs<usize, Topic> {
+            &self.args
         }
+    }
 
-        fn topic(&self) -> Topic {
-            self.topic
-        }
-
-        fn prune_flag(&self) -> bool {
-            self.prune_flag
-        }
-
-        fn operation(&self) -> impl Borrow<Operation> {
+    impl Borrow<Operation> for Event {
+        fn borrow(&self) -> &Operation {
             &self.operation
         }
     }
@@ -139,7 +145,7 @@ mod tests {
         local
             .run_until(async move {
                 let store = SqliteStore::temporary().await;
-                let ingest: Ingest<SqliteStore, IngestArguments, _, _, _> = Ingest::new(store);
+                let ingest: Ingest<SqliteStore, Event, _, _, _> = Ingest::new(store);
 
                 let operation_0 = log.operation(b"Hi", ());
                 let operation_1 = log.operation(b"Ha", ());
@@ -149,35 +155,41 @@ mod tests {
                 let topic = Topic::new();
 
                 let mut stream = stream::iter(vec![
-                    IngestArguments {
+                    Event {
                         operation: operation_0.clone(),
-                        log_id,
-                        topic,
-                        prune_flag: false,
+                        args: IngestArgs {
+                            log_id,
+                            topic,
+                            prune_flag: false,
+                        },
                     },
-                    IngestArguments {
+                    Event {
                         operation: operation_1.clone(),
-                        log_id,
-                        topic,
-                        prune_flag: false,
+                        args: IngestArgs {
+                            log_id,
+                            topic,
+                            prune_flag: false,
+                        },
                     },
-                    IngestArguments {
+                    Event {
                         operation: operation_2.clone(),
-                        log_id,
-                        topic,
-                        prune_flag: false,
+                        args: IngestArgs {
+                            log_id,
+                            topic,
+                            prune_flag: false,
+                        },
                     },
                 ])
                 .layer(ingest);
 
-                let args = stream.next().await.unwrap().unwrap();
-                assert_eq!(args.operation, operation_0);
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_0);
 
-                let args = stream.next().await.unwrap().unwrap();
-                assert_eq!(args.operation, operation_1);
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_1);
 
-                let args = stream.next().await.unwrap().unwrap();
-                assert_eq!(args.operation, operation_2);
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_2);
             })
             .await;
     }
