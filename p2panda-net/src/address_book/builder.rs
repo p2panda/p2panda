@@ -7,7 +7,7 @@ use crate::address_book::actor::AddressBookActor;
 use crate::address_book::{AddressBook, AddressBookError};
 
 pub struct Builder {
-    pub(crate) store: Option<SqliteStore<'static>>,
+    pub(crate) store: Option<SqliteStore>,
 }
 
 impl Builder {
@@ -16,7 +16,7 @@ impl Builder {
         Self { store: None }
     }
 
-    pub fn store(mut self, store: SqliteStore<'static>) -> Self {
+    pub fn store(mut self, store: SqliteStore) -> Self {
         self.store = Some(store);
         self
     }

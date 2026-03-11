@@ -20,7 +20,7 @@ use crate::streams::{
 pub struct Node {
     config: Config,
     #[allow(unused)]
-    store: SqliteStore<'static>,
+    store: SqliteStore,
     forge: OperationForge,
     // NOTE: One single pipeline is currently used to handle _all_ incoming operations,
     // independent of number of streams. While this is sufficient for most applications for now we
@@ -47,7 +47,7 @@ impl Node {
 
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new::<SqliteStore<'static>>(store.clone(), tasks);
+        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
 
         let node = Node::spawn_inner(config, store, forge, pipeline).await?;
 
@@ -56,7 +56,7 @@ impl Node {
 
     pub(crate) async fn spawn_inner(
         config: Config,
-        store: SqliteStore<'static>,
+        store: SqliteStore,
         forge: OperationForge,
         pipeline: Pipeline<Topic, Extensions, Topic>,
     ) -> Result<Self, NetworkError> {

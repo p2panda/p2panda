@@ -27,14 +27,14 @@ pub struct Network {
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
-    pub log_sync: LogSync<SqliteStore<'static>, Topic, Extensions>,
+    pub log_sync: LogSync<SqliteStore, Topic, Extensions>,
 }
 
 impl Network {
     pub async fn spawn(
         config: NetworkConfig,
         private_key: PrivateKey,
-        store: SqliteStore<'static>,
+        store: SqliteStore,
     ) -> Result<Self, NetworkError> {
         // TODO: Supervision of actors.
 

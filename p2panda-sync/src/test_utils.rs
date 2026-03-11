@@ -27,23 +27,23 @@ use crate::traits::Protocol;
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<u64>;
 pub type TestLogSyncEvent = LogSyncEvent<()>;
-pub type TestLogSync = LogSync<u64, (), SqliteStore<'static>, TestLogSyncEvent>;
+pub type TestLogSync = LogSync<u64, (), SqliteStore, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
 pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, ()>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<()>;
-pub type TestTopicSync = TopicLogSync<Topic, SqliteStore<'static>, u64, ()>;
+pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, u64, ()>;
 pub type TestTopicSyncError = TopicLogSyncError;
 
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore<'static>, u64, ()>;
+pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, u64, ()>;
 
 /// Peer abstraction used in tests.
 ///
 /// Contains a private key, store and topic map, produces sessions for either log or topic sync
 /// protocols.
 pub struct Peer {
-    pub store: SqliteStore<'static>,
+    pub store: SqliteStore,
     pub private_key: PrivateKey,
 }
 

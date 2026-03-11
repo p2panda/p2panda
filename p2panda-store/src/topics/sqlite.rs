@@ -12,7 +12,7 @@ use crate::topics::TopicStore;
 
 /// SQLite `TopicStore` implementation that can be used to map a topic to a set of (generic)
 /// per-author data identifiers.
-impl<'a, T, S> TopicStore<T, PublicKey, S> for SqliteStore<'a>
+impl<T, S> TopicStore<T, PublicKey, S> for SqliteStore
 where
     T: Serialize + for<'de> Deserialize<'de>,
     S: LogId,
