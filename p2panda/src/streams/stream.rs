@@ -224,20 +224,20 @@ where
 
                 // Send processing result to application layer.
                 //
-                // If channel stopped working, close the task as well.
-                if app_tx.send(event).await.is_err() {
-                    break;
-                }
+                // If channel stopped working because the subscriber got dropped, ignore it as we
+                // still might want to process locally published operations.
+                let _ = app_tx.send(event).await;
             }
         });
     }
 
-    // TODO: Find out if publishing breaks if StreamSubscription gets dropped as task and therefore
-    // channel might be gone.
+    // Keep around the sync handle on both the publisher and subscriber ends to keep it running
+    // even if one half got dropped.
+    let sync_handle = Arc::new(sync_handle);
 
     let tx = StreamPublisher {
         topic,
-        sync_handle: Arc::new(sync_handle),
+        sync_handle: sync_handle.clone(),
         forge,
         publish_tx,
         _marker: PhantomData,
@@ -245,6 +245,7 @@ where
 
     let rx = StreamSubscription {
         topic,
+        sync_handle,
         stream: ReceiverStream::new(app_rx),
     };
 
@@ -469,6 +470,8 @@ impl Future for PublishFuture {
 #[pin_project]
 pub struct StreamSubscription<M> {
     topic: Topic,
+    #[allow(unused)]
+    sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     #[pin]
     stream: ReceiverStream<StreamEvent<M>>,
 }
