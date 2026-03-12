@@ -167,11 +167,14 @@ pub struct TestNode {
 }
 
 impl TestNode {
-    pub async fn spawn(seed: [u8; 32]) -> Self {
-        Self::spawn_with_args(test_args_from_seed(seed)).await
+    pub async fn spawn(seed: [u8; 32], node_info: Option<NodeInfo>) -> Self {
+        Self::spawn_with_args(test_args_from_seed(seed), node_info).await
     }
 
-    pub async fn spawn_with_args(mut args: ApplicationArguments) -> Self {
+    pub async fn spawn_with_args(
+        mut args: ApplicationArguments,
+        node_info: Option<NodeInfo>,
+    ) -> Self {
         let client = TestClient::new(
             // The identity of the "author" or client has a different private key from the node.
             PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
@@ -179,6 +182,14 @@ impl TestNode {
         .await;
 
         let address_book = AddressBook::builder().spawn().await.unwrap();
+
+        // Insert provided node info into the address book.
+        //
+        // This is useful for informing the local node of a remote node manually, before the
+        // discovery services have been spawned.
+        if let Some(info) = node_info {
+            address_book.insert_node_info(info).await.unwrap();
+        }
 
         let endpoint = Endpoint::builder(address_book.clone())
             .config(args.iroh_config.clone())

@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#[cfg(test)]
+use mock_instant::thread_local::Instant;
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(not(test))]
+use std::time::Instant;
 
 use iroh::endpoint::QuicTransportConfig;
 use iroh::protocol::ProtocolHandler;

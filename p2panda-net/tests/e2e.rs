@@ -19,7 +19,7 @@ async fn gossip_and_sync_with_same_topic() {
     // =======
 
     // Start Panda's node.
-    let mut panda = TestNode::spawn([98; 32]).await;
+    let mut panda = TestNode::spawn([98; 32], None).await;
 
     // Subscribe to gossip overlay to receive (ephemeral) messages.
     let panda_gossip_handle = panda.gossip.stream(topic).await.unwrap();
@@ -51,7 +51,7 @@ async fn gossip_and_sync_with_same_topic() {
     // =======
 
     // Start Penguin's node.
-    let mut penguin = TestNode::spawn([99; 32]).await;
+    let mut penguin = TestNode::spawn([99; 32], None).await;
 
     // Penguin adds Panda as a "bootstrap" node in its address book.
     penguin
