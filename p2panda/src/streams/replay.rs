@@ -13,7 +13,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use crate::node::AckPolicy;
-use crate::operation::{Extensions, Operation};
+use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
 use crate::streams::stream::process_operation;
@@ -23,7 +23,7 @@ pub(crate) async fn replay_from_start<M>(
     topic: Topic,
     store: SqliteStore,
     app_tx: Sender<StreamEvent<M>>,
-    pipeline: Pipeline<Topic, Extensions, Topic>,
+    pipeline: Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
 ) -> Result<(), ReplayError>
 where

@@ -23,7 +23,7 @@ use tracing::warn;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
-use crate::operation::{Extensions, Operation};
+use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::{Event, Pipeline};
 use crate::streams::Offset;
 use crate::streams::replay::replay_from_start;
@@ -86,7 +86,7 @@ pub(crate) async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
     forge: OperationForge,
-    pipeline: Pipeline<Topic, Extensions, Topic>,
+    pipeline: Pipeline<LogId, Extensions, Topic>,
     offset: Offset,
 ) -> Result<
     (StreamPublisher<M>, StreamSubscription<M>),
@@ -105,7 +105,7 @@ where
     let (publish_tx, mut publish_rx) = mpsc::channel::<(
         Operation,
         Option<M>,
-        oneshot::Sender<Event<Topic, Extensions, Topic>>,
+        oneshot::Sender<Event<LogId, Extensions, Topic>>,
     )>(PUBLISH_BUFFER_SIZE);
 
     {
@@ -256,14 +256,13 @@ where
 pub(crate) async fn process_operation<M>(
     operation: Operation,
     topic: Topic,
-    pipeline: &Pipeline<Topic, Extensions, Topic>,
+    pipeline: &Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
 ) -> Option<StreamEvent<M>>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    // TODO: Extract log id from operation extensions instead.
-    let log_id = topic;
+    let log_id = LogId::from_topic(topic);
     let prune_flag = operation.header.extensions.prune_flag;
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
@@ -329,10 +328,9 @@ where
 pub(crate) async fn process_published_operation(
     operation: Operation,
     topic: Topic,
-    pipeline: &Pipeline<Topic, Extensions, Topic>,
-) -> Event<Topic, Extensions, Topic> {
-    // TODO: Extract log id from operation extensions instead.
-    let log_id = topic;
+    pipeline: &Pipeline<LogId, Extensions, Topic>,
+) -> Event<LogId, Extensions, Topic> {
+    let log_id = LogId::from_topic(topic);
     let prune_flag = operation.header.extensions.prune_flag;
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
@@ -363,7 +361,7 @@ pub struct StreamPublisher<M> {
     publish_tx: mpsc::Sender<(
         Operation,
         Option<M>,
-        oneshot::Sender<Event<Topic, Extensions, Topic>>,
+        oneshot::Sender<Event<LogId, Extensions, Topic>>,
     )>,
     _marker: PhantomData<M>,
 }
@@ -402,21 +400,16 @@ where
         prune_flag: bool,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions {
-            prune_flag: prune_flag.into(),
-            ..Default::default()
-        };
+        let extensions = Extensions::from_topic(self.topic()).prune_flag(prune_flag);
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),
             None => None,
         };
 
-        let log_id = self.topic();
-
         let operation = self
             .forge
-            .create_operation(self.topic(), log_id, body_bytes, extensions)
+            .create_operation(self.topic(), extensions.log_id, body_bytes, extensions)
             .await?
             .ok_or(PublishError::DuplicateOperation)?;
         let hash = operation.hash;
@@ -448,7 +441,7 @@ where
 #[derive(Debug)]
 pub struct PublishFuture {
     hash: Hash,
-    processed_rx: oneshot::Receiver<Event<Topic, Extensions, Topic>>,
+    processed_rx: oneshot::Receiver<Event<LogId, Extensions, Topic>>,
 }
 
 impl PublishFuture {
@@ -459,7 +452,7 @@ impl PublishFuture {
 }
 
 impl Future for PublishFuture {
-    type Output = Result<Event<Topic, Extensions, Topic>, oneshot::error::RecvError>;
+    type Output = Result<Event<LogId, Extensions, Topic>, oneshot::error::RecvError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.processed_rx.poll_unpin(cx)
@@ -511,7 +504,7 @@ pub enum StreamEvent<M> {
         session_id: u64,
     },
     DecodingFailed {
-        event: Event<Topic, Extensions, Topic>,
+        event: Event<LogId, Extensions, Topic>,
         topic: Topic,
         error: DecodeError,
     },
@@ -523,7 +516,7 @@ pub enum StreamEvent<M> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedOperation<M> {
-    event: Event<Topic, Extensions, Topic>,
+    event: Event<LogId, Extensions, Topic>,
     topic: Topic,
     message: M,
 }
@@ -549,7 +542,7 @@ impl<M> ProcessedOperation<M> {
         &self.message
     }
 
-    pub fn processed(&self) -> &Event<Topic, Extensions, Topic> {
+    pub fn processed(&self) -> &Event<LogId, Extensions, Topic> {
         &self.event
     }
 
