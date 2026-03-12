@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
-use p2panda::operation::Operation;
+use p2panda::operation::{LogId, Operation};
 use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent};
 use p2panda::test_utils::setup_logging;
 use p2panda_core::{PrivateKey, Topic};
@@ -193,9 +193,10 @@ async fn log_prefix_pruning() {
     }
 
     // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
+    let log_id = LogId::from_topic(topic);
     let panda_result: Vec<(Operation, Vec<u8>)> = panda
         .store()
-        .get_log_entries(&panda.id(), &topic, None, None)
+        .get_log_entries(&panda.id(), &log_id, None, None)
         .await
         .expect("no store failure")
         .expect("result to be Some");
@@ -203,7 +204,7 @@ async fn log_prefix_pruning() {
 
     let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
         .store()
-        .get_log_entries(&panda.id(), &topic, None, None)
+        .get_log_entries(&panda.id(), &log_id, None, None)
         .await
         .expect("no store failure")
         .expect("result to be Some");

@@ -10,10 +10,10 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
 
-use crate::operation::{Extensions, Header, Operation};
+use crate::operation::{Extensions, Header, LogId, Operation};
 
 /// Interface for obtaining a keypair and creating signed operations.
-pub trait Forge<T, C, E> {
+pub trait Forge<TP, C, E> {
     type Error: StdError;
 
     fn private_key(&self) -> &PrivateKey;
@@ -22,7 +22,7 @@ pub trait Forge<T, C, E> {
 
     fn create_operation(
         &mut self,
-        topic: T,
+        topic: TP,
         collection_id: C,
         body: Option<Vec<u8>>,
         extensions: E,
@@ -53,8 +53,6 @@ impl OperationForge {
         }
     }
 }
-
-pub type LogId = Topic;
 
 impl Forge<Topic, LogId, Extensions> for OperationForge {
     type Error = ForgeError;
@@ -161,7 +159,7 @@ mod tests {
     use p2panda_store::logs::LogStore;
 
     use crate::forge::Forge;
-    use crate::operation::Extensions;
+    use crate::operation::{Extensions, LogId};
 
     use super::OperationForge;
 
@@ -171,8 +169,8 @@ mod tests {
         let mut forge = OperationForge::new(store.clone());
 
         let topic = Topic::new();
-        let log_id = Topic::new();
-        let extensions = Extensions::default();
+        let log_id = LogId::from_topic(topic);
+        let extensions = Extensions::from_topic(topic);
 
         forge
             .create_operation(

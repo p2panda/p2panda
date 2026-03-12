@@ -177,6 +177,7 @@ mod tests {
     use p2panda_core::{PrivateKey, PruneFlag, Topic};
     use p2panda_store::SqliteStore;
 
+    use crate::operation::LogId;
     use crate::processor::TaskTracker;
 
     use super::{Event, Pipeline};
@@ -185,7 +186,7 @@ mod tests {
     async fn processing_operations() {
         let store = SqliteStore::temporary().await;
         let tasks = TaskTracker::new();
-        let processor = Pipeline::<Topic, (), Topic>::new(store, tasks);
+        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks);
 
         let log = TestLog::new();
         let topic = Topic::new();
@@ -196,7 +197,7 @@ mod tests {
         let result = processor
             .process(Event::new(
                 operation.clone(),
-                topic,
+                LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
             ))
@@ -212,7 +213,7 @@ mod tests {
         let result = processor
             .process(Event::new(
                 operation.clone(),
-                topic,
+                LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
             ))
