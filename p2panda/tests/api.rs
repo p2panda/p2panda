@@ -156,37 +156,50 @@ async fn log_prefix_pruning() {
     let icebear = p2panda::builder().spawn().await.unwrap();
 
     let (mut panda_tx, _panda_rx) = panda.stream::<usize>(topic).await.unwrap();
+
+    // 1. Panda publishes 3 operations into their append-only log.
     panda_tx.publish(1).await.unwrap();
     panda_tx.publish(2).await.unwrap();
     panda_tx.publish(3).await.unwrap();
-    panda_tx.prune(Some(4)).await.unwrap();
 
+    // 2. Icebear joins the topic and starts syncing Panda's operations. Please note that due to
+    //    async behaviour we don't know how many operations Icebear will _exactly_ sync before
+    //    pruning takes place.
     let (_icebear_tx, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
 
-    let mut received_messages = 0;
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Processed(_) = event {
-            received_messages += 1;
+    // 3. Panda prunes their log now and sets the last message to be "4".
+    let processing = panda_tx.prune(Some(4)).await.unwrap();
 
-            // Icebear should receive 4 messages from panda.
-            if received_messages == 4 {
+    // We keep around the hash of the operation which pruned the log.
+    let hash = processing.hash();
+
+    // 4. Panda waits until their pruning operation was successfully processed in their local
+    //    processing pipeline.
+    let result = processing.await.unwrap();
+    assert!(result.is_completed());
+    assert!(!result.is_failed());
+
+    // 5. We wait until icebear processed the (from their perspective remotely incoming) pruning
+    //    operation as well.
+    while let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::Processed(operation) = event {
+            assert!(operation.processed().is_completed());
+            assert!(!operation.processed().is_failed());
+
+            if operation.id() == hash {
                 break;
             }
         }
     }
 
-    // There should only be 1 message in panda's and icebear's database.
-    let _panda_result: Vec<(Operation, Vec<u8>)> = panda
+    // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
+    let panda_result: Vec<(Operation, Vec<u8>)> = panda
         .store()
         .get_log_entries(&panda.id(), &topic, None, None)
         .await
         .expect("no store failure")
         .expect("result to be Some");
-
-    // TODO: Panda is not processing their own operations yet. This is handled in a separate issue.
-    // See here: https://github.com/p2panda/p2panda/issues/1070
-    //
-    // assert_eq!(panda_result.iter().count(), 1);
+    assert_eq!(panda_result.iter().count(), 1);
 
     let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
         .store()

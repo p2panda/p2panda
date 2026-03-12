@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::{Stream, StreamExt};
+use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, PublicKey, Topic};
@@ -17,8 +17,7 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
@@ -34,8 +33,53 @@ use crate::streams::replay::replay_from_start;
 /// the sync backend.
 const BUFFER_SIZE: usize = 16;
 
+/// Number of items which can stay in the buffer before processing kicks in for locally published
+/// items. If buffer runs full, creating new operations will apply backpressure.
+const PUBLISH_BUFFER_SIZE: usize = 128;
+
 /// Returns publish and subscribe halfs of an eventually consistent messaging stream for a given
 /// topic.
+///
+/// ## At-least-once guarantee
+///
+/// Rare race-conditions might occur where operations can arrive multiple times at the application
+/// layer. This is why we're only providing an *at-least-once* guarantee.
+///
+/// It is recommended to either add measures to provide an *exactly-once* guarantee or make sure
+/// all application logic is idempotent.
+///
+/// ## Stream design
+///
+/// Locally published operations are processed by the same event processor pipeline as incoming,
+/// remote operations.
+///
+/// If a replay was requested, processing local and remotely incoming operations is temporarily
+/// blocked until replay has finished.
+///
+/// ```text
+/// ┌────────────────┐                ┌─────────┐
+/// │ LogSync Stream │                │ Publish │
+/// └──────────────┬─┘                └─┬───────┘
+///                │                    │
+///                /  Replay can block  /
+///                │                    │
+///                │  ┌──────────────┐  │
+///                │  │    Replay    │  │
+///                │  └──────────────┘  │
+///                │         │          │
+///                │         │          │
+///                │  ┌──────▼───────┐  │
+///                └──►              ◄──┘
+///                   │   Pipeline   │
+///                   │              │
+///                   └──────┬───────┘
+///                          │
+///                          │
+///                          │
+///               ┌──────────▼──────────┐
+///               │ Application Stream  │
+///               └─────────────────────┘
+/// ```
 pub(crate) async fn processed_stream<M>(
     topic: Topic,
     ack_policy: AckPolicy,
@@ -53,93 +97,161 @@ where
 {
     let mut sync_stream = sync_handle.subscribe().await?;
 
+    // Channel to send processed events to the application-layer.
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
 
-    let sync_task = tokio::spawn(async move {
-        // In the case where a full replay of the topic stream is requested, then spawn a replay
-        // task and await it's completion. This will block processing of the sync stream until it
-        // is complete.
-        if offset == Offset::Start {
-            // Errors occurring in the replay task which be returned to the user
-            let result = replay_from_start(
-                topic,
-                store.clone(),
-                app_tx.clone(),
-                pipeline.clone(),
-                ack_policy,
-            )
-            .await;
+    // Channel to send locally created operations to the processing pipeline. A "oneshot" callback
+    // is attached to allow publishers to await the processing result.
+    let (publish_tx, mut publish_rx) = mpsc::channel::<(
+        Operation,
+        Option<M>,
+        oneshot::Sender<Event<Topic, Extensions, Topic>>,
+    )>(PUBLISH_BUFFER_SIZE);
 
-            if let Err(err) = result {
-                warn!("error occurred in replay task: {err:?}");
-                let _ = app_tx
-                    .send(StreamEvent::ReplayFailed {
-                        topic,
-                        error: err.to_string(),
-                    })
-                    .await;
-            }
-        }
+    {
+        let pipeline = pipeline.clone();
 
-        while let Some(result) = sync_stream.next().await {
-            // Ignore internal broadcast channel error, this only indicates that the channel
-            // dropped a message which we can't do much about on this layer anymore. In the future
-            // we want to remove this error type altogether.
-            //
-            // Related issue: https://github.com/p2panda/p2panda/issues/959
-            let Ok(from_sync) = result else {
-                continue;
-            };
+        tokio::spawn(async move {
+            // In the case where a full replay of the topic stream is requested, then spawn a
+            // replay task and await it's completion. This will block processing of the sync stream
+            // and of locally created operations until it is complete.
+            if offset == Offset::Start {
+                let result = replay_from_start(
+                    topic,
+                    store.clone(),
+                    app_tx.clone(),
+                    pipeline.clone(),
+                    ack_policy,
+                )
+                .await;
 
-            let event = match from_sync.event {
-                TopicLogSyncEvent::Operation(operation) => {
-                    match process_operation::<M>(*operation, topic, &pipeline, ack_policy).await {
-                        Some(event) => event,
-                        None => continue,
-                    }
+                // Errors occurring in the replay task which be returned to the user.
+                if let Err(err) = result {
+                    warn!("error occurred in replay task: {err:?}");
+
+                    let _ = app_tx
+                        .send(StreamEvent::ReplayFailed {
+                            topic,
+                            error: err.to_string(),
+                        })
+                        .await;
                 }
-                // TODO: Correctly handle log sync events.
-                TopicLogSyncEvent::SyncStatus(metrics) => StreamEvent::SyncStarted {
-                    remote_node_id: from_sync.remote,
-                    session_id: from_sync.session_id,
-                    incoming_operations: metrics.total_operations_remote.unwrap_or_default(),
-                    outgoing_operations: metrics.total_operations_local.unwrap_or_default(),
-                    incoming_bytes: metrics.total_bytes_remote.unwrap_or_default(),
-                    outgoing_bytes: metrics.total_bytes_local.unwrap_or_default(),
-                },
-                TopicLogSyncEvent::Success => StreamEvent::SyncEnded {
-                    remote_node_id: from_sync.remote,
-                    session_id: from_sync.session_id,
-                },
-                TopicLogSyncEvent::Failed { .. } => StreamEvent::SyncEnded {
-                    remote_node_id: from_sync.remote,
-                    session_id: from_sync.session_id,
-                },
-                _ => continue,
-            };
-
-            if app_tx.send(event).await.is_err() {
-                break;
             }
-        }
-    });
+
+            loop {
+                let event = tokio::select! {
+                    // Received incoming operation from remote source.
+                    item = sync_stream.next() => {
+                        let Some(result) = item else {
+                            // Log sync stream seized, we stop the task as well.
+                            break;
+                        };
+
+                        // Ignore internal broadcast channel error, this only indicates that the
+                        // channel dropped a message which we can't do much about on this layer
+                        // anymore. In the future we want to remove this error type altogether.
+                        //
+                        // Related issue: https://github.com/p2panda/p2panda/issues/959
+                        let Ok(from_sync) = result else {
+                            continue;
+                        };
+
+                        match from_sync.event {
+                            TopicLogSyncEvent::Operation(operation) => {
+                                let Some(event) = process_operation::<M>(
+                                    *operation.clone(),
+                                    topic,
+                                    &pipeline,
+                                    ack_policy
+                                ).await else {
+                                    continue;
+                                };
+
+                                event
+                            }
+                            // TODO: Correctly handle log sync events.
+                            TopicLogSyncEvent::SyncStatus(metrics) => StreamEvent::SyncStarted {
+                                remote_node_id: from_sync.remote,
+                                session_id: from_sync.session_id,
+                                incoming_operations: metrics.total_operations_remote
+                                    .unwrap_or_default(),
+                                outgoing_operations: metrics.total_operations_local
+                                    .unwrap_or_default(),
+                                incoming_bytes: metrics.total_bytes_remote
+                                    .unwrap_or_default(),
+                                outgoing_bytes: metrics.total_bytes_local
+                                    .unwrap_or_default(),
+                            },
+                            TopicLogSyncEvent::Success => StreamEvent::SyncEnded {
+                                remote_node_id: from_sync.remote,
+                                session_id: from_sync.session_id,
+                            },
+                            TopicLogSyncEvent::Failed { .. } => StreamEvent::SyncEnded {
+                                remote_node_id: from_sync.remote,
+                                session_id: from_sync.session_id,
+                            },
+                            _ => continue,
+                        }
+                    }
+
+                    // Received locally created operation which needs to be processed as well.
+                    //
+                    // If the publishing channel gets closed, for example when the publisher handle
+                    // got dropped, we still continue with this task, as we still might receive
+                    // operations from the log sync stream.
+                    Some((operation, message, processed_tx)) = publish_rx.recv() => {
+                        let event = process_published_operation(
+                            operation,
+                            topic,
+                            &pipeline,
+                        ).await;
+
+                        // Inform publisher optionally about result of processor and that we're
+                        // done here.
+                        let _ = processed_tx.send(event.clone());
+
+                        if let Some(message) = message {
+                            StreamEvent::Processed(ProcessedOperation {
+                                event,
+                                topic,
+                                message,
+                            })
+                        } else {
+                            continue;
+                        }
+                    }
+                };
+
+                // Send processing result to application layer.
+                //
+                // If channel stopped working, close the task as well.
+                if app_tx.send(event).await.is_err() {
+                    break;
+                }
+            }
+        });
+    }
+
+    // TODO: Find out if publishing breaks if StreamSubscription gets dropped as task and therefore
+    // channel might be gone.
 
     let tx = StreamPublisher {
         topic,
         sync_handle: Arc::new(sync_handle),
         forge,
+        publish_tx,
         _marker: PhantomData,
     };
 
     let rx = StreamSubscription {
         topic,
         stream: ReceiverStream::new(app_rx),
-        sync_task,
     };
 
     Ok((tx, rx))
 }
 
+/// Process an incoming operation coming from an external stream (sync- or replay task).
 pub(crate) async fn process_operation<M>(
     operation: Operation,
     topic: Topic,
@@ -153,14 +265,14 @@ where
     let log_id = topic;
     let prune_flag = operation.header.extensions.prune_flag;
 
-    // Send operation to processor task and wait for result. This blocks the sync
-    // stream and makes sure that all events are handled in same order.
+    // Send operation to processor task and wait for result. This blocks any parent stream and
+    // makes sure that all events are handled in same order.
     let event = pipeline
         .process(Event::new(operation, log_id, topic, prune_flag))
         .await;
 
-    // Do not forward operations which failed processing on system-level. We do
-    // _not_ forward the error to application-level, only log an error.
+    // Do not forward operations which failed processing on system-level. We do _not_ forward the
+    // error to application-level, only log an error.
     if event.is_failed() {
         warn!(
             id = %event.hash(),
@@ -174,17 +286,17 @@ where
     // Do not forward operations to the application-layer if there's no body.
     let body = event.body()?;
 
-    // Attempt decoding application-layer message. This takes place _after_
-    // system-level processing completed and the operation was ingested.
+    // Attempt decoding application-layer message. This takes place _after_ system-level processing
+    // completed and the operation was ingested.
     //
-    // In case decoding fails due to an application bug, users have the option to
-    // re-play this persisted operation and attempt decoding again.
+    // In case decoding fails due to an application bug, users have the option to re-play this
+    // persisted operation and attempt decoding again.
     //
-    // If application data is malformed users can choose to remove the payload of
-    // the operation or delete the whole log altogether.
+    // If application data is malformed users can choose to remove the payload of the operation or
+    // delete the whole log altogether.
     //
-    // TODO: Is this mixing up concerns? We can only handle bytes on our end and
-    // let the users do decoding on application layer?
+    // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users do
+    // decoding on application layer?
     let event = match decode_cbor::<M, _>(body.as_bytes()) {
         Ok(message) => StreamEvent::Processed(ProcessedOperation {
             event,
@@ -205,11 +317,53 @@ where
     Some(event)
 }
 
+/// Process an operation which was just published locally.
+///
+/// This is different from processing a remote or re-played operation coming from a stream:
+///
+/// 1. Since we know the message already we don't need to decode it.
+/// 2. We want to inform the publisher about the result of the processing if they want to. This is
+///    different from processing operations coming from an external stream where there's no
+///    explicit user call which created them.
+pub(crate) async fn process_published_operation(
+    operation: Operation,
+    topic: Topic,
+    pipeline: &Pipeline<Topic, Extensions, Topic>,
+) -> Event<Topic, Extensions, Topic> {
+    // TODO: Extract log id from operation extensions instead.
+    let log_id = topic;
+    let prune_flag = operation.header.extensions.prune_flag;
+
+    // Send operation to processor task and wait for result. This blocks any parent stream and
+    // makes sure that all events are handled in same order.
+    let event = pipeline
+        .process(Event::new(operation, log_id, topic, prune_flag))
+        .await;
+
+    if event.is_failed() {
+        warn!(
+            id = %event.hash(),
+            "processing local operation failed: {}",
+            event.failure_reason().expect("error")
+        );
+    }
+
+    // TODO: Always ack your own operations?
+
+    event
+}
+
 #[derive(Clone)]
 pub struct StreamPublisher<M> {
     topic: Topic,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     forge: OperationForge,
+    #[allow(clippy::type_complexity)]
+    publish_tx: mpsc::Sender<(
+        Operation,
+        Option<M>,
+        oneshot::Sender<Event<Topic, Extensions, Topic>>,
+    )>,
     _marker: PhantomData<M>,
 }
 
@@ -222,7 +376,7 @@ where
     }
 
     /// Publish a message.
-    pub async fn publish(&mut self, message: M) -> Result<Hash, PublishError> {
+    pub async fn publish(&mut self, message: M) -> Result<PublishFuture, PublishError> {
         self.publish_inner(Some(message), false).await
     }
 
@@ -237,7 +391,7 @@ where
     /// Internally we're applying append-only log prefix deletion, meaning that the log's prefix
     /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
     /// "older" / before the point where the prune flag was set.
-    pub async fn prune(&mut self, message: Option<M>) -> Result<Hash, PublishError> {
+    pub async fn prune(&mut self, message: Option<M>) -> Result<PublishFuture, PublishError> {
         self.publish_inner(message, true).await
     }
 
@@ -245,30 +399,69 @@ where
         &mut self,
         message: Option<M>,
         prune_flag: bool,
-    ) -> Result<Hash, PublishError> {
+    ) -> Result<PublishFuture, PublishError> {
+        // Create, sign and persist operation with given payload.
         let extensions = Extensions {
             prune_flag: prune_flag.into(),
             ..Default::default()
         };
 
-        let message = match message {
-            Some(message) => Some(encode_cbor(&message)?),
+        let body_bytes = match message {
+            Some(ref message) => Some(encode_cbor(&message)?),
             None => None,
         };
 
+        let log_id = self.topic();
+
         let operation = self
             .forge
-            .create_operation(self.topic(), self.topic(), message, extensions)
+            .create_operation(self.topic(), log_id, body_bytes, extensions)
             .await?
             .ok_or(PublishError::DuplicateOperation)?;
         let hash = operation.hash;
 
+        // Start processing operation in pipeline. Keep an oneshot receiver around to allow users
+        // to optionally await & get informed when processing has finished.
+        let (processed_tx, processed_rx) = oneshot::channel();
+        self.publish_tx
+            .send((operation.clone(), message, processed_tx))
+            .await
+            .map_err(|err| PublishError::SendToProcessor(err.to_string()))?;
+
+        // Try pushing operation to other nodes if we have an active and "live" sync session with
+        // them. This allows disseminating new messages fastly in the network.
+        //
+        // If no active live session exists, nodes will pick up the operation later when running
+        // the sync protocol.
         self.sync_handle
             .publish(operation)
             .await
             .map_err(|err| PublishError::SyncHandle(err.to_string()))?;
 
-        Ok(hash)
+        Ok(PublishFuture { hash, processed_rx })
+    }
+}
+
+/// Future which can be awaited to find out when locally published operation has finished
+/// processing.
+#[derive(Debug)]
+pub struct PublishFuture {
+    hash: Hash,
+    processed_rx: oneshot::Receiver<Event<Topic, Extensions, Topic>>,
+}
+
+impl PublishFuture {
+    /// Returns hash of the published operation.
+    pub fn hash(&self) -> Hash {
+        self.hash
+    }
+}
+
+impl Future for PublishFuture {
+    type Output = Result<Event<Topic, Extensions, Topic>, oneshot::error::RecvError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.processed_rx.poll_unpin(cx)
     }
 }
 
@@ -276,14 +469,12 @@ where
 #[pin_project]
 pub struct StreamSubscription<M> {
     topic: Topic,
-    sync_task: JoinHandle<()>,
     #[pin]
     stream: ReceiverStream<StreamEvent<M>>,
 }
 
 impl<M> StreamSubscription<M> {
     /// Explicitly acknowledge message.
-    // TODO: Implementing this is not a priority right now.
     pub async fn ack(&self, _message_id: Hash) {
         // This is a no-op if messages are automatically acked (which is the default).
         unimplemented!()
@@ -292,7 +483,7 @@ impl<M> StreamSubscription<M> {
 
 impl<M> Stream for StreamSubscription<M>
 where
-    M: Clone + Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     type Item = StreamEvent<M>;
 
@@ -377,4 +568,7 @@ pub enum PublishError {
 
     #[error("an error occurred while publishing an operation to the log sync stream: {0}")]
     SyncHandle(String),
+
+    #[error("could not send operation to processor pipeline: {0}")]
+    SendToProcessor(String),
 }
