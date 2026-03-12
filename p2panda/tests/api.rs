@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use mock_instant::thread_local::MockClock;
 use p2panda::operation::Operation;
 use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent};
 use p2panda::test_utils::setup_logging;
@@ -49,6 +50,8 @@ async fn ephemeral_stream() {
 
         tokio::spawn(async move {
             let message = rx.next().await.unwrap();
+            // Advance the clock to ensure icebear's message is published later than panda's.
+            MockClock::advance_system_time(Duration::from_secs(1));
             tx.publish("Hi, Panda!".into()).await.unwrap();
             message
         })
