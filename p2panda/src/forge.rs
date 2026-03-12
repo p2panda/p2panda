@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
+use std::sync::Arc;
 
 use p2panda_core::{Body, Hash, PrivateKey, PublicKey, SeqNum, Timestamp, Topic};
 use p2panda_store::logs::LogStore;
@@ -30,7 +31,7 @@ pub trait Forge<T, C, E> {
 
 #[derive(Clone, Debug)]
 pub struct OperationForge {
-    private_key: PrivateKey,
+    private_key: Arc<PrivateKey>,
     store: SqliteStore,
 }
 
@@ -41,15 +42,15 @@ impl OperationForge {
     /// The forge holds the private key used to sign operations. This method generates a new key
     /// using CSPRNG from the system.
     pub fn new(store: SqliteStore) -> Self {
-        Self {
-            private_key: PrivateKey::new(),
-            store,
-        }
+        Self::from_private_key(PrivateKey::new(), store)
     }
 
     /// Create a forge using an existing private key.
     pub fn from_private_key(private_key: PrivateKey, store: SqliteStore) -> Self {
-        Self { private_key, store }
+        Self {
+            private_key: Arc::new(private_key),
+            store,
+        }
     }
 }
 
