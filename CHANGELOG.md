@@ -20,6 +20,7 @@ Highlights are marked with a pancake 🥞
 - Event processing pipeline in Node stream [#1045](https://github.com/p2panda/p2panda/pull/1045)
 - Replay all operations for a topic based on offset [#1064](https://github.com/p2panda/p2panda/pull/1064)
 - Log-prefix pruning processor [#1073](https://github.com/p2panda/p2panda/pull/1073)
+- Process local operations [#1080](https://github.com/p2panda/p2panda/pull/1080)
 
 ### Changed
 
