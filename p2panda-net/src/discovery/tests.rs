@@ -27,15 +27,11 @@ async fn smoke_test() {
     setup_logging();
 
     // Spawn nodes.
-    let alice = TestNode::spawn([7; 32]).await;
-    let mut bob = TestNode::spawn([8; 32]).await;
-
-    // Alice inserts Bob's info in their address book. Bob's address book is empty;
-    alice
-        .address_book
-        .insert_node_info(bob.node_info())
-        .await
-        .unwrap();
+    //
+    // Bob's address book is empty.
+    let mut bob = TestNode::spawn([8; 32], None).await;
+    // Alice manually inserts Bob's info into her address book.
+    let alice = TestNode::spawn([7; 32], Some(bob.node_info())).await;
 
     // Wait until both parties finished at least one discovery session.
     let alice_session_ended = session_ended_handle(&alice).await;
@@ -43,8 +39,8 @@ async fn smoke_test() {
     alice_session_ended.await.unwrap();
     bob_session_ended.await.unwrap();
 
-    // Alice didn't learn about new transport info of Bob as their manually added node info was
-    // already the "latest".
+    // Alice didn't learn about new transport info for Bob; the node info she
+    // added manually was already the "latest".
     let alice_metrics = alice.discovery.metrics().await.unwrap();
     assert_eq!(alice_metrics.newly_learned_transport_infos, 0);
 
