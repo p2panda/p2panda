@@ -155,7 +155,7 @@ async fn log_prefix_pruning() {
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let (mut panda_tx, _panda_rx) = panda.stream::<usize>(topic).await.unwrap();
+    let (mut panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
 
     // 1. Panda publishes 3 operations into their append-only log.
     panda_tx.publish(1).await.unwrap();
@@ -165,7 +165,7 @@ async fn log_prefix_pruning() {
     // 2. Icebear joins the topic and starts syncing Panda's operations. Please note that due to
     //    async behaviour we don't know how many operations Icebear will _exactly_ sync before
     //    pruning takes place.
-    let (_icebear_tx, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
+    let (_, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
 
     // 3. Panda prunes their log now and sets the last message to be "4".
     let processing = panda_tx.prune(Some(4)).await.unwrap();
