@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
-use crate::operation::Extensions;
+use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Offset, StreamPublisher,
@@ -26,7 +26,7 @@ pub struct Node {
     // NOTE: One single pipeline is currently used to handle _all_ incoming operations,
     // independent of number of streams. While this is sufficient for most applications for now we
     // might want to make the number of processors configurable to avoid head-of-line blocking.
-    pipeline: Pipeline<Topic, Extensions, Topic>,
+    pipeline: Pipeline<LogId, Extensions, Topic>,
     network: Network,
 }
 
@@ -59,7 +59,7 @@ impl Node {
         config: Config,
         store: SqliteStore,
         forge: OperationForge,
-        pipeline: Pipeline<Topic, Extensions, Topic>,
+        pipeline: Pipeline<LogId, Extensions, Topic>,
     ) -> Result<Self, NetworkError> {
         let network = Network::spawn(
             config.network.clone(),
