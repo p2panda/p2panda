@@ -35,6 +35,7 @@ Highlights are marked with a pancake 🥞
 - Minor store improvements [#1068](https://github.com/p2panda/p2panda/pull/1068)
 - Use Borrow to express required args in ingest [#1078](https://github.com/p2panda/p2panda/pull/1078)
 - Use MockInstant for Timestamp when running tests [#1081](https://github.com/p2panda/p2panda/pull/1081)
+- Derive log id from topic [#1082](https://github.com/p2panda/p2panda/pull/1082)
 
 ### Fixed
 
