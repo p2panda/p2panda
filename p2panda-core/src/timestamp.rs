@@ -6,12 +6,12 @@ use std::hash::Hash as StdHash;
 use std::num::ParseIntError;
 use std::ops::Add;
 use std::str::FromStr;
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "test_utils")))]
 use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 use mock_instant::SystemTimeError;
-#[cfg(test)]
+#[cfg(any(test, feature = "test_utils"))]
 use mock_instant::thread_local::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

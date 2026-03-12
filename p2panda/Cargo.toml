@@ -42,6 +42,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
 
 [dev-dependencies]
+mock_instant = "0.6.0"
 p2panda = { path = ".", features = ["test_utils"] }
 p2panda-core = { path = "../p2panda-core", version = "0.5.1", features = ["test_utils"] }
 p2panda-store = { path = "../p2panda-store", version = "0.5.1", features = ["test_utils"] }

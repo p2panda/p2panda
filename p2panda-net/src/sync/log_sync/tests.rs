@@ -23,14 +23,8 @@ async fn e2e_log_sync() {
     let topic: Topic = [0; 32].into();
     let log_id = 0;
 
-    let mut alice = TestNode::spawn([10; 32]).await;
-    let mut bob = TestNode::spawn([11; 32]).await;
-
-    alice
-        .address_book
-        .insert_node_info(bob.node_info())
-        .await
-        .unwrap();
+    let mut bob = TestNode::spawn([11; 32], None).await;
+    let mut alice = TestNode::spawn([10; 32], Some(bob.node_info())).await;
 
     // Populate Alice's and Bob's store with some test data.
     alice
@@ -233,21 +227,9 @@ async fn e2e_three_party_sync() {
     let log_id = 0;
 
     // Spawn nodes.
-    let mut bob = TestNode::spawn([30; 32]).await;
-    let mut alice = TestNode::spawn([31; 32]).await;
-    let mut carol = TestNode::spawn([32; 32]).await;
-
-    alice
-        .address_book
-        .insert_node_info(bob.args.node_info())
-        .await
-        .unwrap();
-
-    carol
-        .address_book
-        .insert_node_info(alice.args.node_info())
-        .await
-        .unwrap();
+    let mut bob = TestNode::spawn([30; 32], None).await;
+    let mut alice = TestNode::spawn([31; 32], Some(bob.node_info())).await;
+    let mut carol = TestNode::spawn([32; 32], Some(alice.node_info())).await;
 
     // Populate stores with some test data.
     alice
@@ -483,7 +465,7 @@ async fn unsubscribe_from_gossip_after_drop() {
 
     let sync_topic: Topic = [0; 32].into();
 
-    let alice = TestNode::spawn([73; 32]).await;
+    let alice = TestNode::spawn([73; 32], None).await;
     let alice_handle = alice.log_sync.stream(sync_topic, true).await.unwrap();
 
     let mut watcher = alice
