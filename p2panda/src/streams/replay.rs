@@ -73,7 +73,7 @@ where
         if replay_task.is_finished() {
             return replay_task
                 .await
-                .expect("panic in task")
+                .expect("replay task should never panic")
                 .map_err(|_| ReplayError::CriticalError);
         }
     }
