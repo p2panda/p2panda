@@ -25,8 +25,9 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::{Event, Pipeline};
-use crate::streams::Offset;
 use crate::streams::replay::replay_from_start;
+use crate::streams::sync_metrics::{Aggregator, SessionPhase, SyncError};
+use crate::streams::{Offset, sync_metrics};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -138,6 +139,7 @@ where
                 }
             }
 
+            let mut aggregator = Aggregator::new();
             loop {
                 let event = tokio::select! {
                     // Received incoming operation from remote source.
@@ -156,41 +158,26 @@ where
                             continue;
                         };
 
-                        match from_sync.event {
-                            TopicLogSyncEvent::Operation(operation) => {
+                        let Some(event) = aggregator.process(from_sync) else {
+                            continue;
+                        };
+
+                        match event {
+                            sync_metrics::SyncEvent::SyncStarted { .. } => event.into(),
+                            sync_metrics::SyncEvent::SyncEnded { .. } => event.into(),
+                            sync_metrics::SyncEvent::OperationReceived { operation, source } => {
                                 let Some(event) = process_operation::<M>(
                                     *operation.clone(),
                                     topic,
                                     &pipeline,
-                                    ack_policy
+                                    ack_policy,
+                                    source
                                 ).await else {
                                     continue;
                                 };
 
                                 event
-                            }
-                            // TODO: Correctly handle log sync events.
-                            TopicLogSyncEvent::SyncStatus(metrics) => StreamEvent::SyncStarted {
-                                remote_node_id: from_sync.remote,
-                                session_id: from_sync.session_id,
-                                incoming_operations: metrics.total_operations_remote
-                                    .unwrap_or_default(),
-                                outgoing_operations: metrics.total_operations_local
-                                    .unwrap_or_default(),
-                                incoming_bytes: metrics.total_bytes_remote
-                                    .unwrap_or_default(),
-                                outgoing_bytes: metrics.total_bytes_local
-                                    .unwrap_or_default(),
                             },
-                            TopicLogSyncEvent::Success => StreamEvent::SyncEnded {
-                                remote_node_id: from_sync.remote,
-                                session_id: from_sync.session_id,
-                            },
-                            TopicLogSyncEvent::Failed { .. } => StreamEvent::SyncEnded {
-                                remote_node_id: from_sync.remote,
-                                session_id: from_sync.session_id,
-                            },
-                            _ => continue,
                         }
                     }
 
@@ -211,11 +198,14 @@ where
                         let _ = processed_tx.send(event.clone());
 
                         if let Some(message) = message {
-                            StreamEvent::Processed(ProcessedOperation {
-                                event,
-                                topic,
-                                message,
-                            })
+                            StreamEvent::Processed{
+                                operation: ProcessedOperation {
+                                    event,
+                                    topic,
+                                    message,
+                                },
+                                source: Source::LocalStore
+                            }
                         } else {
                             continue;
                         }
@@ -258,6 +248,7 @@ pub(crate) async fn process_operation<M>(
     topic: Topic,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
+    source: Source,
 ) -> Option<StreamEvent<M>>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -298,11 +289,14 @@ where
     // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users do
     // decoding on application layer?
     let event = match decode_cbor::<M, _>(body.as_bytes()) {
-        Ok(message) => StreamEvent::Processed(ProcessedOperation {
-            event,
-            topic,
-            message,
-        }),
+        Ok(message) => StreamEvent::Processed {
+            operation: ProcessedOperation {
+                event,
+                topic,
+                message,
+            },
+            source,
+        },
         Err(err) => StreamEvent::DecodingFailed {
             event,
             topic,
@@ -489,19 +483,64 @@ where
 }
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum StreamEvent<M> {
-    Processed(ProcessedOperation<M>),
+    Processed {
+        /// Processed operation.
+        operation: ProcessedOperation<M>,
+
+        /// The source of the operation.
+        source: Source,
+    },
     SyncStarted {
+        /// Id of the remote sending node.
         remote_node_id: NodeId,
+
+        /// Id of the sync session.
         session_id: u64,
+
+        /// Total operations which will be received during this session.
         incoming_operations: u64,
+
+        /// Total operations which will be sent during this session.
         outgoing_operations: u64,
+
+        /// Total bytes which will be received during this session.
         incoming_bytes: u64,
+
+        /// Total bytes which will be sent during this session.
         outgoing_bytes: u64,
+
+        /// Total sessions currently running over the same topic.
+        topic_sessions: u64,
     },
     SyncEnded {
+        /// Id of the remote sending node.
         remote_node_id: NodeId,
+
+        /// Id of the sync session.
         session_id: u64,
+
+        /// Operation sent during this session.
+        sent_operations: u64,
+
+        /// Operations received during this session.
+        received_operations: u64,
+
+        /// Bytes sent during this session.
+        sent_bytes: u64,
+
+        /// Bytes received during this session.
+        received_bytes: u64,
+
+        /// Total bytes sent for this topic across all sessions.
+        sent_bytes_topic_total: u64,
+
+        /// Total bytes received for this topic across all sessions.
+        received_bytes_topic_total: u64,
+
+        /// If the sync session ended with an error the reason is included here.
+        error: Option<SyncError>,
     },
     DecodingFailed {
         event: Event<LogId, Extensions, Topic>,
@@ -549,6 +588,44 @@ impl<M> ProcessedOperation<M> {
     pub async fn ack(&self) {
         unimplemented!()
     }
+}
+
+/// The source of a processed operation.
+#[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum Source {
+    /// Source when an operation arrived via a sync session.
+    SyncSession {
+        /// Id of the remote sending node.
+        remote_node_id: NodeId,
+
+        /// Id of the sync session.
+        session_id: u64,
+
+        /// Operation sent during this session.
+        sent_operations: u64,
+
+        /// Operations received during this session.
+        received_operations: u64,
+
+        /// Bytes sent during this session.
+        sent_bytes: u64,
+
+        /// Bytes received during this session.
+        received_bytes: u64,
+
+        /// Total bytes sent for this topic across all sessions.
+        sent_bytes_topic_total: u64,
+
+        /// Total bytes received for this topic across all sessions.
+        received_bytes_topic_total: u64,
+
+        /// The session phase during which an operation arrived.
+        phase: SessionPhase,
+    },
+
+    /// Source when an operation was published locally or replayed.
+    LocalStore,
 }
 
 #[derive(Debug, Error)]
