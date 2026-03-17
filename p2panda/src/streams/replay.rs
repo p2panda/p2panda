@@ -16,7 +16,7 @@ use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
-use crate::streams::stream::process_operation;
+use crate::streams::stream::{Source, process_operation};
 
 /// Retrieve from the store and re-process all operations for a given topic.
 pub(crate) async fn replay_from_start<M>(
@@ -59,7 +59,15 @@ where
     // Pull operations from the replay channel and send them to the processing pipeline.
     loop {
         if let Some(operation) = replay_rx.recv().await {
-            match process_operation::<M>(operation, topic, &pipeline, ack_policy).await {
+            match process_operation::<M>(
+                operation,
+                topic,
+                &pipeline,
+                ack_policy,
+                Source::LocalStore,
+            )
+            .await
+            {
                 Some(event) => {
                     app_tx
                         .send(event)

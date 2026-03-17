@@ -242,15 +242,15 @@ async fn main() -> Result<()> {
         tokio::task::spawn(async move {
             while let Some(Ok(from_sync)) = sync_rx.next().await {
                 match from_sync.event {
-                    SyncEvent::SyncFinished(metrics) => {
+                    SyncEvent::SessionFinished { metrics } => {
                         info!(
                             "finished sync session with {}, bytes received = {}, bytes sent = {}",
                             from_sync.remote.fmt_short(),
-                            metrics.total_bytes_remote.unwrap_or_default(),
-                            metrics.total_bytes_local.unwrap_or_default()
+                            metrics.received_bytes(),
+                            metrics.sent_bytes()
                         );
                     }
-                    SyncEvent::Operation(operation) => {
+                    SyncEvent::OperationReceived { operation, .. } => {
                         if <SqliteStore as OperationStore<Operation, Hash, LogId>>::has_operation(
                             &store,
                             &operation.hash,

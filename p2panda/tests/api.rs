@@ -91,8 +91,8 @@ async fn eventually_consistent_stream() {
     let mut received: Option<ProcessedOperation<String>> = None;
 
     while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Processed(processed) = event {
-            received = Some(processed);
+        if let StreamEvent::Processed { operation, .. } = event {
+            received = Some(operation);
             break;
         }
     }
@@ -134,8 +134,8 @@ async fn replay_stream() {
     let mut received = vec![];
 
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Processed(processed) = event {
-            received.push(processed);
+        if let StreamEvent::Processed { operation, .. } = event {
+            received.push(operation);
             if received.len() == 2 {
                 break;
             }
@@ -182,7 +182,7 @@ async fn log_prefix_pruning() {
     // 5. We wait until icebear processed the (from their perspective remotely incoming) pruning
     //    operation as well.
     while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Processed(operation) = event {
+        if let StreamEvent::Processed { operation, .. } = event {
             assert!(operation.processed().is_completed());
             assert!(!operation.processed().is_failed());
 

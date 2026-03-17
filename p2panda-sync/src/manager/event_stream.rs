@@ -99,7 +99,7 @@ where
                     let event = from_sync.event();
 
                     let operation = match event {
-                        TopicLogSyncEvent::Operation(operation) => Some(*operation.clone()),
+                        TopicLogSyncEvent::OperationReceived{operation, ..} => Some(*operation.clone()),
                         _ => return (state, Some(from_sync)),
                     };
 

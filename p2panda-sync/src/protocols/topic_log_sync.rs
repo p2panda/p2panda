@@ -23,7 +23,7 @@ use crate::ToSync;
 use crate::dedup::DEFAULT_BUFFER_CAPACITY;
 use crate::protocols::ShortFormat;
 use crate::protocols::log_sync::{
-    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics, LogSyncStatus,
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, LogSyncMetrics,
 };
 use crate::traits::Protocol;
 
@@ -157,7 +157,15 @@ where
             // If the log sync session ended with an error, then send a "failed" event and return
             // here with the error itself.
             match result {
-                Ok(output) => output,
+                Ok((dedup, metrics)) => {
+                    self.event_tx
+                        .send(TopicLogSyncEvent::SyncFinished {
+                            metrics: metrics.clone().into(),
+                        })
+                        .map_err(|_| TopicLogSyncChannelError::EventSend)?;
+
+                    (dedup, metrics)
+                }
                 Err(err) => {
                     self.event_tx
                         .send(TopicLogSyncEvent::Failed {
@@ -175,7 +183,8 @@ where
             }
         };
 
-        let mut metrics: TopicLogSyncLiveMetrics = sync_metrics.into();
+        let mut metrics: Metrics = sync_metrics.into();
+
         let result = match self.live_mode_rx {
             None => Ok(()),
             Some(mut live_mode_rx) => {
@@ -190,7 +199,7 @@ where
                     .send(TopicLogSyncEvent::LiveModeStarted)
                     .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
-                let result = loop {
+                loop {
                     tokio::select! {
                         biased;
                         Some(message) = live_mode_rx.next() => {
@@ -201,15 +210,15 @@ where
                                         continue;
                                     }
 
-                                    metrics.bytes_sent +=
+                                    metrics.sent_live_bytes +=
                                         operation.header.to_bytes().len() as u64 + operation.header.payload_size;
-                                    metrics.operations_sent += 1;
+                                    metrics.sent_live_operations += 1;
 
                                     trace!(
                                         phase = "live",
                                         id = ?operation.hash.fmt_short(),
-                                        sent_ops = ?metrics.operations_sent,
-                                        sent_bytes = ?metrics.bytes_sent,
+                                        sent_ops = ?metrics.sent_live_operations,
+                                        sent_bytes = ?metrics.sent_live_bytes,
                                         "sent operation"
                                     );
 
@@ -275,23 +284,23 @@ where
                                         continue;
                                     }
 
-                                    metrics.bytes_received += header.to_bytes().len() as u64 + header.payload_size;
-                                    metrics.operations_received += 1;
+                                    metrics.received_live_bytes += header.to_bytes().len() as u64 + header.payload_size;
+                                    metrics.received_live_operations += 1;
 
                                     trace!(
                                         phase = "live",
                                         operation_id = ?header.hash().fmt_short(),
-                                        received_ops = %metrics.operations_received,
-                                        received_bytes = %metrics.bytes_received,
+                                        received_ops = %metrics.received_live_operations,
+                                        received_bytes = %metrics.received_live_bytes,
                                         "received operation"
                                     );
 
                                     self.event_tx
-                                        .send(TopicLogSyncEvent::Operation(Box::new(Operation {
+                                        .send(TopicLogSyncEvent::OperationReceived{operation: Box::new(Operation {
                                             hash: header.hash(),
                                             header,
                                             body,
-                                        })))
+                                        }), metrics: metrics.clone()})
                                         .map_err(|_| TopicLogSyncChannelError::EventSend)?;
                                 }
                                 Err(err) => {
@@ -303,13 +312,7 @@ where
                             }
                         }
                     }
-                };
-
-                self.event_tx
-                    .send(TopicLogSyncEvent::LiveModeFinished(metrics.clone()))
-                    .map_err(|_| TopicLogSyncChannelError::EventSend)?;
-
-                result
+                }
             }
         };
 
@@ -320,13 +323,13 @@ where
         let final_event = match result.as_ref() {
             Ok(_) => {
                 debug!(
-                    sent_ops = ?metrics.operations_sent,
-                    sent_bytes = ?metrics.bytes_sent,
-                    received_ops = %metrics.operations_received,
-                    received_bytes = %metrics.bytes_received,
+                    sent_ops = ?metrics.sent_operations(),
+                    sent_bytes = ?metrics.sent_bytes(),
+                    received_ops = %metrics.received_operations(),
+                    received_bytes = %metrics.received_bytes(),
                     "sync session closed"
                 );
-                TopicLogSyncEvent::Success
+                TopicLogSyncEvent::SessionFinished { metrics }
             }
             Err(err) => {
                 warn!(error = ?err, "sync session closed with error");
@@ -405,48 +408,111 @@ pub enum TopicLogSyncError {
     DecodeMessage(String),
 }
 
-/// Sync metrics emitted in event messages.
-#[derive(Clone, Debug, PartialEq, Default)]
-pub struct TopicLogSyncLiveMetrics {
-    pub operations_received: u64,
-    pub operations_sent: u64,
-    pub bytes_received: u64,
-    pub bytes_sent: u64,
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Metrics {
+    pub outbound_sync_bytes: u64,
+    pub outbound_sync_operations: u64,
+    pub inbound_sync_bytes: u64,
+    pub inbound_sync_operations: u64,
+    pub sent_sync_bytes: u64,
+    pub sent_sync_operations: u64,
+    pub received_sync_bytes: u64,
+    pub received_sync_operations: u64,
+    pub sent_live_bytes: u64,
+    pub sent_live_operations: u64,
+    pub received_live_bytes: u64,
+    pub received_live_operations: u64,
 }
 
-impl From<LogSyncMetrics> for TopicLogSyncLiveMetrics {
-    fn from(value: LogSyncMetrics) -> TopicLogSyncLiveMetrics {
-        TopicLogSyncLiveMetrics {
-            operations_received: value.total_operations_received,
-            operations_sent: value.total_operations_sent,
-            bytes_received: value.total_bytes_received,
-            bytes_sent: value.total_bytes_sent,
+impl Metrics {
+    pub fn sent_bytes(&self) -> u64 {
+        self.sent_sync_bytes + self.sent_live_bytes
+    }
+
+    pub fn received_bytes(&self) -> u64 {
+        self.received_sync_bytes + self.received_live_bytes
+    }
+
+    pub fn sent_operations(&self) -> u64 {
+        self.sent_sync_operations + self.sent_live_operations
+    }
+
+    pub fn received_operations(&self) -> u64 {
+        self.received_sync_operations + self.received_live_operations
+    }
+}
+
+impl From<LogSyncMetrics> for Metrics {
+    fn from(value: LogSyncMetrics) -> Metrics {
+        Metrics {
+            inbound_sync_bytes: value.inbound_bytes,
+            outbound_sync_bytes: value.outbound_bytes,
+            sent_sync_bytes: value.sent_bytes,
+            received_sync_bytes: value.received_bytes,
+            inbound_sync_operations: value.inbound_operations,
+            outbound_sync_operations: value.outbound_operations,
+            sent_sync_operations: value.sent_operations,
+            received_sync_operations: value.received_operations,
+            ..Default::default()
         }
     }
 }
 
 /// Events emitted from topic log sync sessions.
 #[derive(Debug, Clone, PartialEq)]
-pub enum TopicLogSyncEvent<E> {
-    SyncStarted(LogSyncMetrics),
-    SyncStatus(LogSyncMetrics),
-    SyncFinished(LogSyncMetrics),
+pub enum TopicLogSyncEvent<E = ()> {
+    /// A session has been initiated locally.
+    ///
+    /// This event is always sent and will be followed by `SyncStarted` or `Failed` events.
+    SessionStarted,
+
+    /// We have exchanged initial session metrics with the remote and the sync phase of this
+    /// session has started.
+    ///
+    /// This event will be followed by any number of `OperationReceived` events, or a `SyncFinished` or `Failed`.
+    SyncStarted { metrics: Metrics },
+
+    /// All past state has been replicated and we will now enter live mode `LiveModeStarted` (if configured) or the
+    /// session will end `SessionFinished`.
+    ///
+    /// This event will be followed by a `LiveModeStarted` event or a `SyncFinished` or `Failed` event.
+    SyncFinished { metrics: Metrics },
+
+    /// The session has entered live mode, we will send and receive operations in realtime.
+    ///
+    /// This event will be followed by any number of `OperationReceived` events or a `SyncFinished` or `Failed` event.
     LiveModeStarted,
-    LiveModeFinished(TopicLogSyncLiveMetrics),
-    Operation(Box<Operation<E>>),
-    Success,
+
+    /// An operation has been received, this can be in the "sync" or "live mode" phase of a session.
+    OperationReceived {
+        operation: Box<Operation<E>>,
+        metrics: Metrics,
+    },
+
+    /// The session has finished.
+    ///
+    /// When no error occurs this event will always be sent at the end of a session.
+    SessionFinished { metrics: Metrics },
+
+    /// The session failed.
+    ///
+    /// This event will always be the final event sent when an error occurred in any phase of the
+    /// session.
     Failed { error: String },
 }
 
 impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
     fn from(event: LogSyncEvent<E>) -> Self {
         match event {
-            LogSyncEvent::Status(status_event) => match status_event {
-                LogSyncStatus::Started { metrics } => TopicLogSyncEvent::SyncStarted(metrics),
-                LogSyncStatus::Progress { metrics } => TopicLogSyncEvent::SyncStatus(metrics),
-                LogSyncStatus::Completed { metrics } => TopicLogSyncEvent::SyncFinished(metrics),
+            LogSyncEvent::MetricsExchanged { metrics } => TopicLogSyncEvent::SyncStarted {
+                metrics: metrics.into(),
             },
-            LogSyncEvent::Data(operation) => TopicLogSyncEvent::Operation(operation),
+            LogSyncEvent::OperationReceived { operation, metrics } => {
+                TopicLogSyncEvent::OperationReceived {
+                    operation,
+                    metrics: metrics.into(),
+                }
+            }
         }
     }
 }
@@ -537,7 +603,6 @@ where
             .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")))
     }
 }
-
 #[cfg(test)]
 pub mod tests {
     use std::collections::BTreeMap;
@@ -550,12 +615,11 @@ pub mod tests {
     use crate::ToSync;
     use crate::protocols::{LogSyncError, LogSyncMessage};
     use crate::test_utils::{
-        Peer, TestTopicSyncEvent, TestTopicSyncMessage, run_protocol, run_protocol_uni,
-        setup_logging,
+        Peer, TestTopicSyncMessage, run_protocol, run_protocol_uni, setup_logging,
     };
     use crate::traits::Protocol;
 
-    use super::{TopicLogSyncError, TopicLogSyncEvent, TopicLogSyncLiveMetrics};
+    use super::{TopicLogSyncError, TopicLogSyncEvent};
 
     #[tokio::test]
     async fn sync_session_no_operations() {
@@ -565,7 +629,7 @@ pub mod tests {
 
         let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
-        let remote_rx = run_protocol_uni(
+        let (_, remote_rx) = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
@@ -577,21 +641,16 @@ pub mod tests {
 
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStarted(_)
+            TopicLogSyncEvent::SyncStarted { .. }
         );
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SyncFinished { .. }
         );
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SessionFinished { .. }
         );
-        assert_matches!(
-            events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncFinished(_)
-        );
-        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 2);
@@ -628,7 +687,7 @@ pub mod tests {
 
         let (session, mut events_rx, _) = peer.topic_sync_protocol(topic.clone(), false);
 
-        let remote_rx = run_protocol_uni(
+        let (_, remote_rx) = run_protocol_uni(
             session,
             &[
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
@@ -640,21 +699,16 @@ pub mod tests {
 
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStarted(_)
+            TopicLogSyncEvent::SyncStarted { .. }
         );
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SyncFinished { .. }
         );
         assert_matches!(
             events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SessionFinished { .. }
         );
-        assert_matches!(
-            events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncFinished(_)
-        );
-        assert_matches!(events_rx.recv().await.unwrap(), TestTopicSyncEvent::Success);
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 6);
@@ -685,25 +739,25 @@ pub mod tests {
                 }
                 2 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
-                    header,
-                    Some(body),
-                )) => (header, body));
+                        header,
+                        Some(body),
+                    )) => (header, body));
                     assert_eq!(header, header_bytes_0);
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 3 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
-                    header,
-                    Some(body),
-                )) => (header, body));
+                        header,
+                        Some(body),
+                    )) => (header, body));
                     assert_eq!(header, header_bytes_1);
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 4 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
-                    header,
-                    Some(body),
-                )) => (header, body));
+                        header,
+                        Some(body),
+                    )) => (header, body));
                     assert_eq!(header, header_bytes_2);
                     assert_eq!(Body::new(&body_inner), body)
                 }
@@ -744,63 +798,56 @@ pub mod tests {
         // Assert peer a events.
         assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStarted(_)
+            TopicLogSyncEvent::SyncStarted { .. }
         );
         assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SyncFinished { .. }
         );
         assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
-        );
-        assert_matches!(
-            peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncFinished(_)
-        );
-        assert_matches!(
-            peer_a_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Success
+            TopicLogSyncEvent::SessionFinished { .. }
         );
 
         // Assert peer b events.
         assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStarted(_)
-        );
-        assert_matches!(
-            peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
-        );
-        assert_matches!(
-            peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncStatus(_)
+            TopicLogSyncEvent::SyncStarted { .. }
         );
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+            TopicLogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
+            }
         );
         assert_eq!(header, header_0);
         assert_eq!(body_inner.unwrap(), body);
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+            TopicLogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
+            }
         );
         assert_eq!(header, header_1);
         assert_eq!(body_inner.unwrap(), body);
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Operation (operation) => {let Operation {header, body, ..} = *operation; (header, body)}
+            TopicLogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
+            }
         );
         assert_eq!(header, header_2);
         assert_eq!(body_inner.unwrap(), body);
         assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::SyncFinished(_)
+            TopicLogSyncEvent::SyncFinished { .. }
         );
         assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
-            TestTopicSyncEvent::Success
+            TopicLogSyncEvent::SessionFinished { .. }
         );
     }
 
@@ -842,7 +889,7 @@ pub mod tests {
         live_mode_tx.send(ToSync::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
-        let remote_rx = run_protocol_uni(
+        let (_, remote_rx) = run_protocol_uni(
             protocol,
             &[
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
@@ -862,49 +909,34 @@ pub mod tests {
         .await
         .unwrap();
 
-        for index in 0..=8 {
-            let event = events_rx.recv().await.unwrap();
-            match index {
-                0 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));
-                }
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    assert_matches!(event, TestTopicSyncEvent::Operation(_));
-                }
-                4 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_));
-                }
-                5 => {
-                    assert_matches!(event, TestTopicSyncEvent::LiveModeStarted);
-                }
-                6 => {
-                    assert_matches!(event, TestTopicSyncEvent::Operation(_));
-                }
-                7 => {
-                    let metrics = assert_matches!(event, TestTopicSyncEvent::LiveModeFinished(metrics) => metrics);
-                    let TopicLogSyncLiveMetrics {
-                        operations_received,
-                        operations_sent,
-                        bytes_received,
-                        bytes_sent,
-                    } = metrics;
-                    assert_eq!(operations_received, 2);
-                    assert_eq!(operations_sent, 1);
-                    assert_eq!(bytes_received, expected_bytes_received);
-                    assert_eq!(bytes_sent, expected_bytes_sent);
-                }
-                8 => {
-                    assert_matches!(event, TestTopicSyncEvent::Success)
-                }
-                _ => panic!(),
-            };
-        }
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SyncStarted { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::OperationReceived { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SyncFinished { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::LiveModeStarted
+        );
+        let metrics = assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::OperationReceived { metrics, .. } => metrics
+        );
+        assert_eq!(metrics.received_operations(), 2);
+        assert_eq!(metrics.sent_operations(), 1);
+        assert_eq!(metrics.received_bytes(), expected_bytes_received);
+        assert_eq!(metrics.sent_bytes(), expected_bytes_sent);
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SessionFinished { .. }
+        );
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 4);
@@ -916,9 +948,9 @@ pub mod tests {
                 }
                 2 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Live(
-                    header,
-                    Some(body)
-                ) => (header, body));
+                        header,
+                        Some(body)
+                    ) => (header, body));
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
                 }
@@ -979,7 +1011,7 @@ pub mod tests {
         live_mode_tx.send(ToSync::Close).await.unwrap();
 
         let total_bytes = header_bytes_0.len() + body.to_bytes().len();
-        let remote_rx = run_protocol_uni(
+        let (_, remote_rx) = run_protocol_uni(
             protocol,
             &[
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
@@ -1003,49 +1035,34 @@ pub mod tests {
         .await
         .unwrap();
 
-        for index in 0..=8 {
-            let event = events_rx.recv().await.unwrap();
-            match index {
-                0 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStarted(_));
-                }
-                1 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                2 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncStatus(_));
-                }
-                3 => {
-                    assert_matches!(event, TestTopicSyncEvent::Operation(_));
-                }
-                4 => {
-                    assert_matches!(event, TestTopicSyncEvent::SyncFinished(_));
-                }
-                5 => {
-                    assert_matches!(event, TestTopicSyncEvent::LiveModeStarted);
-                }
-                6 => {
-                    assert_matches!(event, TestTopicSyncEvent::Operation(_));
-                }
-                7 => {
-                    let metrics = assert_matches!(event, TestTopicSyncEvent::LiveModeFinished(metrics) => metrics);
-                    let TopicLogSyncLiveMetrics {
-                        operations_received,
-                        operations_sent,
-                        bytes_received,
-                        bytes_sent,
-                    } = metrics;
-                    assert_eq!(operations_received, 2);
-                    assert_eq!(operations_sent, 1);
-                    assert_eq!(bytes_received, expected_bytes_received);
-                    assert_eq!(bytes_sent, expected_bytes_sent);
-                }
-                8 => {
-                    assert_matches!(event, TestTopicSyncEvent::Success)
-                }
-                _ => panic!(),
-            };
-        }
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SyncStarted { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::OperationReceived { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SyncFinished { .. }
+        );
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::LiveModeStarted
+        );
+        let metrics = assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::OperationReceived { metrics, .. } => metrics
+        );
+        assert_eq!(metrics.received_operations(), 2);
+        assert_eq!(metrics.sent_operations(), 1);
+        assert_eq!(metrics.received_bytes(), expected_bytes_received);
+        assert_eq!(metrics.sent_bytes(), expected_bytes_sent);
+        assert_matches!(
+            events_rx.recv().await.unwrap(),
+            TopicLogSyncEvent::SessionFinished { .. }
+        );
 
         let messages = remote_rx.collect::<Vec<_>>().await;
         assert_eq!(messages.len(), 4);
