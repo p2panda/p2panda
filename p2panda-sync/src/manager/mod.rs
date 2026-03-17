@@ -226,7 +226,6 @@ pub enum TopicSyncManagerError {
     #[error(transparent)]
     Send(#[from] mpsc::SendError),
 }
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -240,7 +239,7 @@ mod tests {
 
     use crate::protocols::TopicLogSyncEvent;
     use crate::test_utils::{
-        Peer, TestTopicSyncEvent, TestTopicSyncManager, drain_stream, run_protocol, setup_logging,
+        Peer, TestTopicSyncManager, drain_stream, run_protocol, setup_logging,
     };
     use crate::traits::{Manager, Protocol};
     use crate::{FromSync, SessionConfig, ToSync};
@@ -276,7 +275,6 @@ mod tests {
         peer_b.associate(&topic, &logs).await;
         let mut peer_b_manager = TestTopicSyncManager::new(peer_b.store.clone());
 
-        // Instantiate sync session for Peer A.
         let config = SessionConfig {
             topic,
             remote: peer_b.id(),
@@ -287,10 +285,8 @@ mod tests {
         let mut event_stream_a = peer_a_manager.subscribe();
         let mut event_stream_b = peer_b_manager.subscribe();
 
-        // Instantiate sync session for Peer A.
+        // Instantiate sync sessions.
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
-
-        // Instantiate sync session for Peer B.
         let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
 
         // Get a handle to Peer A sync session.
@@ -312,56 +308,42 @@ mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert Peer A's events.
-        for index in 0..=7 {
+        for index in 0..=4 {
             let event = event_stream_a.next().await.unwrap();
             assert_eq!(event.session_id(), 0);
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::SyncStarted(_),
+                        event: TopicLogSyncEvent::SyncStarted { .. },
                         ..
                     }
                 ),
-                1 | 2 => assert_matches!(
+                1 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::SyncStatus(_),
+                        event: TopicLogSyncEvent::OperationReceived { .. },
+                        ..
+                    }
+                ),
+                2 => assert_matches!(
+                    event,
+                    FromSync {
+                        event: TopicLogSyncEvent::SyncFinished { .. },
                         ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::Operation(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
                 4 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::SyncFinished(_),
-                        ..
-                    }
-                ),
-                5 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::LiveModeStarted,
-                        ..
-                    }
-                ),
-                6 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::LiveModeFinished(_),
-                        ..
-                    }
-                ),
-                7 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::Success,
+                        event: TopicLogSyncEvent::SessionFinished { .. },
                         ..
                     }
                 ),
@@ -370,30 +352,37 @@ mod tests {
         }
 
         // Assert Peer B's events.
-        for index in 0..=8 {
+        for index in 0..=5 {
             let event = event_stream_b.next().await.unwrap();
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncStarted(_),
+                        event: TopicLogSyncEvent::SyncStarted { .. },
                         ..
                     }
                 ),
-                1 | 2 => assert_matches!(
+                1 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncStatus(_),
+                        event: TopicLogSyncEvent::OperationReceived { .. },
+                        ..
+                    }
+                ),
+                2 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::SyncFinished { .. },
                         ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -401,36 +390,14 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncFinished(_),
+                        event: TopicLogSyncEvent::OperationReceived { .. },
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::LiveModeStarted,
-                        ..
-                    }
-                ),
-                6 => assert_matches!(
-                    event,
-                    FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
-                        ..
-                    }
-                ),
-                7 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::LiveModeFinished(_),
-                        ..
-                    }
-                ),
-                8 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::Success,
+                        event: TopicLogSyncEvent::SessionFinished { .. },
                         ..
                     }
                 ),
@@ -449,7 +416,6 @@ mod tests {
         const SESSION_BA: u64 = 2;
         const SESSION_CA: u64 = 3;
 
-        // Shared topic
         let topic = Topic::new();
 
         // Peer A
@@ -476,7 +442,7 @@ mod tests {
         peer_c.associate(&topic, &logs).await;
         let mut manager_c = TestTopicSyncManager::new(peer_c.store.clone());
 
-        // Session A -> B (A initiates)
+        // Session A -> B
         let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_b.id(),
@@ -486,7 +452,7 @@ mod tests {
         config.remote = peer_a.id();
         let session_b = manager_b.session(SESSION_BA, &config).await;
 
-        // Session A -> C (A initiates)
+        // Session A -> C
         let mut config = SessionConfig {
             topic: topic.clone(),
             remote: peer_c.id(),
@@ -500,7 +466,7 @@ mod tests {
         let mut event_stream_b = manager_b.subscribe();
         let mut event_stream_c = manager_c.subscribe();
 
-        // Run both protocols concurrently
+        // Run both protocols concurrently.
         {
             let (mut local_message_tx, local_message_rx) = mpsc::channel(128);
             let (mut remote_message_tx, remote_message_rx) = mpsc::channel(128);
@@ -539,7 +505,7 @@ mod tests {
             });
         }
 
-        // Send live-mode messages from all peers
+        // Send live-mode messages from all peers.
         let mut handle_ab = manager_a.session_handle(SESSION_AB).await.unwrap();
         let mut handle_ac = manager_a.session_handle(SESSION_AC).await.unwrap();
         let mut handle_ba = manager_b.session_handle(SESSION_BA).await.unwrap();
@@ -584,17 +550,17 @@ mod tests {
             loop {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
-                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                        if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
                             operations_a.push(*operation.clone());
                         }
                     }
                     Some(event) = event_stream_b.next() => {
-                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                        if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
                             operations_b.push(*operation.clone());
                         }
                     }
                     Some(event) = event_stream_c.next() => {
-                        if let TestTopicSyncEvent::Operation(operation) = event.event() {
+                        if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
                             operations_c.push(*operation.clone());
                         }
                     }
@@ -604,8 +570,8 @@ mod tests {
         })
         .await;
 
-        // All peers received 4 messages, B & C received each other messages via A, and nobody
-        // received their own messages.
+        // All peers received 4 messages; B & C received each other's messages via A,
+        // and nobody received their own messages.
         assert_eq!(operations_a.len(), 4);
         assert_eq!(operations_b.len(), 4);
         assert_eq!(operations_c.len(), 4);
@@ -663,7 +629,6 @@ mod tests {
         peer_b.associate(&topic, &logs).await;
         let mut peer_b_manager = TestTopicSyncManager::new(peer_b.store.clone());
 
-        // Instantiate sync session for Peer A.
         let config = SessionConfig {
             topic,
             remote: peer_b.id(),
@@ -672,7 +637,6 @@ mod tests {
 
         let peer_a_session = peer_a_manager.session(SESSION_ID, &config).await;
 
-        // Instantiate sync session for Peer B.
         let event_stream = peer_b_manager.subscribe();
         let peer_b_session = peer_b_manager.session(SESSION_ID, &config).await;
 
@@ -696,30 +660,37 @@ mod tests {
 
         // Assert Peer B's events.
         let events = drain_stream(event_stream).await;
-        assert_eq!(events.len(), 9);
+        assert_eq!(events.len(), 6);
         for (index, event) in events.into_iter().enumerate() {
             match index {
                 0 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncStarted(_),
+                        event: TopicLogSyncEvent::SyncStarted { .. },
                         ..
                     }
                 ),
-                1 | 2 => assert_matches!(
+                1 => assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncStatus(_),
+                        event: TopicLogSyncEvent::OperationReceived { .. },
+                        ..
+                    }
+                ),
+                2 => assert_matches!(
+                    event,
+                    FromSync {
+                        session_id: 0,
+                        event: TopicLogSyncEvent::SyncFinished { .. },
                         ..
                     }
                 ),
                 3 => assert_matches!(
                     event,
                     FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
+                        event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
@@ -727,36 +698,14 @@ mod tests {
                     event,
                     FromSync {
                         session_id: 0,
-                        event: TopicLogSyncEvent::SyncFinished(_),
+                        event: TopicLogSyncEvent::OperationReceived { .. },
                         ..
                     }
                 ),
                 5 => assert_matches!(
                     event,
                     FromSync {
-                        event: TopicLogSyncEvent::LiveModeStarted,
-                        ..
-                    }
-                ),
-                6 => assert_matches!(
-                    event,
-                    FromSync {
-                        session_id: 0,
-                        event: TopicLogSyncEvent::Operation(_),
-                        ..
-                    }
-                ),
-                7 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::LiveModeFinished(_),
-                        ..
-                    }
-                ),
-                8 => assert_matches!(
-                    event,
-                    FromSync {
-                        event: TopicLogSyncEvent::Success,
+                        event: TopicLogSyncEvent::SessionFinished { .. },
                         ..
                     }
                 ),

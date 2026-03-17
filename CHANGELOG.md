@@ -21,6 +21,7 @@ Highlights are marked with a pancake 🥞
 - Replay all operations for a topic based on offset [#1064](https://github.com/p2panda/p2panda/pull/1064)
 - Log-prefix pruning processor [#1073](https://github.com/p2panda/p2panda/pull/1073)
 - Process local operations [#1080](https://github.com/p2panda/p2panda/pull/1080)
+- Process and aggregate metrics for sync events [#1085](https://github.com/p2panda/p2panda/pull/1085)
 
 ### Changed
 

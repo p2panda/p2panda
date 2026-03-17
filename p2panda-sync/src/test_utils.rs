@@ -154,7 +154,10 @@ pub fn setup_logging() {
 }
 
 /// Run a pair of topic sync sessions.
-pub async fn run_protocol<P>(session_local: P, session_remote: P) -> Result<(), P::Error>
+pub async fn run_protocol<P>(
+    session_local: P,
+    session_remote: P,
+) -> Result<(P::Output, P::Output), P::Error>
 where
     P: Protocol + Send + 'static,
 {
@@ -168,16 +171,16 @@ where
         session_remote.run(&mut remote_message_tx, &mut local_message_rx)
     );
 
-    local_result?;
-    remote_result?;
-    Ok(())
+    let local_output = local_result?;
+    let remote_output = remote_result?;
+    Ok((local_output, remote_output))
 }
 
 /// Consume a vector of messages in a single topic sync session.
 pub async fn run_protocol_uni<P>(
     protocol: P,
     messages: &[P::Message],
-) -> Result<mpsc::Receiver<P::Message>, P::Error>
+) -> Result<(P::Output, mpsc::Receiver<P::Message>), P::Error>
 where
     P: Protocol,
     P::Message: Clone,
@@ -190,11 +193,11 @@ where
         remote_message_tx.send(message.to_owned()).await.unwrap();
     }
 
-    protocol
+    let result = protocol
         .run(&mut local_message_tx, &mut local_message_rx)
         .await?;
 
-    Ok(remote_message_rx)
+    Ok((result, remote_message_rx))
 }
 
 pub async fn drain_stream<S>(mut stream: S) -> Vec<S::Item>

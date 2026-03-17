@@ -30,24 +30,21 @@ enum State<L> {
     Start,
 
     /// Calculate local log heights and send Have message to remote.
-    SendHave { metrics: LogSyncMetrics },
+    SendHave,
 
     /// Receive have message from remote and calculate operation diff.
-    ReceiveHave {
-        local: LogHeights<PublicKey, L>,
-        metrics: LogSyncMetrics,
-    },
+    ReceiveHave { local: LogHeights<PublicKey, L> },
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSync {
         remote_needs: LogRanges<PublicKey, L>,
-        metrics: LogSyncMetrics,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
         remote_needs: LogRanges<PublicKey, L>,
-        metrics: LogSyncMetrics,
+        outbound_operations: u64,
+        outbound_bytes: u64,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
@@ -116,26 +113,16 @@ where
 
         let metrics = loop {
             match self.state {
-                State::Start => {
-                    let metrics = LogSyncMetrics::default();
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(LogSyncStatus::Started {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .map_err(|_| LogSyncError::BroadcastSend)?;
-                    self.state = State::SendHave { metrics };
-                }
-                State::SendHave { metrics } => {
+                State::Start => self.state = State::SendHave,
+                State::SendHave => {
                     let local = get_log_heights(&self.store, &self.logs).await?;
                     sink.send(LogSyncMessage::<L>::Have(local.clone()))
                         .await
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
-                    self.state = State::ReceiveHave { local, metrics };
+
+                    self.state = State::ReceiveHave { local };
                 }
-                State::ReceiveHave { local, mut metrics } => {
+                State::ReceiveHave { local } => {
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
@@ -147,41 +134,29 @@ where
 
                     let remote_needs = compare(&local, &remote);
 
-                    let mut operation_count = 0;
-                    let mut byte_count = 0;
+                    self.state = State::SendPreSync { remote_needs };
+                }
+                State::SendPreSync { remote_needs } => {
+                    let mut outbound_operations = 0;
+                    let mut outbound_bytes = 0;
                     for (public_key, log_range) in remote_needs.iter() {
                         for (log_id, (after, until)) in log_range.iter() {
-                            if let Some((inner_operation_count, inner_byte_count)) = self
+                            if let Some((inner_outbound_operations, inner_outbound_bytes)) = self
                                 .store
                                 .get_log_size(public_key, log_id, *after, *until)
                                 .await
                                 .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
                             {
-                                operation_count += inner_operation_count;
-                                byte_count += inner_byte_count;
+                                outbound_operations += inner_outbound_operations;
+                                outbound_bytes += inner_outbound_bytes;
                             };
                         }
                     }
 
-                    metrics.total_operations_local = Some(operation_count);
-                    metrics.total_bytes_local = Some(byte_count);
-
-                    self.state = State::SendPreSync {
-                        remote_needs,
-                        metrics,
-                    };
-                }
-                State::SendPreSync {
-                    remote_needs,
-                    metrics,
-                } => {
-                    let total_operations = metrics.total_operations_local.unwrap();
-                    let total_bytes = metrics.total_bytes_local.unwrap();
-
-                    if total_operations > 0 {
+                    if outbound_bytes > 0 {
                         sink.send(LogSyncMessage::PreSync {
-                            total_bytes,
-                            total_operations,
+                            total_operations: outbound_operations,
+                            total_bytes: outbound_bytes,
                         })
                         .await
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
@@ -192,23 +167,16 @@ where
                         sync_done_sent = true;
                     }
 
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(LogSyncStatus::Progress {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .map_err(|_| LogSyncError::BroadcastSend)?;
-
                     self.state = State::ReceivePreSyncOrDone {
                         remote_needs,
-                        metrics,
+                        outbound_operations,
+                        outbound_bytes,
                     };
                 }
                 State::ReceivePreSyncOrDone {
                     remote_needs,
-                    mut metrics,
+                    outbound_operations,
+                    outbound_bytes,
                 } => {
                     let Some(message) = stream.next().await else {
                         return Err(LogSyncError::UnexpectedStreamClosure);
@@ -216,36 +184,44 @@ where
                     let message =
                         message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
-                    metrics.total_bytes_remote = Some(0);
-                    metrics.total_operations_remote = Some(0);
-
-                    match message {
+                    let (inbound_operations, inbound_bytes) = match message {
                         LogSyncMessage::PreSync {
                             total_operations,
                             total_bytes,
-                        } => {
-                            metrics.total_bytes_remote = Some(total_bytes);
-                            metrics.total_operations_remote = Some(total_operations);
+                        } => (total_operations, total_bytes),
+                        LogSyncMessage::Done => {
+                            sync_done_received = true;
+                            (0, 0)
                         }
-                        LogSyncMessage::Done => sync_done_received = true,
                         message => {
                             return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                         }
-                    }
+                    };
 
                     debug!(
-                        local_ops = metrics.total_operations_local.unwrap_or_default(),
-                        remote_ops = metrics.total_operations_remote.unwrap_or_default(),
-                        local_bytes = metrics.total_bytes_local.unwrap_or_default(),
-                        remote_bytes = metrics.total_bytes_remote.unwrap_or_default(),
-                        "sync metrics received",
+                        local_ops = outbound_operations,
+                        remote_ops = inbound_operations,
+                        local_bytes = outbound_bytes,
+                        remote_bytes = inbound_bytes,
+                        "sync metrics exchanged",
                     );
+
+                    let metrics = LogSyncMetrics {
+                        outbound_operations,
+                        outbound_bytes,
+                        inbound_operations,
+                        inbound_bytes,
+                        sent_operations: 0,
+                        sent_bytes: 0,
+                        received_operations: 0,
+                        received_bytes: 0,
+                    };
 
                     self.event_tx
                         .send(
-                            LogSyncEvent::Status(LogSyncStatus::Progress {
+                            LogSyncEvent::MetricsExchanged {
                                 metrics: metrics.clone(),
-                            })
+                            }
                             .into(),
                         )
                         .map_err(|_| LogSyncError::BroadcastSend)?;
@@ -272,11 +248,11 @@ where
 
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
-                                        metrics.total_bytes_received += {
+                                        metrics.received_bytes += {
                                             header.len()
                                                 + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
                                         } as u64;
-                                        metrics.total_operations_received += 1;
+                                        metrics.received_operations += 1;
 
                                         let header: Header<E> = decode_cbor(&header[..])?;
                                         let body = body.map(|ref bytes| Body::new(bytes));
@@ -287,19 +263,15 @@ where
                                         trace!(
                                             phase = "sync",
                                             id = ?header.hash().fmt_short(),
-                                            received_ops = metrics.total_operations_received,
-                                            received_bytes = metrics.total_bytes_received,
+                                            received_ops = metrics.received_operations,
+                                            received_bytes = metrics.received_bytes,
                                             "received operation"
                                         );
 
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(
-                                                LogSyncEvent::Data(Box::new(Operation {
-                                                    hash: header.hash(),
-                                                    header,
-                                                    body,
-                                                }))
+                                                LogSyncEvent::OperationReceived{operation:Box::new(Operation{hash:header.hash(),header,body,}), metrics: metrics.clone() }
                                                 .into(),
                                             )
                                             .map_err(|_| LogSyncError::BroadcastSend)?;
@@ -340,10 +312,10 @@ where
                                         let body = operation.body;
                                         let hash = operation.hash;
 
-                                        metrics.total_bytes_sent += { header_bytes.len() +
+                                        metrics.sent_bytes += { header_bytes.len() +
                                             body.as_ref().map(|body|
                                         body.to_bytes().len()).unwrap_or_default() } as u64;
-                                        metrics.total_operations_sent += 1;
+                                        metrics.sent_operations += 1;
 
                                         trace!(
                                             phase = "sync",
@@ -351,8 +323,8 @@ where
                                             log_id = ?log_id,
                                             seq_num = header.seq_num,
                                             id = %hash.fmt_short(),
-                                            sent_ops = metrics.total_operations_sent,
-                                            sent_bytes = metrics.total_bytes_sent,
+                                            sent_ops = metrics.sent_operations,
+                                            sent_bytes = metrics.sent_bytes,
                                             "send operation",
                                         );
 
@@ -393,14 +365,6 @@ where
                     self.state = State::End { metrics };
                 }
                 State::End { metrics } => {
-                    self.event_tx
-                        .send(
-                            LogSyncEvent::Status(LogSyncStatus::Completed {
-                                metrics: metrics.clone(),
-                            })
-                            .into(),
-                        )
-                        .map_err(|_| LogSyncError::BroadcastSend)?;
                     break metrics;
                 }
             }
@@ -470,29 +434,30 @@ where
 /// Events emitted from log sync sessions.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LogSyncEvent<E> {
-    Status(LogSyncStatus),
-    Data(Box<Operation<E>>),
+    /// We have calculated and sent the estimated bytes and operations to be sent during this sync
+    /// session and received the remotes' estimates.
+    ///
+    /// This is the first event to occur and will only be sent once.
+    MetricsExchanged { metrics: LogSyncMetrics },
+
+    /// An operation has been received from the remote.
+    OperationReceived {
+        operation: Box<Operation<E>>,
+        metrics: LogSyncMetrics,
+    },
 }
 
 /// Sync metrics emitted in event messages.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogSyncMetrics {
-    pub total_operations_local: Option<u64>,
-    pub total_operations_remote: Option<u64>,
-    pub total_operations_received: u64,
-    pub total_operations_sent: u64,
-    pub total_bytes_local: Option<u64>,
-    pub total_bytes_remote: Option<u64>,
-    pub total_bytes_received: u64,
-    pub total_bytes_sent: u64,
-}
-
-/// Sync status variants sent on log sync events.
-#[derive(Clone, Debug, PartialEq)]
-pub enum LogSyncStatus {
-    Started { metrics: LogSyncMetrics },
-    Progress { metrics: LogSyncMetrics },
-    Completed { metrics: LogSyncMetrics },
+    pub outbound_operations: u64,
+    pub outbound_bytes: u64,
+    pub inbound_operations: u64,
+    pub inbound_bytes: u64,
+    pub sent_operations: u64,
+    pub sent_bytes: u64,
+    pub received_operations: u64,
+    pub received_bytes: u64,
 }
 
 /// Protocol error types.
@@ -552,9 +517,7 @@ mod tests {
     use p2panda_store::operations::OperationStore;
     use p2panda_store::{SqliteStore, tx_unwrap};
 
-    use crate::protocols::log_sync::{
-        LogSyncError, LogSyncEvent, LogSyncMetrics, LogSyncStatus, Logs, Operation,
-    };
+    use crate::protocols::log_sync::{LogSyncError, LogSyncEvent, Logs, Operation};
     use crate::test_utils::{
         Peer, TestLogSyncMessage, run_protocol, run_protocol_uni, setup_logging,
     };
@@ -565,7 +528,7 @@ mod tests {
         let mut peer: Peer = Peer::new(0).await;
 
         let (session, mut event_rx) = peer.log_sync_protocol(&Logs::default());
-        let remote_message_rx = run_protocol_uni(
+        let ((_, metrics), mut remote_message_rx) = run_protocol_uni(
             session,
             &[
                 TestLogSyncMessage::Have(BTreeMap::default()),
@@ -575,61 +538,27 @@ mod tests {
         .await
         .unwrap();
 
-        for index in 0..=3 {
-            let event = event_rx.recv().await.unwrap();
-            match index {
-                0 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Started { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
-                         => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, None);
-                    assert_eq!(total_bytes, None);
-                }
-                1 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Progress { metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. } })
-                         => (total_operations_local, total_bytes_local)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
-                }
-                2 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Progress { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
-                         => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
-                }
-                3 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Completed { metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. } })
-                         => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
-                }
-                _ => panic!(),
-            };
-        }
+        let event_metrics = assert_matches!(
+            event_rx.recv().await.unwrap(),
+            LogSyncEvent::MetricsExchanged { metrics } => metrics
+        );
 
-        let messages = remote_message_rx.collect::<Vec<_>>().await;
-        assert_eq!(messages.len(), 2);
-        for (index, message) in messages.into_iter().enumerate() {
-            match index {
-                0 => assert_eq!(message, TestLogSyncMessage::Have(BTreeMap::default())),
-                1 => {
-                    assert_eq!(message, TestLogSyncMessage::Done);
-                    break;
-                }
-                _ => panic!(),
-            };
-        }
+        assert_eq!(metrics.outbound_operations, 0);
+        assert_eq!(metrics.outbound_bytes, 0);
+        assert_eq!(metrics.inbound_operations, 0);
+        assert_eq!(metrics.inbound_bytes, 0);
+
+        assert_eq!(event_metrics, metrics);
+
+        assert_eq!(
+            remote_message_rx.recv().await.unwrap(),
+            TestLogSyncMessage::Have(BTreeMap::default())
+        );
+
+        assert_eq!(
+            remote_message_rx.recv().await.unwrap(),
+            TestLogSyncMessage::Done
+        );
     }
 
     #[tokio::test]
@@ -646,7 +575,7 @@ mod tests {
         logs.insert(peer.id(), vec![log_id]);
 
         let (session, mut event_rx) = peer.log_sync_protocol(&logs);
-        let remote_message_rx = run_protocol_uni(
+        let ((_, final_metrics), remote_message_rx) = run_protocol_uni(
             session,
             &[
                 TestLogSyncMessage::Have(BTreeMap::default()),
@@ -663,95 +592,60 @@ mod tests {
             + header_2.payload_size
             + header_bytes_2.len() as u64;
 
-        for index in 0..=3 {
-            let event = event_rx.recv().await.unwrap();
-            match index {
-                0 => {
-                    assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. }));
-                }
-                1 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Progress {
-                            metrics: LogSyncMetrics { total_operations_local, total_bytes_local, .. }
-                        }) => (total_operations_local, total_bytes_local)
-                    );
-                    assert_eq!(total_operations, Some(3));
+        let metrics = assert_matches!(
+            event_rx.recv().await.unwrap(),
+            LogSyncEvent::MetricsExchanged { metrics } => metrics
+        );
 
-                    assert_eq!(total_bytes, Some(expected_bytes));
-                }
-                2 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Progress {
-                            metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
-                        }) => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
-                }
-                3 => {
-                    let (total_operations, total_bytes) = assert_matches!(
-                        event,
-                        LogSyncEvent::Status(LogSyncStatus::Completed {
-                            metrics: LogSyncMetrics { total_operations_remote, total_bytes_remote, .. }
-                        }) => (total_operations_remote, total_bytes_remote)
-                    );
-                    assert_eq!(total_operations, Some(0));
-                    assert_eq!(total_bytes, Some(0));
-                }
-                _ => panic!(),
-            };
-        }
+        assert_eq!(metrics.outbound_operations, 3);
+        assert_eq!(metrics.outbound_bytes, expected_bytes);
+        assert_eq!(metrics.inbound_operations, 0);
+        assert_eq!(metrics.inbound_bytes, 0);
+
+        assert_eq!(final_metrics.sent_operations, 3);
+        assert_eq!(final_metrics.sent_bytes, expected_bytes);
+        assert_eq!(final_metrics.received_operations, 0);
+        assert_eq!(final_metrics.received_bytes, 0);
 
         let messages = remote_message_rx.collect::<Vec<_>>().await;
+
         assert_eq!(messages.len(), 6);
-        for (index, message) in messages.into_iter().enumerate() {
-            match index {
-                0 => assert_eq!(
-                    message,
-                    TestLogSyncMessage::Have(BTreeMap::from([(
-                        peer.id(),
-                        BTreeMap::from([(0, 2)])
-                    )]))
-                ),
-                1 => assert_eq!(
-                    message,
-                    TestLogSyncMessage::PreSync {
-                        total_operations: 3,
-                        total_bytes: expected_bytes
-                    }
-                ),
-                2 => {
-                    let (header, body_inner) = assert_matches!(message, TestLogSyncMessage::Operation(
-                        header,
-                        Some(body),
-                    ) => (header, body));
-                    assert_eq!(header, header_bytes_0);
-                    assert_eq!(Body::new(&body_inner), body)
-                }
-                3 => {
-                    let (header, body_inner) = assert_matches!(message, TestLogSyncMessage::Operation(
-                        header,
-                        Some(body),
-                    ) => (header, body));
-                    assert_eq!(header, header_bytes_1);
-                    assert_eq!(Body::new(&body_inner), body)
-                }
-                4 => {
-                    let (header, body_inner) = assert_matches!(message, TestLogSyncMessage::Operation(
-                        header,
-                        Some(body),
-                    ) => (header, body));
-                    assert_eq!(header, header_bytes_2);
-                    assert_eq!(Body::new(&body_inner), body)
-                }
-                5 => {
-                    assert_eq!(message, TestLogSyncMessage::Done);
-                }
-                _ => panic!(),
-            };
-        }
+
+        assert_eq!(
+            messages[0],
+            TestLogSyncMessage::Have(BTreeMap::from([(peer.id(), BTreeMap::from([(0, 2)]))]))
+        );
+
+        assert_eq!(
+            messages[1],
+            TestLogSyncMessage::PreSync {
+                total_operations: 3,
+                total_bytes: expected_bytes
+            }
+        );
+
+        let (header, body_inner) = assert_matches!(
+            &messages[2],
+            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
+        );
+        assert_eq!(header, header_bytes_0);
+        assert_eq!(Body::new(&body_inner), body);
+
+        let (header, body_inner) = assert_matches!(
+            &messages[3],
+            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
+        );
+        assert_eq!(header, header_bytes_1);
+        assert_eq!(Body::new(&body_inner), body);
+
+        let (header, body_inner) = assert_matches!(
+            &messages[4],
+            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
+        );
+        assert_eq!(header, header_bytes_2);
+        assert_eq!(Body::new(&body_inner), body);
+
+        assert_eq!(messages[5], TestLogSyncMessage::Done);
     }
 
     #[tokio::test]
@@ -779,81 +673,74 @@ mod tests {
         let (a_session, mut peer_a_event_rx) = peer_a.log_sync_protocol(&logs);
         let (b_session, mut peer_b_event_rx) = peer_b.log_sync_protocol(&logs);
 
-        run_protocol(a_session, b_session).await.unwrap();
+        let ((_, local_metrics), (_, remote_metrics)) =
+            run_protocol(a_session, b_session).await.unwrap();
 
-        for index in 0..=5 {
-            let event = peer_a_event_rx.recv().await.unwrap();
-            match index {
-                0 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. })),
-                1 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
-                2 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
-                3 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_b0);
-                    assert_eq!(body_inner.unwrap(), body_b);
-                }
-                4 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_b1);
-                    assert_eq!(body_inner.unwrap(), body_b);
-                }
-                5 => {
-                    assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Completed { .. }));
-                    break;
-                }
-                _ => panic!(),
+        assert_matches!(
+            peer_a_event_rx.recv().await.unwrap(),
+            LogSyncEvent::MetricsExchanged { .. }
+        );
+
+        let (header, body_inner) = assert_matches!(
+            peer_a_event_rx.recv().await.unwrap(),
+            LogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
             }
-        }
+        );
+        assert_eq!(header, header_b0);
+        assert_eq!(body_inner.unwrap(), body_b);
 
-        for index in 0..=5 {
-            let event = peer_b_event_rx.recv().await.unwrap();
-            match index {
-                0 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Started { .. })),
-                1 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
-                2 => assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Progress { .. })),
-                3 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_a0);
-                    assert_eq!(body_inner.unwrap(), body_a);
-                }
-                4 => {
-                    let (header, body_inner) = assert_matches!(
-                        event,
-                        LogSyncEvent::Data(operation) => {let Operation {header, body, ..} = *operation; (header, body)}
-                    );
-                    assert_eq!(header, header_a1);
-                    assert_eq!(body_inner.unwrap(), body_a);
-                }
-                5 => {
-                    let metrics = assert_matches!(event, LogSyncEvent::Status(LogSyncStatus::Completed { metrics }) => metrics);
-                    let LogSyncMetrics {
-                        total_operations_local,
-                        total_operations_remote,
-                        total_operations_received,
-                        total_operations_sent,
-                        total_bytes_local,
-                        total_bytes_remote,
-                        total_bytes_received,
-                        total_bytes_sent,
-                    } = metrics;
-
-                    assert_eq!(total_operations_remote.unwrap(), total_operations_received);
-                    assert_eq!(total_bytes_remote.unwrap(), total_bytes_received);
-                    assert_eq!(total_operations_local.unwrap(), total_operations_sent);
-                    assert_eq!(total_bytes_local.unwrap(), total_bytes_sent);
-                }
-                _ => panic!(),
+        let (header, body_inner) = assert_matches!(
+            peer_a_event_rx.recv().await.unwrap(),
+            LogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
             }
-        }
+        );
+        assert_eq!(header, header_b1);
+        assert_eq!(body_inner.unwrap(), body_b);
+
+        assert_matches!(
+            peer_b_event_rx.recv().await.unwrap(),
+            LogSyncEvent::MetricsExchanged { .. }
+        );
+
+        let (header, body_inner) = assert_matches!(
+            peer_b_event_rx.recv().await.unwrap(),
+            LogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
+            }
+        );
+        assert_eq!(header, header_a0);
+        assert_eq!(body_inner.unwrap(), body_a);
+
+        let (header, body_inner) = assert_matches!(
+            peer_b_event_rx.recv().await.unwrap(),
+            LogSyncEvent::OperationReceived { operation, .. } => {
+                let Operation { header, body, .. } = *operation;
+                (header, body)
+            }
+        );
+        assert_eq!(header, header_a1);
+        assert_eq!(body_inner.unwrap(), body_a);
+
+        assert_eq!(
+            local_metrics.inbound_operations,
+            local_metrics.received_operations
+        );
+        assert_eq!(local_metrics.inbound_bytes, local_metrics.received_bytes);
+        assert_eq!(
+            local_metrics.outbound_operations,
+            local_metrics.sent_operations
+        );
+        assert_eq!(local_metrics.outbound_bytes, local_metrics.sent_bytes);
+        assert_eq!(local_metrics.outbound_bytes, remote_metrics.inbound_bytes);
+        assert_eq!(
+            local_metrics.outbound_operations,
+            remote_metrics.inbound_operations
+        );
     }
 
     #[tokio::test]
@@ -869,7 +756,6 @@ mod tests {
 
         let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
-        // Remote sends Operation without PreSync first.
         let messages = vec![
             TestLogSyncMessage::Have(BTreeMap::from([(peer.id(), BTreeMap::from([(LOG_ID, 0)]))])),
             TestLogSyncMessage::Operation(header_bytes.clone(), Some(body.to_bytes())),
@@ -881,6 +767,7 @@ mod tests {
         ];
 
         let result = run_protocol_uni(session, &messages).await;
+
         assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
@@ -894,6 +781,7 @@ mod tests {
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
+
         let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         let messages = vec![
@@ -910,6 +798,7 @@ mod tests {
         ];
 
         let result = run_protocol_uni(session, &messages).await;
+
         assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
@@ -923,22 +812,20 @@ mod tests {
         let messages = vec![TestLogSyncMessage::Done];
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(
-            matches!(result, Err(LogSyncError::UnexpectedMessage(_))),
-            "{:?}",
-            result
-        );
+        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
     async fn log_sync_unexpected_have_after_presend() {
         let mut peer = Peer::new(0).await;
         const LOG_ID: u64 = 1;
+
         let body = Body::new(b"bad have order");
         peer.create_operation(&body, LOG_ID).await;
 
         let mut logs = Logs::default();
         logs.insert(peer.id(), vec![LOG_ID]);
+
         let (session, _event_rx) = peer.log_sync_protocol(&logs);
 
         let messages = vec![
@@ -950,11 +837,12 @@ mod tests {
             TestLogSyncMessage::Have(BTreeMap::from([(
                 peer.id(),
                 BTreeMap::from([(LOG_ID, 99)]),
-            )])), // invalid here
+            )])),
             TestLogSyncMessage::Done,
         ];
 
         let result = run_protocol_uni(session, &messages).await;
+
         assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
@@ -968,22 +856,26 @@ mod tests {
 
         let body = Body::new(&[0; 1000]);
 
-        // Load up the peer with three logs.
         for _ in 0..100 {
             let _ = peer_a.create_operation(&body, 0).await;
         }
+
         for _ in 0..100 {
             let _ = peer_a.create_operation(&body, 1).await;
         }
+
         let mut to_be_pruned_log = vec![];
+
         for _ in 0..50 {
             let (header, _) = peer_c.create_operation(&body, 0).await;
             let id = header.hash();
+
             let operation = Operation {
                 hash: header.hash(),
                 header,
                 body: Some(body.clone()),
             };
+
             tx_unwrap!(
                 &peer_a.store,
                 peer_a
@@ -992,6 +884,7 @@ mod tests {
                     .await
                     .unwrap()
             );
+
             to_be_pruned_log.push(id);
         }
 
@@ -1005,7 +898,7 @@ mod tests {
         let _peer_b_event_tx_clone = b_session.event_tx.clone();
 
         // Spawn a task to run the sync session.
-        {
+        let session_b_handle = {
             let (mut local_message_tx, local_message_rx) = mpsc::channel(512);
             let (mut remote_message_tx, remote_message_rx) = mpsc::channel(512);
             let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
@@ -1020,14 +913,14 @@ mod tests {
                 b_session
                     .run(&mut remote_message_tx, &mut local_message_rx)
                     .await
-                    .unwrap();
-            });
-        }
+                    .unwrap()
+            })
+        };
 
         loop {
             let event = peer_b_event_rx.recv().await.unwrap();
-            if let LogSyncEvent::Data(_) = event {
-                // Concurrently delete the first operation from the last log.
+
+            if let LogSyncEvent::OperationReceived { .. } = event {
                 tx_unwrap!(&peer_a.store, {
                     <SqliteStore as OperationStore<Operation<()>, Hash, ()>>::delete_operation(
                         &peer_a.store,
@@ -1041,24 +934,8 @@ mod tests {
             }
         }
 
-        loop {
-            let event = peer_b_event_rx.recv().await.unwrap();
-            if let LogSyncEvent::Status(LogSyncStatus::Completed { metrics }) = event {
-                let LogSyncMetrics {
-                    total_operations_remote,
-                    total_operations_received,
-                    ..
-                } = metrics;
-
-                // We expect all operations to be included in the total remote operations as these
-                // were calculated before pruning occurred.
-                assert_eq!(total_operations_remote.unwrap(), 250);
-
-                // One operation was not sent because it got deleted after the sync session
-                // started.
-                assert_eq!(total_operations_received, 249);
-                break;
-            }
-        }
+        let (_, metrics) = session_b_handle.await.unwrap();
+        assert_eq!(metrics.inbound_operations, 250);
+        assert_eq!(metrics.received_operations, 249);
     }
 }

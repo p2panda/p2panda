@@ -26,7 +26,6 @@ async fn e2e_log_sync() {
     let mut bob = TestNode::spawn([11; 32], None).await;
     let mut alice = TestNode::spawn([10; 32], Some(bob.node_info())).await;
 
-    // Populate Alice's and Bob's store with some test data.
     alice
         .client
         .create_operation(b"Hello from Alice", log_id)
@@ -41,14 +40,12 @@ async fn e2e_log_sync() {
         .associate(&topic, &HashMap::from([(bob.client_id(), vec![log_id])]))
         .await;
 
-    // Alice and Bob create stream for the same topic.
     let alice_handle = alice.log_sync.stream(topic, true).await.unwrap();
     let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
     let bob_handle = bob.log_sync.stream(topic, true).await.unwrap();
     let mut bob_subscription = bob_handle.subscribe().await.unwrap();
 
-    // Alice manually initiates a sync session with Bob.
     alice_handle.initiate_session(bob.node_id());
 
     // Assert Alice receives the expected events.
@@ -59,14 +56,14 @@ async fn e2e_log_sync() {
         Ok(FromSync {
             session_id: 0,
             remote,
-            event: Event::SyncStarted(_),
+            event: Event::SyncStarted { .. },
         }) if remote == bob_id
     );
     let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -74,23 +71,7 @@ async fn e2e_log_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
-            ..
-        })
-    );
-    let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::SyncFinished(_),
+            event: Event::SyncFinished { .. },
             ..
         })
     );
@@ -111,15 +92,14 @@ async fn e2e_log_sync() {
         Ok(FromSync {
             session_id: 0,
             remote,
-            event: Event::SyncStarted(_),
+            event: Event::SyncStarted { .. },
         }) if remote == alice_id
     );
-
     let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -127,23 +107,7 @@ async fn e2e_log_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
-            ..
-        })
-    );
-    let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::SyncFinished(_),
+            event: Event::SyncFinished { .. },
             ..
         })
     );
@@ -156,7 +120,7 @@ async fn e2e_log_sync() {
         })
     );
 
-    // Alice publishes "live" message.
+    // Alice publishes a live message.
     let (header, _, body) = alice
         .client
         .create_operation(b"live message from Alice", log_id)
@@ -170,12 +134,12 @@ async fn e2e_log_sync() {
         .await
         .unwrap();
 
-    // Bob receives Alice's message.
+    // Bob receives Alice's live message.
     let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::Operation(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -183,29 +147,12 @@ async fn e2e_log_sync() {
     // Drop Alice's stream to enforce closing live session with Bob.
     drop(alice_handle);
 
+    // Both peers observe a clean session close.
     let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::LiveModeFinished(_),
-            ..
-        })
-    );
-    let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Success,
-            ..
-        })
-    );
-
-    // Assert Alice's final events.
-    let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::LiveModeFinished(_),
+            event: Event::SessionFinished { .. },
             ..
         })
     );
@@ -213,7 +160,7 @@ async fn e2e_log_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::Success,
+            event: Event::SessionFinished { .. },
             ..
         })
     );
@@ -226,12 +173,10 @@ async fn e2e_three_party_sync() {
     let topic: Topic = [0; 32].into();
     let log_id = 0;
 
-    // Spawn nodes.
     let mut bob = TestNode::spawn([30; 32], None).await;
     let mut alice = TestNode::spawn([31; 32], Some(bob.node_info())).await;
     let mut carol = TestNode::spawn([32; 32], Some(alice.node_info())).await;
 
-    // Populate stores with some test data.
     alice
         .client
         .create_operation(b"Hello from Alice", log_id)
@@ -255,14 +200,12 @@ async fn e2e_three_party_sync() {
         .associate(&topic, &HashMap::from([(carol.client_id(), vec![log_id])]))
         .await;
 
-    // Alice and Bob create stream for the same topic. Carol is inactive here.
     let alice_handle = alice.log_sync.stream(topic, true).await.unwrap();
     let mut alice_subscription = alice_handle.subscribe().await.unwrap();
 
     let bob_handle = bob.log_sync.stream(topic, true).await.unwrap();
     let mut bob_subscription = bob_handle.subscribe().await.unwrap();
 
-    // Alice initiates sync.
     alice_handle.initiate_session(bob.node_id());
 
     // Assert Alice receives the expected events.
@@ -273,14 +216,14 @@ async fn e2e_three_party_sync() {
         Ok(FromSync {
             session_id: 0,
             remote,
-            event: Event::SyncStarted(_),
+            event: Event::SyncStarted { .. },
         }) if remote == bob_id
     );
     let event = alice_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -288,23 +231,7 @@ async fn e2e_three_party_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
-            ..
-        })
-    );
-    let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::SyncFinished(_),
+            event: Event::SyncFinished { .. },
             ..
         })
     );
@@ -325,14 +252,14 @@ async fn e2e_three_party_sync() {
         Ok(FromSync {
             session_id: 0,
             remote,
-            event: Event::SyncStarted(_),
+            event: Event::SyncStarted { .. },
         }) if remote == alice_id
     );
     let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -340,23 +267,7 @@ async fn e2e_three_party_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
-            ..
-        })
-    );
-    let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::SyncFinished(_),
+            event: Event::SyncFinished { .. },
             ..
         })
     );
@@ -383,21 +294,20 @@ async fn e2e_three_party_sync() {
         .await
         .unwrap();
 
-    // Bob receives Alice's message.
+    // Bob receives Alice's live message.
     let event = bob_subscription.next().await.unwrap();
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::Operation(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
 
-    // Create Carol's stream.
+    // Carol creates her stream and initiates sync with Alice.
     let carol_handle = carol.log_sync.stream(topic, true).await.unwrap();
     let mut carol_subscription = carol_handle.subscribe().await.unwrap();
 
-    // Carol initiates sync with Alice.
     carol_handle.initiate_session(alice.node_id());
 
     let event = carol_subscription.next().await.unwrap();
@@ -405,7 +315,7 @@ async fn e2e_three_party_sync() {
         event,
         Ok(FromSync {
             session_id: 0,
-            event: Event::SyncStarted(_),
+            event: Event::SyncStarted { .. },
             ..
         })
     );
@@ -413,7 +323,7 @@ async fn e2e_three_party_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -421,7 +331,7 @@ async fn e2e_three_party_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::SyncStatus(_),
+            event: Event::OperationReceived { .. },
             ..
         })
     );
@@ -429,23 +339,7 @@ async fn e2e_three_party_sync() {
     assert_matches!(
         event,
         Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::Operation(_),
-            ..
-        })
-    );
-    let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
-        event,
-        Ok(FromSync {
-            event: Event::SyncFinished(_),
+            event: Event::SyncFinished { .. },
             ..
         })
     );
@@ -474,15 +368,12 @@ async fn unsubscribe_from_gossip_after_drop() {
         .await
         .unwrap();
 
-    // Alice should be subscribed to the topic.
     while let Some(event) = watcher.recv().await {
-        // Assert that the original sync topic is _not_ used but the derived gossip topic instead.
         if !event.value.contains(&sync_topic) && event.value.len() == 1 {
             break;
         }
     }
 
-    // Alice should be unsubscribed from the topic after dropping the sync handle.
     drop(alice_handle);
 
     while let Some(event) = watcher.recv().await {
@@ -545,7 +436,6 @@ async fn panic_on_sink_closure_after_error_regression() {
     // already in a closed state causes an error. The fix is to introduce a custom Sink wrapper
     // instead of chaining adaptors.
     connection.close(0u32.into(), b"testing");
-
     let result = handle.await.unwrap();
     assert!(result.is_err());
 }

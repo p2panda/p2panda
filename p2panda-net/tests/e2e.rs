@@ -40,7 +40,7 @@ async fn gossip_and_sync_with_same_topic() {
     // Panda waits for Penguin to send something here as well.
     let panda_sync_task = tokio::spawn(async move {
         while let Some(Ok(item)) = panda_sync_rx.next().await {
-            if let TopicLogSyncEvent::Operation(operation) = item.event {
+            if let TopicLogSyncEvent::OperationReceived { operation, .. } = item.event {
                 return Some(operation);
             }
         }
