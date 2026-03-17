@@ -5,6 +5,7 @@ mod event_stream;
 mod offset;
 mod replay;
 mod stream;
+mod sync_metrics;
 
 pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
@@ -14,5 +15,6 @@ pub use event_stream::{SystemEvent, SystemEventStream};
 pub use offset::Offset;
 pub(crate) use stream::processed_stream;
 pub use stream::{
-    ProcessedOperation, PublishFuture, StreamEvent, StreamPublisher, StreamSubscription,
+    ProcessedOperation, PublishFuture, Source, StreamEvent, StreamPublisher, StreamSubscription,
 };
+pub use sync_metrics::{SessionPhase, SyncError};
