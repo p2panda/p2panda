@@ -166,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn operation_forge() {
         let store = SqliteStore::temporary().await;
-        let mut forge = OperationForge::new(store.clone());
+        let forge = OperationForge::new(store.clone());
 
         let topic = Topic::new();
         let log_id = LogId::from_topic(topic);

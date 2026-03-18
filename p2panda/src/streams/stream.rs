@@ -81,6 +81,7 @@ const PUBLISH_BUFFER_SIZE: usize = 128;
 ///               │ Application Stream  │
 ///               └─────────────────────┘
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn processed_stream<M>(
     topic: Topic,
     ack_policy: AckPolicy,
@@ -142,7 +143,7 @@ where
             let mut aggregator = Aggregator::new();
             loop {
                 let event = tokio::select! {
-                    // Received incoming operation from remote source.
+                   // Received incoming operation from remote source.
                     item = sync_stream.next() => {
                         let Some(result) = item else {
                             // Log sync stream seized, we stop the task as well.
