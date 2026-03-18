@@ -125,7 +125,7 @@ impl SqliteStoreBuilder {
 
 pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 
-pub type Pool = sqlx::SqlitePool;
+pub type SqlitePool = sqlx::SqlitePool;
 
 /// SQLite database with connection pool and transaction provider.
 ///
