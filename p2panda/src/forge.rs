@@ -21,7 +21,7 @@ pub trait Forge<TP, C, E> {
     fn public_key(&self) -> PublicKey;
 
     fn create_operation(
-        &mut self,
+        &self,
         topic: TP,
         collection_id: C,
         body: Option<Vec<u8>>,
@@ -73,7 +73,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
     /// store. Both the log-topic association and operation insertion are executed as part of a
     /// single transaction, thereby ensuring atomicity.
     async fn create_operation(
-        &mut self,
+        &self,
         topic: Topic,
         log_id: LogId,
         body: Option<Vec<u8>>,
