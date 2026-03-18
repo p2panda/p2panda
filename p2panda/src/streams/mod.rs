@@ -13,4 +13,6 @@ pub use ephemeral_stream::{
 pub use event_stream::{SystemEvent, SystemEventStream};
 pub use offset::Offset;
 pub(crate) use stream::processed_stream;
-pub use stream::{ProcessedOperation, StreamEvent, StreamPublisher, StreamSubscription};
+pub use stream::{
+    ProcessedOperation, PublishFuture, StreamEvent, StreamPublisher, StreamSubscription,
+};
