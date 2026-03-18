@@ -39,7 +39,7 @@ pub const PRIVATE_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 pub const PUBLIC_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
 /// Private Ed25519 key used for digital signatures.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct PrivateKey(ed25519_dalek::SigningKey);
 
 impl Default for PrivateKey {
