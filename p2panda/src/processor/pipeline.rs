@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
 use std::thread;
 
 use futures_util::StreamExt;
@@ -48,7 +49,7 @@ use crate::processor::{Event, ProcessorStatus};
 ///             v
 ///           Event
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
     pipeline_tx: mpsc::UnboundedSender<Event<L, E, TP>>,
     tasks: TaskTracker<Event<L, E, TP>, Hash>,

@@ -45,7 +45,7 @@ use crate::iroh_mdns::actor::{MdnsActorArgs, ToMdns};
 /// information for other nodes without leaking your own information. Set it to "active" mode using
 /// [`MdnsDiscoveryMode`](crate::iroh_mdns::MdnsDiscoveryMode) if you want to publish your IP
 /// address on the local-area network.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MdnsDiscovery {
     #[allow(unused)]
     pub(super) args: MdnsActorArgs,
@@ -53,6 +53,7 @@ pub struct MdnsDiscovery {
     pub(super) inner: Arc<RwLock<Inner>>,
 }
 
+#[derive(Debug)]
 pub(super) struct Inner {
     pub(super) actor_ref: Option<ActorRef<ToMdns>>,
 }

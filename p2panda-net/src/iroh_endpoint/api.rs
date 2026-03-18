@@ -84,12 +84,13 @@ use crate::{NetworkId, NodeId};
 ///    network.
 ///
 /// [iroh]: https://www.iroh.computer/
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Endpoint {
     pub(super) args: IrohEndpointArgs,
     pub(super) inner: Arc<RwLock<Inner>>,
 }
 
+#[derive(Debug)]
 pub(super) struct Inner {
     pub(super) actor_ref: Option<ActorRef<ToIrohEndpoint>>,
 }

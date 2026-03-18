@@ -37,7 +37,7 @@ use crate::sync::log_sync::Builder;
 /// network using a gossip protocol.
 ///
 /// [`chat.rs`]: https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LogSync<S, L, E>
 where
     S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
@@ -52,6 +52,7 @@ where
     _phantom: PhantomData<(S, L)>,
 }
 
+#[derive(Debug)]
 struct Inner<E>
 where
     E: Extensions + Send + 'static,
