@@ -2,7 +2,6 @@
 
 use std::fmt::Debug;
 
-
 pub use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
@@ -22,6 +21,7 @@ use crate::streams::{
     StreamSubscription, SystemEventStream, ephemeral_stream, processed_stream,
 };
 
+#[derive(Debug)]
 pub struct Node {
     config: Config,
     #[allow(unused)]

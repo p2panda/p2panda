@@ -23,7 +23,7 @@ use crate::traits::Protocol;
 pub type Logs<L> = BTreeMap<PublicKey, Vec<L>>;
 
 /// Sync session life-cycle states.
-#[derive(Default)]
+#[derive(Debug, Default)]
 enum State<L> {
     /// Initialise session metrics and announce sync start on event stream.
     #[default]
@@ -62,6 +62,7 @@ enum State<L> {
 }
 
 /// Efficient sync protocol for append-only log data types.
+#[derive(Debug)]
 pub struct LogSync<L, E, S, Evt> {
     state: State<L>,
     logs: Logs<L>,

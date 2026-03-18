@@ -19,13 +19,14 @@ use crate::iroh_endpoint::Endpoint;
 /// Read more about the underlying design in [`p2panda-discovery`].
 ///
 /// [`p2panda-discovery`]: https://docs.rs/p2panda-discovery/latest/p2panda_discovery/
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Discovery {
     #[allow(unused, reason = "used by supervisor behind feature flag")]
     pub(super) args: DiscoveryManagerArgs,
     pub(super) inner: Arc<RwLock<Inner>>,
 }
 
+#[derive(Debug)]
 pub(super) struct Inner {
     pub(super) actor_ref: Option<ActorRef<ToDiscoveryManager>>,
 }

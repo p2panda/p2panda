@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
+
 use futures_util::{Stream, StreamExt};
 use p2panda_core::Topic;
 use p2panda_sync::FromSync;
@@ -14,6 +16,7 @@ use crate::sync::actors::{ToSyncManager, ToTopicManager};
 /// Handle to a sync stream.
 ///
 /// The stream can be used to publish messages or to request a subscription.
+#[derive(Debug)]
 pub struct SyncHandle<M, E>
 where
     M: Clone + Send + 'static,
