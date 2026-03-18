@@ -375,7 +375,7 @@ where
     }
 
     /// Publish a message.
-    pub async fn publish(&mut self, message: M) -> Result<PublishFuture, PublishError> {
+    pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
         self.publish_inner(Some(message), false).await
     }
 
@@ -390,12 +390,12 @@ where
     /// Internally we're applying append-only log prefix deletion, meaning that the log's prefix
     /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
     /// "older" / before the point where the prune flag was set.
-    pub async fn prune(&mut self, message: Option<M>) -> Result<PublishFuture, PublishError> {
+    pub async fn prune(&self, message: Option<M>) -> Result<PublishFuture, PublishError> {
         self.publish_inner(message, true).await
     }
 
     async fn publish_inner(
-        &mut self,
+        &self,
         message: Option<M>,
         prune_flag: bool,
     ) -> Result<PublishFuture, PublishError> {
