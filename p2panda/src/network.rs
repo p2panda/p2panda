@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
+use std::fmt::Debug;
 
 use p2panda_core::{PrivateKey, Topic};
 use p2panda_net::address_book::AddressBookError;
@@ -19,7 +20,7 @@ use thiserror::Error;
 
 use crate::operation::Extensions;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub struct Network {
     pub address_book: AddressBook,

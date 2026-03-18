@@ -61,11 +61,12 @@ use crate::watchers::{UpdatesOnly, WatcherReceiver};
 ///    local-area network.
 /// 2. [`Discovery`](crate::Discovery): Resolve addresses and confidentially exchange topics using
 ///    random-walk strategy, exploring the network.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AddressBook {
     pub(super) inner: Arc<RwLock<Inner>>,
 }
 
+#[derive(Debug)]
 pub(super) struct Inner {
     pub(super) actor_ref: Option<ActorRef<ToAddressBookActor>>,
 }
