@@ -2,13 +2,17 @@
 
 use std::fmt::Debug;
 
-use p2panda_core::{Hash, Topic};
-use p2panda_net::NodeId;
+
+pub use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::builder::NodeBuilder;
+pub use p2panda_net::iroh_endpoint::RelayUrl;
+pub use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
+pub use p2panda_net::{NetworkId, NodeId};
+
+pub use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
