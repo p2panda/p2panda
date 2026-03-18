@@ -109,6 +109,20 @@ impl TryFrom<&[u8]> for Topic {
     }
 }
 
+impl TryFrom<Vec<u8>> for Topic {
+    type Error = TopicError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        let value_len = value.len();
+
+        let checked_value: [u8; TOPIC_LENGTH] = value
+            .try_into()
+            .map_err(|_| TopicError::InvalidLength(value_len, TOPIC_LENGTH))?;
+
+        Ok(Self::from(checked_value))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TopicError {
     /// Invalid number of bytes.
