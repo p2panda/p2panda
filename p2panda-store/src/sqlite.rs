@@ -125,6 +125,8 @@ impl SqliteStoreBuilder {
 
 pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 
+pub type Pool = sqlx::SqlitePool;
+
 /// SQLite database with connection pool and transaction provider.
 ///
 /// This struct can be cloned and used in multiple places in the application. Every cloned instance
@@ -191,6 +193,10 @@ impl SqliteStore {
             // right from the beginning with this semaphore.
             semaphore: Arc::new(Semaphore::new(1)),
         }
+    }
+
+    pub fn from_pool(pool: sqlx::SqlitePool) -> Self {
+        Self::new(pool)
     }
 
     /// Shortcut building an in-memory SQLite database with a randomised name for testing purposes.
