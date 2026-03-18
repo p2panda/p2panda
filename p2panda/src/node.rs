@@ -2,7 +2,8 @@
 
 use std::fmt::Debug;
 
-pub use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
+use futures_util::Stream;
+use p2panda_core::{Hash, Topic};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -18,7 +19,7 @@ use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Offset, StreamPublisher,
-    StreamSubscription, SystemEventStream, ephemeral_stream, processed_stream,
+    StreamSubscription, SystemEvent, ephemeral_stream, event_stream, processed_stream,
 };
 
 #[derive(Debug)]
@@ -82,6 +83,10 @@ impl Node {
     }
 
     /// Eventually consistent publish and subscribe stream of messages.
+    ///
+    /// Items emitted from the stream include operations, sync events and system events (ie.
+    /// network-related events, such as discovery events, which are not directly associated with a
+    /// specific topic).
     pub async fn stream<M>(
         &self,
         topic: impl Into<Topic>,
@@ -150,8 +155,21 @@ impl Node {
         Ok(ephemeral_stream(topic, self.forge.clone(), handle))
     }
 
-    pub async fn events(&self) -> Result<SystemEventStream, CreateStreamError> {
-        unimplemented!()
+    /// System event stream.
+    ///
+    /// System events include all network-related events, such as discovery events, which are not
+    /// associated with a specific topic.
+    pub async fn event_stream(
+        &self,
+    ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
+        let discovery_events = self
+            .network
+            .discovery
+            .events()
+            .await
+            .map_err(|err| CreateStreamError(err.to_string()))?;
+
+        Ok(event_stream(discovery_events))
     }
 
     pub fn id(&self) -> NodeId {

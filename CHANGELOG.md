@@ -22,6 +22,7 @@ Highlights are marked with a pancake 🥞
 - Log-prefix pruning processor [#1073](https://github.com/p2panda/p2panda/pull/1073)
 - Process local operations [#1080](https://github.com/p2panda/p2panda/pull/1080)
 - Process and aggregate metrics for sync events [#1085](https://github.com/p2panda/p2panda/pull/1085)
+- Introduce system event API for Node [#1087](https://github.com/p2panda/p2panda/pull/1087)
 
 ### Changed
 

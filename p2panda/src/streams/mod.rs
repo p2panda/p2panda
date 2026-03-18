@@ -11,7 +11,8 @@ pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
     EphemeralMessage, EphemeralStreamPublisher, EphemeralStreamSubscription, PublishError,
 };
-pub use event_stream::{SystemEvent, SystemEventStream};
+pub use event_stream::SystemEvent;
+pub(crate) use event_stream::event_stream;
 pub use offset::Offset;
 pub(crate) use stream::processed_stream;
 pub use stream::{
