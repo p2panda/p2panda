@@ -5,9 +5,10 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::operation::{LogId, Operation};
-use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent};
+use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent, SystemEvent};
 use p2panda::test_utils::setup_logging;
 use p2panda_core::{PrivateKey, Topic};
+use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
 
@@ -82,7 +83,7 @@ async fn eventually_consistent_stream() {
     let icebear = p2panda::builder().spawn().await.unwrap();
 
     // Panda joins the chat and sends a message to icebear.
-    let (mut panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
     panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
 
     // Icebear joins the chat and waits for a message of panda.
@@ -113,7 +114,7 @@ async fn replay_stream() {
 
     // Panda subscribes to chat and publishes one message.
     {
-        let (mut panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
     }
 
@@ -126,7 +127,7 @@ async fn replay_stream() {
         .unwrap();
 
     // Icebear joins the chat and publishes one message.
-    let (mut icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+    let (icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
     icebear_tx.publish("Hello, Panda!".into()).await.unwrap();
 
     // Panda should receive the first message they sent again, followed by Icebear's message which
@@ -147,6 +148,38 @@ async fn replay_stream() {
 }
 
 #[tokio::test]
+async fn event_stream() {
+    setup_logging();
+
+    let chat_id = Topic::new();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda joins the chat and sends a message to icebear.
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+
+    // Icebear joins the chat.
+    let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    // Create a system event stream for panda.
+    let mut events = panda.event_stream().await.unwrap();
+
+    let mut received_event = false;
+
+    // Wait for the first discovery session started event.
+    while let Some(event) = events.next().await {
+        if let SystemEvent::Discovery(DiscoveryEvent::SessionStarted { .. }) = event {
+            received_event = true;
+            break;
+        }
+    }
+
+    assert!(received_event);
+}
+
+#[tokio::test]
 async fn log_prefix_pruning() {
     setup_logging();
 
@@ -155,7 +188,7 @@ async fn log_prefix_pruning() {
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let (mut panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
+    let (panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
 
     // 1. Panda publishes 3 operations into their append-only log.
     panda_tx.publish(1).await.unwrap();
