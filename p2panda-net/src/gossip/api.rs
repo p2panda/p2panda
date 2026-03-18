@@ -107,7 +107,7 @@ type GossipSenders = HashMap<
 ///
 /// If all `Gossip` instances are dropped then the associated handles and subscriptions will fail
 /// sending or receiving messages.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Gossip {
     my_node_id: NodeId,
     address_book: AddressBook,
@@ -115,6 +115,7 @@ pub struct Gossip {
     senders: Arc<RwLock<GossipSenders>>,
 }
 
+#[derive(Debug)]
 struct Inner {
     actor_ref: ActorRef<ToGossipManager>,
 }
@@ -247,7 +248,7 @@ pub enum GossipError {
 
 /// Handle for publishing ephemeral messages into the gossip overlay and receiving from the
 /// network for a specific topic.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GossipHandle {
     topic: Topic,
     to_topic_tx: mpsc::Sender<Vec<u8>>,

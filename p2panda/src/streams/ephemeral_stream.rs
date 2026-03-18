@@ -215,7 +215,7 @@ pub(crate) fn ephemeral_stream<M>(
     (tx, rx)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EphemeralStreamPublisher<M> {
     topic: Topic,
     forge: OperationForge,

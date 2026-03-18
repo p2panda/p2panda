@@ -352,7 +352,7 @@ pub(crate) async fn process_published_operation(
     event
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StreamPublisher<M> {
     topic: Topic,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
