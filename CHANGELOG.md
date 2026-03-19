@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - Process local operations [#1080](https://github.com/p2panda/p2panda/pull/1080)
 - Process and aggregate metrics for sync events [#1085](https://github.com/p2panda/p2panda/pull/1085)
 - Introduce system event API for Node [#1087](https://github.com/p2panda/p2panda/pull/1087)
+- Return error when gossip message exceeds maximum size [#1096](https://github.com/p2panda/p2panda/pull/1096)
 
 ### Changed
 
