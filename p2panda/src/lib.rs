@@ -23,7 +23,7 @@ pub fn builder() -> builder::NodeBuilder {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn test_runtime_spawn() {
         let runtime = tokio::runtime::Runtime::new().unwrap();

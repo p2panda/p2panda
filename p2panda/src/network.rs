@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 use p2panda_core::{PrivateKey, Topic};
 use p2panda_net::address_book::AddressBookError;
-use p2panda_net::addrs::NodeInfo;
+use p2panda_net::addrs::{NodeInfo, TrustedTransportInfo};
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
 use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{EndpointError, IrohConfig, RelayUrl};
@@ -41,10 +41,11 @@ impl Network {
 
         let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
-        for bootstrap in &config.bootstraps {
-            address_book
-                .insert_node_info(NodeInfo::new(*bootstrap).bootstrap())
-                .await?;
+        for (node_id, transport_info) in config.bootstraps {
+            let mut node_info = NodeInfo::new(node_id).bootstrap();
+            if node_info.update_transports(transport_info.into()).is_ok() {
+                address_book.insert_node_info(node_info).await?;
+            }
         }
 
         let mut endpoint = Endpoint::builder(address_book.clone())
@@ -111,7 +112,7 @@ impl Network {
 pub struct NetworkConfig {
     pub network_id: NetworkId,
     pub relay_urls: HashSet<RelayUrl>,
-    pub bootstraps: HashSet<NodeId>,
+    pub bootstraps: HashSet<(NodeId, TrustedTransportInfo)>,
     pub mdns_mode: MdnsDiscoveryMode,
     pub discovery: DiscoveryConfig,
     pub gossip: GossipConfig,
