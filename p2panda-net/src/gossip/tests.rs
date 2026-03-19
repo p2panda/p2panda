@@ -10,7 +10,8 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 use crate::address_book::AddressBook;
-use crate::gossip::{Gossip, GossipEvent};
+use crate::gossip::api::GossipPublishError;
+use crate::gossip::{DEFAULT_MAX_MESSAGE_SIZE, Gossip, GossipEvent};
 use crate::iroh_endpoint::Endpoint;
 use crate::test_utils::{setup_logging, test_args};
 
@@ -720,4 +721,47 @@ async fn leave_overlay_on_drop() {
     let handle = ant_gossip.stream(topic).await.unwrap();
     assert!(handle.publish(b"test 3").await.is_ok());
     assert_eq!(bat_rx.next().await.unwrap().unwrap(), b"test 3".to_vec());
+}
+
+#[tokio::test]
+async fn large_message_error() {
+    setup_logging();
+
+    let args = test_args();
+
+    let topic = Topic::new();
+
+    // Create address book.
+    let address_book = AddressBook::builder().spawn().await.unwrap();
+
+    // Create endpoint.
+    let endpoint = Endpoint::builder(address_book.clone())
+        .config(args.iroh_config.clone())
+        .private_key(args.private_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    // Spawn gossip.
+    let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    // Subscribe to gossip topic.
+    let handle = gossip.stream(topic).await.unwrap();
+
+    // The byte length of the hex-encoded published message will be 5000.
+    let large_str = hex::encode([255; 2500]);
+    let large_str_len = large_str.len();
+
+    let result = handle.publish(large_str).await;
+
+    assert_eq!(
+        result,
+        Err(GossipPublishError::MessageTooLarge((
+            large_str_len,
+            DEFAULT_MAX_MESSAGE_SIZE // 4096
+        )))
+    );
 }

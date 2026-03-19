@@ -9,6 +9,7 @@ use p2panda_core::Topic;
 use p2panda_store::address_book::NodeInfo as _;
 use ractor::{ActorRef, call};
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
@@ -16,6 +17,7 @@ use tracing::trace;
 
 use crate::NodeId;
 use crate::address_book::{AddressBook, AddressBookError};
+use crate::gossip::GossipConfig;
 use crate::gossip::actors::ToGossipManager;
 use crate::gossip::builder::Builder;
 use crate::gossip::events::GossipEvent;
@@ -113,6 +115,7 @@ pub struct Gossip {
     address_book: AddressBook,
     inner: Arc<RwLock<Inner>>,
     senders: Arc<RwLock<GossipSenders>>,
+    config: GossipConfig,
 }
 
 #[derive(Debug)]
@@ -125,12 +128,14 @@ impl Gossip {
         actor_ref: ActorRef<ToGossipManager>,
         my_node_id: NodeId,
         address_book: AddressBook,
+        config: GossipConfig,
     ) -> Self {
         Self {
             my_node_id,
             address_book,
             inner: Arc::new(RwLock::new(Inner { actor_ref })),
             senders: Arc::new(RwLock::new(HashMap::new())),
+            config,
         }
     }
 
@@ -141,6 +146,8 @@ impl Gossip {
     /// Join gossip overlay for this topic and return a handle to publish messages to it or receive
     /// messages from the network.
     pub async fn stream(&self, topic: Topic) -> Result<GossipHandle, GossipError> {
+        let max_message_size = self.config.max_message_size;
+
         // Check if there's already a handle for this topic and clone it.
         //
         // If this handle exists but the topic counter is zero we know that all previous handles
@@ -152,6 +159,7 @@ impl Gossip {
         {
             return Ok(GossipHandle::new(
                 topic,
+                max_message_size,
                 to_gossip_tx.clone(),
                 from_gossip_tx.clone(),
                 guard.clone(),
@@ -203,6 +211,7 @@ impl Gossip {
 
         Ok(GossipHandle::new(
             topic,
+            max_message_size,
             to_gossip_tx,
             from_gossip_tx,
             guard,
@@ -246,11 +255,21 @@ pub enum GossipError {
     AddressBook(#[from] AddressBookError),
 }
 
+#[derive(Debug, Error, PartialEq)]
+pub enum GossipPublishError {
+    #[error("message size exceeds maximum limit ({} vs {})", .0.0, .0.1)]
+    MessageTooLarge((usize, usize)),
+
+    #[error(transparent)]
+    SendError(SendError<Vec<u8>>),
+}
+
 /// Handle for publishing ephemeral messages into the gossip overlay and receiving from the
 /// network for a specific topic.
 #[derive(Clone, Debug)]
 pub struct GossipHandle {
     topic: Topic,
+    max_message_size: usize,
     to_topic_tx: mpsc::Sender<Vec<u8>>,
     from_gossip_tx: broadcast::Sender<Vec<u8>>,
     _guard: TopicDropGuard,
@@ -259,12 +278,14 @@ pub struct GossipHandle {
 impl GossipHandle {
     fn new(
         topic: Topic,
+        max_message_size: usize,
         to_topic_tx: mpsc::Sender<Vec<u8>>,
         from_gossip_tx: broadcast::Sender<Vec<u8>>,
         _guard: TopicDropGuard,
     ) -> Self {
         Self {
             topic,
+            max_message_size,
             to_topic_tx,
             from_gossip_tx,
             _guard,
@@ -272,11 +293,27 @@ impl GossipHandle {
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(
-        &self,
-        bytes: impl Into<Vec<u8>>,
-    ) -> Result<(), mpsc::error::SendError<Vec<u8>>> {
-        self.to_topic_tx.send(bytes.into()).await
+    ///
+    /// An error will be returned if the size of the bytes exceeds the configured maximum message
+    /// size.
+    pub async fn publish(&self, bytes: impl Into<Vec<u8>>) -> Result<(), GossipPublishError> {
+        let bytes: Vec<u8> = bytes.into();
+        let message_size = bytes.len();
+
+        // NOTE(glyph): iroh-gossip currently fails silently when the message size exceeds the
+        // configured maximum; not even a warning is logged. We check the size here and return an
+        // error to guard against unexplained behaviour.
+        if message_size > self.max_message_size {
+            return Err(GossipPublishError::MessageTooLarge((
+                message_size,
+                self.max_message_size,
+            )));
+        }
+
+        self.to_topic_tx
+            .send(bytes)
+            .await
+            .map_err(GossipPublishError::SendError)
     }
 
     /// Subscribes to the stream.
