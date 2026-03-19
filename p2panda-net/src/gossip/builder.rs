@@ -30,16 +30,21 @@ impl Builder {
 
     pub async fn spawn(self) -> Result<Gossip, GossipError> {
         let my_node_id = self.endpoint.node_id();
+        let config = self.config.unwrap_or_default();
 
         let (actor_ref, _) = {
             let thread_pool = ThreadLocalActorSpawner::new();
 
-            let config = self.config.unwrap_or_default();
-            let args = (config, self.address_book.clone(), self.endpoint);
+            let args = (config.clone(), self.address_book.clone(), self.endpoint);
 
             GossipManager::spawn(None, args, thread_pool).await?
         };
 
-        Ok(Gossip::new(actor_ref, my_node_id, self.address_book))
+        Ok(Gossip::new(
+            actor_ref,
+            my_node_id,
+            self.address_book,
+            config,
+        ))
     }
 }
