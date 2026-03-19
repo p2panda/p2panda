@@ -3,9 +3,10 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use p2panda_core::PrivateKey;
+use p2panda_net::addrs::TrustedTransportInfo;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::gossip::GossipConfig;
-use p2panda_net::iroh_endpoint::RelayUrl;
+use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::SqliteStore;
@@ -62,8 +63,12 @@ impl NodeBuilder {
         self
     }
 
-    pub fn bootstrap(mut self, node_id: NodeId) -> Self {
-        self.config.network.bootstraps.insert(node_id);
+    pub fn bootstrap(mut self, node_id: NodeId, relay_url: RelayUrl) -> Self {
+        let endpoint_addr = EndpointAddr::new(from_public_key(node_id)).with_relay_url(relay_url);
+        self.config
+            .network
+            .bootstraps
+            .insert((node_id, TrustedTransportInfo::from(endpoint_addr)));
         self
     }
 
