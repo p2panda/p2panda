@@ -232,7 +232,7 @@ where
         self.topic
     }
 
-    pub async fn publish(&self, message: M) -> Result<(), PublishError> {
+    pub async fn publish(&self, message: M) -> Result<(), EphemeralPublishError> {
         // The PlumTree implementation for the gossip overlay used by p2panda-net ignores duplicate
         // messages to avoid flooding the network. This can lead to surprises by the users as they
         // expect messages to still arrive, not noticing it's because of a duplicate payload.
@@ -256,14 +256,14 @@ where
         self.inner
             .publish(bytes)
             .await
-            .map_err(|_err| PublishError::BrokenChannel)?;
+            .map_err(|_err| EphemeralPublishError::BrokenChannel)?;
 
         Ok(())
     }
 }
 
 #[derive(Debug, Error)]
-pub enum PublishError {
+pub enum EphemeralPublishError {
     /// If this error occurs probably something is wrong with the system.
     #[error("critical encoding error: {0}")]
     Encode(#[from] EncodeError),
