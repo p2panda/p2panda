@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+use std::hash::Hash as StdHash;
+
 use crate::traits::{IdentityHandle, OperationId};
 use crate::{
     group::GroupCrdtState,
@@ -45,7 +47,7 @@ where
 ///
 /// NOTE: this in-memory implementation will be replaced with SQLite stores in the near future.
 #[derive(Clone)]
-pub struct Store<M, A = PublicKey, ID = Hash, C = ()>
+pub struct Store<SID, M, A = PublicKey, ID = Hash, C = ()>
 where
     A: IdentityHandle,
     ID: OperationId,
@@ -55,11 +57,12 @@ where
     transaction_lock: Arc<Mutex<()>>,
 
     #[allow(clippy::type_complexity)]
-    state: Arc<Mutex<Option<AuthState<M, A, ID, C>>>>,
+    states: Arc<Mutex<HashMap<SID, AuthState<M, A, ID, C>>>>,
 }
 
-impl<M, A, ID, C> Store<M, A, ID, C>
+impl<SID, M, A, ID, C> Store<SID, M, A, ID, C>
 where
+    SID: Copy + Eq + StdHash,
     A: IdentityHandle,
     ID: OperationId,
     M: Operation<A, ID, C> + Clone,
@@ -69,25 +72,17 @@ where
         self.transaction_lock.lock().await
     }
 
-    pub async fn take_state(&self) -> AuthState<M, A, ID, C> {
-        self.state.lock().await.take().unwrap_or_default()
+    pub async fn set_state(&self, id: &SID, state: AuthState<M, A, ID, C>) {
+        let mut states = self.states.lock().await;
+        states.insert(*id, state);
     }
 
-    pub async fn set_state(&self, state: AuthState<M, A, ID, C>) {
-        *self.state.lock().await = Some(state);
-    }
-
-    pub async fn get_state(&self) -> AuthState<M, A, ID, C> {
-        self.state
-            .lock()
-            .await
-            .as_ref()
-            .cloned()
-            .unwrap_or_default()
+    pub async fn get_state(&self, id: &SID) -> Option<AuthState<M, A, ID, C>> {
+        self.states.lock().await.get(id).cloned()
     }
 }
 
-impl<M, A, ID, C> Default for Store<M, A, ID, C>
+impl<SID, M, A, ID, C> Default for Store<SID, M, A, ID, C>
 where
     A: IdentityHandle,
     ID: OperationId,
@@ -97,7 +92,7 @@ where
     fn default() -> Self {
         Self {
             transaction_lock: Arc::new(Mutex::new(())),
-            state: Arc::new(Mutex::new(Some(AuthState::default()))),
+            states: Arc::new(Mutex::new(HashMap::default())),
         }
     }
 }

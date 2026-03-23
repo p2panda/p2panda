@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::{Debug, Display};
+use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 
 use p2panda_core::{Hash, PublicKey};
@@ -39,10 +40,14 @@ where
     /// Processed operations are first partially ordered, and only processed on the auth groups state
     /// if all their dependencies have been met. If other operations become "ready" by this one, then
     /// they will be all processed in order.
-    pub async fn process(
-        store: &Store<M, A, ID, C>,
+    pub async fn process<SID>(
+        id: &SID,
+        store: &Store<SID, M, A, ID, C>,
         operation: &M,
-    ) -> Result<(), GroupsProcessorError<M, A, ID, C>> {
+    ) -> Result<(), GroupsProcessorError<M, A, ID, C>>
+    where
+        SID: Copy + Eq + StdHash,
+    {
         // Retrieve the current groups state from the store.
         //
         // @TODO: we will use the new store API here once upstream changes in `development` are
@@ -50,7 +55,7 @@ where
         // conditions when multiple processes try to mutate the store concurrently. For now we use
         // an in-memory store with a Mutex to coordinate shared access.
         let _lock = store.begin_transaction().await;
-        let mut y = store.take_state().await;
+        let mut y = store.get_state(id).await.unwrap_or_default();
 
         // Add operation to the internal buffer.
         let operation_id = operation.id();
@@ -77,7 +82,7 @@ where
 
         // Set the groups state after processing is finished.
         y.orderer = orderer.store();
-        store.set_state(y).await;
+        store.set_state(id, y).await;
 
         Ok(())
     }
@@ -112,6 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn ooo_operations() {
+        let chat_id = 0;
         let group_id = 'G';
 
         let alice = 'A';
@@ -145,13 +151,13 @@ mod tests {
         );
 
         let groups_store = Store::default();
-        GroupsProcessor::process(&groups_store, &op_02)
+        GroupsProcessor::process(&chat_id, &groups_store, &op_02)
             .await
             .unwrap();
-        GroupsProcessor::process(&groups_store, &op_01)
+        GroupsProcessor::process(&chat_id, &groups_store, &op_01)
             .await
             .unwrap();
-        GroupsProcessor::process(&groups_store, &op_00)
+        GroupsProcessor::process(&chat_id, &groups_store, &op_00)
             .await
             .unwrap();
     }
