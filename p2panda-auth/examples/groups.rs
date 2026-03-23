@@ -204,7 +204,7 @@ async fn main() -> Result<()> {
     let sync_tx = sync.stream(topic_id, true).await?;
     let mut sync_rx = sync_tx.subscribe().await?;
 
-    let groups_store = GroupsStore::<GroupsOperation>::default();
+    let groups_store = GroupsStore::<TopicId, GroupsOperation>::default();
 
     // Receive messages from the sync stream.
     {
@@ -233,7 +233,8 @@ async fn main() -> Result<()> {
                             .expect("all operations have groups args");
 
                         if let Err(err) =
-                            GroupsProcessor::process(&groups_store, &control_message).await
+                            GroupsProcessor::process(&topic_id, &groups_store, &control_message)
+                                .await
                         {
                             println!();
                             println!("error: {err:?}");
@@ -256,7 +257,7 @@ async fn main() -> Result<()> {
                             .insert(topic_id, operation.header.public_key, LOG_ID)
                             .await;
 
-                        print_group(&groups_store, &control_message).await;
+                        print_group(&topic_id, &groups_store, &control_message).await;
                     }
                     _ => (),
                 }
@@ -274,18 +275,24 @@ async fn main() -> Result<()> {
     // Sign and encode each line of text input and broadcast it on the chat topic.
     tokio::task::spawn(async move {
         while let Some(text) = line_rx.recv().await {
-            let (group_id, action) = match text_2_action(&groups_store, public_key, text).await {
-                Ok(action) => action,
-                Err(err) => {
-                    println!();
-                    println!("error: {err:?}");
-                    println!();
-                    continue;
-                }
-            };
+            let (group_id, action) =
+                match text_2_action(&topic_id, &groups_store, public_key, text).await {
+                    Ok(action) => action,
+                    Err(err) => {
+                        println!();
+                        println!("error: {err:?}");
+                        println!();
+                        continue;
+                    }
+                };
 
             let groups_args = GroupsArgs { group_id, action };
-            let previous: Vec<Hash> = groups_store.get_state().await.crdt.heads();
+            let previous: Vec<Hash> = groups_store
+                .get_state(&topic_id)
+                .await
+                .unwrap_or_default()
+                .crdt
+                .heads();
 
             let (hash, header, header_bytes, operation) =
                 create_operation(&private_key, seq_num, backlink, &previous, groups_args);
@@ -295,7 +302,9 @@ async fn main() -> Result<()> {
                 .try_into()
                 .expect("all operations have groups args");
 
-            if let Err(err) = GroupsProcessor::process(&groups_store, &control_message).await {
+            if let Err(err) =
+                GroupsProcessor::process(&topic_id, &groups_store, &control_message).await
+            {
                 println!();
                 println!("error: {err:?}");
                 println!();
@@ -307,7 +316,7 @@ async fn main() -> Result<()> {
                 .await
                 .unwrap();
 
-            print_group(&groups_store, &control_message).await;
+            print_group(&topic_id, &groups_store, &control_message).await;
 
             sync_tx.publish(operation).await.unwrap();
 
@@ -393,11 +402,12 @@ enum Text2ActionError {
 }
 
 async fn text_2_action(
-    store: &GroupsStore<GroupsOperation>,
+    id: &TopicId,
+    store: &GroupsStore<TopicId, GroupsOperation>,
     me: PublicKey,
     text: String,
 ) -> Result<(PublicKey, GroupAction<PublicKey>), Text2ActionError> {
-    let y = store.get_state().await;
+    let y = store.get_state(id).await.unwrap_or_default();
     let args = if let Some(_text) = text.strip_prefix("create") {
         let group_id = PrivateKey::new().public_key();
         (
@@ -474,8 +484,12 @@ fn parse_member(
     Ok(member)
 }
 
-async fn print_group(store: &GroupsStore<GroupsOperation>, operation: &GroupsOperation) {
-    let y = store.get_state().await;
+async fn print_group(
+    id: &TopicId,
+    store: &GroupsStore<TopicId, GroupsOperation>,
+    operation: &GroupsOperation,
+) {
+    let y = store.get_state(id).await.unwrap_or_default();
     let members = y
         .crdt
         .members(operation.group_id())
