@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Highlights are marked with a pancake 🥞
 
-## [0.5.2] - 09/03/2026
+## [unreleased]
 
 ### Added
 
@@ -43,9 +43,15 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
-- Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
 - Enforce strictly growing operations log in backlink validation method [#1044](https://github.com/p2panda/p2panda/pull/1044)
 - Fix automatic roll-back of unused, dropped permits [#1075](https://github.com/p2panda/p2panda/pull/1075)
+
+## [0.5.2] - 09/03/2026
+
+### Fixed
+
+- Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
+- Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
 
 ## [0.5.1] - 09/02/2026
 
