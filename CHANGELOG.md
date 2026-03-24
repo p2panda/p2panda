@@ -35,6 +35,7 @@ Highlights are marked with a pancake 🥞
 - Get current network id from `Node` [#1143](https://github.com/p2panda/p2panda/pull/1143)
 - Deduplicate received operations in sync manager event stream [#1147](https://github.com/p2panda/p2panda/pull/1147)
 - Todo list example with LWW-CRDT for Node API [#1148](https://github.com/p2panda/p2panda/pull/1148)
+- Method for getting filtered groups CRDT heads [#1102](https://github.com/p2panda/p2panda/pull/1102)
 
 ### Changed
 

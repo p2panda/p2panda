@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
+use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -126,6 +126,29 @@ where
             .externals(petgraph::Direction::Outgoing)
             .map(|idx| self.graph.from_index(idx.index()))
             .collect::<HashSet<_>>()
+    }
+
+    /// Get graph tips filtered to only those which included "create" operation for passed group
+    /// ids in their causal history.
+    pub fn heads_filtered(&self, groups: &[ID]) -> HashSet<OP> {
+        let global_heads = self.heads();
+        global_heads
+            .into_iter()
+            .filter(|id| {
+                let reversed = Reversed(&self.graph);
+                let mut bfs = Bfs::new(&reversed, *id);
+                while let Some(inner_id) = bfs.next(&reversed) {
+                    let operation = self
+                        .operations
+                        .get(&inner_id)
+                        .expect("operation is present in map");
+                    if operation.action().is_create() && groups.contains(&operation.group_id()) {
+                        return true;
+                    }
+                }
+                false
+            })
+            .collect()
     }
 
     /// Current group states.
@@ -363,6 +386,12 @@ where
     /// Current tips for the groups operation graph.
     pub fn heads(&self) -> Vec<OP> {
         self.inner.heads().into_iter().collect()
+    }
+
+    /// Get graph tips filtered to only those which included "create" operation for passed group
+    /// ids in their causal history.
+    pub fn heads_filtered(&self, groups: &[ID]) -> Vec<OP> {
+        self.inner.heads_filtered(groups).into_iter().collect()
     }
 }
 
