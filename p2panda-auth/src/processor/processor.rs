@@ -310,4 +310,159 @@ mod tests {
         assert!(members.contains(&(bobby, Access::manage())));
         assert!(members.contains(&(cathy, Access::manage())));
     }
+
+    #[tokio::test]
+    async fn device_groups_single_context() {
+        // All operations are processed on the same groups state context.
+        let state_id = 'S';
+
+        let alice_store = Store::default();
+        let bobby_store = Store::default();
+        let cathy_store = Store::default();
+
+        let alice = 'A';
+        let bobby = 'B';
+        let cathy = 'C';
+        let alice_device_group = 'X';
+        let bobby_device_group = 'Y';
+        let cathy_device_group = 'Z';
+        let ab_chat = '0';
+        let bc_chat = '1';
+
+        // All members create their own device groups and process them on their own stores.
+
+        let create_alice_device_00 = create_group(
+            alice,
+            0,
+            alice_device_group,
+            vec![(GroupMember::Individual(alice), Access::manage())],
+            vec![],
+        );
+
+        GroupsProcessor::process(&state_id, &alice_store, &create_alice_device_00)
+            .await
+            .unwrap();
+
+        let create_bobby_device_01 = create_group(
+            bobby,
+            1,
+            bobby_device_group,
+            vec![(GroupMember::Individual(bobby), Access::manage())],
+            vec![],
+        );
+
+        GroupsProcessor::process(&state_id, &bobby_store, &create_bobby_device_01)
+            .await
+            .unwrap();
+
+        let create_cathy_device_02 = create_group(
+            alice,
+            2,
+            cathy_device_group,
+            vec![(GroupMember::Individual(cathy), Access::manage())],
+            vec![],
+        );
+
+        GroupsProcessor::process(&state_id, &cathy_store, &create_cathy_device_02)
+            .await
+            .unwrap();
+
+        // Alice creates chat with Bobby.
+        //
+        // First they process "create device group" operation from Bobby.
+        GroupsProcessor::process(&state_id, &alice_store, &create_bobby_device_01)
+            .await
+            .unwrap();
+
+        // Then they create the chat group.
+        let alice_y = alice_store.get_state(&state_id).await.unwrap();
+        let create_alice_bobby_chat_03 = create_group(
+            alice,
+            3,
+            ab_chat,
+            vec![
+                (GroupMember::Group(alice_device_group), Access::write()),
+                (GroupMember::Group(bobby_device_group), Access::write()),
+            ],
+            alice_y
+                .crdt
+                .heads_filtered(&[alice_device_group, bobby_device_group]),
+        );
+
+        GroupsProcessor::process(&state_id, &alice_store, &create_alice_bobby_chat_03)
+            .await
+            .unwrap();
+
+        // Bobby processes alice's "create device group" and "create ab chat".
+        for op in [create_alice_device_00.clone(), create_alice_bobby_chat_03] {
+            GroupsProcessor::process(&state_id, &bobby_store, &op)
+                .await
+                .unwrap();
+        }
+
+        // Both Alice and Bobby have the correct groups state.
+        for store in [alice_store.clone(), bobby_store.clone()] {
+            let mut members = store
+                .get_state(&state_id)
+                .await
+                .unwrap()
+                .crdt
+                .members(ab_chat);
+            members.sort();
+
+            assert_eq!(
+                members,
+                vec![('A', Access::write()), ('B', Access::write())]
+            );
+        }
+
+        // Cathy now creates a chat with Bobby.
+        //
+        // First they process "create device group" for bobby.
+        GroupsProcessor::process(&state_id, &cathy_store, &create_bobby_device_01)
+            .await
+            .unwrap();
+
+        // Then they create the chat group.
+        let cathy_y = cathy_store.get_state(&state_id).await.unwrap();
+        let create_bobby_cathy_chat_04 = create_group(
+            cathy,
+            4,
+            bc_chat,
+            vec![
+                (GroupMember::Group(bobby_device_group), Access::write()),
+                (GroupMember::Group(cathy_device_group), Access::write()),
+            ],
+            cathy_y
+                .crdt
+                .heads_filtered(&[bobby_device_group, cathy_device_group]),
+        );
+
+        GroupsProcessor::process(&state_id, &cathy_store, &create_bobby_cathy_chat_04)
+            .await
+            .unwrap();
+
+        // Bobby processes cathy's "create device group" and "create bc chat".
+        for op in [create_cathy_device_02.clone(), create_bobby_cathy_chat_04] {
+            GroupsProcessor::process(&state_id, &bobby_store, &op)
+                .await
+                .unwrap();
+        }
+
+        // Both Cathy and Bobby have the correct groups state.
+        for store in [cathy_store, bobby_store] {
+            let mut members = store
+                .get_state(&state_id)
+                .await
+                .unwrap()
+                .crdt
+                .members(bc_chat);
+            members.sort();
+
+            assert_eq!(
+                members,
+                vec![('B', Access::write()), ('C', Access::write())]
+            );
+        }
+    }
 }
