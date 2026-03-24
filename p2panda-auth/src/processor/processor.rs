@@ -384,6 +384,7 @@ mod tests {
                 (GroupMember::Group(alice_device_group), Access::write()),
                 (GroupMember::Group(bobby_device_group), Access::write()),
             ],
+            // The dependencies are filtered by group ids for alice and bobby's device group.
             alice_y
                 .crdt
                 .heads_filtered(&[alice_device_group, bobby_device_group]),
@@ -433,6 +434,7 @@ mod tests {
                 (GroupMember::Group(bobby_device_group), Access::write()),
                 (GroupMember::Group(cathy_device_group), Access::write()),
             ],
+            // The dependencies are filtered by bobby and cathy's device group.
             cathy_y
                 .crdt
                 .heads_filtered(&[bobby_device_group, cathy_device_group]),
