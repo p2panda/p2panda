@@ -5,6 +5,8 @@ use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
+use crate::identity::Author;
+
 /// Uniquely identify a single-author log.
 ///
 /// The `LogId` exists purely to group a set of operations and is intended to be implemented for
@@ -62,8 +64,8 @@ pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNu
 /// method, then it is expected only the remaining "frontier" will be replicated for each log.
 pub fn compare<A, L>(local: &LogHeights<A, L>, remote: &LogHeights<A, L>) -> LogRanges<A, L>
 where
-    A: Clone + StdHash + Eq + Ord + PartialEq,
-    L: Clone + StdHash + Eq + Ord + PartialEq,
+    A: Author,
+    L: LogId,
 {
     let mut remote_needs: LogRanges<A, L> = BTreeMap::default();
 
@@ -121,6 +123,8 @@ mod tests {
     use crate::logs::compare;
 
     type Author = u8;
+
+    impl crate::identity::Author for Author {}
 
     const ALICE: Author = 0;
     const BOB: Author = 1;
