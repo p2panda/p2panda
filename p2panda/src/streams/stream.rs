@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
-use p2panda_core::{Hash, PublicKey, Topic};
+use p2panda_core::{Cursor, Hash, PublicKey, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::sync::{SyncHandle, SyncHandleError};
 use p2panda_store::SqliteStore;
@@ -25,9 +25,8 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::{Event, Pipeline};
-use crate::streams::replay::replay_from_start;
-use crate::streams::sync_metrics::{Aggregator, SessionPhase, SyncError};
-use crate::streams::{Offset, sync_metrics};
+use crate::streams::replay::{StreamFrom, replay_from};
+use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -89,7 +88,7 @@ pub(crate) async fn processed_stream<M>(
     store: SqliteStore,
     forge: OperationForge,
     pipeline: Pipeline<LogId, Extensions, Topic>,
-    offset: Offset,
+    from: StreamFrom,
 ) -> Result<
     (StreamPublisher<M>, StreamSubscription<M>),
     SyncHandleError<Operation, TopicLogSyncEvent<Extensions>>,
@@ -114,30 +113,37 @@ where
         let pipeline = pipeline.clone();
 
         tokio::spawn(async move {
-            // In the case where a full replay of the topic stream is requested, then spawn a
-            // replay task and await it's completion. This will block processing of the sync stream
-            // and of locally created operations until it is complete.
-            if offset == Offset::Start {
-                let result = replay_from_start(
-                    topic,
-                    store.clone(),
-                    app_tx.clone(),
-                    pipeline.clone(),
-                    ack_policy,
-                )
-                .await;
-
-                // Errors occurring in the replay task which be returned to the user.
-                if let Err(err) = result {
-                    warn!("error occurred in replay task: {err:?}");
-
-                    let _ = app_tx
-                        .send(StreamEvent::ReplayFailed {
-                            topic,
-                            error: err.to_string(),
-                        })
-                        .await;
+            let cursor = match from {
+                StreamFrom::Start => Cursor::default(),
+                StreamFrom::Frontier => {
+                    // TODO
+                    unimplemented!()
                 }
+                StreamFrom::Cursor(cursor) => cursor,
+            };
+
+            // This will block processing of the sync stream and of locally created operations
+            // until it is complete.
+            let replay_result = replay_from(
+                topic,
+                store.clone(),
+                app_tx.clone(),
+                pipeline.clone(),
+                ack_policy,
+                cursor,
+            )
+            .await;
+
+            // Errors occurring in the replay task which be returned to the user.
+            if let Err(err) = replay_result {
+                warn!("error occurred in replay task: {err:?}");
+
+                let _ = app_tx
+                    .send(StreamEvent::ReplayFailed {
+                        topic,
+                        error: err.to_string(),
+                    })
+                    .await;
             }
 
             let mut aggregator = Aggregator::new();

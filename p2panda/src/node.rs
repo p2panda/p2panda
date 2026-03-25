@@ -18,7 +18,7 @@ use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Offset, StreamPublisher,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, StreamFrom, StreamPublisher,
     StreamSubscription, SystemEvent, ephemeral_stream, event_stream, processed_stream,
 };
 
@@ -94,12 +94,12 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from(topic, Offset::Frontier).await
+        self.stream_from(topic, StreamFrom::Frontier).await
     }
 
-    /// Eventually consistent publish and subscribe stream of messages with a custom offset.
+    /// Eventually consistent publish and subscribe stream of messages with a custom cursor.
     ///
-    /// Setting an offset is useful if the application doesn't keep any materialised state around
+    /// Setting an cursor is useful if the application doesn't keep any materialised state around
     /// and needs to repeat all messages on start.
     ///
     /// Another use-case is the roll-out of an application update where all state needs to be
@@ -107,7 +107,7 @@ impl Node {
     pub async fn stream_from<M>(
         &self,
         topic: impl Into<Topic>,
-        offset: Offset,
+        from: StreamFrom,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -129,7 +129,7 @@ impl Node {
             self.store.clone(),
             self.forge.clone(),
             self.pipeline.clone(),
-            offset,
+            from,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;

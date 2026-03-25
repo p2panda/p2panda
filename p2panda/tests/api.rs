@@ -5,7 +5,9 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::operation::{LogId, Operation};
-use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent, SystemEvent};
+use p2panda::streams::{
+    EphemeralMessage, ProcessedOperation, StreamEvent, StreamFrom, SystemEvent,
+};
 use p2panda::test_utils::setup_logging;
 use p2panda_core::{PrivateKey, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
@@ -122,7 +124,7 @@ async fn replay_stream() {
 
     // Panda subscribes again, this time asking to replay all messages.
     let (_panda_tx, mut panda_rx) = panda
-        .stream_from::<String>(chat_id, Offset::Start)
+        .stream_from::<String>(chat_id, StreamFrom::Start)
         .await
         .unwrap();
 

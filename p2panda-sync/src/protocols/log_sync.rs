@@ -116,6 +116,7 @@ where
                 State::Start => self.state = State::SendHave,
                 State::SendHave => {
                     let local = get_log_heights(&self.store, &self.logs).await?;
+
                     sink.send(LogSyncMessage::<L>::Have(local.clone()))
                         .await
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
@@ -375,7 +376,7 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-async fn get_log_heights<L, E, S>(
+pub async fn get_log_heights<L, E, S>(
     store: &S,
     logs: &Logs<L>,
 ) -> Result<LogHeights<PublicKey, L>, LogSyncError>
