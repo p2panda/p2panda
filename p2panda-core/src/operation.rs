@@ -95,11 +95,12 @@ use std::borrow::Borrow;
 use thiserror::Error;
 
 use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
+use crate::extensions::{Extension, Extensions};
 use crate::hash::Hash;
 use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::logs::SeqNum;
 use crate::timestamp::Timestamp;
 use crate::traits::Digest;
-use crate::{Extension, Extensions};
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -210,7 +211,7 @@ pub struct Header<E = ()> {
 
     /// Number of operations this author has published to this log, begins with 0 and is always
     /// incremented by 1 with each new operation by the same author.
-    pub seq_num: u64,
+    pub seq_num: SeqNum,
 
     /// Hash of the previous operation of the same author and log. Can be omitted if first
     /// operation in log.

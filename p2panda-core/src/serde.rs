@@ -8,12 +8,14 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
-use crate::Topic;
+use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
-use crate::identity::{IdentityError, PrivateKey, PublicKey, Signature};
+use crate::identity::{Author, IdentityError, PrivateKey, PublicKey, Signature};
+use crate::logs::LogHeights;
 use crate::operation::{Body, Header};
 use crate::timestamp::Timestamp;
 use crate::topic::TopicError;
+use crate::{LogId, Topic};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -305,6 +307,68 @@ impl<'de> Deserialize<'de> for Topic {
             .as_slice()
             .try_into()
             .map_err(|err: TopicError| serde::de::Error::custom(err.to_string()))
+    }
+}
+
+impl<A, L> Serialize for Cursor<A, L>
+where
+    A: Author,
+    L: LogId,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(2))?;
+        seq.serialize_element(self.name())?;
+        seq.serialize_element(self.state())?;
+        seq.end()
+    }
+}
+
+impl<'de, A, L> Deserialize<'de> for Cursor<A, L>
+where
+    A: Author,
+    L: LogId,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct CursorVisitor<A, L> {
+            _marker: PhantomData<(A, L)>,
+        }
+
+        impl<'de, A, L> Visitor<'de> for CursorVisitor<A, L>
+        where
+            A: Author,
+            L: LogId,
+        {
+            type Value = Cursor<A, L>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("Cursor encoded as a sequence")
+            }
+
+            fn visit_seq<T>(self, mut seq: T) -> Result<Self::Value, T::Error>
+            where
+                T: SeqAccess<'de>,
+            {
+                let name: String = seq
+                    .next_element()?
+                    .ok_or(SerdeError::custom("cursor id missing"))?;
+
+                let state: LogHeights<A, L> = seq
+                    .next_element()?
+                    .ok_or(SerdeError::custom("state vector missing"))?;
+
+                Ok(Cursor::new(name, state))
+            }
+        }
+
+        deserializer.deserialize_seq(CursorVisitor::<A, L> {
+            _marker: PhantomData,
+        })
     }
 }
 
