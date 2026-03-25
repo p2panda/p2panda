@@ -3,7 +3,8 @@
 use std::fmt::Debug;
 
 use futures_util::Stream;
-use p2panda_core::{Hash, Topic};
+pub use p2panda_core::identity::{PrivateKey, PublicKey};
+pub use p2panda_core::{Hash, Topic};
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 pub use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 pub use p2panda_net::{NetworkId, NodeId};
