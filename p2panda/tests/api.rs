@@ -4,13 +4,24 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
+use p2panda::node::AckPolicy;
 use p2panda::operation::{LogId, Operation};
-use p2panda::streams::{EphemeralMessage, Offset, ProcessedOperation, StreamEvent, SystemEvent};
+use p2panda::streams::{
+    EphemeralMessage, ProcessedOperation, StreamEvent, StreamFrom, SystemEvent,
+};
 use p2panda::test_utils::setup_logging;
-use p2panda_core::{PrivateKey, Topic};
+use p2panda_core::logs::LogHeights;
+use p2panda_core::{Cursor, Hash, PrivateKey, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
+
+fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash) {
+    let StreamEvent::Processed { operation, .. } = event else {
+        panic!("unexpected event");
+    };
+    assert_eq!(operation.id(), id);
+}
 
 #[tokio::test]
 async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
@@ -101,50 +112,6 @@ async fn eventually_consistent_stream() {
     let received = received.expect("icebear should have received operation");
     assert_eq!(received.message(), &"Hello, Icebear!".to_string());
     assert_eq!(received.author(), panda.id());
-}
-
-#[tokio::test]
-async fn replay_stream() {
-    setup_logging();
-
-    let chat_id = Topic::new();
-
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
-
-    // Panda subscribes to chat and publishes one message.
-    {
-        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
-        panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-    }
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Panda subscribes again, this time asking to replay all messages.
-    let (_panda_tx, mut panda_rx) = panda
-        .stream_from::<String>(chat_id, Offset::Start)
-        .await
-        .unwrap();
-
-    // Icebear joins the chat and publishes one message.
-    let (icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-    icebear_tx.publish("Hello, Panda!".into()).await.unwrap();
-
-    // Panda should receive the first message they sent again, followed by Icebear's message which
-    // arrived via sync.
-    let mut received = vec![];
-
-    while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Processed { operation, .. } = event {
-            received.push(operation);
-            if received.len() == 2 {
-                break;
-            }
-        }
-    }
-
-    assert_eq!(received[0].message(), &"Hello, Icebear!".to_string());
-    assert_eq!(received[1].message(), &"Hello, Panda!".to_string());
 }
 
 #[tokio::test]
@@ -242,4 +209,191 @@ async fn log_prefix_pruning() {
         .expect("no store failure")
         .expect("result to be Some");
     assert_eq!(icebear_result.iter().count(), 1);
+}
+
+#[tokio::test]
+async fn automatic_acking() {
+    setup_logging();
+
+    let topic = Topic::new();
+    let node = p2panda::builder().spawn().await.unwrap();
+
+    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+    // Publish two messages into the stream.
+    let processing = tx.publish("first".into()).await.unwrap();
+    let message_id_1 = processing.hash();
+    processing.await.unwrap();
+
+    let processing = tx.publish("second".into()).await.unwrap();
+    let message_id_2 = processing.hash();
+    processing.await.unwrap();
+
+    // We except to receive them.
+    let event = rx.next().await.unwrap();
+    let StreamEvent::Processed { operation, .. } = event else {
+        panic!("unexpected event");
+    };
+    assert_eq!(operation.id(), message_id_1);
+
+    let event = rx.next().await.unwrap();
+    let StreamEvent::Processed { operation, .. } = event else {
+        panic!("unexpected event");
+    };
+    assert_eq!(operation.id(), message_id_2);
+
+    // Create a new subscription.
+    drop(tx);
+    drop(rx);
+
+    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+    // Publish one more message.
+    let processing = tx.publish("third".into()).await.unwrap();
+    let message_id_3 = processing.hash();
+    processing.await.unwrap();
+
+    // We expect to only receive the new, third message and not the previous two ones anymore.
+    let event = rx.next().await.unwrap();
+    let StreamEvent::Processed { operation, .. } = event else {
+        panic!("unexpected event");
+    };
+    assert_eq!(operation.id(), message_id_3);
+}
+
+#[tokio::test]
+async fn explicit_acking() {
+    setup_logging();
+
+    let topic = Topic::new();
+    let node = p2panda::builder()
+        .ack_policy(AckPolicy::Explicit)
+        .spawn()
+        .await
+        .unwrap();
+
+    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+    // Publish two messages into the stream.
+    let message_id_1 = {
+        let processing = tx.publish("first".into()).await.unwrap();
+        let id = processing.hash();
+        processing.await.unwrap();
+        id
+    };
+
+    let message_id_2 = {
+        let processing = tx.publish("second".into()).await.unwrap();
+        let id = processing.hash();
+        processing.await.unwrap();
+        id
+    };
+
+    // We except to receive them from the subscription stream.
+    assert_message_id(&rx.next().await.unwrap(), message_id_1);
+    assert_message_id(&rx.next().await.unwrap(), message_id_2);
+
+    // Acknowledge first message.
+    rx.ack(message_id_1).await.unwrap();
+
+    // Create a new subscription, streaming from "acked frontier".
+    drop(tx);
+    drop(rx);
+
+    let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+    // We except to receive only the un-acked messages from the subscription stream.
+    assert_message_id(&rx.next().await.unwrap(), message_id_2);
+}
+
+#[tokio::test]
+async fn replay_stream_from_start() {
+    setup_logging();
+
+    let chat_id = Topic::new();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda subscribes to chat and publishes one message.
+    {
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+    }
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Panda subscribes again, this time asking to replay all messages.
+    let (_panda_tx, mut panda_rx) = panda
+        .stream_from::<String>(chat_id, StreamFrom::Start)
+        .await
+        .unwrap();
+
+    // Icebear joins the chat and publishes one message.
+    let (icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+    icebear_tx.publish("Hello, Panda!".into()).await.unwrap();
+
+    // Panda should receive the first message they sent again, followed by Icebear's message which
+    // arrived via sync.
+    let mut received = vec![];
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Processed { operation, .. } = event {
+            received.push(operation);
+            if received.len() == 2 {
+                break;
+            }
+        }
+    }
+
+    assert_eq!(received[0].message(), &"Hello, Icebear!".to_string());
+    assert_eq!(received[1].message(), &"Hello, Panda!".to_string());
+}
+
+#[tokio::test]
+async fn replay_stream_from_cursor() {
+    setup_logging();
+
+    let topic = Topic::new();
+    let node = p2panda::builder().spawn().await.unwrap();
+
+    let (tx, rx) = node.stream::<String>(topic).await.unwrap();
+
+    // Publish two messages into the stream.
+    let _message_id_1 = {
+        let processing = tx.publish("first".into()).await.unwrap();
+        let id = processing.hash();
+        processing.await.unwrap();
+        id
+    };
+
+    let message_id_2 = {
+        let processing = tx.publish("second".into()).await.unwrap();
+        let id = processing.hash();
+        processing.await.unwrap();
+        id
+    };
+
+    let message_id_3 = {
+        let processing = tx.publish("third".into()).await.unwrap();
+        let id = processing.hash();
+        processing.await.unwrap();
+        id
+    };
+
+    // Force re-playing from custom cursor position with new stream subscription.
+    drop(tx);
+    drop(rx);
+
+    let mut cursor = Cursor::new(topic.to_string(), LogHeights::default());
+    cursor.advance(node.id(), LogId::from_topic(topic), 0); // seq_num = 0, the first message
+
+    let (_tx, mut rx) = node
+        .stream_from::<String>(topic, StreamFrom::Cursor(cursor))
+        .await
+        .unwrap();
+
+    // We expect to only receive the second and third message.
+    assert_message_id(&rx.next().await.unwrap(), message_id_2);
+    assert_message_id(&rx.next().await.unwrap(), message_id_3);
 }

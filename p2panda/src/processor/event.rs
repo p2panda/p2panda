@@ -94,7 +94,7 @@ where
     }
 
     /// Returns the error which occurred during a processing failure or `None`.
-    pub fn failure_reason(&self) -> Option<EventError> {
+    pub fn failure_reason(&self) -> Option<ProcessorError> {
         if let ProcessorStatus::Failed(err) = &self.ingest {
             return Some(err.to_owned().into());
         }
@@ -107,8 +107,8 @@ where
     }
 }
 
-#[derive(Debug, Error)]
-pub enum EventError {
+#[derive(Clone, Debug, Error)]
+pub enum ProcessorError {
     #[error("ingest processor failed with: {0}")]
     Ingest(#[from] IngestError),
 
@@ -119,6 +119,12 @@ pub enum EventError {
 impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {
     fn borrow(&self) -> &Operation<E> {
         &self.operation
+    }
+}
+
+impl<L, E, TP> Borrow<Header<E>> for &Event<L, E, TP> {
+    fn borrow(&self) -> &Header<E> {
+        &self.operation.header
     }
 }
 

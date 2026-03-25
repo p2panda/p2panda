@@ -18,7 +18,7 @@ use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Offset, StreamPublisher,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, StreamFrom, StreamPublisher,
     StreamSubscription, SystemEvent, ephemeral_stream, event_stream, processed_stream,
 };
 
@@ -82,11 +82,179 @@ impl Node {
         })
     }
 
-    /// Eventually consistent publish and subscribe stream of messages.
+    /// Returns a publisher and stateful subscriber for an eventually consistent event stream of
+    /// messages over the given topic.
     ///
-    /// Items emitted from the stream include operations, sync events and system events (ie.
-    /// network-related events, such as discovery events, which are not directly associated with a
-    /// specific topic).
+    /// This API is inspired by the principles of "event streaming", combined with eventually
+    /// consistent "local-first" and causally ordered events.
+    ///
+    /// ## Event types
+    ///
+    /// Items emitted from the stream include application messages (delivered on top of p2panda's
+    /// "operation" append-only log data-type), error and system events, for example about the sync
+    /// session taking place on the networking layer.
+    ///
+    /// ## Event processing
+    ///
+    /// Every operation running through the subscription stream gets processed by an internal "event
+    /// processing pipeline". This concerns the system-layer, meaning the internal p2panda
+    /// append-only log `Operation` data-type and internal processors to derive state from these
+    /// operations. Here we check the log-integrity, prune the log on demand, order operations
+    /// causally and more.
+    ///
+    /// After this we're forwarding the message to the application-layer, with a bunch of meta data
+    /// and debugging info attached.
+    ///
+    /// Applications usually want to further process the received events from the stream, for
+    /// example validating the application specific message format to then finally change the state.
+    ///
+    /// These application messages can be deltas of CRDTs (Conflict-Free Replicated Data-Types) or
+    /// concrete events, such as "move pawn to E4" in a chess-game. Usually applying these state
+    /// transitions will lead to a new "materialization" of the application's state which is
+    /// persisted in the app's database.
+    ///
+    /// This streaming API has a *at least once* guarantee, meaning that events can occur more than
+    /// once. Any processing system needs to have an idempotency guarantee or account for tracking
+    /// processed events.
+    ///
+    /// Events are automatically acknowledged by default and re-played when not acked on app-start,
+    /// read further below for more details on the stateful design of stream subscribers, cursors
+    /// and acknowledgments.
+    ///
+    /// ```text
+    ///               ┌────────────────────────────────────────────┐
+    ///               │                                            │   APPLICATION
+    ///               │               User interface               │   (example)
+    ///               │                                            │
+    ///               └───▲────────────────────────────────────┬───┘
+    ///                   │                                    ▼
+    ///           ┌───────┼───────┐                       User Action
+    ///           │               │                            │
+    ///           │   Database    │                            │
+    ///           │               │                            │
+    ///           └───────────▲───┘                            │
+    ///                       │                                │
+    ///      Acknowledge      │                                │
+    ///     ┌─────────┐       │                                │
+    ///     │         │       │                                │
+    ///     │     ┌───┼───────┼───┐                            │
+    ///     │     │               │                            │
+    ///     │     │  Application  │                            │
+    ///     │     │  Stream       │                            │ Command
+    ///     │     │  Processing   │                      ┌─────▼──────┐
+    ///     │     │               │                      │Create Event│
+    ///     │     │               │                      └─────┬──────┘
+    ///     │     └───────▲───────┘                            │
+    ///     │             │                                    │
+    ///     │             │                                    │
+    ///     │             │ rx                                 │ tx
+    ///     │             │                                    │
+    /// ────┼─────────────┼────────────────────────────────────┼──────────────────
+    ///     │             │                                    │            SYSTEM
+    ///     │     ┌───────┼───────┐                            │
+    ///     │     │               │                            │ Publish
+    ///     │     │               │           ┌────────────────▼─────────────────┐
+    ///     │     │   System      │           │Create & sign p2panda operation w.│
+    ///     │     │   Stream      │           │"message" payload from application│
+    ///     │     │   Processing  │           └────────────────┬─────────────────┘
+    ///     │     │               │                            │
+    /// ┌───▼───┐ │               │                            │
+    /// │ Acked │ │               │                            │
+    /// │ State │ │               │                            │
+    /// └───┬───┘ │               │                            │
+    ///     └─────┤               │                            │
+    ///           └───────▲───────┘                            │
+    ///                   │                                    │
+    ///                   │                                    │
+    ///                   │◄───────────────────────────────────┤
+    ///                   │                                    │
+    ///                   │                                    │
+    ///                   │ Receive from other nodes           │ Publish
+    ///                   │                                    │
+    ///               ┌───┼────────────────────────────────────▼──┐
+    ///               │                                           │
+    ///               │                p2p network                │
+    ///               │                                           │
+    ///               └───────────────────────────────────────────┘
+    /// ```
+    ///
+    /// Locally created operations (via the stream publisher) are processed by the same pipeline. It
+    /// is possible to await the processing result which can be useful for some applications if they
+    /// want to block UI components etc.
+    ///
+    /// ```rust
+    /// # use p2panda_core::Topic;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let topic = Topic::new();
+    /// # let node = p2panda::builder().spawn().await?;
+    /// #
+    /// let (tx, _) = node.stream::<String>(topic).await?;
+    ///
+    /// // Publish a message, internally this creates an "operation" which needs to be processed.
+    /// let processing = tx.publish("I'm being processed soon!".into()).await?;
+    ///
+    /// // The hash of the created operation is directly available.
+    /// let hash = processing.hash();
+    ///
+    /// // We can optionally await the result of the processor.
+    /// let result = processing.await?;
+    /// assert!(result.is_completed());
+    /// assert!(!result.is_failed());
+    /// #
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// ## Stateful subscriptions and acknowledgments
+    ///
+    /// The returned [`StreamSubscription`] is stateful and keeps track of already acknowledged
+    /// operations by persisting them in the local SQLite database. Operations which have not been
+    /// acknowledged yet will be automatically re-played when this stream is created again.
+    ///
+    /// By default all events are automatically acknowledged. Use [`AckPolicy`] to change this
+    /// behaviour when configuring the node. It is recommended to switch to a manual policy and
+    /// explicitly acknowledge events _after_ processing them on application-layer was successful
+    /// (see diagram above). Like this applications can ensure every event is at least processed
+    /// once, guaranteeing resiliance in the context of application crashes.
+    ///
+    /// The topic is used to identify each stream's state. It is not recommended to create more than
+    /// one subscription over the same topic using this high-level method as the acked state will be
+    /// shared across them, leading to potentially surprising behaviour ("work stealing" processing
+    /// behaviour across streams and potentially more duplicate events).
+    ///
+    /// Applications _never_ acknowledge events which only concern system-level state (for example
+    /// pruning events without a payload, key agreement "control messages" etc.), these are _always_
+    /// acknowledged automatically after they've been processed successfully, independent of the
+    /// chosen ack policy.
+    ///
+    /// ## Crash Resiliance & Re-plays
+    ///
+    /// Un-acknowledged ("nacked") events are automatically re-played when a stream is created by
+    /// default. This gives us the "at least once" guarantee, making sure no events get lost, even
+    /// when facing system crashes or other unexpected exits (for example a user moving a mobile
+    /// application into the background, interrupting all current processing).
+    ///
+    /// With the [`Node::stream_from`] method we can further determine the behaviour of re-plays.
+    /// For example we can begin streaming from a custom "cursor" position on or request to stream
+    /// _all_ currently known events for this topic from the start. All of these tools allow for
+    /// different patterns of application state materialization, rolling out breaking changes,
+    /// updates, etc.
+    ///
+    /// Please note that this can be a destructive action as it will _replace_ and persist the
+    /// current acked stream state with the new arguments.
+    ///
+    /// ## System-level failures
+    ///
+    /// In most cases application developers will not need to deal with the system-level event
+    /// processing part. However, in rare cases (bugs, critical failures, etc.) processing an event,
+    /// re-playing or acknowledging it might have failed.
+    ///
+    /// Usually these situations are connected to system failure (running out of resource like
+    /// hard-disc space) or bugs in p2panda. Since failed system-level events are not acknowledged,
+    /// they will be automatically replayed when the application starts again. If the underlying
+    /// cause of the error was not fixed by that, then you might want to consult if any patches have
+    /// been made in p2panda.
     pub async fn stream<M>(
         &self,
         topic: impl Into<Topic>,
@@ -94,20 +262,18 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from(topic, Offset::Frontier).await
+        self.stream_from(topic, StreamFrom::Frontier).await
     }
 
-    /// Eventually consistent publish and subscribe stream of messages with a custom offset.
+    /// Eventually consistent publish and subscribe stream of messages from a given position.
     ///
-    /// Setting an offset is useful if the application doesn't keep any materialised state around
-    /// and needs to repeat all messages on start.
+    /// Use [`StreamFrom`] to determine the starting position of the subscription stream.
     ///
-    /// Another use-case is the roll-out of an application update where all state needs to be
-    /// re-materialised.
+    /// See [`Node::stream`] for further information.
     pub async fn stream_from<M>(
         &self,
         topic: impl Into<Topic>,
-        offset: Offset,
+        from: StreamFrom,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -129,7 +295,7 @@ impl Node {
             self.store.clone(),
             self.forge.clone(),
             self.pipeline.clone(),
-            offset,
+            from,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
@@ -182,10 +348,6 @@ impl Node {
         relay_url: RelayUrl,
     ) -> Result<(), NetworkError> {
         self.network.insert_bootstrap(node_id, relay_url).await
-    }
-
-    pub fn ack(&self, _message_id: Hash) {
-        unimplemented!()
     }
 }
 

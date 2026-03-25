@@ -136,6 +136,12 @@ impl<E> PartialEq for Operation<E> {
 
 impl<E> Eq for Operation<E> {}
 
+impl<E> Borrow<Header<E>> for Operation<E> {
+    fn borrow(&self) -> &Header<E> {
+        &self.header
+    }
+}
+
 #[allow(clippy::non_canonical_partial_ord_impl)]
 impl<E> PartialOrd for Operation<E> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
