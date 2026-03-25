@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::BTreeMap;
-
 use p2panda_core::{Cursor, PublicKey, Topic};
 use p2panda_store::logs::LogStore;
-use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::protocols::{LogSyncError, get_log_heights};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -16,6 +12,7 @@ use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
+use crate::streams::ack::{Acked, AckedError};
 use crate::streams::stream::{Source, process_operation};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
@@ -34,30 +31,32 @@ pub enum StreamFrom {
     Cursor(Cursor<PublicKey, LogId>),
 }
 
-/// Compute difference between local state and given state vector for a given topic, then re-play
-/// and re-process all operations in the difference set.
+impl From<Cursor<PublicKey, LogId>> for StreamFrom {
+    fn from(cursor: Cursor<PublicKey, LogId>) -> Self {
+        Self::Cursor(cursor)
+    }
+}
+
+/// Re-play and re-process local operations from a given point on.
 pub(crate) async fn replay_from<M>(
     topic: Topic,
     store: SqliteStore,
     app_tx: mpsc::Sender<StreamEvent<M>>,
     pipeline: Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
-    cursor: Cursor<PublicKey, LogId>,
+    acked: &Acked,
+    from: StreamFrom,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     let (replay_tx, mut replay_rx) = mpsc::unbounded_channel::<Operation>();
 
+    // Determine from which point on we re-play local operations.
+    let log_ranges = acked.nacked_log_ranges(from).await?;
+
     let replay_task: JoinHandle<Result<(), ReplayError>> = tokio::spawn(async move {
-        let local_logs: BTreeMap<PublicKey, Vec<LogId>> = store.resolve(&topic).await?;
-
-        let local_log_heights =
-            get_log_heights::<LogId, Extensions, SqliteStore>(&store, &local_logs).await?;
-
-        let diff = cursor.compare(&local_log_heights);
-
-        for (author, logs) in diff {
+        for (author, logs) in log_ranges {
             for (log_id, (from, to)) in logs {
                 let Some(operations): Option<Vec<(Operation, _)>> =
                     store.get_log_entries(&author, &log_id, from, to).await?
@@ -87,6 +86,7 @@ where
                 topic,
                 &pipeline,
                 ack_policy,
+                acked,
                 Source::LocalStore,
             )
             .await
@@ -116,8 +116,8 @@ pub enum ReplayError {
     #[error("an error occurred while querying the store: {0}")]
     Store(#[from] SqliteError),
 
-    #[error(transparent)]
-    LogSync(#[from] LogSyncError),
+    #[error("failed managing acked operations: {0}")]
+    Acked(#[from] AckedError),
 
     #[error("a critical error occurred in the replay task")]
     CriticalError,

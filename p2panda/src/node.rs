@@ -175,10 +175,6 @@ impl Node {
     pub fn id(&self) -> NodeId {
         self.forge.public_key()
     }
-
-    pub fn ack(&self, _message_id: Hash) {
-        unimplemented!()
-    }
 }
 
 #[cfg(any(test, feature = "test_utils"))]

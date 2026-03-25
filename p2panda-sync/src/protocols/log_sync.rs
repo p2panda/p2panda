@@ -376,7 +376,7 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-pub async fn get_log_heights<L, E, S>(
+async fn get_log_heights<L, E, S>(
     store: &S,
     logs: &Logs<L>,
 ) -> Result<LogHeights<PublicKey, L>, LogSyncError>

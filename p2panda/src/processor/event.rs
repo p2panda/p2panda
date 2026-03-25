@@ -122,6 +122,12 @@ impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {
     }
 }
 
+impl<L, E, TP> Borrow<Header<E>> for &Event<L, E, TP> {
+    fn borrow(&self) -> &Header<E> {
+        &self.operation.header
+    }
+}
+
 impl<L, E, TP> Borrow<IngestArgs<L, TP>> for Event<L, E, TP>
 where
     L: LogId,
