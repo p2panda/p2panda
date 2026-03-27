@@ -119,6 +119,24 @@ mod tests {
     }
 
     #[test]
+    fn encode_decode_empty_body() {
+        let private_key = PrivateKey::new();
+        let body = Body::new(&[]);
+        let mut header = Header::<()> {
+            public_key: private_key.public_key(),
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            ..Default::default()
+        };
+        header.sign(&private_key);
+
+        let bytes = encode_cbor(&header).unwrap();
+        let header_again: Header<()> = decode_cbor(&bytes[..]).unwrap();
+
+        assert_eq!(header.hash(), header_again.hash());
+    }
+
+    #[test]
     fn decode_eof() {
         // This is an incomplete byte sequence of a header / body tuple.
         let bytes = hex::decode("828901582014d59877a250").unwrap();
