@@ -2,6 +2,7 @@
 
 pub mod address_book;
 pub mod cursors;
+pub mod groups;
 pub mod logs;
 #[cfg(feature = "macros")]
 pub mod macros;
