@@ -6,7 +6,8 @@ use std::error::Error;
 pub trait GroupsStore<ID, S> {
     type Error: Error;
 
-    fn set_state(&self, id: &ID, state: &S) -> impl Future<Output = Result<(), Self::Error>>;
+    fn set_groups_state(&self, id: &ID, state: &S)
+    -> impl Future<Output = Result<(), Self::Error>>;
 
-    fn get_state(&self, id: &ID) -> impl Future<Output = Result<Option<S>, Self::Error>>;
+    fn get_groups_state(&self, id: &ID) -> impl Future<Output = Result<Option<S>, Self::Error>>;
 }

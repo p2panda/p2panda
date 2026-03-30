@@ -26,7 +26,7 @@ async fn partial_order() {
     // A has no dependencies and so it's added straight to the processed set and ready
     // queue.
 
-    let mut orderer = CausalOrderer::new(store.clone());
+    let orderer = CausalOrderer::new(store.clone());
     let item = graph[0].clone();
     tx_unwrap!(store, {
         orderer.process(item.0, &item.1).await.unwrap();
@@ -89,7 +89,7 @@ async fn idempotency() {
         ("B".to_string(), vec!["A".to_string()]),
     ];
 
-    let mut orderer = CausalOrderer::new(store.clone());
+    let orderer = CausalOrderer::new(store.clone());
 
     let item_a = graph[0].clone();
     let item_b = graph[1].clone();
@@ -156,7 +156,7 @@ async fn partial_order_with_recursion() {
         ("G".to_string(), vec!["F".to_string()]),
     ];
 
-    let mut orderer = CausalOrderer::new(store.clone());
+    let orderer = CausalOrderer::new(store.clone());
 
     tx_unwrap!(store, {
         for (key, dependencies) in incomplete_graph {
@@ -223,7 +223,7 @@ async fn complex_graph() {
         ),
     ];
 
-    let mut orderer = CausalOrderer::new(store.clone());
+    let orderer = CausalOrderer::new(store.clone());
 
     tx_unwrap!(store, {
         for (key, dependencies) in incomplete_graph {
@@ -304,7 +304,7 @@ async fn very_out_of_order() {
         ("A".to_string(), vec![]),
     ];
 
-    let mut orderer = CausalOrderer::new(store.clone());
+    let orderer = CausalOrderer::new(store.clone());
 
     tx_unwrap!(store, {
         for (key, dependencies) in out_of_order_graph {
