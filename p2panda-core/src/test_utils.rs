@@ -49,7 +49,11 @@ impl TestLog {
             version: 1,
             signature: None,
             payload_size: body.size(),
-            payload_hash: Some(body.hash()),
+            payload_hash: if body.size() == 0 {
+                None
+            } else {
+                Some(body.hash())
+            },
             timestamp: Timestamp::now(),
             seq_num: *seq_num,
             backlink: *backlink,
@@ -65,5 +69,20 @@ impl TestLog {
             header,
             body: Some(body),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Header;
+    use crate::cbor::{decode_cbor, encode_cbor};
+    use crate::test_utils::TestLog;
+
+    #[test]
+    fn zero_byte_body() {
+        let log = TestLog::new();
+        let operation = log.operation(&[], ());
+        let bytes = encode_cbor(operation.header()).unwrap();
+        assert!(decode_cbor::<Header, _>(&bytes[..]).is_ok());
     }
 }
