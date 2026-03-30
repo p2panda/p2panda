@@ -28,6 +28,8 @@ Highlights are marked with a pancake 🥞
 - Introduce `Cursor` type in core to track log heights [#1104](https://github.com/p2panda/p2panda/pull/1104)
 - `CursorStore` to persist `Cursor` state in SQLite [#1104](https://github.com/p2panda/p2panda/pull/1104)
 - Re-play events from any cursor, track acked state [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- Processor for groups operations [#1112](https://github.com/p2panda/p2panda/pull/1112)
+- `GroupsStore` with `SqliteStore` implementation [#1112](https://github.com/p2panda/p2panda/pull/1112)
 
 ### Changed
 

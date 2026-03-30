@@ -16,14 +16,14 @@ pub use resolver::Resolver;
 ///
 /// Note that this needs to be unique within a group, can be a username, number or preferably a
 /// long byte string.
-pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
+pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + Ord + StdHash {}
 
 /// Identifier for each group membership operation.
 ///
 /// Operations trigger changes of the group state and are usually sent in form of messages over the
 /// network. Each operation needs to be uniquely identifiable, preferably by a collision-resistant
 /// hash.
-pub trait OperationId: Copy + Debug + PartialEq + Eq + StdHash {}
+pub trait OperationId: Copy + Debug + PartialEq + Eq + Ord + StdHash {}
 
 /// Conditions associated with an actors access level.
 pub trait Conditions: Clone + Debug + PartialEq + PartialOrd {}

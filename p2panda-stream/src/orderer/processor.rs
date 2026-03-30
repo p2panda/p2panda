@@ -53,7 +53,7 @@ where
             .await
             .map_err(|err| OrdererError::Transaction(err))?;
 
-        let mut inner = self.inner.lock().await;
+        let inner = self.inner.lock().await;
         inner
             .process(input.hash(), input.dependencies())
             .await
@@ -70,7 +70,7 @@ where
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         loop {
-            let mut inner = self.inner.lock().await;
+            let inner = self.inner.lock().await;
 
             let permit = self
                 .store

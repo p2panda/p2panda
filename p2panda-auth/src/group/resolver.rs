@@ -52,8 +52,8 @@ pub struct StrongRemove<ID, OP, M, C> {
 
 impl<ID, OP, M, C> Resolver<ID, OP, M, C> for StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle + Ord,
-    OP: OperationId + Ord,
+    ID: IdentityHandle,
+    OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
 {
@@ -103,8 +103,8 @@ where
 
 impl<ID, OP, M, C> StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle + Ord,
-    OP: OperationId + Ord,
+    ID: IdentityHandle,
+    OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
 {
@@ -311,8 +311,8 @@ where
 /// manager access.
 fn removed_or_demoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle + Ord,
-    OP: OperationId + Ord,
+    ID: IdentityHandle,
+    OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
 {
@@ -337,8 +337,8 @@ where
 /// manager access.
 fn added_or_promoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle + Ord,
-    OP: OperationId + Ord,
+    ID: IdentityHandle,
+    OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
 {

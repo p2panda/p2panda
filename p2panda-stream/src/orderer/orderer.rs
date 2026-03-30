@@ -66,7 +66,7 @@ use p2panda_store::orderer::OrdererStore;
 ///
 /// Note that no checks are made for cycles occurring in the graph, this should be validated on
 /// another layer.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CausalOrderer<ID, S> {
     /// Store for managing "ready" and "pending" items.
     pub(crate) store: S,
@@ -86,12 +86,12 @@ where
     }
 
     /// Pop the next item from the ready queue.
-    pub async fn next(&mut self) -> Result<Option<ID>, S::Error> {
+    pub async fn next(&self) -> Result<Option<ID>, S::Error> {
         self.store.take_next_ready().await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&mut self, key: ID, dependencies: &[ID]) -> Result<(), S::Error> {
+    pub async fn process(&self, key: ID, dependencies: &[ID]) -> Result<(), S::Error> {
         if !self.store.ready(dependencies).await? {
             self.store
                 .mark_pending(key.clone(), dependencies.to_vec())
@@ -109,7 +109,7 @@ where
     }
 
     /// Recursively check if any pending items now have their dependencies met.
-    async fn process_pending(&mut self, key: ID) -> Result<(), S::Error> {
+    async fn process_pending(&self, key: ID) -> Result<(), S::Error> {
         // Get all items which depend on the passed key.
         let Some(dependents) = self.store.get_next_pending(key.clone()).await? else {
             return Ok(());

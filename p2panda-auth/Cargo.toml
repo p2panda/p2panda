@@ -16,22 +16,52 @@ keywords = ["auth", "access-control", "groups", "crdt", "offline-first"]
 [package.metadata.docs.rs]
 all-features = true
 
-[lints]
-workspace = true
-
 [features]
-default = []
-test_utils = ["dep:rand", "serde"]
+default = ["processor"]
+processor = [
+  "serde",
+  "dep:p2panda-core",
+  "dep:p2panda-stream",
+  "dep:p2panda-store",
+  "dep:tokio",
+]
+test_utils = [
+  "serde",
+  "dep:p2panda-core",
+  "dep:rand",
+  "dep:tokio",
+  "dep:tracing-subscriber",
+]
 serde = ["dep:serde"]
+test = ["test_utils"]
 
 [dependencies]
-p2panda-core = { path = "../p2panda-core", version = "0.5.1", optional = true }
-petgraph = { version = "0.8.1", features = ["serde-1"] }
-rand = { version = "0.9.0", features = ["alloc"], optional = true }
+p2panda-core = { path = "../p2panda-core", version = "0.5.2", optional = true }
+p2panda-store = { path = "../p2panda-store", version = "0.5.2", optional = true }
+p2panda-stream = { path = "../p2panda-stream", version = "0.5.2", optional = true }
+petgraph = { version = "0.8.3", features = ["serde-1"] }
+rand = { version = "0.10.0", optional = true }
 serde = { version = "1.0.219", features = ["derive"], optional = true }
 thiserror = "2.0.12"
+tokio = { version = "1.49.0", features = ["sync", "signal"], optional = true }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = [
+  "env-filter",
+], optional = true }
 
 [dev-dependencies]
-rand = { version = "0.9.1", features = ["alloc"] }
-serde = { version = "1.0.219", features = ["derive"] }
+anyhow = "1.0.102"
 ciborium = "0.2.2"
+futures-util = "0.3.32"
+p2panda-auth = { path = ".", features = ["test_utils"] }
+p2panda-core = { path = "../p2panda-core", version = "0.5.2", features = [
+  "test_utils",
+] }
+p2panda-net = { path = "../p2panda-net", version = "0.5.2" }
+p2panda-store = { path = "../p2panda-store", version = "0.5.2", features = [
+  "test_utils",
+] }
+p2panda-sync = { path = "../p2panda-sync", version = "0.5.2" }
+
+[lints]
+workspace = true
