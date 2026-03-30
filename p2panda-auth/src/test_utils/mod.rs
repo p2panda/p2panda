@@ -4,6 +4,7 @@
 
 use std::fmt::Debug;
 
+use p2panda_stream::orderer::Ordering;
 use serde::{Deserialize, Serialize};
 
 use crate::Access;
@@ -51,6 +52,12 @@ impl Operation<char, u32, Conditions> for TestOperation {
 
     fn action(&self) -> GroupAction<char, Conditions> {
         self.action.clone()
+    }
+}
+
+impl Ordering<u32> for TestOperation {
+    fn dependencies(&self) -> &[u32] {
+        &self.dependencies
     }
 }
 
@@ -173,4 +180,12 @@ pub fn assert_members(
     actual.sort();
     expected.sort();
     assert_eq!(actual, expected);
+}
+
+pub fn setup_logging() {
+    if std::env::var("RUST_LOG").is_ok() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
 }

@@ -75,8 +75,10 @@
 mod access;
 pub mod graph;
 pub mod group;
+#[cfg(feature = "processor")]
+pub mod processor;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod traits;
 
-pub use access::{Access, AccessLevel};
+pub use access::{Access, AccessError, AccessLevel};
