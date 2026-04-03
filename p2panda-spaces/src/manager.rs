@@ -522,7 +522,7 @@ where
         let space = match self.space(*space_id).await? {
             Some(space) => space,
             None => {
-                if !auth_message.payload().is_create() {
+                if !auth_message.action().is_create() {
                     // If this is not a "create" message we should have learned about the space
                     // before. This can be either a faulty message or a problem with the message
                     // orderer.

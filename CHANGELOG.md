@@ -24,6 +24,8 @@ Highlights are marked with a pancake 🥞
 - Process and aggregate metrics for sync events [#1085](https://github.com/p2panda/p2panda/pull/1085)
 - Introduce system event API for Node [#1087](https://github.com/p2panda/p2panda/pull/1087)
 - Return error when gossip message exceeds maximum size [#1096](https://github.com/p2panda/p2panda/pull/1096)
+- Processor for groups operations [#1112](https://github.com/p2panda/p2panda/pull/1112)
+- `GroupsStore` with `SqliteStore` implementation [#1112](https://github.com/p2panda/p2panda/pull/1112)
 
 ### Changed
 
@@ -52,6 +54,10 @@ Highlights are marked with a pancake 🥞
 
 - Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
+
+### Changed
+
+- `p2panda-auth` remove high-level API and orderer generic [#1030](https://github.com/p2panda/p2panda/pull/1030)
 
 ## [0.5.1] - 09/02/2026
 

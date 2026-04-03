@@ -2,17 +2,15 @@
 
 //! Test utilities.
 
-pub mod no_ord;
-pub mod partial_ord;
-
 use std::fmt::Debug;
 
+use p2panda_stream::orderer::Ordering;
 use serde::{Deserialize, Serialize};
 
 use crate::Access;
 use crate::group::resolver::StrongRemove;
-use crate::group::{GroupAction, GroupControlMessage, GroupCrdt, GroupCrdtState, GroupMember};
-use crate::traits::{IdentityHandle, Operation, OperationId, Orderer};
+use crate::group::{GroupAction, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember};
+use crate::traits::{IdentityHandle, Operation, OperationId};
 
 impl IdentityHandle for char {}
 impl OperationId for u32 {}
@@ -20,17 +18,22 @@ impl OperationId for u32 {}
 pub type MemberId = char;
 pub type MessageId = u32;
 pub type Conditions = ();
-pub type TestResolver = StrongRemove<MemberId, MessageId, Conditions, TestOperation>;
+pub type TestGroupState = GroupCrdtState<MemberId, MessageId, TestOperation, Conditions>;
+pub type TestGroup = GroupCrdt<MemberId, MessageId, TestOperation, Conditions, TestResolver>;
+pub type TestResolver = StrongRemove<MemberId, MessageId, TestOperation, Conditions>;
+pub type TestGroupError =
+    GroupCrdtError<MemberId, MessageId, TestOperation, Conditions, TestResolver>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TestOperation {
     pub id: u32,
     pub author: char,
     pub dependencies: Vec<u32>,
-    pub payload: GroupControlMessage<char, ()>,
+    pub group_id: char,
+    pub action: GroupAction<char, Conditions>,
 }
 
-impl Operation<char, u32, GroupControlMessage<char, ()>> for TestOperation {
+impl Operation<char, u32, Conditions> for TestOperation {
     fn id(&self) -> u32 {
         self.id
     }
@@ -43,8 +46,18 @@ impl Operation<char, u32, GroupControlMessage<char, ()>> for TestOperation {
         self.dependencies.clone()
     }
 
-    fn payload(&self) -> GroupControlMessage<char, ()> {
-        self.payload.clone()
+    fn group_id(&self) -> char {
+        self.group_id
+    }
+
+    fn action(&self) -> GroupAction<char, Conditions> {
+        self.action.clone()
+    }
+}
+
+impl Ordering<u32> for TestOperation {
+    fn dependencies(&self) -> &[u32] {
+        &self.dependencies
     }
 }
 
@@ -55,12 +68,12 @@ fn make_group_op(
     action: GroupAction<MemberId, ()>,
     dependencies: Vec<MessageId>,
 ) -> TestOperation {
-    let control_message = GroupControlMessage { group_id, action };
     TestOperation {
         id: operation_id,
         author: actor_id,
         dependencies,
-        payload: control_message,
+        group_id,
+        action,
     }
 }
 
@@ -147,35 +160,32 @@ pub fn demote_member(
     )
 }
 
-pub fn sync<ORD>(
-    y: GroupCrdtState<MemberId, MessageId, Conditions, ORD>,
+pub fn sync(
+    y: GroupCrdtState<MemberId, MessageId, TestOperation, Conditions>,
     ops: &[TestOperation],
-) -> GroupCrdtState<MemberId, MessageId, Conditions, ORD>
-where
-    ORD: Orderer<
-            MemberId,
-            MessageId,
-            GroupControlMessage<MemberId, Conditions>,
-            Operation = TestOperation,
-        > + Debug,
-    ORD::Operation: Clone,
-{
+) -> GroupCrdtState<MemberId, MessageId, TestOperation, Conditions> {
     ops.iter().fold(y, |g, op| {
-        GroupCrdt::<MemberId, MessageId, Conditions, TestResolver, ORD>::process(g, op).unwrap()
+        GroupCrdt::<MemberId, MessageId, TestOperation, Conditions, TestResolver>::process(g, op)
+            .unwrap()
     })
 }
 
-pub fn assert_members<ORD>(
-    y: &GroupCrdtState<MemberId, MessageId, Conditions, ORD>,
+pub fn assert_members(
+    y: &GroupCrdtState<MemberId, MessageId, TestOperation, Conditions>,
     group_id: MemberId,
     expected: &[(char, Access<()>)],
-) where
-    ORD: Orderer<MemberId, MessageId, GroupControlMessage<MemberId, Conditions>> + Debug,
-    ORD::Operation: Clone,
-{
+) {
     let mut actual = y.members(group_id);
     let mut expected = expected.to_vec();
     actual.sort();
     expected.sort();
     assert_eq!(actual, expected);
+}
+
+pub fn setup_logging() {
+    if std::env::var("RUST_LOG").is_ok() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
 }

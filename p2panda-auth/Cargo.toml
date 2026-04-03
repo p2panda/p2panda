@@ -20,17 +20,49 @@ all-features = true
 workspace = true
 
 [features]
-default = []
-test_utils = ["dep:rand", "serde"]
+default = ["processor"]
+processor = [
+  "dep:tokio",
+  "serde",
+  "dep:p2panda-core",
+  "dep:p2panda-stream",
+  "dep:p2panda-store",
+]
+test_utils = ["dep:rand", "serde", "dep:p2panda-core", "dep:tracing-subscriber"]
 serde = ["dep:serde"]
+test = ["test_utils"]
 
 [dependencies]
+p2panda-core = { path = "../p2panda-core", version = "0.5.2", optional = true }
+p2panda-stream = { path = "../p2panda-stream", version = "0.5.2", optional = true }
+p2panda-store = { path = "../p2panda-store", version = "0.5.2", optional = true }
 petgraph = { version = "0.8.1", features = ["serde-1"] }
 rand = { version = "0.9.0", features = ["alloc"], optional = true }
 serde = { version = "1.0.219", features = ["derive"], optional = true }
+tokio = { version = "1.49.0", features = ["sync"], optional = true }
 thiserror = "2.0.12"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = [
+  "env-filter",
+], optional = true }
 
 [dev-dependencies]
+p2panda-core = { path = "../p2panda-core", version = "0.5.2", features = [
+  "test_utils",
+] }
+p2panda-net = { path = "../p2panda-net", version = "0.5.2" }
+p2panda-store = { path = "../p2panda-store", version = "0.5.2", features = [
+  "test_utils",
+] }
+p2panda-sync = { path = "../p2panda-sync", version = "0.5.2" }
 rand = { version = "0.9.1", features = ["alloc"] }
 serde = { version = "1.0.219", features = ["derive"] }
 ciborium = "0.2.2"
+tokio = "1.49.0"
+anyhow = "1.0.102"
+clap = { version = "4.5.54", features = ["derive"] }
+futures-util = "0.3.32"
+rand_chacha = "0.9.0"
+tracing = "0.1.44"
+hex = "0.4.3"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
