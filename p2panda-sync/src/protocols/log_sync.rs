@@ -116,6 +116,7 @@ where
                 State::Start => self.state = State::SendHave,
                 State::SendHave => {
                     let local = get_log_heights(&self.store, &self.logs).await?;
+
                     sink.send(LogSyncMessage::<L>::Have(local.clone()))
                         .await
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;

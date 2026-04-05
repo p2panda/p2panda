@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
@@ -12,7 +13,9 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, PublicKey, Topic};
 use p2panda_net::NodeId;
 use p2panda_net::sync::{SyncHandle, SyncHandleError};
+use p2panda_net::utils::ShortFormat;
 use p2panda_store::SqliteStore;
+use p2panda_store::operations::OperationStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -23,11 +26,11 @@ use tracing::warn;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::AckPolicy;
-use crate::operation::{Extensions, LogId, Operation};
+use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{Event, Pipeline};
-use crate::streams::replay::replay_from_start;
-use crate::streams::sync_metrics::{Aggregator, SessionPhase, SyncError};
-use crate::streams::{Offset, sync_metrics};
+use crate::streams::ack::{Acked, AckedError};
+use crate::streams::replay::{ReplayError, StreamFrom, replay_from};
+use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -89,7 +92,7 @@ pub(crate) async fn processed_stream<M>(
     store: SqliteStore,
     forge: OperationForge,
     pipeline: Pipeline<LogId, Extensions, Topic>,
-    offset: Offset,
+    from: StreamFrom,
 ) -> Result<
     (StreamPublisher<M>, StreamSubscription<M>),
     SyncHandleError<Operation, TopicLogSyncEvent<Extensions>>,
@@ -97,6 +100,8 @@ pub(crate) async fn processed_stream<M>(
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
+    let acked = Acked::new(store.clone(), topic);
+
     let mut sync_stream = sync_handle.subscribe().await?;
 
     // Channel to send processed events to the application-layer.
@@ -112,38 +117,49 @@ where
 
     {
         let pipeline = pipeline.clone();
+        let acked = acked.clone();
+        let store = store.clone();
 
         tokio::spawn(async move {
-            // In the case where a full replay of the topic stream is requested, then spawn a
-            // replay task and await it's completion. This will block processing of the sync stream
-            // and of locally created operations until it is complete.
-            if offset == Offset::Start {
-                let result = replay_from_start(
+            // 1. Re-play local events
+            // =======================
+
+            {
+                // This will block processing of the sync stream and of locally created operations
+                // until it is complete.
+                let replay_result = replay_from(
                     topic,
                     store.clone(),
                     app_tx.clone(),
                     pipeline.clone(),
                     ack_policy,
+                    &acked,
+                    from,
                 )
                 .await;
 
                 // Errors occurring in the replay task which be returned to the user.
-                if let Err(err) = result {
-                    warn!("error occurred in replay task: {err:?}");
+                if let Err(error) = replay_result {
+                    warn!(
+                        topic = %topic.fmt_short(),
+                        "error occurred in replay task: {error}"
+                    );
 
                     let _ = app_tx
                         .send(StreamEvent::ReplayFailed {
-                            topic,
-                            error: err.to_string(),
+                            error: Arc::new(error),
                         })
                         .await;
                 }
             }
 
+            // 2. Stream external events
+            // =========================
+
             let mut aggregator = Aggregator::new();
             loop {
                 let event = tokio::select! {
-                   // Received incoming operation from remote source.
+                    // Received incoming operation from remote source.
                     item = sync_stream.next() => {
                         let Some(result) = item else {
                             // Log sync stream seized, we stop the task as well.
@@ -168,10 +184,11 @@ where
                             sync_metrics::SyncEvent::SyncEnded { .. } => event.into(),
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
                                 let Some(event) = process_operation::<M>(
-                                    *operation.clone(),
+                                    *operation,
                                     topic,
                                     &pipeline,
                                     ack_policy,
+                                    &acked,
                                     source
                                 ).await else {
                                     continue;
@@ -198,15 +215,35 @@ where
                         // done here.
                         let _ = processed_tx.send(event.clone());
 
+                        // TODO: Clean up this mess.
                         if let Some(message) = message {
-                            StreamEvent::Processed{
-                                operation: ProcessedOperation {
-                                    event,
-                                    topic,
-                                    message,
-                                },
-                                source: Source::LocalStore
+                            if ack_policy == AckPolicy::Automatic {
+                                if let Err(error) = acked.ack(&event).await {
+                                    StreamEvent::AckFailed { event, error: Arc::new(error) }
+                                } else {
+                                    StreamEvent::Processed {
+                                        operation: ProcessedOperation {
+                                            event,
+                                            topic,
+                                            acked: acked.clone(),
+                                            message,
+                                        },
+                                        source: Source::LocalStore
+                                    }
+                                }
+                            } else {
+                                StreamEvent::Processed {
+                                    operation: ProcessedOperation {
+                                        event,
+                                        topic,
+                                        acked: acked.clone(),
+                                        message,
+                                    },
+                                    source: Source::LocalStore
+                                }
                             }
+                        } else if let Err(error) = acked.ack(&event).await {
+                            StreamEvent::AckFailed { event, error: Arc::new(error) }
                         } else {
                             continue;
                         }
@@ -236,7 +273,9 @@ where
 
     let rx = StreamSubscription {
         topic,
+        store,
         sync_handle,
+        acked,
         stream: ReceiverStream::new(app_rx),
     };
 
@@ -249,6 +288,7 @@ pub(crate) async fn process_operation<M>(
     topic: Topic,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
+    acked: &Acked,
     source: Source,
 ) -> Option<StreamEvent<M>>
 where
@@ -263,8 +303,6 @@ where
         .process(Event::new(operation, log_id, topic, prune_flag))
         .await;
 
-    // Do not forward operations which failed processing on system-level. We do _not_ forward the
-    // error to application-level, only log an error.
     if event.is_failed() {
         warn!(
             id = %event.hash(),
@@ -272,11 +310,21 @@ where
             event.failure_reason().expect("error")
         );
 
-        return None;
+        return Some(StreamEvent::Failed { event, source });
     }
 
-    // Do not forward operations to the application-layer if there's no body.
-    let body = event.body()?;
+    // Do not forward operations to the application-layer if there's no body and _always_ ack
+    // system-level events, even if no automatic policy was configured.
+    let Some(body) = event.body() else {
+        if let Err(error) = acked.ack(&event).await {
+            return Some(StreamEvent::AckFailed {
+                event,
+                error: Arc::new(error),
+            });
+        }
+
+        return None;
+    };
 
     // Attempt decoding application-layer message. This takes place _after_ system-level processing
     // completed and the operation was ingested.
@@ -290,24 +338,29 @@ where
     // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users do
     // decoding on application layer?
     let event = match decode_cbor::<M, _>(body.as_bytes()) {
-        Ok(message) => StreamEvent::Processed {
-            operation: ProcessedOperation {
-                event,
-                topic,
-                message,
-            },
-            source,
-        },
-        Err(err) => StreamEvent::DecodingFailed {
-            event,
-            topic,
-            error: err,
-        },
-    };
+        Ok(message) => {
+            // Do only ack events automatically if processing or decoding did not fail.
+            if ack_policy == AckPolicy::Automatic
+                && let Err(error) = acked.ack(&event).await
+            {
+                return Some(StreamEvent::AckFailed {
+                    event,
+                    error: Arc::new(error),
+                });
+            }
 
-    if ack_policy == AckPolicy::Automatic {
-        // TODO: Automatically acknowledge this message.
-    }
+            StreamEvent::Processed {
+                operation: ProcessedOperation {
+                    event,
+                    topic,
+                    acked: acked.clone(),
+                    message,
+                },
+                source,
+            }
+        }
+        Err(error) => StreamEvent::DecodeFailed { event, error },
+    };
 
     Some(event)
 }
@@ -341,8 +394,6 @@ pub(crate) async fn process_published_operation(
             event.failure_reason().expect("error")
         );
     }
-
-    // TODO: Always ack your own operations?
 
     event
 }
@@ -458,6 +509,8 @@ impl Future for PublishFuture {
 #[pin_project]
 pub struct StreamSubscription<M> {
     topic: Topic,
+    store: SqliteStore,
+    acked: Acked,
     #[allow(unused)]
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     #[pin]
@@ -465,10 +518,17 @@ pub struct StreamSubscription<M> {
 }
 
 impl<M> StreamSubscription<M> {
-    /// Explicitly acknowledge message.
-    pub async fn ack(&self, _message_id: Hash) {
-        // This is a no-op if messages are automatically acked (which is the default).
-        unimplemented!()
+    /// Explicitly acknowledge operation.
+    ///
+    /// Fails silently if operation is not known (it might have been pruned, etc.).
+    pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
+        if let Some(operation) =
+            OperationStore::<_, _, LogId>::get_operation(&self.store, &id).await?
+        {
+            self.acked.ack(&operation.header).await?;
+        }
+
+        Ok(())
     }
 }
 
@@ -489,6 +549,15 @@ pub enum StreamEvent<M> {
     Processed {
         /// Processed operation.
         operation: ProcessedOperation<M>,
+
+        /// The source of the operation.
+        source: Source,
+    },
+    Failed {
+        /// Event which failed during system-level processing.
+        ///
+        /// Inspect the event to find the cause of the failure.
+        event: Event<LogId, Extensions, Topic>,
 
         /// The source of the operation.
         source: Source,
@@ -543,14 +612,16 @@ pub enum StreamEvent<M> {
         /// If the sync session ended with an error the reason is included here.
         error: Option<SyncError>,
     },
-    DecodingFailed {
+    DecodeFailed {
         event: Event<LogId, Extensions, Topic>,
-        topic: Topic,
         error: DecodeError,
     },
     ReplayFailed {
-        topic: Topic,
-        error: String,
+        error: Arc<ReplayError>,
+    },
+    AckFailed {
+        event: Event<LogId, Extensions, Topic>,
+        error: Arc<AckedError>,
     },
 }
 
@@ -558,6 +629,7 @@ pub enum StreamEvent<M> {
 pub struct ProcessedOperation<M> {
     event: Event<LogId, Extensions, Topic>,
     topic: Topic,
+    acked: Acked,
     message: M,
 }
 
@@ -586,8 +658,15 @@ impl<M> ProcessedOperation<M> {
         &self.event
     }
 
-    pub async fn ack(&self) {
-        unimplemented!()
+    pub async fn ack(&self) -> Result<(), AckedError> {
+        self.acked.ack(self).await?;
+        Ok(())
+    }
+}
+
+impl<M> Borrow<Header> for &ProcessedOperation<M> {
+    fn borrow(&self) -> &Header {
+        self.event.header()
     }
 }
 

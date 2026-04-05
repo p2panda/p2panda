@@ -1,44 +1,65 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::BTreeMap;
-
-use p2panda_core::{PublicKey, Topic};
+use p2panda_core::{Cursor, PublicKey, Topic};
 use p2panda_store::logs::LogStore;
-use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
 use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
+use crate::streams::ack::{Acked, AckedError};
 use crate::streams::stream::{Source, process_operation};
 
-/// Retrieve from the store and re-process all operations for a given topic.
-pub(crate) async fn replay_from_start<M>(
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub enum StreamFrom {
+    /// Stream all events from the beginning, including already acknowledged ones.
+    Start,
+
+    /// Stream only unacknowledged events from where we've ended last.
+    ///
+    /// We keep an internal cursor around for each topic which is used to track acknowledged
+    /// operations.
+    #[default]
+    Frontier,
+
+    /// Stream all events from _after_ the given cursor position.
+    Cursor(Cursor<PublicKey, LogId>),
+}
+
+impl From<Cursor<PublicKey, LogId>> for StreamFrom {
+    fn from(cursor: Cursor<PublicKey, LogId>) -> Self {
+        Self::Cursor(cursor)
+    }
+}
+
+/// Re-play and re-process local operations from a given point on.
+pub(crate) async fn replay_from<M>(
     topic: Topic,
     store: SqliteStore,
-    app_tx: Sender<StreamEvent<M>>,
+    app_tx: mpsc::Sender<StreamEvent<M>>,
     pipeline: Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
+    acked: &Acked,
+    from: StreamFrom,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     let (replay_tx, mut replay_rx) = mpsc::unbounded_channel::<Operation>();
 
-    // Spawn task for retrieving operations from the store and sending them on a channel to be
-    // processed.
+    // Determine from which point on we re-play local operations.
+    let log_ranges = acked.nacked_log_ranges(from).await?;
+
     let replay_task: JoinHandle<Result<(), ReplayError>> = tokio::spawn(async move {
-        let author_logs: BTreeMap<PublicKey, Vec<Topic>> = store.resolve(&topic).await?;
-        for (author, logs) in author_logs {
-            for log_id in logs {
+        for (author, logs) in log_ranges {
+            for (log_id, (from, to)) in logs {
                 let Some(operations): Option<Vec<(Operation, _)>> =
-                    store.get_log_entries(&author, &log_id, None, None).await?
+                    store.get_log_entries(&author, &log_id, from, to).await?
                 else {
                     // If the log was concurrently deleted since calling TopicStore::resolve then
                     // None is returned here. This is not considered an error, as no log integrity
@@ -53,6 +74,7 @@ where
                 }
             }
         }
+
         Ok(())
     });
 
@@ -64,6 +86,7 @@ where
                 topic,
                 &pipeline,
                 ack_policy,
+                acked,
                 Source::LocalStore,
             )
             .await
@@ -92,6 +115,9 @@ where
 pub enum ReplayError {
     #[error("an error occurred while querying the store: {0}")]
     Store(#[from] SqliteError),
+
+    #[error("failed managing acked operations: {0}")]
+    Acked(#[from] AckedError),
 
     #[error("a critical error occurred in the replay task")]
     CriticalError,

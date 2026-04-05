@@ -21,12 +21,14 @@
 //! assert!(public_key.verify(bytes, &signature))
 //! ```
 use std::fmt;
+use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// The length of an Ed25519 `Signature`, in bytes.
@@ -37,6 +39,11 @@ pub const PRIVATE_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 
 /// The length of an Ed25519 `PublicKey`, in bytes.
 pub const PUBLIC_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
+
+pub trait Author:
+    Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
+{
+}
 
 /// Private Ed25519 key used for digital signatures.
 #[derive(Clone, Eq, PartialEq)]
@@ -241,6 +248,8 @@ impl FromStr for PublicKey {
         Self::try_from(hex::decode(value)?.as_slice())
     }
 }
+
+impl Author for PublicKey {}
 
 #[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for PublicKey {
