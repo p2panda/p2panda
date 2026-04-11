@@ -176,6 +176,10 @@ impl Node {
         self.forge.public_key()
     }
 
+    pub async fn insert_bootstrap(&self, node_id: NodeId) -> Result<(), NetworkError> {
+        self.network.insert_bootstrap(node_id).await
+    }
+
     pub fn ack(&self, _message_id: Hash) {
         unimplemented!()
     }
