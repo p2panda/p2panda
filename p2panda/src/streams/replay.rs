@@ -55,10 +55,9 @@ pub(crate) async fn replay_from<M>(
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let (replay_tx, mut replay_rx) = mpsc::unbounded_channel::<Operation>();
-
     // Determine from which point on we re-play local operations.
     let log_ranges = acked.nacked_log_ranges(from).await?;
+    let acked = acked.clone();
 
     let replay_task: JoinHandle<Result<(), ReplayError>> = tokio::spawn(async move {
         for (author, logs) in log_ranges {
@@ -73,9 +72,24 @@ where
                 };
 
                 for (operation, _) in operations {
-                    replay_tx
-                        .send(operation)
-                        .map_err(|_| ReplayError::CriticalError)?;
+                    match process_operation::<M>(
+                        operation,
+                        topic,
+                        &pipeline,
+                        ack_policy,
+                        &acked,
+                        Source::LocalStore,
+                    )
+                    .await
+                    {
+                        Some(event) => {
+                            app_tx
+                                .send(event)
+                                .await
+                                .map_err(|_| ReplayError::CriticalError)?;
+                        }
+                        None => continue,
+                    }
                 }
             }
         }
@@ -83,36 +97,7 @@ where
         Ok(())
     });
 
-    // Pull operations from the replay channel and send them to the processing pipeline.
-    loop {
-        if let Some(operation) = replay_rx.recv().await {
-            match process_operation::<M>(
-                operation,
-                topic,
-                &pipeline,
-                ack_policy,
-                acked,
-                Source::LocalStore,
-            )
-            .await
-            {
-                Some(event) => {
-                    app_tx
-                        .send(event)
-                        .await
-                        .map_err(|_| ReplayError::CriticalError)?;
-                }
-                None => continue,
-            }
-        };
-
-        if replay_task.is_finished() {
-            return replay_task
-                .await
-                .expect("replay task should never panic")
-                .map_err(|_| ReplayError::CriticalError);
-        }
-    }
+    replay_task.await.expect("replay task should never panic")
 }
 
 /// Error types which can occur during replay.
