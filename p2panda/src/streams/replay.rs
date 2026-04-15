@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, PublicKey, Topic};
 use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 
 use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
-use crate::streams::acked::{Acked, AckedError};
+use crate::streams::acked::Acked;
 use crate::streams::stream::{Source, process_operation};
 
 /// Determines the starting point of a subscription stream.
@@ -42,62 +42,54 @@ impl From<Cursor<PublicKey, LogId>> for StreamFrom {
     }
 }
 
-/// Re-play and re-process local operations from a given point on.
-pub(crate) async fn replay_from<M>(
+/// Re-play and re-process locally stored operations.
+pub(crate) async fn replay_log_ranges<M>(
     topic: Topic,
-    store: SqliteStore,
-    app_tx: mpsc::Sender<StreamEvent<M>>,
-    pipeline: Pipeline<LogId, Extensions, Topic>,
+    store: &SqliteStore,
+    app_tx: &mpsc::Sender<StreamEvent<M>>,
+    pipeline: &Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
     acked: &Acked,
-    from: StreamFrom,
+    log_ranges: LogRanges<PublicKey, LogId>,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    // Determine from which point on we re-play local operations.
-    let log_ranges = acked.nacked_log_ranges(from).await?;
-    let acked = acked.clone();
+    for (author, logs) in log_ranges {
+        for (log_id, (from, to)) in logs {
+            let Some(operations): Option<Vec<(Operation, _)>> =
+                store.get_log_entries(&author, &log_id, from, to).await?
+            else {
+                // If the log was concurrently deleted since calling TopicStore::resolve then None
+                // is returned here. This is not considered an error, as no log integrity is broken
+                // and deletes should be immediately respected.
+                continue;
+            };
 
-    let replay_task: JoinHandle<Result<(), ReplayError>> = tokio::spawn(async move {
-        for (author, logs) in log_ranges {
-            for (log_id, (from, to)) in logs {
-                let Some(operations): Option<Vec<(Operation, _)>> =
-                    store.get_log_entries(&author, &log_id, from, to).await?
-                else {
-                    // If the log was concurrently deleted since calling TopicStore::resolve then
-                    // None is returned here. This is not considered an error, as no log integrity
-                    // is broken and deletes should be immediately respected.
-                    continue;
-                };
-
-                for (operation, _) in operations {
-                    match process_operation::<M>(
-                        operation,
-                        topic,
-                        &pipeline,
-                        ack_policy,
-                        &acked,
-                        Source::LocalStore,
-                    )
-                    .await
-                    {
-                        Some(event) => {
-                            app_tx
-                                .send(event)
-                                .await
-                                .map_err(|_| ReplayError::CriticalError)?;
-                        }
-                        None => continue,
+            for (operation, _) in operations {
+                match process_operation::<M>(
+                    operation,
+                    topic,
+                    pipeline,
+                    ack_policy,
+                    acked,
+                    Source::LocalStore,
+                )
+                .await
+                {
+                    Some(event) => {
+                        app_tx
+                            .send(event)
+                            .await
+                            .map_err(|_| ReplayError::CriticalError)?;
                     }
+                    None => continue,
                 }
             }
         }
+    }
 
-        Ok(())
-    });
-
-    replay_task.await.expect("replay task should never panic")
+    Ok(())
 }
 
 /// Error types which can occur during replay.
@@ -105,9 +97,6 @@ where
 pub enum ReplayError {
     #[error("an error occurred while querying the store: {0}")]
     Store(#[from] SqliteError),
-
-    #[error("failed managing acked operations: {0}")]
-    Acked(#[from] AckedError),
 
     #[error("a critical error occurred in the replay task")]
     CriticalError,

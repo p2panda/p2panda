@@ -12,12 +12,11 @@ use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, PublicKey, Topic};
 use p2panda_net::NodeId;
-use p2panda_net::sync::{SyncHandle, SyncHandleError};
+use p2panda_net::sync::SyncHandle;
 use p2panda_net::utils::ShortFormat;
 use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
-use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -25,11 +24,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
-use crate::node::AckPolicy;
+use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{Event, Pipeline, ProcessorError};
 use crate::streams::acked::{Acked, AckedError};
-use crate::streams::replay::{ReplayError, StreamFrom, replay_from};
+use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
@@ -93,16 +92,16 @@ pub(crate) async fn processed_stream<M>(
     forge: OperationForge,
     pipeline: Pipeline<LogId, Extensions, Topic>,
     from: StreamFrom,
-) -> Result<
-    (StreamPublisher<M>, StreamSubscription<M>),
-    SyncHandleError<Operation, TopicLogSyncEvent<Extensions>>,
->
+) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     let acked = Acked::new(store.clone(), topic);
 
-    let mut sync_stream = sync_handle.subscribe().await?;
+    let mut sync_stream = sync_handle
+        .subscribe()
+        .await
+        .map_err(|err| CreateStreamError(err.to_string()))?;
 
     // Channel to send processed events to the application-layer.
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
@@ -115,26 +114,33 @@ where
         oneshot::Sender<Event<LogId, Extensions, Topic>>,
     )>(PUBLISH_BUFFER_SIZE);
 
+    // Determine from which point on we re-play locally stored operations.
+    let nacked_log_ranges = acked
+        .nacked_log_ranges(from)
+        .await
+        .map_err(|err| CreateStreamError(err.to_string()))?;
+
     {
         let pipeline = pipeline.clone();
         let acked = acked.clone();
         let store = store.clone();
 
         tokio::spawn(async move {
+            // =======================
             // 1. Re-play local events
             // =======================
 
             {
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
-                let replay_result = replay_from(
+                let replay_result = replay_log_ranges(
                     topic,
-                    store.clone(),
-                    app_tx.clone(),
-                    pipeline.clone(),
+                    &store,
+                    &app_tx,
+                    &pipeline,
                     ack_policy,
                     &acked,
-                    from,
+                    nacked_log_ranges,
                 )
                 .await;
 
@@ -153,6 +159,7 @@ where
                 }
             }
 
+            // =========================
             // 2. Stream external events
             // =========================
 
@@ -549,14 +556,13 @@ impl Future for PublishFuture {
 }
 
 /// Subscription to events arriving from a stream.
-#[pin_project]
 pub struct StreamSubscription<M> {
+    #[allow(unused)]
     topic: Topic,
     store: SqliteStore,
     acked: Acked,
     #[allow(unused)]
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-    #[pin]
     stream: ReceiverStream<StreamEvent<M>>,
 }
 
@@ -584,9 +590,13 @@ where
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.stream.poll_next_unpin(cx)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.stream.size_hint()
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum StreamEvent<M> {
     Processed {

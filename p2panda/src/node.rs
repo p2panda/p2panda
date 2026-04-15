@@ -391,4 +391,4 @@ pub enum SpawnError {
 /// Users may re-attempt creating a new stream in case the actor restarted later.
 #[derive(Error, Debug)]
 #[error("error occurred in internal actor: {0}")]
-pub struct CreateStreamError(String);
+pub struct CreateStreamError(pub String);
