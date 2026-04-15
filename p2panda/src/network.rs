@@ -99,9 +99,15 @@ impl Network {
     }
 
     #[allow(unused)]
-    pub async fn insert_bootstrap(&self, node_id: NodeId) -> Result<(), NetworkError> {
-        let node_info = NodeInfo::new(node_id).bootstrap();
-        self.address_book.insert_node_info(node_info).await?;
+    pub async fn insert_bootstrap(
+        &self,
+        node_id: NodeId,
+        transport_info: TrustedTransportInfo,
+    ) -> Result<(), NetworkError> {
+        let mut node_info = NodeInfo::new(node_id).bootstrap();
+        if node_info.update_transports(transport_info.into()).is_ok() {
+            self.address_book.insert_node_info(node_info).await?;
+        }
         Ok(())
     }
 
