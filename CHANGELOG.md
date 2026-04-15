@@ -24,6 +24,10 @@ Highlights are marked with a pancake 🥞
 - Process and aggregate metrics for sync events [#1085](https://github.com/p2panda/p2panda/pull/1085)
 - Introduce system event API for Node [#1087](https://github.com/p2panda/p2panda/pull/1087)
 - Return error when gossip message exceeds maximum size [#1096](https://github.com/p2panda/p2panda/pull/1096)
+- Introduce `Author` and use super-trait in `p2panda-core` [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- Introduce `Cursor` type in core to track log heights [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- `CursorStore` to persist `Cursor` state in SQLite [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- Re-play events from any cursor, track acked state [#1104](https://github.com/p2panda/p2panda/pull/1104)
 
 ### Changed
 
@@ -47,6 +51,8 @@ Highlights are marked with a pancake 🥞
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
 - Enforce strictly growing operations log in backlink validation method [#1044](https://github.com/p2panda/p2panda/pull/1044)
 - Fix automatic roll-back of unused, dropped permits [#1075](https://github.com/p2panda/p2panda/pull/1075)
+- Race where replay_from misses processing ops [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- Race where replay state was determined late [#1104](https://github.com/p2panda/p2panda/pull/1104)
 
 ## [0.5.2] - 09/03/2026
 

@@ -230,17 +230,8 @@ async fn automatic_acking() {
     processing.await.unwrap();
 
     // We except to receive them.
-    let event = rx.next().await.unwrap();
-    let StreamEvent::Processed { operation, .. } = event else {
-        panic!("unexpected event");
-    };
-    assert_eq!(operation.id(), message_id_1);
-
-    let event = rx.next().await.unwrap();
-    let StreamEvent::Processed { operation, .. } = event else {
-        panic!("unexpected event");
-    };
-    assert_eq!(operation.id(), message_id_2);
+    assert_message_id(&rx.next().await.unwrap(), message_id_1);
+    assert_message_id(&rx.next().await.unwrap(), message_id_2);
 
     // Create a new subscription.
     drop(tx);
@@ -254,11 +245,7 @@ async fn automatic_acking() {
     processing.await.unwrap();
 
     // We expect to only receive the new, third message and not the previous two ones anymore.
-    let event = rx.next().await.unwrap();
-    let StreamEvent::Processed { operation, .. } = event else {
-        panic!("unexpected event");
-    };
-    assert_eq!(operation.id(), message_id_3);
+    assert_message_id(&rx.next().await.unwrap(), message_id_3);
 }
 
 #[tokio::test]
