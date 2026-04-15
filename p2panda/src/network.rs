@@ -8,7 +8,9 @@ use p2panda_net::address_book::AddressBookError;
 use p2panda_net::addrs::{NodeInfo, TrustedTransportInfo};
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
 use p2panda_net::gossip::{GossipConfig, GossipError};
-use p2panda_net::iroh_endpoint::{EndpointError, IrohConfig, RelayUrl};
+use p2panda_net::iroh_endpoint::{
+    EndpointAddr, EndpointError, IrohConfig, RelayUrl, from_public_key,
+};
 use p2panda_net::iroh_mdns::{MdnsDiscoveryError, MdnsDiscoveryMode};
 use p2panda_net::sync::LogSyncError;
 use p2panda_net::{
@@ -102,9 +104,12 @@ impl Network {
     pub async fn insert_bootstrap(
         &self,
         node_id: NodeId,
-        transport_info: TrustedTransportInfo,
+        relay_url: RelayUrl,
     ) -> Result<(), NetworkError> {
         let mut node_info = NodeInfo::new(node_id).bootstrap();
+        let endpoint_addr = EndpointAddr::new(from_public_key(node_id)).with_relay_url(relay_url);
+        let transport_info = TrustedTransportInfo::from(endpoint_addr);
+
         if node_info.update_transports(transport_info.into()).is_ok() {
             self.address_book.insert_node_info(node_info).await?;
         }

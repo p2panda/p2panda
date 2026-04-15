@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use futures_util::Stream;
 pub use p2panda_core::identity::{PrivateKey, PublicKey};
 pub use p2panda_core::{Hash, Topic};
-use p2panda_net::addrs::TrustedTransportInfo;
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 pub use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 pub use p2panda_net::{NetworkId, NodeId};
@@ -180,9 +179,9 @@ impl Node {
     pub async fn insert_bootstrap(
         &self,
         node_id: NodeId,
-        transport_info: TrustedTransportInfo,
+        relay_url: RelayUrl,
     ) -> Result<(), NetworkError> {
-        self.network.insert_bootstrap(node_id, transport_info).await
+        self.network.insert_bootstrap(node_id, relay_url).await
     }
 
     pub fn ack(&self, _message_id: Hash) {
