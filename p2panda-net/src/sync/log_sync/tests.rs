@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use assert_matches::assert_matches;
 use iroh::Endpoint;
-use iroh::endpoint::Connection;
+use iroh::endpoint::{Connection, presets};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
 use p2panda_core::{Operation, Topic};
 use p2panda_net::cbor::{into_cbor_sink, into_cbor_stream};
@@ -414,13 +414,13 @@ async fn panic_on_sink_closure_after_error_regression() {
 
     let (session, _events_rx, _live_tx) = peer.topic_sync_protocol(topic.clone(), true);
 
-    let acceptor = Endpoint::bind().await.unwrap();
+    let acceptor = Endpoint::bind(presets::Minimal).await.unwrap();
     let acceptor_router = Router::builder(acceptor)
         .accept(ALPN, TestProtocol::default())
         .spawn();
     let addr = acceptor_router.endpoint().addr();
 
-    let initiator = Endpoint::bind().await.unwrap();
+    let initiator = Endpoint::bind(presets::Minimal).await.unwrap();
     let connection = initiator.connect(addr, ALPN).await.unwrap();
     let (tx, rx) = connection.open_bi().await.unwrap();
     let mut tx = into_cbor_sink::<TestTopicSyncMessage, _>(tx);

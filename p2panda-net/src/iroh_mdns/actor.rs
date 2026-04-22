@@ -150,6 +150,11 @@ impl ThreadLocalActor for MdnsActor {
                                             // Additionally we don't know if that node might actually still
                                             // be reachable (just not inside the same local area network).
                                         }
+                                        Some(_) => {
+                                            // `DiscoveryEvent` is marked as non-exhaustive so we
+                                            // need this wildcard check to satisfy the compiler; do
+                                            // nothing.
+                                        }
                                         None => {
                                             // The stream has seized, close actor.
                                             myself.stop(Some("mdns stream stopped".into()));
@@ -262,9 +267,7 @@ impl ThreadLocalActor for MdnsActor {
                         .service
                         .as_ref()
                         .expect("exists at this point")
-                        .publish(
-                            &EndpointData::from(endpoint_addr).with_user_data(Some(user_data)),
-                        );
+                        .publish(&EndpointData::from(endpoint_addr).with_user_data(user_data));
                 }
             }
         }
