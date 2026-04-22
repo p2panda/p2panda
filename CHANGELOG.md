@@ -45,6 +45,7 @@ Highlights are marked with a pancake 🥞
 - Derive log id from topic [#1082](https://github.com/p2panda/p2panda/pull/1082)
 - Expose insert_bootstrap on the node API [#1125](https://github.com/p2panda/p2panda/pull/1125)
 - Update iroh to v0.98.1 [#1131](https://github.com/p2panda/p2panda/pull/1131)
+- Forge result is never `None` or duplicate [#1132](https://github.com/p2panda/p2panda/pull/1132)
 
 ### Fixed
 

@@ -26,7 +26,7 @@ pub trait Forge<TP, C, E> {
         collection_id: C,
         body: Option<Vec<u8>>,
         extensions: E,
-    ) -> impl Future<Output = Result<Option<p2panda_core::Operation<E>>, Self::Error>>;
+    ) -> impl Future<Output = Result<p2panda_core::Operation<E>, Self::Error>>;
 }
 
 #[derive(Clone, Debug)]
@@ -78,7 +78,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         log_id: LogId,
         body: Option<Vec<u8>>,
         extensions: Extensions,
-    ) -> Result<Option<Operation>, Self::Error> {
+    ) -> Result<Operation, Self::Error> {
         // Perform prerequisite computations outside of the locked transaction.
         let payload_size = body.as_ref().map(|bytes| bytes.len()).unwrap_or(0) as u64;
         let body: Option<Body> = body.map(|bytes| bytes.into());
@@ -136,8 +136,9 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 
             self.store
                 .insert_operation(&hash, &operation, &log_id)
-                .await?
-                .then_some(operation)
+                .await?;
+
+            operation
         });
 
         Ok(operation)
@@ -180,7 +181,6 @@ mod tests {
                 extensions.clone(),
             )
             .await
-            .unwrap()
             .unwrap();
 
         forge
@@ -191,7 +191,6 @@ mod tests {
                 extensions,
             )
             .await
-            .unwrap()
             .unwrap();
 
         let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
