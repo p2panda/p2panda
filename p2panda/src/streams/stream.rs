@@ -506,8 +506,7 @@ where
         let operation = self
             .forge
             .create_operation(self.topic(), extensions.log_id, body_bytes, extensions)
-            .await?
-            .ok_or(PublishError::DuplicateOperation)?;
+            .await?;
         let hash = operation.hash;
 
         // Start processing operation in pipeline. Keep an oneshot receiver around to allow users
@@ -771,9 +770,6 @@ pub enum PublishError {
 
     #[error("an error occurred while creating an operation in the forge: {0}")]
     Forge(#[from] ForgeError),
-
-    #[error("message already exists in the forge")]
-    DuplicateOperation,
 
     #[error("an error occurred while publishing an operation to the log sync stream: {0}")]
     SyncHandle(String),

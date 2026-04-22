@@ -224,7 +224,6 @@ mod tests {
                 Extensions::from_topic(topic),
             )
             .await
-            .unwrap()
             .unwrap();
 
         // This first operation was not acked yet.
@@ -271,7 +270,6 @@ mod tests {
                 Extensions::from_topic(topic),
             )
             .await
-            .unwrap()
             .unwrap();
 
         // The first cursor acks it.
@@ -316,7 +314,6 @@ mod tests {
                 Extensions::from_topic(topic),
             )
             .await
-            .unwrap()
             .unwrap();
 
         acked.ack(operation_0).await.unwrap();
