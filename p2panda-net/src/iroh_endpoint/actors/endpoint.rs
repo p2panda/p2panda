@@ -7,7 +7,7 @@ use std::net::{SocketAddrV4, SocketAddrV6};
 use std::sync::Arc;
 use std::time::Duration;
 
-use iroh::endpoint::QuicTransportConfig;
+use iroh::endpoint::{QuicTransportConfig, presets};
 use iroh::protocol::DynProtocolHandler;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -194,7 +194,8 @@ impl ThreadLocalActor for IrohEndpoint {
                 );
 
                 // Create and bind the endpoint to the socket.
-                let endpoint = iroh::Endpoint::empty_builder(relay_mode)
+                let endpoint = iroh::Endpoint::builder(presets::Minimal)
+                    .relay_mode(relay_mode)
                     .address_lookup(address_book_discovery)
                     .secret_key(from_private_key(state.private_key.clone()))
                     .transport_config(quic_transport_config)
