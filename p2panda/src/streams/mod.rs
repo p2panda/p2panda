@@ -7,6 +7,7 @@ mod replay;
 mod stream;
 mod sync_metrics;
 
+pub use acked::AckedError;
 pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
     EphemeralMessage, EphemeralPublishError, EphemeralStreamPublisher, EphemeralStreamSubscription,
