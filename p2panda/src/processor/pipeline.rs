@@ -17,10 +17,15 @@ use tokio::pin;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tokio::task::LocalSet;
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
+
+/// Number of items which can stay in the pipeline buffer before backpressure is applied. If the
+/// buffer runs full, then sending of new operations into the processor will wait one is received
+/// by the processor.
+const PUBLISH_BUFFER_SIZE: usize = 128;
 
 /// Event processor pipeline which consists of multiple processors.
 ///
@@ -51,7 +56,7 @@ use crate::processor::{Event, ProcessorStatus};
 /// ```
 #[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
-    pipeline_tx: mpsc::UnboundedSender<Event<L, E, TP>>,
+    pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
     tasks: TaskTracker<Event<L, E, TP>, Hash>,
 }
 
@@ -85,7 +90,7 @@ where
             + Send
             + 'static,
     {
-        let (pipeline_tx, pipeline_rx) = mpsc::unbounded_channel();
+        let (pipeline_tx, pipeline_rx) = mpsc::channel(PUBLISH_BUFFER_SIZE);
 
         {
             let tasks = tasks.clone();
@@ -104,7 +109,7 @@ where
                     let log_prune = LogPrune::<S, Event<L, E, TP>, L, E>::new(store);
 
                     // Receive incoming events through mpsc channel.
-                    let pipeline = UnboundedReceiverStream::new(pipeline_rx)
+                    let pipeline = ReceiverStream::new(pipeline_rx)
                         .layer(ingest)
                         .map(|result| match result {
                             Ok((mut event, result)) => {
@@ -160,7 +165,7 @@ where
 
         // Send operation to processing pipeline, it will handle this operation eventually in a
         // concurrent "background" task.
-        let _ = self.pipeline_tx.send(input);
+        let _ = self.pipeline_tx.send(input).await;
 
         // Block and await here until the mananger received the signal that the task has finished.
         // This assures that operations are handled in-order.

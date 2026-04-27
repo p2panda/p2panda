@@ -5,12 +5,14 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::node::AckPolicy;
-use p2panda::operation::{LogId, Operation};
+use p2panda::operation::{Extensions, LogId, Operation};
 use p2panda::streams::{
     EphemeralMessage, ProcessedOperation, StreamEvent, StreamFrom, SystemEvent,
 };
 use p2panda::test_utils::setup_logging;
+use p2panda_core::cbor::encode_cbor;
 use p2panda_core::logs::LogHeights;
+use p2panda_core::test_utils::TestLog;
 use p2panda_core::{Cursor, Hash, PrivateKey, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
@@ -383,4 +385,99 @@ async fn replay_stream_from_cursor() {
     // We expect to only receive the second and third message.
     assert_message_id(&rx.next().await.unwrap(), message_id_2);
     assert_message_id(&rx.next().await.unwrap(), message_id_3);
+}
+
+#[tokio::test]
+async fn import_external_stream() {
+    setup_logging();
+
+    let chat_id = Topic::new();
+
+    // Panda opens their app and publishes some messages into a chat.
+    let panda_log = TestLog::new();
+    let extensions = Extensions {
+        prune_flag: false.into(),
+        log_id: LogId::from_topic(chat_id),
+        version: Default::default(),
+    };
+    let operation_1 = panda_log.operation(
+        &encode_cbor(&"Hello, Icebear!").unwrap(),
+        extensions.clone(),
+    );
+    let operation_2 = panda_log.operation(
+        &encode_cbor(&"I'm in a remote place with no internet, it's really nice :-p").unwrap(),
+        extensions.clone(),
+    );
+    let operation_3 = panda_log.operation(
+        &encode_cbor(&"Gunna post these messages to you on an SD card yo!").unwrap(),
+        extensions,
+    );
+
+    // Panda exports messages to an SD card.
+    let exported = vec![
+        operation_1.clone(),
+        operation_2.clone(),
+        operation_3.clone(),
+    ];
+
+    // Panda goes offline and walks to the post office to send the SD card to Icebear.
+
+    // Icebear receives the SD card, opens their app and initiates import.
+    let import_stream = futures_util::stream::iter(exported);
+    let icebear = p2panda::builder().spawn().await.unwrap();
+    let (icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+    let import = icebear_tx.import(import_stream).await.unwrap();
+
+    assert_eq!(import.session_id(), 0);
+    assert!(import.await.is_ok());
+
+    // Icebear receives the new messages after they've been processed.
+    let mut imported = Vec::new();
+    let mut start_received = false;
+    let mut end_received = false;
+    while let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::ImportStarted { session_id } = &event {
+            assert!(!start_received);
+            assert_eq!(session_id, &0);
+            start_received = true;
+            continue;
+        };
+
+        if let StreamEvent::Processed { operation, .. } = &event {
+            assert!(start_received);
+            assert!(!end_received);
+            imported.push(operation.clone());
+            if imported.len() == 3 {
+                continue;
+            }
+        }
+
+        if let StreamEvent::ImportEnded { session_id } = event {
+            assert!(start_received);
+            assert!(!end_received);
+            assert_eq!(session_id, 0);
+            end_received = true;
+            break;
+        };
+    }
+
+    assert!(start_received);
+    assert!(end_received);
+    assert_eq!(imported.len(), 3);
+    assert!(
+        imported
+            .iter()
+            .any(|event| event.id() == operation_1.header().hash())
+    );
+    assert!(
+        imported
+            .iter()
+            .any(|event| event.id() == operation_2.header().hash())
+    );
+    assert!(
+        imported
+            .iter()
+            .any(|event| event.id() == operation_3.header().hash())
+    );
+    assert!(end_received);
 }

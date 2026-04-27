@@ -3,6 +3,7 @@
 mod acked;
 mod ephemeral_stream;
 mod event_stream;
+mod external_stream;
 mod replay;
 mod stream;
 mod sync_metrics;
