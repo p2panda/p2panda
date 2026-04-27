@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use futures_util::stream::BoxStream;
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
@@ -28,6 +29,9 @@ use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{Event, Pipeline, ProcessorError};
 use crate::streams::acked::{Acked, AckedError};
+use crate::streams::external_stream::{
+    ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
+};
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 
@@ -39,6 +43,10 @@ const BUFFER_SIZE: usize = 16;
 /// Number of items which can stay in the buffer before processing kicks in for locally published
 /// items. If buffer runs full, creating new operations will apply backpressure.
 const PUBLISH_BUFFER_SIZE: usize = 128;
+
+/// Number of streams which can stay in the import buffer. If the buffer runs full importing of
+/// new streams will have backpressure applied.
+const IMPORT_BUFFER_SIZE: usize = 16;
 
 /// Returns publish and subscribe halfs of an eventually consistent messaging stream for a given
 /// topic.
@@ -113,6 +121,15 @@ where
         Option<M>,
         oneshot::Sender<Event<LogId, Extensions, Topic>>,
     )>(PUBLISH_BUFFER_SIZE);
+
+    // Channel for importing external operation streams.
+    let (import_tx, mut import_rx) = mpsc::channel::<(
+        BoxStream<'static, Operation>,
+        oneshot::Sender<ExternalStreamFuture>,
+    )>(IMPORT_BUFFER_SIZE);
+
+    // Set of currently active external streams.
+    let mut external_stream = ExternalStream::default();
 
     // Determine from which point on we re-play locally stored operations.
     let nacked_log_ranges = acked
@@ -240,6 +257,38 @@ where
 
                         event
                     }
+
+                    // Receive imported external source of operations.
+                    Some((stream, ready_tx)) = import_rx.recv() => {
+                        let external_stream_future = external_stream.insert(stream);
+                        let session_id = external_stream_future.session_id();
+                        if ready_tx.send(external_stream_future).is_err() {
+                            warn!(session_id = session_id, "failed sending on import ready channel")
+                        };
+                        continue;
+                    }
+
+                    // Receive the next ready event from any imported external source.
+                    Some(event) = external_stream.next() => {
+                        match event {
+                            ExternalStreamEvent::Start { session_id } => StreamEvent::ImportStarted { session_id },
+                            ExternalStreamEvent::Operation { session_id, operation } => {
+                                let Some(event) = process_operation::<M>(
+                                    *operation,
+                                    topic,
+                                    &pipeline,
+                                    ack_policy,
+                                    &acked,
+                                    Source::ExternalStream { session_id },
+                                ).await else {
+                                    continue;
+                                };
+
+                                event
+                            },
+                            ExternalStreamEvent::End { session_id } => StreamEvent::ImportEnded { session_id },
+                        }
+                    }
                 };
 
                 // Send processing result to application layer.
@@ -260,6 +309,7 @@ where
         sync_handle: sync_handle.clone(),
         forge,
         publish_tx,
+        import_tx,
         _marker: PhantomData,
     };
 
@@ -459,6 +509,10 @@ pub struct StreamPublisher<M> {
         Option<M>,
         oneshot::Sender<Event<LogId, Extensions, Topic>>,
     )>,
+    import_tx: mpsc::Sender<(
+        BoxStream<'static, Operation>,
+        oneshot::Sender<ExternalStreamFuture>,
+    )>,
     _marker: PhantomData<M>,
 }
 
@@ -488,6 +542,26 @@ where
     /// "older" / before the point where the prune flag was set.
     pub async fn prune(&self, message: Option<M>) -> Result<PublishFuture, PublishError> {
         self.publish_inner(message, true).await
+    }
+
+    /// Import an external source of operations.
+    pub async fn import(
+        &self,
+        stream: impl Stream<Item = Operation> + Send + 'static,
+    ) -> Result<ExternalStreamFuture, ImportError> {
+        // Send stream to processor.
+        let stream = Box::pin(stream);
+        let (ready_tx, ready_rx) = oneshot::channel::<ExternalStreamFuture>();
+        self.import_tx
+            .send((stream, ready_tx))
+            .await
+            .map_err(|err| ImportError::SendToProcessor(err.to_string()))?;
+
+        // Await receiving the session id and future which will complete when the external stream
+        // closes and all operations have been processed.
+        ready_rx
+            .await
+            .map_err(|err| ImportError::ReceiveFromProcessor(err.to_string()))
     }
 
     async fn publish_inner(
@@ -655,6 +729,14 @@ pub enum StreamEvent<M> {
         /// If the sync session ended with an error the reason is included here.
         error: Option<SyncError>,
     },
+    ImportStarted {
+        /// Id of the import session.
+        session_id: SessionId,
+    },
+    ImportEnded {
+        /// Id of the import session.
+        session_id: SessionId,
+    },
     ProcessingFailed {
         /// Event which failed during system-level processing.
         ///
@@ -759,6 +841,13 @@ pub enum Source {
         phase: SessionPhase,
     },
 
+    /// Source when an operation arrived by an external stream (eg. reading from the filesystem or
+    /// a remote service).
+    ExternalStream {
+        /// Id of the import session.
+        session_id: u64,
+    },
+
     /// Source when an operation was published locally or replayed.
     LocalStore,
 }
@@ -774,6 +863,15 @@ pub enum PublishError {
     #[error("an error occurred while publishing an operation to the log sync stream: {0}")]
     SyncHandle(String),
 
-    #[error("could not send operation to processor pipeline: {0}")]
+    #[error("could not send to processor pipeline: {0}")]
     SendToProcessor(String),
+}
+
+#[derive(Debug, Error)]
+pub enum ImportError {
+    #[error("could not send to processor pipeline: {0}")]
+    SendToProcessor(String),
+
+    #[error("an error occurred awaiting message from processor: {0}")]
+    ReceiveFromProcessor(String),
 }

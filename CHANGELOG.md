@@ -30,6 +30,7 @@ Highlights are marked with a pancake 🥞
 - Re-play events from any cursor, track acked state [#1104](https://github.com/p2panda/p2panda/pull/1104)
 - Processor for groups operations [#1112](https://github.com/p2panda/p2panda/pull/1112)
 - `GroupsStore` with `SqliteStore` implementation [#1112](https://github.com/p2panda/p2panda/pull/1112)
+- Node API for importing external operation streams [#1135](https://github.com/p2panda/p2panda/pull/1135)
 
 ### Changed
 
