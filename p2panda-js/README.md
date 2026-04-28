@@ -41,7 +41,10 @@
   </h3>
 </div>
 
-<br />
+![Maintained: no](https://img.shields.io/maintenance/no/2024?style=flat-square)
+> [!important]
+> p2panda-js is deprecated and unmaintained; visit our [`website`](https://p2panda.org) 
+> to learn about the current libraries and latest developments.
 
 This library provides all tools required to write a client, node or even your
 own protocol implementation for the [`p2panda`] network. It is shipped both as
