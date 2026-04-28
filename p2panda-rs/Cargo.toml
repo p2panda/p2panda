@@ -16,6 +16,9 @@ readme = "README.md"
 exclude = [".gitignore"]
 categories = ["web-programming", "wasm", "cryptography"]
 
+[badges]
+maintenance.status = "deprecated"
+
 [package.metadata.docs.rs]
 features = ["secret-group", "storage-provider"]
 
