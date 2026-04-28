@@ -28,6 +28,10 @@ The crate implements two different group key-agreement and encryption schemes fo
 
 More detail about the particular implementation and design choices of `p2panda-encryption` can be found in our [in-depth blog post](https://p2panda.org/2025/02/24/group-encryption.html).
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## Features
 
 ### Strong Security Guarantees

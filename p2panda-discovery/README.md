@@ -38,6 +38,10 @@ acknowledgement is achieved using a secure multiparty cryptographic technique
 known as Private Equality Testing (PET) or Private Set Intersection (PSI) which
 prevents unrelated topics being leaked to other parties.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0] or [MIT license] at your option.

@@ -39,6 +39,10 @@ levels to determine who to sync with and over which subsets of data. Access cond
 used to define application-layer specific access rules, for example when modelling moderation
 rules or additional write checks.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## Features
 
 ### Eventually Consistent Group State
