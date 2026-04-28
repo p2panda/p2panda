@@ -29,6 +29,10 @@ these modules solve the problem of event delivery.
 Applications subscribe to any topic they are interested in and `p2panda-net`
 will automatically discover similar peers and exchange messages between them.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## Features
 
 - [Publish & Subscribe] for ephemeral messages (gossip protocol)

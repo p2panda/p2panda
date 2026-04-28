@@ -29,6 +29,10 @@ scheme is used for key agreement and group management is achieved through an int
 [p2panda-auth groups](https://docs.rs/p2panda-auth/latest/p2panda_auth/). The main entry point for
 users is the `Manager` struct from which groups and spaces can be created.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## Features
 
 * Decentralised group key agreement with forward secrecy and encrypted messaging with

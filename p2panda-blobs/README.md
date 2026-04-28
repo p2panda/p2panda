@@ -26,6 +26,10 @@ This crate provides a networked blob store for streaming content-addressed blobs
 It can be used to import, export and download blobs. Both in-memory and filesystem-based
 persistence options are provided.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0] or [MIT license] at your option.

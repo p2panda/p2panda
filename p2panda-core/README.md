@@ -29,6 +29,10 @@ The primary data structure is an append-only implementation which supports histo
 multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
 extensible depending on your application requirements.
 
+🚧 This library is under active development and the APIs are not yet considered stable for
+production use. Core data types and user-facing APIs may still undergo breaking changes.
+Stability guarantees will improve with the release of v1.0.0.
+
 ## Features
 
 - Cryptographic signatures for authorship verification and tamper-proof messages
