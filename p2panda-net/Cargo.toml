@@ -70,7 +70,7 @@ ciborium = "0.2.2"
 futures-channel = "0.3.31"
 futures-util = "0.3.31"
 hex = "0.4.3"
-iroh = { version = "0.98.1", default-features = false, features = ["tls-ring"], optional = true }
+iroh = { version = "0.98.2", default-features = false, features = ["tls-ring"], optional = true }
 iroh-base = { version = "0.98.0", optional = true }
 iroh-gossip = { version = "0.98.0", optional = true }
 p2panda-core = { path = "../p2panda-core", version = "0.5.2" }
