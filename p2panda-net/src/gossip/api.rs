@@ -13,7 +13,7 @@ use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{RwLock, broadcast, mpsc};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::NodeId;
 use crate::address_book::{AddressBook, AddressBookError};
@@ -236,8 +236,21 @@ impl Drop for Inner {
             "drop gossip actor reference"
         );
 
-        // Stop actor after all references (Gossip, GossipHandle, GossipSubscription) have dropped.
-        self.actor_ref.stop(None);
+        // Stop the gossip manager actor once all references to Gossip have been dropped.
+        //
+        // Process all messages which are already in the inboxes of the gossip actors which are the
+        // children of the gossip manager.
+        self.actor_ref.drain_children();
+
+        // Tell the gossip manager to shutdown.
+        if let Err(err) = self.actor_ref.send_message(ToGossipManager::Shutdown) {
+            warn!("failed to send shutdown event to gossip manager: {}", err)
+        }
+
+        // Proccess all messages in the inbox of the gossip manager before stopping it.
+        if let Err(err) = self.actor_ref.drain() {
+            warn!("failed to drain gossip manager: {}", err)
+        }
     }
 }
 

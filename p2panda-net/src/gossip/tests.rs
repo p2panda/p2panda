@@ -585,6 +585,9 @@ async fn leave_overlay_on_drop() {
     // See issue: https://github.com/p2panda/p2panda/issues/967
     setup_logging();
 
+    // Configure two nodes, ant and bat, which know about one another.
+    // Then get a handle to the same gossip topic stream for both.
+
     let mut ant_args = test_args();
     let mut bat_args = test_args();
     let topic: Topic = [1; 32].into();
