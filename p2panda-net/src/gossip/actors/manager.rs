@@ -75,6 +75,9 @@ pub enum ToGossipManager {
 
     /// Subscribe to system events.
     Events(RpcReplyPort<broadcast::Receiver<GossipEvent>>),
+
+    /// Gracefully shut down the gossip actor, cleaning up connection state.
+    Shutdown,
 }
 
 /// Mapping of topic to the associated sender channels for getting messages into and out of the
@@ -158,26 +161,6 @@ impl ThreadLocalActor for GossipManager {
             neighbours,
             events_tx,
         })
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        // Leave all subscribed topics, send `Disconnect` messages to nodes and drop all state and
-        // connections.
-        if let Some(gossip) = state.gossip.take() {
-            // Make sure the endpoint has all the time it needs to gracefully shut down while other
-            // processes might already drop the whole actor.
-            tokio::task::spawn(async move {
-                if let Err(err) = gossip.shutdown().await {
-                    warn!("gossip failed during shutdown: {err:?}");
-                }
-            });
-        }
-
-        Ok(())
     }
 
     async fn handle(
@@ -379,6 +362,13 @@ impl ThreadLocalActor for GossipManager {
             }
             ToGossipManager::Events(reply) => {
                 let _ = reply.send(state.events_tx.subscribe());
+            }
+            ToGossipManager::Shutdown => {
+                if let Some(gossip) = state.gossip.take()
+                    && let Err(err) = gossip.shutdown().await
+                {
+                    warn!("failed to gracefully shut down iroh gossip: {err:?}");
+                }
             }
         }
 
