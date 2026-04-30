@@ -240,6 +240,7 @@ impl<E, M> From<SyncEvent<E>> for StreamEvent<M> {
     }
 }
 
+/// Error occurred during a sync session.
 #[derive(Clone, Debug, Error)]
 #[error("an error occurred during sync: {0}")]
 pub struct SyncError(String);

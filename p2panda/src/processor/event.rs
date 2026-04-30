@@ -73,10 +73,12 @@ where
         }
     }
 
+    /// System-level data (append-only log, pruning coordination, etc.) of this operation.
     pub fn header(&self) -> &Header<E> {
         &self.operation.header
     }
 
+    /// Payload of this operation.
     pub fn body(&self) -> Option<&Body> {
         self.operation.body.as_ref()
     }
@@ -107,6 +109,10 @@ where
     }
 }
 
+/// Operation failed during event processing of the system-level pipeline.
+///
+/// This is likely to come from either processing invalid operations from a broken / malicious node
+/// or due to a bug in the Node API.
 #[derive(Clone, Debug, Error)]
 pub enum ProcessorError {
     #[error("ingest processor failed with: {0}")]

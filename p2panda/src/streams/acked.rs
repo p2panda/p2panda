@@ -177,6 +177,7 @@ async fn get_log_heights(
     Ok(result)
 }
 
+/// Acknowledgment of event failed due to critical error.
 #[derive(Debug, Error)]
 pub enum AckedError {
     #[error("an error occurred while querying the store: {0}")]

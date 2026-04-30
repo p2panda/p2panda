@@ -7,9 +7,11 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>",
 ]
+description = "Out-of-the-box p2panda Node API for application developers"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+keywords = ["p2p", "local-first", "sync", "event-sourcing"]
 
 [package.metadata.docs.rs]
 all-features = true

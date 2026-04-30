@@ -23,9 +23,9 @@ use thiserror::Error;
 use crate::operation::Extensions;
 
 #[derive(Clone, Debug)]
-#[allow(unused)]
 pub(crate) struct Network {
     pub address_book: AddressBook,
+    #[allow(unused)]
     pub mdns: Option<MdnsDiscovery>,
     pub endpoint: Endpoint,
     pub discovery: Discovery,
@@ -39,8 +39,6 @@ impl Network {
         signing_key: SigningKey,
         store: SqliteStore,
     ) -> Result<Self, NetworkError> {
-        // TODO: Supervision of actors.
-
         let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
         for (node_id, transport_info) in config.bootstraps {
@@ -121,15 +119,22 @@ impl Network {
         }
         Ok(())
     }
-
-    // TODO: Do we need methods to get the transport info (with ip addresses etc.)?
 }
 
+/// mDNS discovery mode.
+///
+/// By default this is set to "active" meaning we are actively advertising our address and public
+/// key on local-area networks on local-area networks.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum MdnsDiscoveryMode {
+    /// mDNS discovery disabled.
     Disabled,
+
+    /// Advertise our own and listen for others' discovery announcements.
     #[default]
     Active,
+
+    /// Listen for others' discovery announcements but don't advertise our own.
     Passive,
 }
 
@@ -168,6 +173,7 @@ impl Default for NetworkConfig {
     }
 }
 
+/// Errors coming from the networking layer.
 #[derive(Debug, Error)]
 pub enum NetworkError {
     #[error(transparent)]
