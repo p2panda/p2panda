@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::Duration;
-
-use tokio::time::sleep;
-
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
 use crate::iroh_mdns::{MdnsDiscovery, MdnsDiscoveryMode};
@@ -34,6 +30,31 @@ async fn mdns_discovery() {
         .await
         .unwrap();
 
+    // Alice and Bob do not yet know about one another.
+    let result = bob_address_book
+        .node_info(alice_args.public_key)
+        .await
+        .unwrap();
+    assert!(result.is_none());
+
+    let result = alice_address_book
+        .node_info(bob_args.public_key)
+        .await
+        .unwrap();
+    assert!(result.is_none());
+
+    // Listen for changes to Bob's node info in Alice's address book.
+    let mut alice_address_book_bob = alice_address_book
+        .watch_node_info(bob_endpoint.node_id(), true)
+        .await
+        .unwrap();
+
+    // Listen for changes to Alice's node info in Bob's address book.
+    let mut bob_address_book_alice = bob_address_book
+        .watch_node_info(alice_endpoint.node_id(), true)
+        .await
+        .unwrap();
+
     // Enable active discovery mode, otherwise they'll not find each other.
     let _alice_mdns = MdnsDiscovery::builder(alice_address_book.clone(), alice_endpoint.clone())
         .mode(MdnsDiscoveryMode::Active)
@@ -47,7 +68,8 @@ async fn mdns_discovery() {
         .unwrap();
 
     // Wait until they find each other and exchange transport infos.
-    sleep(Duration::from_millis(1000)).await;
+    alice_address_book_bob.recv().await;
+    bob_address_book_alice.recv().await;
 
     // Alice should be in Bob's address book and vice-versa.
     let result = bob_address_book
