@@ -55,6 +55,7 @@ Highlights are marked with a pancake 🥞
 - Fix automatic roll-back of unused, dropped permits [#1075](https://github.com/p2panda/p2panda/pull/1075)
 - Race where replay_from misses processing ops [#1104](https://github.com/p2panda/p2panda/pull/1104)
 - Race where replay state was determined late [#1104](https://github.com/p2panda/p2panda/pull/1104)
+- React to node address changes in mDNS test [#1141](https://github.com/p2panda/p2panda/pull/1141)
 
 ## [0.5.2] - 09/03/2026
 
