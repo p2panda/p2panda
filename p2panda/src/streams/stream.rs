@@ -498,6 +498,69 @@ pub(crate) async fn ack_published_operation<M>(
     })
 }
 
+/// Publish messages into a topic stream.
+///
+/// Any message type `M` can be published as long as it can be encoded into bytes by implementing
+/// serde's [`Serialize`] and [`Deserialize`] traits.
+///
+/// ## Example
+///
+/// ```rust
+/// # use p2panda_core::Topic;
+/// # use serde::{Serialize, Deserialize};
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # let node = p2panda::builder().spawn().await?;
+/// #
+/// let our_trees = Topic::new();
+///
+/// #[derive(Clone, Debug, Serialize, Deserialize)]
+/// struct Tree {
+///     leafy: bool,
+///     latin_name: String,
+/// }
+///
+/// let (tx, _rx) = node.stream::<Tree>(our_trees).await?;
+///
+/// tx.publish(Tree {
+///     leafy: true,
+///     latin_name: "Acer pseudoplatanus".into(),
+/// }).await?;
+/// #
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Append-only log
+///
+/// The Node API internally maintains an append-only log data-type for published application
+/// messages in a topic stream.
+///
+/// Publishing a message creates and signs an [`Operation`] which gets automatically appended to
+/// the author's log for the given topic. The message itself is the payload of the created
+/// operation.
+///
+/// ```plain
+/// Author "Panda"
+/// Topic "Trees" Log: [ Header ] <-- [ Header ] <-- [ Header ] ...
+///                         |             |              |
+///                         v            ...            ...
+///                     [ Body ]
+///               "Acer pseudoplatanus"
+///
+/// Author "Icebear"
+/// Topic "Trees" Log: [ Header ] <-- [ Header ] ...
+///                         |             |
+///                         v            ...
+///                     [ Body ]
+///                 "Pinus halepensis"
+/// ```
+///
+/// ## External sources
+///
+/// Operations can be imported from external sources into the processing pipeline by calling
+/// [`StreamPublisher::import`]. This allows transporting data via sneakernets (USB stick, etc.) or
+/// other sync solutions.
 #[derive(Clone, Debug)]
 pub struct StreamPublisher<M> {
     topic: Topic,
@@ -520,16 +583,21 @@ impl<M> StreamPublisher<M>
 where
     M: Serialize,
 {
+    /// Associated topic.
     pub fn topic(&self) -> Topic {
         self.topic
     }
 
-    /// Publish a message.
+    /// Publish a message into a topic stream.
+    ///
+    /// Locally created operations are processed by the same pipeline as remotely received
+    /// operations. It is possible to await the processing result which can be useful for some
+    /// applications if they want to block UI components etc.
     pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
         self.publish_inner(Some(message), false).await
     }
 
-    /// Deletes all our previously published messages in this stream.
+    /// Deletes all our previously published messages in this topic stream.
     ///
     /// This signals to all other nodes that they should remove them as well.
     ///
@@ -545,6 +613,10 @@ where
     }
 
     /// Import an external source of operations.
+    ///
+    /// Please note: Operations do not contain any information by themselves about to which topic
+    /// they belong. By importing operations into a topic stream, they will be assigned to this
+    /// topic. Make sure you accordingly routed operations into the correct topic before.
     pub async fn import(
         &self,
         stream: impl Stream<Item = Operation> + Send + 'static,
@@ -583,8 +655,8 @@ where
             .await?;
         let hash = operation.hash;
 
-        // Start processing operation in pipeline. Keep an oneshot receiver around to allow users
-        // to optionally await & get informed when processing has finished.
+        // Start processing operation in pipeline. Keep a oneshot receiver around to allow users to
+        // optionally await & get informed when processing has finished.
         let (processed_tx, processed_rx) = oneshot::channel();
         self.publish_tx
             .send((operation.clone(), message, processed_tx))
@@ -594,8 +666,8 @@ where
         // Try pushing operation to other nodes if we have an active and "live" sync session with
         // them. This allows disseminating new messages fastly in the network.
         //
-        // If no active live session exists, nodes will pick up the operation later when running
-        // the sync protocol.
+        // If no active live session exists, nodes will pick up the operation later when running the
+        // sync protocol.
         self.sync_handle
             .publish(operation)
             .await
@@ -605,7 +677,7 @@ where
     }
 }
 
-/// Future which can be awaited to find out when locally published operation has finished
+/// Future which can be awaited to find out when a locally published operation has finished
 /// processing.
 #[derive(Debug)]
 pub struct PublishFuture {
@@ -628,9 +700,34 @@ impl Future for PublishFuture {
     }
 }
 
-/// Subscription to events arriving from a stream.
+/// Subscription to events arriving from a topic stream.
+///
+/// A topic stream emits:
+///
+/// - Locally created or remotely synced [`ProcessedOperation`] with application messages inside
+/// - Topic-scoped system-events, for example if a sync session has begun and how much will be sent
+/// - Critical errors such as [`AckedError`] coming from the processing pipeline
+///
+/// ## Example
+///
+/// ```no_run
+/// use futures_util::StreamExt;
+/// use p2panda_core::Topic;
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// # let node = p2panda::spawn().await?;
+/// let topic = Topic::new();
+///
+/// let (_tx, mut rx) = node.stream::<String>(topic).await?;
+///
+/// while let Some(stream_event) = rx.next().await {
+///     // .. react to topic stream events
+/// }
+/// #
+/// # Ok(())
+/// # }
+/// ```
 pub struct StreamSubscription<M> {
-    #[allow(unused)]
     topic: Topic,
     store: SqliteStore,
     acked: Acked,
@@ -640,9 +737,18 @@ pub struct StreamSubscription<M> {
 }
 
 impl<M> StreamSubscription<M> {
+    /// Associated topic.
+    pub fn topic(&self) -> Topic {
+        self.topic
+    }
+
     /// Explicitly acknowledge operation.
     ///
     /// Fails silently if operation is not known (it might have been pruned, etc.).
+    ///
+    /// If the [`AckPolicy`] is set to "explicit", users want to call this method _after_
+    /// applicaton-level processing has successfully finished. See high-level description in
+    /// [`Node::stream`](crate::node::Node::stream) for more details.
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
         if let Some(operation) =
             OperationStore::<_, _, LogId>::get_operation(&self.store, &id).await?
@@ -669,9 +775,15 @@ where
     }
 }
 
+/// Operations with application messages, system events and errors coming from a topic stream
+/// subscription.
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum StreamEvent<M> {
+    /// Operation with application message coming from a topic stream.
+    ///
+    /// Operations can arrive from various sources. For example, from a sync session with a remote
+    /// node, a locally created message or import.
     Processed {
         /// Processed operation.
         operation: ProcessedOperation<M>,
@@ -679,6 +791,8 @@ pub enum StreamEvent<M> {
         /// The source of the operation.
         source: Source,
     },
+
+    /// Sync session started with a remote node.
     SyncStarted {
         /// Id of the remote sending node.
         remote_node_id: NodeId,
@@ -701,6 +815,8 @@ pub enum StreamEvent<M> {
         /// Total sessions currently running over the same topic.
         topic_sessions: u64,
     },
+
+    /// Sync session ended with a remote node.
     SyncEnded {
         /// Id of the remote sending node.
         remote_node_id: NodeId,
@@ -729,14 +845,23 @@ pub enum StreamEvent<M> {
         /// If the sync session ended with an error the reason is included here.
         error: Option<SyncError>,
     },
+
+    /// Import of operations from an external stream has started.
     ImportStarted {
         /// Id of the import session.
         session_id: SessionId,
     },
+
+    /// Import of operations from an external stream has ended.
     ImportEnded {
         /// Id of the import session.
         session_id: SessionId,
     },
+
+    /// Operation failed during event processing of the system-level pipeline.
+    ///
+    /// This is likely to come from either processing invalid operations from a broken / malicious
+    /// node or due to a bug in the Node API.
     ProcessingFailed {
         /// Event which failed during system-level processing.
         ///
@@ -749,19 +874,28 @@ pub enum StreamEvent<M> {
         /// The source of the operation.
         source: Source,
     },
+
+    /// Deserializing the application message into the specified type failed.
+    ///
+    /// This is an application-level error and indicates an invalid application payload.
+    // TODO(adz): Since this is an applicaton-level concern we should remove encoding / decoding
+    // from our APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
     DecodeFailed {
         event: Event<LogId, Extensions, Topic>,
         error: DecodeError,
     },
-    ReplayFailed {
-        error: Arc<ReplayError>,
-    },
+
+    /// Topic stream could not re-play events due to an internal error.
+    ReplayFailed { error: Arc<ReplayError> },
+
+    /// Topic stream could not acknowledge events due to an internal error.
     AckFailed {
         event: Event<LogId, Extensions, Topic>,
         error: Arc<AckedError>,
     },
 }
 
+/// Processed operation with application message coming from a topic stream.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedOperation<M> {
     event: Event<LogId, Extensions, Topic>,
@@ -771,30 +905,76 @@ pub struct ProcessedOperation<M> {
 }
 
 impl<M> ProcessedOperation<M> {
+    /// Associated topic.
     pub fn topic(&self) -> Topic {
         self.topic
     }
 
+    /// Unique identifier of this operation.
     pub fn id(&self) -> Hash {
         self.event.hash()
     }
 
+    /// Verified author.
     pub fn author(&self) -> VerifyingKey {
         self.event.header().verifying_key
     }
 
+    /// Timestamp when this operation was created.
+    ///
+    /// Microseconds since the UNIX epoch based on system time.
     pub fn timestamp(&self) -> u64 {
         self.event.header().timestamp.into()
     }
 
+    /// Application message.
     pub fn message(&self) -> &M {
         &self.message
     }
 
+    /// Meta-data for inspecting and debugging the processed event (failure / success status) and
+    /// underlying [`Operation`] of the append-only log.
     pub fn processed(&self) -> &Event<LogId, Extensions, Topic> {
         &self.event
     }
 
+    /// Acknowledge this event.
+    ///
+    /// If the [`AckPolicy`] is set to "explicit", users want to call this method _after_
+    /// applicaton-level processing has successfully finished. See high-level description in
+    /// [`Node::stream`](crate::node::Node::stream) for more details.
+    ///
+    /// ## Example
+    ///
+    /// ```no_run
+    /// # use futures_util::StreamExt;
+    /// # use p2panda::node::AckPolicy;
+    /// # use p2panda::streams::StreamEvent;
+    /// # use p2panda_core::Topic;
+    /// # use serde::{Serialize, Deserialize};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let node = p2panda::builder()
+    ///     .ack_policy(AckPolicy::Explicit)
+    ///     .spawn()
+    ///     .await?;
+    ///
+    /// let topic = Topic::new();
+    ///
+    /// let (_tx, mut rx) = node.stream::<Vec<u8>>(topic).await?;
+    ///
+    /// while let Some(StreamEvent::Processed { operation, .. }) = rx.next().await {
+    ///     // Do things with the message, event sourcing, apply to CRDT, materialise state,
+    ///     // write to database, ..
+    ///     let crdt = operation.message();
+    ///
+    ///     // Finally, acknowledge it.
+    ///     operation.ack().await?;
+    /// }
+    /// #
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn ack(&self) -> Result<(), AckedError> {
         self.acked.ack(self).await?;
         Ok(())
@@ -807,11 +987,11 @@ impl<M> Borrow<Header> for &ProcessedOperation<M> {
     }
 }
 
-/// The source of a processed operation.
+/// Source of a processed operation.
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Source {
-    /// Source when an operation arrived via a sync session.
+    /// Source when an operation arrived via a sync session with a remote node.
     SyncSession {
         /// Id of the remote sending node.
         remote_node_id: NodeId,
@@ -852,6 +1032,7 @@ pub enum Source {
     LocalStore,
 }
 
+/// Error occurred when creating operation and publishing it to topic stream.
 #[derive(Debug, Error)]
 pub enum PublishError {
     #[error("an error occurred while serializing the message for publication: {0}")]

@@ -92,7 +92,7 @@ where
     Ok(())
 }
 
-/// Error types which can occur during replay.
+/// Topic stream could not re-play events due to an internal error.
 #[derive(Debug, Error)]
 pub enum ReplayError {
     #[error("an error occurred while querying the store: {0}")]

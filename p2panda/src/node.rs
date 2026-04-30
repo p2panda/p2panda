@@ -20,24 +20,29 @@ use crate::streams::{
     StreamSubscription, SystemEvent, ephemeral_stream, event_stream, processed_stream,
 };
 
+/// Node API with methods to establish ephemeral and eventually consistent topic streams.
 #[derive(Debug)]
 pub struct Node {
     config: Config,
-    #[allow(unused)]
     store: SqliteStore,
     forge: OperationForge,
-    // NOTE: One single pipeline is currently used to handle _all_ incoming operations,
-    // independent of number of streams. While this is sufficient for most applications for now we
-    // might want to make the number of processors configurable to avoid head-of-line blocking.
+    // NOTE: One single pipeline is currently used to handle _all_ incoming operations, independent
+    // of number of streams. While this is sufficient for most applications for now we might want to
+    // make the number of processors configurable to avoid head-of-line blocking.
     pipeline: Pipeline<LogId, Extensions, Topic>,
     network: Network,
 }
 
 impl Node {
+    /// Returns the builder for a `Node`.
     pub fn builder() -> NodeBuilder {
         NodeBuilder::new()
     }
 
+    /// Spawns a `Node` using default configuration parameters.
+    ///
+    /// A [`SpawnError`] is returned if spawning is unsuccessful due to a network or store-related
+    /// failure.
     pub async fn spawn() -> Result<Self, SpawnError> {
         // Initialises an in-memory SQLite database.
         let store = SqliteStoreBuilder::default().build().await?;
@@ -301,6 +306,14 @@ impl Node {
         Ok((tx, rx))
     }
 
+    /// Returns a publisher and subscriber pair for an ephemeral stream of messages over the given
+    /// topic.
+    ///
+    /// Messages sent or received on this stream will not be persisted in local storage. Only
+    /// currently online and reachable nodes will receive published messages.
+    ///
+    /// Message payloads are signed providing integrity and provenance guarantees, plus making sure
+    /// each message is unique with the help of a timestamp.
     pub async fn ephemeral_stream<M>(
         &self,
         topic: impl Into<Topic>,
@@ -319,10 +332,14 @@ impl Node {
         Ok(ephemeral_stream(topic, self.forge.clone(), handle))
     }
 
-    /// System event stream.
+    /// Returns a stream of system events.
     ///
     /// System events include all network-related events, such as discovery events, which are not
     /// associated with a specific topic.
+    ///
+    /// Any events generated before this method is called will _not_ be emitted. Therefore, it's
+    /// recommended to call `event_stream()` right after the `Node` is spawned if you wish to
+    /// observe network behaviour throughout the lifetime of the `Node`.
     pub async fn event_stream(
         &self,
     ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
@@ -336,14 +353,32 @@ impl Node {
         Ok(event_stream(discovery_events))
     }
 
+    /// Returns the node identifier (public key).
     pub fn id(&self) -> NodeId {
         self.forge.verifying_key()
     }
 
+    /// Returns the network identifier being used by the node.
     pub fn network_id(&self) -> NetworkId {
         self.network.network_id()
     }
 
+    /// Inserts a bootstrap node into the local address book.
+    ///
+    /// Bootstrap nodes are used as a starting point for the random-walk discovery algorithm to
+    /// find other nodes in the network, without the need for any centralised registry. Any node
+    /// can serve as a bootstrap into the network. The URL of the relay used by the bootstrap node
+    /// is required to assist with connectivity (via relaying of traffic and negotiation of
+    /// hole-punching for direct connections).
+    ///
+    /// Multiple bootstrap nodes can be registered. Each iteration of the discovery algorithm
+    /// begins by picking a random node from the set of known bootstrap nodes. It's recommended to
+    /// register several bootstrap nodes, especially if they are not highly-available; this
+    /// offers redunancy in the case that any of the bootstrap nodes go offline or are otherwise
+    /// unavailable.
+    ///
+    /// Consult the documentation of the `p2panda-discovery` crate for further details concerning
+    /// the discovery protocol.
     pub async fn insert_bootstrap(
         &self,
         node_id: NodeId,
@@ -355,6 +390,7 @@ impl Node {
 
 #[cfg(any(test, feature = "test_utils"))]
 impl Node {
+    /// Returns a clone of the underlying store for this `Node`.
     // NOTE(adz): This feels like something we would like to have on the regular Node API as well,
     // I'll leave it here for now until we've made a decision.
     pub fn store(&self) -> SqliteStore {
@@ -362,6 +398,14 @@ impl Node {
     }
 }
 
+/// Message acknowledgement policy for eventually-consistent topic streams.
+///
+/// Every `StreamSubscription` instance is stateful and keeps track of already acknowledged
+/// operations by persisting them in the local SQLite database. Specifying a policy defines how and
+/// when events are acknowledged.
+///
+/// Operations which have not been acknowledged yet will be automatically re-played when this stream
+/// is created again.
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub enum AckPolicy {
     /// Each individual message must be acknowledged.
@@ -378,6 +422,7 @@ pub(crate) struct Config {
     pub network: NetworkConfig,
 }
 
+/// Error occurred when spawning network or store processes.
 #[derive(Debug, Error)]
 pub enum SpawnError {
     #[error(transparent)]
