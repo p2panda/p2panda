@@ -11,7 +11,7 @@ use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{
     EndpointAddr, EndpointError, IrohConfig, RelayUrl, from_public_key,
 };
-use p2panda_net::iroh_mdns::{MdnsDiscoveryError, MdnsDiscoveryMode};
+use p2panda_net::iroh_mdns::MdnsDiscoveryError;
 use p2panda_net::sync::LogSyncError;
 use p2panda_net::{
     AddressBook, DEFAULT_NETWORK_ID, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery,
@@ -26,7 +26,7 @@ use crate::operation::Extensions;
 #[allow(unused)]
 pub struct Network {
     pub address_book: AddressBook,
-    pub mdns: MdnsDiscovery,
+    pub mdns: Option<MdnsDiscovery>,
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
@@ -61,10 +61,17 @@ impl Network {
 
         let endpoint = endpoint.spawn().await?;
 
-        let mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
-            .mode(config.mdns_mode)
-            .spawn()
-            .await?;
+        let mdns = match config.mdns_mode {
+            MdnsDiscoveryMode::Active | MdnsDiscoveryMode::Passive => {
+                let mdns = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
+                    .mode(config.mdns_mode.into())
+                    .spawn()
+                    .await?;
+
+                Some(mdns)
+            }
+            MdnsDiscoveryMode::Disabled => None,
+        };
 
         let discovery = Discovery::builder(address_book.clone(), endpoint.clone())
             .config(config.discovery)
@@ -117,6 +124,24 @@ impl Network {
     }
 
     // TODO: Do we need methods to get the transport info (with ip addresses etc.)?
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum MdnsDiscoveryMode {
+    Disabled,
+    #[default]
+    Active,
+    Passive,
+}
+
+impl From<MdnsDiscoveryMode> for p2panda_net::iroh_mdns::MdnsDiscoveryMode {
+    fn from(value: MdnsDiscoveryMode) -> Self {
+        match value {
+            MdnsDiscoveryMode::Disabled => unreachable!(),
+            MdnsDiscoveryMode::Active => Self::Active,
+            MdnsDiscoveryMode::Passive => Self::Passive,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
