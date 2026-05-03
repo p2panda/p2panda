@@ -3,10 +3,15 @@
 use std::fmt::Debug;
 
 use futures_util::Stream;
+#[doc(no_inline)]
 pub use p2panda_core::identity::{PrivateKey, PublicKey};
+#[doc(no_inline)]
 pub use p2panda_core::{Hash, Topic};
+#[doc(no_inline)]
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
+#[doc(no_inline)]
 pub use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
+#[doc(no_inline)]
 pub use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
