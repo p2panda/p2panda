@@ -102,12 +102,10 @@ impl Network {
         self.endpoint.node_id()
     }
 
-    #[allow(unused)]
     pub fn network_id(&self) -> NetworkId {
         self.endpoint.network_id()
     }
 
-    #[allow(unused)]
     pub async fn insert_bootstrap(
         &self,
         node_id: NodeId,
