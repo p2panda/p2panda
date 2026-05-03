@@ -24,7 +24,7 @@ use crate::operation::Extensions;
 
 #[derive(Clone, Debug)]
 #[allow(unused)]
-pub struct Network {
+pub(crate) struct Network {
     pub address_book: AddressBook,
     pub mdns: Option<MdnsDiscovery>,
     pub endpoint: Endpoint,
@@ -145,7 +145,7 @@ impl From<MdnsDiscoveryMode> for p2panda_net::iroh_mdns::MdnsDiscoveryMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct NetworkConfig {
+pub(crate) struct NetworkConfig {
     pub network_id: NetworkId,
     pub relay_urls: HashSet<RelayUrl>,
     pub bootstraps: HashSet<(NodeId, TrustedTransportInfo)>,
