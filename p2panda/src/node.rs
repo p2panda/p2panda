@@ -342,6 +342,10 @@ impl Node {
         self.forge.public_key()
     }
 
+    pub fn network_id(&self) -> NetworkId {
+        self.network.network_id()
+    }
+
     pub async fn insert_bootstrap(
         &self,
         node_id: NodeId,
