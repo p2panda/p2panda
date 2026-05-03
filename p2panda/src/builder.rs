@@ -7,13 +7,13 @@ use p2panda_net::addrs::TrustedTransportInfo;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::gossip::GossipConfig;
 use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl, from_public_key};
-use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::SqliteStore;
 use p2panda_store::sqlite::{SqlitePool, SqliteStoreBuilder};
 
 use crate::Node;
 use crate::forge::OperationForge;
+use crate::network::MdnsDiscoveryMode;
 use crate::node::{AckPolicy, Config, SpawnError};
 use crate::processor::{Pipeline, TaskTracker};
 
