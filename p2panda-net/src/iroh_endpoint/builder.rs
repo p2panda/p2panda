@@ -9,7 +9,7 @@ use crate::address_book::AddressBook;
 use crate::iroh_endpoint::actors::{IrohEndpoint, IrohEndpointArgs};
 use crate::iroh_endpoint::api::{Endpoint, EndpointError};
 use crate::iroh_endpoint::config::IrohConfig;
-use crate::{DEFAULT_NETWORK_ID, NetworkId};
+use crate::{NetworkId, DEFAULT_NETWORK_ID};
 
 pub struct Builder {
     network_id: Option<NetworkId>,
@@ -17,6 +17,7 @@ pub struct Builder {
     config: Option<IrohConfig>,
     relay_urls: HashSet<iroh::RelayUrl>,
     address_book: AddressBook,
+    with_ble: bool,
 }
 
 impl Builder {
@@ -27,7 +28,13 @@ impl Builder {
             config: None,
             address_book,
             relay_urls: HashSet::new(),
+            with_ble: false,
         }
+    }
+
+    pub fn with_ble(mut self, ble: bool) -> Self {
+        self.with_ble = ble;
+        self
     }
 
     pub fn network_id(mut self, network_id: NetworkId) -> Self {
@@ -79,6 +86,7 @@ impl Builder {
             config,
             relay_map,
             self.address_book,
+            self.with_ble,
         )
     }
 

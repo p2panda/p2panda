@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use iroh::endpoint::{QuicTransportConfig, presets};
 use iroh::protocol::DynProtocolHandler;
+use iroh_ble_transport::BleTransport;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
@@ -25,7 +26,7 @@ use crate::iroh_endpoint::actors::connection::{
 use crate::iroh_endpoint::actors::is_globally_reachable_endpoint;
 use crate::iroh_endpoint::config::IrohConfig;
 use crate::iroh_endpoint::discovery::AddressBookDiscovery;
-use crate::iroh_endpoint::from_private_key;
+use crate::iroh_endpoint::{from_private_key, from_public_key};
 use crate::utils::ShortFormat;
 use crate::{NetworkId, NodeId, ProtocolId, hash_protocol_id_with_network_id};
 
@@ -87,6 +88,7 @@ pub struct IrohState {
     config: IrohConfig,
     relay_map: iroh::RelayMap,
     address_book: AddressBook,
+    with_ble: bool,
     endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
@@ -100,6 +102,7 @@ pub type IrohEndpointArgs = (
     IrohConfig,
     iroh::RelayMap,
     AddressBook,
+    bool
 );
 
 #[derive(Default)]
@@ -117,7 +120,7 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (network_id, private_key, config, relay_map, address_book) = args;
+        let (network_id, private_key, config, relay_map, address_book, with_ble) = args;
 
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
@@ -128,6 +131,7 @@ impl ThreadLocalActor for IrohEndpoint {
             config,
             relay_map,
             address_book,
+            with_ble,
             endpoint: None,
             protocols: Arc::default(),
             accept_handle: None,
@@ -193,12 +197,24 @@ impl ThreadLocalActor for IrohEndpoint {
                     state.address_book.clone(),
                 );
 
-                // Create and bind the endpoint to the socket.
-                let endpoint = iroh::Endpoint::builder(presets::Minimal)
+                // Create and configure the endpoint.
+                let endpoint_builder = iroh::Endpoint::builder(presets::Minimal)
                     .relay_mode(relay_mode)
                     .address_lookup(address_book_discovery)
                     .secret_key(from_private_key(state.private_key.clone()))
-                    .transport_config(quic_transport_config)
+                    .transport_config(quic_transport_config);
+
+                // Optionally register the BLE address lookup service.
+                let endpoint_builder = if state.with_ble {
+                    let ble = BleTransport::builder().build(from_public_key(state.private_key.public_key())).await?;
+                    endpoint_builder
+                        .hooks(ble.dedup_hook())
+                        .add_custom_transport(ble.as_custom_transport())
+                        .address_lookup(ble.address_lookup())
+                } else { endpoint_builder };
+
+                // Bind the endpoint to the socket.
+                let endpoint = endpoint_builder
                     .bind_addr(socket_address_v4)?
                     .bind_addr(socket_address_v6)?
                     .bind()

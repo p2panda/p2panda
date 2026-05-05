@@ -45,11 +45,11 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteStore, Transaction};
 use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 use tokio::time::Instant;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 type LogId = u64;
 
@@ -97,6 +97,10 @@ struct Args {
     /// Enable mDNS discovery
     #[arg(short = 'm', long, action)]
     mdns: bool,
+
+    /// Enable BLE transport.
+    #[arg(long, action)]
+    ble: bool,
 }
 
 #[tokio::main]
@@ -136,16 +140,22 @@ async fn main() -> Result<()> {
             .await?;
     }
 
-    let endpoint = Endpoint::builder(address_book.clone())
-        .private_key(private_key.clone())
-        .relay_url(RELAY_URL.parse().unwrap())
-        .spawn()
-        .await?;
+    let endpoint = Endpoint::builder(address_book.clone()).private_key(private_key.clone());
+    // NOTE: We disable this for now to test BLE.
+    //.relay_url(RELAY_URL.parse().unwrap());
+
+    let endpoint = if args.ble {
+        endpoint.with_ble(true)
+    } else {
+        endpoint
+    };
+
+    let endpoint = endpoint.spawn().await?;
 
     println!("network id: {}", endpoint.network_id().fmt_short());
     println!("chat topic: {}", topic);
     println!("public key: {}", public_key.to_hex());
-    println!("relay url: {}", RELAY_URL);
+    //println!("relay url: {}", RELAY_URL);
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()
