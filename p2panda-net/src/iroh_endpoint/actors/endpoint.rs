@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use iroh::endpoint::{QuicTransportConfig, presets};
 use iroh::protocol::DynProtocolHandler;
-use iroh_ble_transport::BleTransport;
+use iroh_ble_transport::{BleTransport, Central, CentralConfig, L2capPolicy, Peripheral};
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
@@ -38,7 +38,7 @@ use crate::{NetworkId, NodeId, ProtocolId, hash_protocol_id_with_network_id};
 pub const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Maximum duration of inactivity to accept before timing out the connection.
-pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[allow(clippy::large_enum_variant)]
 pub enum ToIrohEndpoint {
@@ -102,7 +102,7 @@ pub type IrohEndpointArgs = (
     IrohConfig,
     iroh::RelayMap,
     AddressBook,
-    bool
+    bool,
 );
 
 #[derive(Default)]
@@ -206,12 +206,33 @@ impl ThreadLocalActor for IrohEndpoint {
 
                 // Optionally register the BLE address lookup service.
                 let endpoint_builder = if state.with_ble {
-                    let ble = BleTransport::builder().build(from_public_key(state.private_key.public_key())).await?;
+                    // Sprinkle some config from the tauri example.
+                    let central_config = CentralConfig {
+                        connect_timeout: Some(std::time::Duration::from_secs(5)),
+                        ..Default::default()
+                    };
+                    let central = Arc::new(
+                        Central::with_config(central_config)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    );
+                    let peripheral = Arc::new(Peripheral::new().await.map_err(|e| e.to_string())?);
+
+                    let ble = BleTransport::builder()
+                        .l2cap_policy(L2capPolicy::PreferL2cap)
+                        .central(central)
+                        .peripheral(peripheral)
+                        .build(from_public_key(state.private_key.public_key()))
+                        .await?;
+
                     endpoint_builder
                         .hooks(ble.dedup_hook())
                         .add_custom_transport(ble.as_custom_transport())
                         .address_lookup(ble.address_lookup())
-                } else { endpoint_builder };
+                        .clear_ip_transports()
+                } else {
+                    endpoint_builder
+                };
 
                 // Bind the endpoint to the socket.
                 let endpoint = endpoint_builder

@@ -36,6 +36,7 @@ use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Timestamp, Topic};
 use p2panda_net::addrs::NodeInfo;
+use p2panda_net::gossip::{GossipConfig, HyParViewConfig};
 use p2panda_net::iroh_endpoint::from_public_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
@@ -171,7 +172,21 @@ async fn main() -> Result<()> {
         .spawn()
         .await?;
 
+    // NOTE: This is purely for BLE.
+    let hyparview = HyParViewConfig {
+        active_view_capacity: 3,
+        passive_view_capacity: 12,
+        shuffle_interval: std::time::Duration::from_secs(120),
+        ..Default::default()
+    };
+
+    let gossip_config = GossipConfig {
+        membership: hyparview,
+        ..Default::default()
+    };
+
     let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
+        .config(gossip_config)
         .spawn()
         .await?;
 

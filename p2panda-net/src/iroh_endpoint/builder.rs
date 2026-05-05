@@ -9,7 +9,7 @@ use crate::address_book::AddressBook;
 use crate::iroh_endpoint::actors::{IrohEndpoint, IrohEndpointArgs};
 use crate::iroh_endpoint::api::{Endpoint, EndpointError};
 use crate::iroh_endpoint::config::IrohConfig;
-use crate::{NetworkId, DEFAULT_NETWORK_ID};
+use crate::{DEFAULT_NETWORK_ID, NetworkId};
 
 pub struct Builder {
     network_id: Option<NetworkId>,

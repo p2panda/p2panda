@@ -36,7 +36,7 @@ use crate::iroh_endpoint::{Endpoint, to_public_key};
 use crate::utils::ShortFormat;
 
 /// Maximum duration of inactivity to accept before timing out the connection.
-pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);
+pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub enum ToDiscoveryManager {
     /// Accept incoming "discovery protocol" connection requests.
