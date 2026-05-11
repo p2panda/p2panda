@@ -17,7 +17,7 @@ pub use iroh::{EndpointAddr, RelayUrl};
 
 pub use api::{Endpoint, EndpointError};
 pub use builder::Builder;
-pub use config::IrohConfig;
+pub use config::{BleMode, IrohConfig};
 
 /// Converts an `iroh` public key type to the `p2panda-core` implementation.
 pub fn to_public_key(key: iroh_base::PublicKey) -> p2panda_core::PublicKey {

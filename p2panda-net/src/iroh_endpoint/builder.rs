@@ -8,7 +8,7 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::actors::{IrohEndpoint, IrohEndpointArgs};
 use crate::iroh_endpoint::api::{Endpoint, EndpointError};
-use crate::iroh_endpoint::config::IrohConfig;
+use crate::iroh_endpoint::config::{BleMode, IrohConfig};
 use crate::{DEFAULT_NETWORK_ID, NetworkId};
 
 pub struct Builder {
@@ -17,7 +17,7 @@ pub struct Builder {
     config: Option<IrohConfig>,
     relay_urls: HashSet<iroh::RelayUrl>,
     address_book: AddressBook,
-    with_ble: bool,
+    ble_mode: BleMode,
 }
 
 impl Builder {
@@ -28,12 +28,12 @@ impl Builder {
             config: None,
             address_book,
             relay_urls: HashSet::new(),
-            with_ble: false,
+            ble_mode: Default::default(),
         }
     }
 
-    pub fn with_ble(mut self, ble: bool) -> Self {
-        self.with_ble = ble;
+    pub fn ble_mode(mut self, mode: BleMode) -> Self {
+        self.ble_mode = mode;
         self
     }
 
@@ -86,7 +86,7 @@ impl Builder {
             config,
             relay_map,
             self.address_book,
-            self.with_ble,
+            self.ble_mode,
         )
     }
 

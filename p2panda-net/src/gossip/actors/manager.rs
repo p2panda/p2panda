@@ -334,7 +334,7 @@ impl ThreadLocalActor for GossipManager {
                     warn!("oneshot gossip joined receiver dropped")
                 }
 
-                let nodes = HashSet::from_iter(nodes.into_iter());
+                let nodes = HashSet::from_iter(nodes);
                 state.neighbours.insert(topic, nodes.clone());
 
                 let _ = state.events_tx.send(GossipEvent::Joined { topic, nodes });

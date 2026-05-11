@@ -37,7 +37,7 @@ use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Timestamp, Topic};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::gossip::{GossipConfig, HyParViewConfig};
-use p2panda_net::iroh_endpoint::from_public_key;
+use p2panda_net::iroh_endpoint::{BleMode, from_public_key};
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
 use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId};
@@ -46,11 +46,11 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteStore, Transaction};
 use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
 use tracing::info;
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 type LogId = u64;
 
@@ -141,12 +141,14 @@ async fn main() -> Result<()> {
             .await?;
     }
 
-    let endpoint = Endpoint::builder(address_book.clone()).private_key(private_key.clone());
-    // NOTE: We disable this for now to test BLE.
-    //.relay_url(RELAY_URL.parse().unwrap());
+    let endpoint = Endpoint::builder(address_book.clone())
+        .private_key(private_key.clone())
+        // NOTE: Be sure to disable WiFi / ethernet if your intention is to test BLE without the
+        // possibility of internet connections.
+        .relay_url(RELAY_URL.parse().unwrap());
 
     let endpoint = if args.ble {
-        endpoint.with_ble(true)
+        endpoint.ble_mode(BleMode::Active)
     } else {
         endpoint
     };
@@ -156,7 +158,7 @@ async fn main() -> Result<()> {
     println!("network id: {}", endpoint.network_id().fmt_short());
     println!("chat topic: {}", topic);
     println!("public key: {}", public_key.to_hex());
-    //println!("relay url: {}", RELAY_URL);
+    println!("relay url: {}", RELAY_URL);
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()

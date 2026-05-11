@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use iroh::endpoint::{QuicTransportConfig, presets};
 use iroh::protocol::DynProtocolHandler;
-use iroh_ble_transport::{BleTransport, Central, CentralConfig, L2capPolicy, Peripheral};
+use iroh_ble_transport::BleTransport;
 use p2panda_core::PrivateKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
@@ -24,7 +24,7 @@ use crate::iroh_endpoint::actors::connection::{
     ConnectReplyPort, ConnectionActorError, IrohConnection, IrohConnectionArgs,
 };
 use crate::iroh_endpoint::actors::is_globally_reachable_endpoint;
-use crate::iroh_endpoint::config::IrohConfig;
+use crate::iroh_endpoint::config::{BleMode, IrohConfig};
 use crate::iroh_endpoint::discovery::AddressBookDiscovery;
 use crate::iroh_endpoint::{from_private_key, from_public_key};
 use crate::utils::ShortFormat;
@@ -88,7 +88,7 @@ pub struct IrohState {
     config: IrohConfig,
     relay_map: iroh::RelayMap,
     address_book: AddressBook,
-    with_ble: bool,
+    ble_mode: BleMode,
     endpoint: Option<iroh::Endpoint>,
     protocols: ProtocolMap,
     accept_handle: Option<JoinHandle<()>>,
@@ -102,7 +102,7 @@ pub type IrohEndpointArgs = (
     IrohConfig,
     iroh::RelayMap,
     AddressBook,
-    bool,
+    BleMode,
 );
 
 #[derive(Default)]
@@ -120,7 +120,7 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (network_id, private_key, config, relay_map, address_book, with_ble) = args;
+        let (network_id, private_key, config, relay_map, address_book, ble_mode) = args;
 
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
@@ -131,7 +131,7 @@ impl ThreadLocalActor for IrohEndpoint {
             config,
             relay_map,
             address_book,
-            with_ble,
+            ble_mode,
             endpoint: None,
             protocols: Arc::default(),
             accept_handle: None,
@@ -204,24 +204,14 @@ impl ThreadLocalActor for IrohEndpoint {
                     .secret_key(from_private_key(state.private_key.clone()))
                     .transport_config(quic_transport_config);
 
-                // Optionally register the BLE address lookup service.
-                let endpoint_builder = if state.with_ble {
-                    // Sprinkle some config from the tauri example.
-                    let central_config = CentralConfig {
-                        connect_timeout: Some(std::time::Duration::from_secs(5)),
-                        ..Default::default()
-                    };
-                    let central = Arc::new(
-                        Central::with_config(central_config)
-                            .await
-                            .map_err(|e| e.to_string())?,
-                    );
-                    let peripheral = Arc::new(Peripheral::new().await.map_err(|e| e.to_string())?);
-
+                // Optionally build the BLE transport and register the address lookup service.
+                let endpoint_builder = if state.ble_mode.is_active() {
+                    // TODO: We might consider exposing the ability to supply custom config
+                    // parameters.
+                    //
+                    // Here we're simply using the defaults (L2capPolicy, Central and Peripheral
+                    // are all defined during `build`).
                     let ble = BleTransport::builder()
-                        .l2cap_policy(L2capPolicy::PreferL2cap)
-                        .central(central)
-                        .peripheral(peripheral)
                         .build(from_public_key(state.private_key.public_key()))
                         .await?;
 
@@ -229,7 +219,9 @@ impl ThreadLocalActor for IrohEndpoint {
                         .hooks(ble.dedup_hook())
                         .add_custom_transport(ble.as_custom_transport())
                         .address_lookup(ble.address_lookup())
-                        .clear_ip_transports()
+                    // TODO: In the future it could be nice to expose this option via config /
+                    // flag, so that a BLE-only / no-IP mode can be enabled.
+                    //.clear_ip_transports()
                 } else {
                     endpoint_builder
                 };

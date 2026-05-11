@@ -1,6 +1,36 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
 use std::net::{Ipv4Addr, Ipv6Addr};
+
+/// Bluetooth Low-Energy (BLE) mode.
+///
+/// By default this is set to "disabled".
+///
+/// This default is chosen to prioritise privacy and security; only choose "active" mode only if
+/// you can accept leaking your address and public key to untrusted, in-range BLE devices.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum BleMode {
+    Active,
+    #[default]
+    Disabled,
+}
+
+impl Display for BleMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            BleMode::Active => "active",
+            BleMode::Disabled => "disabled",
+        };
+        write!(f, "{value}")
+    }
+}
+
+impl BleMode {
+    pub fn is_active(&self) -> bool {
+        self == &BleMode::Active
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IrohConfig {
