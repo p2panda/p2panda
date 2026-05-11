@@ -31,6 +31,8 @@ Highlights are marked with a pancake 🥞
 - Processor for groups operations [#1112](https://github.com/p2panda/p2panda/pull/1112)
 - `GroupsStore` with `SqliteStore` implementation [#1112](https://github.com/p2panda/p2panda/pull/1112)
 - Node API for importing external operation streams [#1135](https://github.com/p2panda/p2panda/pull/1135)
+- Option to disable mDNS discovery [#1143](https://github.com/p2panda/p2panda/pull/1143)
+- Get current network id from `Node` [#1143](https://github.com/p2panda/p2panda/pull/1143)
 
 ### Changed
 
