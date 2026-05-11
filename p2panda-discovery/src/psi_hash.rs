@@ -208,7 +208,7 @@ where
 
         // Alice needs to hash their data with their salt and send to Bob so they can do the same.
         let topics_for_bob: HashSet<Topic> =
-            HashSet::from_iter(hash_vector(&my_topics, &alice_final_salt)?.into_iter());
+            HashSet::from_iter(hash_vector(&my_topics, &alice_final_salt)?);
 
         tx.send(PsiHashMessage::AliceHashedData { topics_for_bob })
             .await
@@ -266,7 +266,7 @@ where
             .collect();
 
         let topics_for_alice: HashSet<Topic> =
-            HashSet::from_iter(hash_vector(&my_topics, &bob_final_salt)?.into_iter());
+            HashSet::from_iter(hash_vector(&my_topics, &bob_final_salt)?);
 
         tx.send(PsiHashMessage::BobSaltHalfAndHashedData {
             bob_salt_half,
