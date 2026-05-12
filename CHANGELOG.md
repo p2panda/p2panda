@@ -34,6 +34,7 @@ Highlights are marked with a pancake 🥞
 - Option to disable mDNS discovery [#1143](https://github.com/p2panda/p2panda/pull/1143)
 - Get current network id from `Node` [#1143](https://github.com/p2panda/p2panda/pull/1143)
 - Deduplicate received operations in sync manager event stream [#1147](https://github.com/p2panda/p2panda/pull/1147)
+- Todo list example with LWW-CRDT for Node API [#1148](https://github.com/p2panda/p2panda/pull/1148)
 
 ### Changed
 
