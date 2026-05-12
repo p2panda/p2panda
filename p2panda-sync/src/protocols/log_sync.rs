@@ -259,7 +259,10 @@ where
                                         let body = body.map(|ref bytes| Body::new(bytes));
 
                                         // Insert message hash into deduplication buffer.
-                                        dedup.insert(header.hash());
+                                        if !dedup.insert(header.hash()) {
+                                            trace!(phase = "sync", operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
+                                            continue;
+                                        }
 
                                         trace!(
                                             phase = "sync",

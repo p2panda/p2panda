@@ -8,11 +8,13 @@ use std::task::{Context, Poll};
 use futures::channel::mpsc;
 use futures::stream::SelectAll;
 use futures::{SinkExt, Stream, StreamExt};
-use p2panda_core::Extensions;
+use p2panda_core::traits::Digest;
+use p2panda_core::{Extensions, Hash};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{debug, trace};
 
+use crate::dedup::Dedup;
 use crate::manager::{SessionStream, SessionTopicMap, ToTopicSync};
 use crate::protocols::TopicLogSyncEvent;
 use crate::{FromSync, ToSync};
@@ -31,6 +33,7 @@ where
     pub(crate) session_rx_set:
         SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
     pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
+    pub(crate) dedup: Dedup<Hash>,
 }
 
 type FutureOutput<T, E> = (
@@ -133,6 +136,13 @@ where
                         for id in dropped {
                             debug!(session_id = id, "drop session: channel unexpectedly closed");
                             state.session_topic_map.drop(id);
+                        }
+
+                        // If this operation was already present in the deduplication buffer then
+                        // it means we have received it before on this event stream and should not
+                        // return it again to any consumers.
+                        if !state.dedup.insert(operation.hash()) {
+                            return (state, None)
                         }
                     }
 

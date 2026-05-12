@@ -30,6 +30,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
+use crate::dedup::Dedup;
 use crate::manager::event_stream::{ManagerEventStreamState, StreamDebug};
 use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
 use crate::traits::Manager;
@@ -48,6 +49,13 @@ pub type ToTopicSync<E> = ToSync<Operation<E>>;
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
 /// any topic subscriptions in order to understand the correct mappings.  
+///
+/// There are two points where message deduplication occurs; 1) per-subscription deduplication of
+/// received operations across all sessions for this manager occurs in the event stream 2)
+/// per-session deduplication occurs on sending operations to a remote, this is especially
+/// required during live-mode when we may receive the same new operation from several sources. The
+/// former stops any local consumers from receiving the same operation more than once, the latter
+/// reduces unnecessary noise on the network.
 #[allow(clippy::type_complexity)]
 #[derive(Debug)]
 pub struct TopicSyncManager<T, S, L, E>
@@ -203,6 +211,7 @@ where
             manager_rx,
             session_rx_set,
             session_topic_map: self.session_topic_map.clone(),
+            dedup: Dedup::default(),
         };
 
         let stream = ManagerEventStream {
@@ -422,25 +431,28 @@ mod tests {
         let mut peer_a = Peer::new(0).await;
         let body_a = Body::new("Hello from A".as_bytes());
         let (peer_a_header_0, _) = peer_a.create_operation(&body_a, LOG_ID).await;
-        let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
-        peer_a.associate(&topic, &logs).await;
         let mut manager_a = TestTopicSyncManager::new(peer_a.store.clone());
 
         // Peer B
         let mut peer_b = Peer::new(1).await;
         let body_b = Body::new("Hello from B".as_bytes());
         let (peer_b_header_0, _) = peer_b.create_operation(&body_b, LOG_ID).await;
-        let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
-        peer_b.associate(&topic, &logs).await;
         let mut manager_b = TestTopicSyncManager::new(peer_b.store.clone());
 
         // Peer C
         let mut peer_c = Peer::new(2).await;
         let body_c = Body::new("Hello from C".as_bytes());
         let (peer_c_header_0, _) = peer_c.create_operation(&body_c, LOG_ID).await;
-        let logs = BTreeMap::from([(peer_c.id(), vec![LOG_ID])]);
-        peer_c.associate(&topic, &logs).await;
         let mut manager_c = TestTopicSyncManager::new(peer_c.store.clone());
+
+        let logs = BTreeMap::from([
+            (peer_a.id(), vec![LOG_ID]),
+            (peer_b.id(), vec![LOG_ID]),
+            (peer_c.id(), vec![LOG_ID]),
+        ]);
+        peer_a.associate(&topic, &logs).await;
+        peer_b.associate(&topic, &logs).await;
+        peer_c.associate(&topic, &logs).await;
 
         // Session A -> B
         let mut config = SessionConfig {
@@ -450,7 +462,7 @@ mod tests {
         };
         let session_ab = manager_a.session(SESSION_AB, &config).await;
         config.remote = peer_a.id();
-        let session_b = manager_b.session(SESSION_BA, &config).await;
+        let session_ba = manager_b.session(SESSION_BA, &config).await;
 
         // Session A -> C
         let mut config = SessionConfig {
@@ -460,7 +472,7 @@ mod tests {
         };
         let session_ac = manager_a.session(SESSION_AC, &config).await;
         config.remote = peer_a.id();
-        let session_c = manager_c.session(SESSION_CA, &config).await;
+        let session_ca = manager_c.session(SESSION_CA, &config).await;
 
         let mut event_stream_a = manager_a.subscribe();
         let mut event_stream_b = manager_b.subscribe();
@@ -479,7 +491,7 @@ mod tests {
                     .unwrap();
             });
             tokio::spawn(async move {
-                session_b
+                session_ba
                     .run(&mut remote_message_tx, &mut local_message_rx)
                     .await
                     .unwrap();
@@ -498,7 +510,7 @@ mod tests {
                     .unwrap();
             });
             tokio::spawn(async move {
-                session_c
+                session_ca
                     .run(&mut remote_message_tx, &mut local_message_rx)
                     .await
                     .unwrap();
@@ -551,51 +563,41 @@ mod tests {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_a.push(*operation.clone());
+                            println!("A received operation: {}", operation.hash);
+                            operations_a.push(operation.header().clone());
                         }
                     }
                     Some(event) = event_stream_b.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_b.push(*operation.clone());
+                            println!("B received operation: {}", operation.hash);
+                            operations_b.push(operation.header().clone());
                         }
                     }
                     Some(event) = event_stream_c.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_c.push(*operation.clone());
+                            operations_c.push(operation.header().clone());
                         }
                     }
-                    else => tokio::time::sleep(Duration::from_millis(5)).await
+                    else => tokio::time::sleep(Duration::from_millis(20)).await
                 }
             }
         })
         .await;
 
-        // All peers received 4 messages; B & C received each other's messages via A,
-        // and nobody received their own messages.
+        // A receives 2 operations each from B & C
         assert_eq!(operations_a.len(), 4);
+        // B receives 2 operations each from A & C (via A)
         assert_eq!(operations_b.len(), 4);
+        // C receives 2 operations each from A & B (via A)
         assert_eq!(operations_c.len(), 4);
-        assert!(
-            operations_a
-                .iter()
-                .find(|operation| operation.header == peer_a_header_0
-                    || operation.header == peer_a_header_1)
-                .is_none()
-        );
-        assert!(
-            operations_b
-                .iter()
-                .find(|operation| operation.header == peer_b_header_0
-                    || operation.header == peer_b_header_1)
-                .is_none()
-        );
-        assert!(
-            operations_c
-                .iter()
-                .find(|operation| operation.header == peer_c_header_0
-                    || operation.header == peer_c_header_1)
-                .is_none()
-        );
+
+        // No peers received their own operations back again.
+        assert!(!operations_a.contains(&peer_a_header_0));
+        assert!(!operations_a.contains(&peer_a_header_1));
+        assert!(!operations_b.contains(&peer_b_header_0));
+        assert!(!operations_b.contains(&peer_b_header_1));
+        assert!(!operations_c.contains(&peer_c_header_0));
+        assert!(!operations_c.contains(&peer_c_header_1));
     }
 
     #[tokio::test]

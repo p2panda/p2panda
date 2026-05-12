@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - Node API for importing external operation streams [#1135](https://github.com/p2panda/p2panda/pull/1135)
 - Option to disable mDNS discovery [#1143](https://github.com/p2panda/p2panda/pull/1143)
 - Get current network id from `Node` [#1143](https://github.com/p2panda/p2panda/pull/1143)
+- Deduplicate received operations in sync manager event stream [#1147](https://github.com/p2panda/p2panda/pull/1147)
 
 ### Changed
 
