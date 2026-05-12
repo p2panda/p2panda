@@ -67,7 +67,7 @@ impl TestLog {
         Operation {
             hash: header.hash(),
             header,
-            body: Some(body),
+            body: if body.size() == 0 { None } else { Some(body) },
         }
     }
 }
