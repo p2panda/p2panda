@@ -2,4 +2,3 @@
 
 //! Message types and trait implementations required by p2panda-auth.
 pub(crate) mod message;
-pub(crate) mod orderer;
