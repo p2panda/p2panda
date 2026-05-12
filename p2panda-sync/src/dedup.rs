@@ -4,7 +4,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 
-pub static DEFAULT_BUFFER_CAPACITY: usize = 10000;
+pub static DEFAULT_BUFFER_CAPACITY: usize = 1024;
 
 /// Maintain a ring buffer of generic items and efficiently identify if an item is currently in
 /// the buffer.

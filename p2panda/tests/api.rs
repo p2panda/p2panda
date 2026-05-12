@@ -481,3 +481,53 @@ async fn import_external_stream() {
     );
     assert!(end_received);
 }
+
+#[tokio::test]
+async fn deduplicate_events() {
+    setup_logging();
+
+    let chat_id = Topic::new();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda joins the chat.
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+
+    // Icebear joins the chat and waits for a message of panda.
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+    panda_tx
+        .publish("Hello, Icebear again!".into())
+        .await
+        .unwrap();
+    panda_tx
+        .publish("Hello, Icebear and again!".into())
+        .await
+        .unwrap();
+
+    let mut received = vec![];
+
+    loop {
+        let event = icebear_rx.next().await.unwrap();
+        if let StreamEvent::SyncStarted { .. } = event {
+            break;
+        }
+    }
+
+    loop {
+        tokio::select! {
+            Some(event) = icebear_rx.next() => {
+                if let StreamEvent::Processed { operation, .. } = event {
+                    received.push(operation);
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_secs(2)) => {
+                break;
+            }
+        }
+    }
+
+    assert_eq!(received.len(), 3);
+}
