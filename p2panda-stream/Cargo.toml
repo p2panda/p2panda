@@ -19,7 +19,7 @@ ingest = [
   "dep:p2panda-core",
 ]
 log_prune = [
-  "dep:p2panda-core",
+  "p2panda-core/prune",
 ]
 orderer = [
   "dep:p2panda-core",
@@ -29,17 +29,17 @@ orderer = [
 
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
-p2panda-core = { path = "../p2panda-core", version = "0.5.2", optional = true }
-p2panda-store = { path = "../p2panda-store", version = "0.5.2", optional = true }
+p2panda-core = { workspace = true, optional = true }
+p2panda-store = { workspace = true, optional = true }
 pin-project = "1.1.10"
 thiserror = { version = "2.0.16", optional = true }
-tokio = { version = "1.47.1", default-features = false, features = ["rt", "sync", "macros"] }
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
 futures-test = { version = "0.3.31" }
-futures-util = { version = "0.3.31", default-features = false, features = ["alloc"] }
-p2panda-core = { path = "../p2panda-core", version = "0.5.2", features = ["test_utils"] }
-p2panda-store = { path = "../p2panda-store", version = "0.5.2", features = ["test_utils"] }
-serde = { version = "1.0.219" }
-tokio = { version = "1.47.1", features = ["macros", "rt", "sync", "time"] }
-tokio-stream = { version = "0.1.17", default-features = false }
+futures-util = { workspace = true, features = ["alloc"] }
+p2panda-core = { workspace = true, features = ["test_utils"] }
+p2panda-store = { workspace = true, features = ["test_utils"] }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio-stream = { workspace = true }

@@ -21,25 +21,28 @@ workspace = true
 
 [features]
 default = []
-test_utils = ["dep:rand", "dep:tracing-subscriber"]
+test_utils = [
+  "dep:rand",
+  "dep:tracing-subscriber",
+]
 
 [dependencies]
 futures = "0.3.31"
-futures-util = "0.3.31"
-p2panda-core = { path = "../p2panda-core", version = "0.5.2" }
-p2panda-store = { path = "../p2panda-store", version = "0.5.2" }
+futures-util = { workspace = true }
+p2panda-core = { workspace = true }
+p2panda-store = { workspace = true }
 pin-project-lite = "0.2.16"
-rand = { version = "0.9.2", optional = true }
-serde = "1.0.228"
-thiserror = "2.0.17"
-tokio = { version = "1.47.1", features = ["macros", "sync"] }
-tokio-stream = { version = "0.1.17", features = ["sync"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional = true }
+rand = { workspace = true, optional = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-p2panda-store = { path = "../p2panda-store", version = "0.5.2", features = ["test_utils"] }
-rand = "0.9.2"
-tokio = { version = "1.47.1", features = ["time", "rt", "macros", "sync"] }
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+p2panda-store = { workspace = true, features = ["test_utils"] }
+rand = { workspace = true }
+tokio = { workspace = true, features = ["time", "rt", "macros", "sync"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

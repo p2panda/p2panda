@@ -18,7 +18,7 @@ use p2panda_auth::test_utils::{
 use p2panda_auth::traits::Operation as OperationTrait;
 use p2panda_auth::{Access, AccessLevel};
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 /// Flag for saving dot graph representations of all groups to the filesystem.
 ///
