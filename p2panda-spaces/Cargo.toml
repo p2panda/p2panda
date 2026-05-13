@@ -24,16 +24,16 @@ test_utils = [
 ]
 
 [dependencies]
-p2panda-auth = { path = "../p2panda-auth", version = "0.5.2", features = ["serde"], default-features = false }
-p2panda-core = { path = "../p2panda-core", version = "0.5.2", default-features = false }
-p2panda-encryption = { path = "../p2panda-encryption", version = "0.5.2", features = ["data_scheme"], default-features = false }
+p2panda-auth = { workspace = true, features = ["serde"] }
+p2panda-core = { workspace = true }
+p2panda-encryption = { workspace = true, features = ["data_scheme"] }
 petgraph = "0.8.2"
-serde = { version = "1.0.219", features = ["derive"] }
-thiserror = "2.0.12"
-tokio = { version = "1.46.1", features = ["sync"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-p2panda-auth = { path = "../p2panda-auth", version = "0.5.2", features = ["test_utils"], default-features = false }
-p2panda-encryption = { path = "../p2panda-encryption", version = "0.5.2", features = ["test_utils"], default-features = false }
-tokio = { version = "1.46.1", features = ["rt", "macros"] }
+p2panda-auth = { workspace = true, features = ["test_utils"] }
+p2panda-encryption = { workspace = true, features = ["test_utils"] }
+tokio = { workspace = true, features = ["rt", "macros"] }

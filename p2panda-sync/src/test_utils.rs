@@ -11,7 +11,7 @@ use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
-use rand::Rng;
+use rand::RngExt;
 use rand::rngs::StdRng;
 use tokio::join;
 use tokio::sync::broadcast;

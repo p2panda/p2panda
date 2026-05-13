@@ -54,6 +54,7 @@ Highlights are marked with a pancake 🥞
 - Update iroh to v0.98.1 [#1131](https://github.com/p2panda/p2panda/pull/1131)
 - Forge result is never `None` or duplicate [#1132](https://github.com/p2panda/p2panda/pull/1132)
 - Update iroh to v0.98.2 [#1137](https://github.com/p2panda/p2panda/pull/1137)
+- Move shared dependencies into workspace Cargo.toml [#1150](https://github.com/p2panda/p2panda/pull/1150)
 
 ### Fixed
 
