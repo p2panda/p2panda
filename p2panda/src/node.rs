@@ -3,12 +3,9 @@
 use std::fmt::Debug;
 
 use futures_util::Stream;
-#[doc(no_inline)]
-pub use p2panda_core::{Cursor, Hash, PrivateKey, PublicKey, Topic};
-#[doc(no_inline)]
-pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
-#[doc(no_inline)]
-pub use p2panda_net::{NetworkId, NodeId};
+use p2panda_core::Topic;
+use p2panda_net::iroh_endpoint::RelayUrl;
+use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

@@ -10,6 +10,14 @@ pub mod streams;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 
+// Useful external types we want to re-export for convenience.
+#[doc(no_inline)]
+pub use p2panda_core::{Cursor, Hash, PrivateKey, PublicKey, Topic};
+#[doc(no_inline)]
+pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
+#[doc(no_inline)]
+pub use p2panda_net::{NetworkId, NodeId};
+
 pub use builder::NodeBuilder;
 #[doc(inline)]
 pub use node::Node;
