@@ -30,9 +30,17 @@ impl Timestamp {
         Self(value)
     }
 
+    pub fn zero() -> Self {
+        Self(0)
+    }
+
     pub fn now() -> Self {
         let now = SystemTime::now();
         now.try_into().expect("system time went backwards")
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 }
 
