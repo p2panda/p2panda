@@ -120,14 +120,14 @@ impl Acked {
         let header = header.borrow();
 
         // Make sure we're only acking operations for the given topic.
-        if LogId::from_topic(self.topic) != header.extensions.log_id {
+        if LogId::from_topic(self.topic) != header.extensions.log_id() {
             return Err(AckedError::InvalidTopic(self.topic));
         }
 
         let mut cursor = self.cursor().await?;
         cursor.advance(
             header.verifying_key,
-            header.extensions.log_id,
+            header.extensions.log_id(),
             header.seq_num,
         );
 
