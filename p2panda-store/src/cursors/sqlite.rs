@@ -15,6 +15,7 @@ where
 {
     type Error = SqliteError;
 
+    /// Returns the cursor matching the given name from the database.
     async fn get_cursor(&self, name: impl AsRef<str>) -> Result<Option<Cursor<A, L>>, Self::Error> {
         let state_bytes: Option<Vec<u8>> = self
             .execute(async |pool| {
@@ -44,6 +45,7 @@ where
         }
     }
 
+    /// Inserts the given cursor into the database.
     async fn set_cursor(&self, cursor: &Cursor<A, L>) -> Result<(), Self::Error> {
         self.tx(async |tx| {
             query(
@@ -73,6 +75,7 @@ where
         Ok(())
     }
 
+    /// Deletes the cursor matching the given name from the database.
     async fn delete_cursor(&self, name: impl AsRef<str>) -> Result<(), Self::Error> {
         self.tx(async |tx| {
             query(

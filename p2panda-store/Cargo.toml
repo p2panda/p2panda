@@ -2,6 +2,16 @@
 name = "p2panda-store"
 version = "0.5.2"
 edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
+]
+description = "Database traits and SQLite implementations for p2panda"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["local-first", "p2p", "database", "sqlite", "transactions"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -29,8 +39,8 @@ test_utils = [
 
 [dependencies]
 p2panda-core = { workspace = true }
-rand = { workspace = true, optional = true }
-rand_chacha = { workspace = true, optional = true }
+rand = { workspace = true, default-features = true, optional = true }
+rand_chacha = { workspace = true, default-features = true, optional = true }
 serde = { workspace = true, optional = true }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
 thiserror = { workspace = true, optional = true }
