@@ -9,12 +9,12 @@ pub static DEFAULT_BUFFER_CAPACITY: usize = 1024;
 /// Maintain a ring buffer of generic items and efficiently identify if an item is currently in
 /// the buffer.
 #[derive(Debug)]
-pub struct Dedup<T> {
+pub struct DeduplicationBuffer<T> {
     buffer: VecDeque<T>,
     set: HashSet<T>,
 }
 
-impl<T> Default for Dedup<T> {
+impl<T> Default for DeduplicationBuffer<T> {
     fn default() -> Self {
         Self {
             buffer: VecDeque::with_capacity(DEFAULT_BUFFER_CAPACITY),
@@ -23,7 +23,7 @@ impl<T> Default for Dedup<T> {
     }
 }
 
-impl<T> Dedup<T>
+impl<T> DeduplicationBuffer<T>
 where
     T: Eq + Hash + Clone,
 {
@@ -60,7 +60,7 @@ where
         true
     }
 
-    // Returns `true` if the item is currently in the buffer.
+    /// Returns `true` if the item is currently in the buffer.
     pub fn contains(&self, item: &T) -> bool {
         self.set.contains(item)
     }
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn insert_items() {
-        let mut d = Dedup::new(3);
+        let mut d = DeduplicationBuffer::new(3);
 
         assert!(d.insert(1));
         assert!(d.insert(2));
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn insert_ignores_duplicates() {
-        let mut d = Dedup::new(3);
+        let mut d = DeduplicationBuffer::new(3);
 
         assert!(d.insert(42));
         assert!(!d.insert(42));
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn insert_evicts_when_capacity_reached() {
-        let mut d = Dedup::new(3);
+        let mut d = DeduplicationBuffer::new(3);
 
         d.insert(1);
         d.insert(2);

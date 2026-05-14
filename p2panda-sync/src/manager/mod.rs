@@ -30,7 +30,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::debug;
 
-use crate::dedup::Dedup;
+use crate::dedup::DeduplicationBuffer;
 use crate::manager::event_stream::{ManagerEventStreamState, StreamDebug};
 use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
 use crate::traits::Manager;
@@ -211,7 +211,7 @@ where
             manager_rx,
             session_rx_set,
             session_topic_map: self.session_topic_map.clone(),
-            dedup: Dedup::default(),
+            dedup: DeduplicationBuffer::default(),
         };
 
         let stream = ManagerEventStream {

@@ -16,7 +16,7 @@ use tokio::select;
 use tokio::sync::broadcast;
 use tracing::{debug, trace, warn};
 
-use crate::dedup::{DEFAULT_BUFFER_CAPACITY, Dedup};
+use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
 
 /// A map of author logs.
@@ -99,7 +99,7 @@ where
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
-    type Output = (Dedup<Hash>, LogSyncMetrics);
+    type Output = (DeduplicationBuffer<Hash>, LogSyncMetrics);
     type Message = LogSyncMessage<L>;
 
     async fn run(
@@ -109,7 +109,7 @@ where
     ) -> Result<Self::Output, Self::Error> {
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
-        let mut dedup = Dedup::new(self.buffer_capacity);
+        let mut dedup = DeduplicationBuffer::new(self.buffer_capacity);
 
         let metrics = loop {
             match self.state {

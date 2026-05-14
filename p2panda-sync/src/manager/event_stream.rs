@@ -14,7 +14,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tracing::{debug, trace};
 
-use crate::dedup::Dedup;
+use crate::dedup::DeduplicationBuffer;
 use crate::manager::{SessionStream, SessionTopicMap, ToTopicSync};
 use crate::protocols::TopicLogSyncEvent;
 use crate::{FromSync, ToSync};
@@ -33,7 +33,7 @@ where
     pub(crate) session_rx_set:
         SelectAll<Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>>>,
     pub(crate) session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
-    pub(crate) dedup: Dedup<Hash>,
+    pub(crate) dedup: DeduplicationBuffer<Hash>,
 }
 
 type FutureOutput<T, E> = (
