@@ -62,6 +62,7 @@ Highlights are marked with a pancake 🥞
 - Race where replay state was determined late [#1104](https://github.com/p2panda/p2panda/pull/1104)
 - React to node address changes in mDNS test [#1141](https://github.com/p2panda/p2panda/pull/1141)
 - Ensure iroh Gossip is shut down gracefully [#1139](https://github.com/p2panda/p2panda/pull/1139)
+- Correct "Sync Ended" event semantics in Node API [#1154](https://github.com/p2panda/p2panda/pull/1154)
 
 ## [0.5.2] - 09/03/2026
 

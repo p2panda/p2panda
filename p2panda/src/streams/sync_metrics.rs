@@ -95,12 +95,6 @@ impl Aggregator {
                 self.session_metrics.insert(session_id, metrics.clone());
                 self.total_bytes_sent += metrics.sent_bytes();
                 self.total_bytes_received += metrics.received_bytes();
-                None
-            }
-            TopicLogSyncEvent::SessionFinished { metrics } => {
-                self.handle_session_end(session_id);
-                self.total_bytes_sent += metrics.sent_bytes();
-                self.total_bytes_received += metrics.received_bytes();
                 Some(SyncEvent::SyncEnded {
                     remote,
                     session_id,
@@ -112,6 +106,12 @@ impl Aggregator {
                     received_bytes_topic_total: self.total_bytes_received(),
                     error: None,
                 })
+            }
+            TopicLogSyncEvent::SessionFinished { metrics } => {
+                self.handle_session_end(session_id);
+                self.total_bytes_sent += metrics.sent_bytes();
+                self.total_bytes_received += metrics.received_bytes();
+                None
             }
             TopicLogSyncEvent::Failed { error } => {
                 let metrics = self.handle_session_end(session_id);
