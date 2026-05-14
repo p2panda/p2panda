@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `TopicStore` trait for managing mappings of application data to topics as well as a concrete
-//! `SqliteStore` implementation.
+//! Topic to application data mapping stores.
+//!
+//! An implementation of the [`TopicStore`] trait is provided for [`SqliteStore`].
+//!
+//! [`SqliteStore`]: crate::SqliteStore
 #[cfg(feature = "sqlite")]
 mod sqlite;
 #[cfg(test)]

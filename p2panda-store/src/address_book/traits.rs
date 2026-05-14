@@ -6,11 +6,13 @@ use std::time::Duration;
 
 use p2panda_core::Topic;
 
-/// Node informations which can be stored in an address book, aiding discovery, sync, peer sampling
+/// Trait for querying information about a node.
+///
+/// Node information can be stored in an address book and may aid in discovery, sync, peer sampling
 /// or other protocols.
 ///
-/// Usually we want to separate node informations into a _local_ and _shareable_ part. Not all
-/// information is meant to be shared with other nodes. NodeInfo is meant to be the _local_ or
+/// Usually we want to separate node information into a _local_ and _shareable_ part. Not all
+/// information is meant to be shared with other nodes. `NodeInfo` is meant to be the _local_ or
 /// private part while the associated `Transports` type is dedicated for _shareable_ or public
 /// information.
 pub trait NodeInfo<ID> {
@@ -23,10 +25,10 @@ pub trait NodeInfo<ID> {
     /// Returns node id for this information.
     fn id(&self) -> ID;
 
-    /// Returns `true` if node is marked as a "boostrap".
+    /// Returns `true` if node is marked as a boostrap.
     fn is_bootstrap(&self) -> bool;
 
-    /// Returns `true` if node is marked as a "stale".
+    /// Returns `true` if node is marked as a stale.
     ///
     /// Stale nodes should not be considered for connection attempts anymore and should not be
     /// shared during discovery with other nodes.
@@ -36,7 +38,7 @@ pub trait NodeInfo<ID> {
     fn transports(&self) -> Option<Self::Transports>;
 }
 
-/// Interface for storing, managing and querying information about nodes.
+/// Trait for storing, managing and querying information about nodes.
 pub trait AddressBookStore<ID, N>
 where
     N: NodeInfo<ID>,

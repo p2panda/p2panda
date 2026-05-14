@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! SQLite database implementation with associated utility functions.
 use std::sync::Arc;
 
 use p2panda_core::cbor::EncodeError;
@@ -9,7 +10,7 @@ use sqlx::{Sqlite, migrate};
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
-/// Create SQLite database if it doesn't already exist.
+/// Creates the SQLite database if it doesn't already exist.
 pub async fn create_database(url: &str) -> Result<(), SqliteError> {
     if !Sqlite::database_exists(url).await? {
         Sqlite::create_database(url).await?
@@ -17,7 +18,7 @@ pub async fn create_database(url: &str) -> Result<(), SqliteError> {
     Ok(())
 }
 
-/// Drop SQLite database if it exists.
+/// Drops the SQLite database if it exists.
 pub async fn drop_database(url: &str) -> Result<(), SqliteError> {
     if Sqlite::database_exists(url).await? {
         Sqlite::drop_database(url).await?
@@ -25,7 +26,7 @@ pub async fn drop_database(url: &str) -> Result<(), SqliteError> {
     Ok(())
 }
 
-/// Create SQLite connection pool.
+/// Creates the SQLite connection pool.
 pub async fn connection_pool(
     url: &str,
     max_connections: u32,
@@ -37,17 +38,24 @@ pub async fn connection_pool(
     Ok(pool)
 }
 
-/// Get migrations from folder without running them.
+/// Gets migrations from folder without running them.
 pub fn migrations() -> Migrator {
     migrate!()
 }
 
-/// Run any pending database migrations from inside the application.
+/// Runs any pending database migrations from inside the application.
 pub async fn run_pending_migrations(pool: &sqlx::SqlitePool) -> Result<(), SqliteError> {
     migrations().run(pool).await?;
     Ok(())
 }
 
+/// Builder for `SqliteStore`.
+///
+/// To create the database call `SqliteStoreBuilder::build()`.
+///
+/// By default, the builder configures an in-memory database with a maximum number of 16
+/// connections. The database is created if it doesn't already exist and migrations are
+/// automatically run on start-up.
 pub struct SqliteStoreBuilder {
     url: String,
     max_connections: u32,
@@ -67,10 +75,12 @@ impl Default for SqliteStoreBuilder {
 }
 
 impl SqliteStoreBuilder {
+    /// Creates a new `SqliteStoreBuilder` using default configuration values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Assigns a randomly-generated in-memory database URL with private cache.
     #[cfg(any(test, feature = "test_utils"))]
     pub fn random_memory_url(mut self) -> Self {
         // Combining Rust tests with in-memory databases can lead to unsound behaviour, this
@@ -85,26 +95,39 @@ impl SqliteStoreBuilder {
         self
     }
 
+    /// Sets the database URL.
+    ///
+    /// If left unset, the database will use an ephemeral in-memory URL.
     pub fn database_url(mut self, url: &str) -> Self {
         self.url = url.to_string();
         self
     }
 
+    /// Sets the maximum number of connections to be maintained by the database pool.
+    ///
+    /// If left unset, a maximum of 16 connections will be maintained.
     pub fn max_connections(mut self, max_connections: u32) -> Self {
         self.max_connections = max_connections;
         self
     }
 
+    /// Creates the database if it doesn't already exist.
+    ///
+    /// If left unset, the database will be created by default.
     pub fn create_database(mut self, create_database: bool) -> Self {
         self.create_database = create_database;
         self
     }
 
+    /// Sets whether pending migrations should be applied when the database is built.
+    ///
+    /// If left unset, the database will apply any pending migrations.
     pub fn run_default_migrations(mut self, run_migrations: bool) -> Self {
         self.run_migrations = run_migrations;
         self
     }
 
+    /// Builds the `SqliteStore`.
     pub async fn build(self) -> Result<SqliteStore, SqliteError> {
         if self.create_database {
             create_database(&self.url).await?;
@@ -123,8 +146,10 @@ impl SqliteStoreBuilder {
     }
 }
 
+/// An in-progress database transaction.
 pub type Transaction<'a> = sqlx::Transaction<'a, Sqlite>;
 
+/// Sqlite connection pool.
 pub type SqlitePool = sqlx::SqlitePool;
 
 /// SQLite database with connection pool and transaction provider.
@@ -184,6 +209,7 @@ pub struct SqliteStore {
 }
 
 impl SqliteStore {
+    /// Creates a new `SqliteStore` using the provided connection pool.
     pub(crate) fn new(pool: sqlx::SqlitePool) -> Self {
         Self {
             tx: Arc::default(),
@@ -195,11 +221,12 @@ impl SqliteStore {
         }
     }
 
+    /// Creates a new `SqliteStore` using the provided connection pool.
     pub fn from_pool(pool: sqlx::SqlitePool) -> Self {
         Self::new(pool)
     }
 
-    /// Shortcut building an in-memory SQLite database with a randomised name for testing purposes.
+    /// Builds an in-memory SQLite database with a randomised name for testing purposes.
     #[cfg(any(test, feature = "test_utils"))]
     pub async fn temporary() -> Self {
         SqliteStoreBuilder::new()
@@ -210,7 +237,7 @@ impl SqliteStore {
             .expect("migrations succeeded")
     }
 
-    /// Execute SQL query within transaction.
+    /// Executes a SQL query within a transaction.
     ///
     /// This method will return an error when no transaction is currently given. Make sure to call
     /// `begin` before.
@@ -227,7 +254,7 @@ impl SqliteStore {
         f(tx).await
     }
 
-    /// Execute SQL query directly.
+    /// Executes a SQL query directly.
     pub async fn execute<F, R>(&self, f: F) -> Result<R, SqliteError>
     where
         F: AsyncFnOnce(&sqlx::SqlitePool) -> Result<R, SqliteError>,
@@ -315,6 +342,7 @@ impl crate::traits::Transaction for SqliteStore {
     }
 }
 
+/// Locked context marking the lifetime of a single transaction.
 pub struct TransactionPermit {
     permit: Arc<OwnedSemaphorePermit>,
     tx: Arc<Mutex<Option<Transaction<'static>>>>,
@@ -322,6 +350,7 @@ pub struct TransactionPermit {
 }
 
 impl TransactionPermit {
+    /// Creates a new `TransactionPermit` using the given permit and transaction.
     pub(super) fn new(
         permit: OwnedSemaphorePermit,
         tx: Arc<Mutex<Option<Transaction<'static>>>>,
@@ -333,6 +362,10 @@ impl TransactionPermit {
         }
     }
 
+    /// Marks the transaction as committed and drops the permit.
+    ///
+    /// In the case that the permit was never used, whether due to an early return or error, the
+    /// transaction is automatically rolled-back to prevent corrupted state.
     pub(super) fn mark_committed_and_drop(mut self) {
         self.committed = true;
         drop(self)
@@ -358,6 +391,7 @@ impl Drop for TransactionPermit {
     }
 }
 
+/// Error when interacting with a SQLite store implementation.
 #[derive(Debug, Error)]
 pub enum SqliteError {
     /// This is a critical error as it indicates that something is wrong with the usage of this
@@ -383,6 +417,7 @@ pub enum SqliteError {
     Decode(String, DecodeError),
 }
 
+/// Error decoding value retrieved from a store.
 #[derive(Debug, Error)]
 pub enum DecodeError {
     #[error(transparent)]

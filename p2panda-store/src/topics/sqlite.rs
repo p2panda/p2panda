@@ -12,18 +12,19 @@ use crate::topics::TopicStore;
 
 /// SQLite `TopicStore` implementation that can be used to map a topic to a set of (generic)
 /// per-author data identifiers.
-impl<T, S> TopicStore<T, VerifyingKey, S> for SqliteStore
+impl<T, L> TopicStore<T, VerifyingKey, L> for SqliteStore
 where
     T: Serialize + for<'de> Deserialize<'de>,
-    S: LogId,
+    L: LogId,
 {
     type Error = SqliteError;
 
+    /// Associate a topic with an author + log id pair.
     async fn associate(
         &self,
         topic: &T,
         author: &VerifyingKey,
-        data_id: &S,
+        data_id: &L,
     ) -> Result<bool, SqliteError> {
         let result = self
             .tx(async |tx| {
@@ -57,11 +58,12 @@ where
         Ok(result.rows_affected() > 0)
     }
 
+    /// Remove an association between a topic and author + log id pair.
     async fn remove(
         &self,
         topic: &T,
         author: &VerifyingKey,
-        data_id: &S,
+        data_id: &L,
     ) -> Result<bool, SqliteError> {
         let result = self
             .tx(async |tx| {
@@ -92,7 +94,8 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn resolve(&self, topic: &T) -> Result<BTreeMap<VerifyingKey, Vec<S>>, Self::Error> {
+    /// Retrieve a list of all logs associated with the provided topic for all known authors.
+    async fn resolve(&self, topic: &T) -> Result<BTreeMap<VerifyingKey, Vec<L>>, Self::Error> {
         let data_ids = self
             .execute(async |pool| {
                 query_as::<_, (String, Vec<u8>)>(
@@ -116,7 +119,7 @@ where
             })
             .await?;
 
-        let mut result: BTreeMap<VerifyingKey, Vec<S>> = BTreeMap::new();
+        let mut result: BTreeMap<VerifyingKey, Vec<L>> = BTreeMap::new();
 
         for (author, data_id) in data_ids {
             let author: VerifyingKey = author

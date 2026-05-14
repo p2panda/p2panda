@@ -410,6 +410,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
+#[doc(hidden)]
 impl SqliteStore {
     pub async fn set_last_changed(
         &self,
