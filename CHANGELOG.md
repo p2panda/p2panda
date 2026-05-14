@@ -19,6 +19,7 @@ Highlights are marked with a pancake 🥞
     - Remove `timestamp` [#1195](https://github.com/p2panda/p2panda/pull/1195)
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
+- Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
 
 ## [0.6.1] - 22/05/2026
 
