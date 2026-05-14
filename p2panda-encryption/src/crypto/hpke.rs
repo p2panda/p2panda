@@ -33,7 +33,7 @@ pub struct HpkeCiphertext {
 /// key, some information `info` and additional data `aad` to bind the encryption to a certain
 /// context, as well as the payload `plaintext`.
 pub fn hpke_seal(
-    public_key: &PublicKey,
+    verifying_key: &PublicKey,
     info: Option<&[u8]>,
     aad: Option<&[u8]>,
     plaintext: &[u8],
@@ -46,7 +46,7 @@ pub fn hpke_seal(
         KdfAlgorithm::HkdfSha256,
         AeadAlgorithm::ChaCha20Poly1305,
     );
-    let pk_r = HpkePublicKey::new(public_key.as_bytes().to_vec());
+    let pk_r = HpkePublicKey::new(verifying_key.as_bytes().to_vec());
     let (kem_output, ciphertext) = hpke
         .seal(
             &pk_r,
@@ -118,11 +118,12 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let public_key = secret_key.public_key().unwrap();
+        let verifying_key = secret_key.verifying_key().unwrap();
 
         let info = b"some info";
         let aad = b"some aad";
-        let ciphertext = hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
+        let ciphertext =
+            hpke_seal(&verifying_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
         let plaintext = hpke_open(&ciphertext, &secret_key, Some(info), Some(aad)).unwrap();
 
         assert_eq!(plaintext, b"Hello, Panda!");
@@ -133,11 +134,12 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let valid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let public_key = valid_secret_key.public_key().unwrap();
+        let verifying_key = valid_secret_key.verifying_key().unwrap();
 
         let info = b"some info";
         let aad = b"some aad";
-        let ciphertext = hpke_seal(&public_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
+        let ciphertext =
+            hpke_seal(&verifying_key, Some(info), Some(aad), b"Hello, Panda!").unwrap();
 
         // Invalid secret key.
         let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());

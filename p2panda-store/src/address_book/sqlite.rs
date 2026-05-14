@@ -6,16 +6,16 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{PublicKey, Topic};
+use p2panda_core::{Topic, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, query_scalar};
 
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::sqlite::{SqliteError, SqliteStore};
 
-impl<N> AddressBookStore<PublicKey, N> for SqliteStore
+impl<N> AddressBookStore<VerifyingKey, N> for SqliteStore
 where
-    N: NodeInfo<PublicKey> + Serialize + for<'de> Deserialize<'de>,
+    N: NodeInfo<VerifyingKey> + Serialize + for<'de> Deserialize<'de>,
 {
     type Error = SqliteError;
 
@@ -68,7 +68,7 @@ where
         Ok(!is_upsert)
     }
 
-    async fn remove_node_info(&self, id: &PublicKey) -> Result<bool, Self::Error> {
+    async fn remove_node_info(&self, id: &VerifyingKey) -> Result<bool, Self::Error> {
         // Remove node's info.
         let result = self
             .tx(async |tx| {
@@ -149,7 +149,7 @@ where
         Ok(node_ids.len())
     }
 
-    async fn node_info(&self, id: &PublicKey) -> Result<Option<N>, Self::Error> {
+    async fn node_info(&self, id: &VerifyingKey) -> Result<Option<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (Vec<u8>,)>(
@@ -172,7 +172,7 @@ where
         decode_node_info(result)
     }
 
-    async fn node_topics(&self, id: &PublicKey) -> Result<HashSet<Topic>, Self::Error> {
+    async fn node_topics(&self, id: &VerifyingKey) -> Result<HashSet<Topic>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (String,)>(
@@ -263,7 +263,7 @@ where
         Ok(count as usize)
     }
 
-    async fn selected_node_infos(&self, ids: &[PublicKey]) -> Result<Vec<N>, Self::Error> {
+    async fn selected_node_infos(&self, ids: &[VerifyingKey]) -> Result<Vec<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
                 query_as::<_, (Vec<u8>,)>(&format!(
@@ -286,7 +286,11 @@ where
         decode_node_infos(result)
     }
 
-    async fn set_topics(&self, id: PublicKey, topics: HashSet<Topic>) -> Result<(), Self::Error> {
+    async fn set_topics(
+        &self,
+        id: VerifyingKey,
+        topics: HashSet<Topic>,
+    ) -> Result<(), Self::Error> {
         // Remove all previous topics set for this node id and replace it with new values. Both
         // updates will be executed inside the same atomic transaction.
         self.tx(async |tx| {
@@ -409,7 +413,7 @@ where
 impl SqliteStore {
     pub async fn set_last_changed(
         &self,
-        id: &PublicKey,
+        id: &VerifyingKey,
         timestamp: u64,
     ) -> Result<(), SqliteError> {
         self.tx(async |tx| {
@@ -453,7 +457,7 @@ fn in_op_str<T: Display>(list: &[T]) -> String {
 /// Deserialize multiple rows containing encoded node info.
 fn decode_node_infos<N>(result: Vec<(Vec<u8>,)>) -> Result<Vec<N>, SqliteError>
 where
-    N: NodeInfo<PublicKey> + Serialize + for<'a> Deserialize<'a>,
+    N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
 {
     result
         .iter()
@@ -467,7 +471,7 @@ where
 /// Deserialize single row maybe containing encoded node info.
 fn decode_node_info<N>(result: Option<(Vec<u8>,)>) -> Result<Option<N>, SqliteError>
 where
-    N: NodeInfo<PublicKey> + Serialize + for<'a> Deserialize<'a>,
+    N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
 {
     match result {
         Some((bytes,)) => {

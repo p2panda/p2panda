@@ -96,21 +96,21 @@ impl From<DeserializeError<std::io::Error>> for DecodeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Body, Header, PrivateKey};
+    use crate::{Body, Header, SigningKey};
 
     use super::{DecodeError, decode_cbor, encode_cbor};
 
     #[test]
     fn encode_decode() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let body = Body::new(&[1, 2, 3]);
         let mut header = Header::<()> {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
             ..Default::default()
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         let bytes = encode_cbor(&header).unwrap();
         let header_again: Header<()> = decode_cbor(&bytes[..]).unwrap();

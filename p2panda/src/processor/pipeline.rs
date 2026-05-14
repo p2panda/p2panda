@@ -5,7 +5,7 @@ use std::thread;
 
 use futures_util::StreamExt;
 use p2panda_core::traits::Digest;
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -85,8 +85,8 @@ where
         S: Clone
             + Transaction
             + OperationStore<Operation<E>, Hash, L>
-            + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
-            + TopicStore<TP, PublicKey, L>
+            + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+            + TopicStore<TP, VerifyingKey, L>
             + Send
             + 'static,
     {
@@ -180,7 +180,7 @@ where
 mod tests {
     use p2panda_core::test_utils::TestLog;
     use p2panda_core::traits::Digest;
-    use p2panda_core::{PrivateKey, PruneFlag, Topic};
+    use p2panda_core::{PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::operation::LogId;
@@ -195,7 +195,7 @@ mod tests {
         let processor = Pipeline::<LogId, (), Topic>::new(store, tasks);
 
         let log = TestLog::new();
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         let mut operation = log.operation(b"test", ());
 
@@ -214,7 +214,7 @@ mod tests {
         assert!(!result.is_failed());
 
         // Replace public key of operation to make it invalid. We expect the processor to fail.
-        operation.header.public_key = PrivateKey::new().public_key();
+        operation.header.verifying_key = SigningKey::generate().verifying_key();
 
         let result = processor
             .process(Event::new(

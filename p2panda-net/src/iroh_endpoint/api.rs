@@ -26,7 +26,7 @@ use crate::{NetworkId, NodeId};
 /// # let address_book = AddressBook::builder().spawn().await?;
 /// #
 /// // Generate Ed25519 key which will be used to authenticate node.
-/// let private_key = p2panda_core::PrivateKey::new();
+/// let signing_key = p2panda_core::SigningKey::generate();
 ///
 /// // Use this iroh relay as a "home relay".
 /// let relay_url = "https://my.relay.org".parse().expect("valid relay url");
@@ -34,7 +34,7 @@ use crate::{NetworkId, NodeId};
 /// // Initialise endpoint with custom network identifier.
 /// let endpoint = Endpoint::builder(address_book)
 ///     .network_id([1; 32])
-///     .private_key(private_key)
+///     .signing_key(signing_key)
 ///     .relay_url(relay_url)
 ///     .spawn()
 ///     .await?;
@@ -123,7 +123,7 @@ impl Endpoint {
     }
 
     pub fn node_id(&self) -> NodeId {
-        self.args.1.public_key()
+        self.args.1.verifying_key()
     }
 
     /// Register protocol handler for a given ALPN (protocol identifier).

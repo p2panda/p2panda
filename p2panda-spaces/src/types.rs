@@ -10,7 +10,7 @@ use p2panda_auth::traits::{
     Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver,
 };
 use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::identity::{PUBLIC_KEY_LEN, PublicKey};
+use p2panda_core::identity::{VERIFYING_KEY_LEN, VerifyingKey};
 use p2panda_core::{HashError, IdentityError};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
@@ -24,12 +24,12 @@ use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
 
-pub const ACTOR_ID_SIZE: usize = PUBLIC_KEY_LEN;
+pub const ACTOR_ID_SIZE: usize = VERIFYING_KEY_LEN;
 pub const OPERATION_ID_SIZE: usize = HASH_LEN;
 
 /// Identifier for an actor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ActorId(pub(crate) PublicKey);
+pub struct ActorId(pub(crate) VerifyingKey);
 
 impl AuthIdentityHandle for ActorId {}
 
@@ -37,7 +37,7 @@ impl EncryptionIdentityHandle for ActorId {}
 
 impl ActorId {
     pub fn from_bytes(bytes: &[u8; ACTOR_ID_SIZE]) -> Result<Self, ActorIdError> {
-        Ok(Self(PublicKey::from_bytes(bytes)?))
+        Ok(Self(VerifyingKey::from_bytes(bytes)?))
     }
 
     pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
@@ -52,8 +52,8 @@ impl ActorId {
     // not known and not required. In these cases we need to satisfy the trait interfaces using a
     // placeholder value.
     pub(crate) fn placeholder() -> Self {
-        static PLACEHOLDER_PUBLIC_KEY: LazyLock<PublicKey> = LazyLock::new(|| {
-            PublicKey::from_bytes(&[0; PUBLIC_KEY_LEN])
+        static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
+            VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
                 .expect("can create public key from constant bytes")
         });
         Self(*PLACEHOLDER_PUBLIC_KEY)
@@ -66,9 +66,9 @@ impl Display for ActorId {
     }
 }
 
-impl From<PublicKey> for ActorId {
-    fn from(public_key: PublicKey) -> Self {
-        Self(public_key)
+impl From<VerifyingKey> for ActorId {
+    fn from(verifying_key: VerifyingKey) -> Self {
+        Self(verifying_key)
     }
 }
 
@@ -76,7 +76,7 @@ impl TryFrom<[u8; ACTOR_ID_SIZE]> for ActorId {
     type Error = ActorIdError;
 
     fn try_from(bytes: [u8; ACTOR_ID_SIZE]) -> Result<Self, Self::Error> {
-        Ok(Self(PublicKey::from_bytes(&bytes)?))
+        Ok(Self(VerifyingKey::from_bytes(&bytes)?))
     }
 }
 
@@ -84,15 +84,15 @@ impl TryFrom<&[u8]> for ActorId {
     type Error = ActorIdError;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(PublicKey::try_from(bytes)?))
+        Ok(Self(VerifyingKey::try_from(bytes)?))
     }
 }
 
-impl TryFrom<ActorId> for PublicKey {
+impl TryFrom<ActorId> for VerifyingKey {
     type Error = ActorIdError;
 
     fn try_from(actor_id: ActorId) -> Result<Self, Self::Error> {
-        Ok(PublicKey::from_bytes(actor_id.as_bytes())?)
+        Ok(VerifyingKey::from_bytes(actor_id.as_bytes())?)
     }
 }
 
@@ -100,7 +100,7 @@ impl FromStr for ActorId {
     type Err = ActorIdError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Self(PublicKey::from_str(value)?))
+        Ok(Self(VerifyingKey::from_str(value)?))
     }
 }
 
@@ -242,30 +242,30 @@ pub type EncryptionGroupOutput<M> = p2panda_encryption::data_scheme::GroupOutput
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{PrivateKey, PublicKey};
+    use p2panda_core::{SigningKey, VerifyingKey};
     use p2panda_encryption::Rng;
 
     use crate::ActorId;
 
     #[test]
     fn from_actor_id() {
-        let private_key = PrivateKey::new();
-        let public_key = private_key.public_key();
+        let signing_key = SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
 
-        let actor_id: ActorId = public_key.to_hex().parse().unwrap();
+        let actor_id: ActorId = verifying_key.to_hex().parse().unwrap();
 
-        assert_eq!(PublicKey::try_from(actor_id).unwrap(), public_key);
+        assert_eq!(VerifyingKey::try_from(actor_id).unwrap(), verifying_key);
     }
 
     #[test]
     fn actor_id_from_rng() {
-        let rng = Rng::from_seed(*PrivateKey::new().as_bytes());
+        let rng = Rng::from_seed(*SigningKey::generate().as_bytes());
 
-        let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
-        let public_key = private_key.public_key();
+        let signing_key = SigningKey::from_bytes(&rng.random_array().unwrap());
+        let verifying_key = signing_key.verifying_key();
 
-        let actor_id: ActorId = public_key.to_hex().parse().unwrap();
+        let actor_id: ActorId = verifying_key.to_hex().parse().unwrap();
 
-        assert_eq!(PublicKey::try_from(actor_id).unwrap(), public_key);
+        assert_eq!(VerifyingKey::try_from(actor_id).unwrap(), verifying_key);
     }
 }

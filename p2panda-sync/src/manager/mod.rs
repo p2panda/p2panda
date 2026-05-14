@@ -21,7 +21,7 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -65,8 +65,8 @@ where
 {
     store: S,
     session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
-    from_session_tx: HashMap<(u64, PublicKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
-    from_session_rx: HashMap<(u64, PublicKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
+    from_session_tx: HashMap<(u64, VerifyingKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
+    from_session_rx: HashMap<(u64, VerifyingKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
     manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
     _phantom: PhantomData<L>,
 }
@@ -79,7 +79,7 @@ where
 {
     pub session_id: u64,
     pub topic: T,
-    pub remote: PublicKey,
+    pub remote: VerifyingKey,
     pub event_rx: broadcast::Receiver<TopicLogSyncEvent<E>>,
     pub live_tx: mpsc::Sender<ToTopicSync<E>>,
 }
@@ -104,8 +104,8 @@ where
 impl<T, S, L, E> Manager<T> for TopicSyncManager<T, S, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<T, PublicKey, L>
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+        + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
@@ -266,7 +266,7 @@ mod tests {
         const LOG_ID: u64 = 0;
         const SESSION_ID: u64 = 0;
 
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         // Setup Peer A
         let mut peer_a = Peer::new(0).await;
@@ -425,7 +425,7 @@ mod tests {
         const SESSION_BA: u64 = 2;
         const SESSION_CA: u64 = 3;
 
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         // Peer A
         let mut peer_a = Peer::new(0).await;
@@ -605,7 +605,7 @@ mod tests {
         const LOG_ID: u64 = 0;
         const SESSION_ID: u64 = 0;
 
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         // Setup Peer A
         let mut peer_a = Peer::new(0).await;

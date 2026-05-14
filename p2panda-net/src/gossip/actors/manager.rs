@@ -16,7 +16,7 @@ use crate::gossip::GossipConfig;
 use crate::gossip::actors::session::{GossipSession, ToGossipSession};
 use crate::gossip::events::GossipEvent;
 use crate::hash_protocol_id_with_network_id;
-use crate::iroh_endpoint::{Endpoint, from_public_key};
+use crate::iroh_endpoint::{Endpoint, from_verifying_key};
 use crate::utils::ShortFormat;
 
 pub enum ToGossipManager {
@@ -200,7 +200,7 @@ impl ThreadLocalActor for GossipManager {
                 // Convert p2panda public keys to iroh endpoint ids.
                 let nodes = nodes
                     .iter()
-                    .map(|key: &NodeId| from_public_key(*key))
+                    .map(|key: &NodeId| from_verifying_key(*key))
                     .collect();
 
                 // Subscribe to the gossip topic (without waiting for a connection).
@@ -290,7 +290,7 @@ impl ThreadLocalActor for GossipManager {
                 // Convert p2panda public keys to iroh endpoint ids.
                 let nodes: Vec<iroh::EndpointId> = nodes
                     .iter()
-                    .map(|key: &NodeId| from_public_key(*key))
+                    .map(|key: &NodeId| from_verifying_key(*key))
                     .collect();
 
                 if let Some(session) = state.sessions.sessions_by_topic.get(&topic) {

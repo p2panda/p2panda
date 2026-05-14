@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use iroh::endpoint::{QuicTransportConfig, presets};
 use iroh::protocol::DynProtocolHandler;
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
 use thiserror::Error;
@@ -25,7 +25,7 @@ use crate::iroh_endpoint::actors::connection::{
 use crate::iroh_endpoint::actors::is_globally_reachable_endpoint;
 use crate::iroh_endpoint::config::IrohConfig;
 use crate::iroh_endpoint::discovery::AddressBookDiscovery;
-use crate::iroh_endpoint::from_private_key;
+use crate::iroh_endpoint::from_signing_key;
 use crate::utils::ShortFormat;
 use crate::{NetworkId, NodeId, ProtocolId, hash_protocol_id_with_network_id};
 
@@ -83,7 +83,7 @@ pub type ProtocolMap = Arc<RwLock<BTreeMap<ProtocolId, Box<dyn DynProtocolHandle
 
 pub struct IrohState {
     network_id: NetworkId,
-    private_key: PrivateKey,
+    signing_key: SigningKey,
     config: IrohConfig,
     relay_map: iroh::RelayMap,
     address_book: AddressBook,
@@ -96,7 +96,7 @@ pub struct IrohState {
 
 pub type IrohEndpointArgs = (
     NetworkId,
-    PrivateKey,
+    SigningKey,
     IrohConfig,
     iroh::RelayMap,
     AddressBook,
@@ -117,14 +117,14 @@ impl ThreadLocalActor for IrohEndpoint {
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (network_id, private_key, config, relay_map, address_book) = args;
+        let (network_id, signing_key, config, relay_map, address_book) = args;
 
         // Automatically bind iroh endpoint after actor start.
         myself.send_message(ToIrohEndpoint::Bind)?;
 
         Ok(IrohState {
             network_id,
-            private_key,
+            signing_key,
             config,
             relay_map,
             address_book,
@@ -189,7 +189,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 // Connect iroh's endpoint with our own address book to "publish" our changed iroh
                 // address directly and "resolve" endpoint id's.
                 let address_book_discovery = AddressBookDiscovery::new(
-                    state.private_key.clone(),
+                    state.signing_key.clone(),
                     state.address_book.clone(),
                 );
 
@@ -197,7 +197,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 let endpoint = iroh::Endpoint::builder(presets::Minimal)
                     .relay_mode(relay_mode)
                     .address_lookup(address_book_discovery)
-                    .secret_key(from_private_key(state.private_key.clone()))
+                    .secret_key(from_signing_key(state.signing_key.clone()))
                     .transport_config(quic_transport_config)
                     .bind_addr(socket_address_v4)?
                     .bind_addr(socket_address_v6)?
@@ -271,7 +271,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 IrohConnection::spawn_linked(
                     None,
                     (
-                        state.private_key.public_key(),
+                        state.signing_key.verifying_key(),
                         IrohConnectionArgs::Connect {
                             endpoint: state.endpoint
                                 .clone()
@@ -300,7 +300,7 @@ impl ThreadLocalActor for IrohEndpoint {
                 IrohConnection::spawn_linked(
                     None,
                     (
-                        state.private_key.public_key(),
+                        state.signing_key.verifying_key(),
                         IrohConnectionArgs::Accept {
                             incoming,
                             protocols: state.protocols.clone(),

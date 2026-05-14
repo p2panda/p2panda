@@ -74,7 +74,7 @@ impl TestPeer {
     ) -> Self {
         let spaces_store = TestStore::new();
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(spaces_store.clone(), credentials.private_key());
+        let forge = TestForge::new(spaces_store.clone(), credentials.signing_key());
 
         let manager = TestManager::new_with_config(
             spaces_store,

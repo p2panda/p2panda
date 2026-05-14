@@ -4,11 +4,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::timestamp::Timestamp;
-use crate::{Body, Extensions, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+use crate::{Body, Extensions, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
 
 #[derive(Clone, Default)]
 pub struct TestLog {
-    private_key: PrivateKey,
+    signing_key: SigningKey,
     backlink: Rc<RefCell<Option<Hash>>>,
     seq_num: Rc<RefCell<u64>>,
     log_id: Topic,
@@ -17,16 +17,16 @@ pub struct TestLog {
 impl TestLog {
     pub fn new() -> Self {
         Self {
-            private_key: PrivateKey::new(),
+            signing_key: SigningKey::generate(),
             backlink: Rc::default(),
             seq_num: Rc::default(),
-            log_id: Topic::new(),
+            log_id: Topic::random(),
         }
     }
 
-    pub fn from_private_key(private_key: PrivateKey) -> Self {
+    pub fn from_signing_key(signing_key: SigningKey) -> Self {
         let mut log = TestLog::new();
-        log.private_key = private_key;
+        log.signing_key = signing_key;
         log
     }
 
@@ -34,8 +34,8 @@ impl TestLog {
         self.log_id
     }
 
-    pub fn author(&self) -> PublicKey {
-        self.private_key.public_key()
+    pub fn author(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
     }
 
     pub fn operation<E: Extensions>(&self, body: &[u8], extensions: E) -> Operation<E> {
@@ -45,7 +45,7 @@ impl TestLog {
         let mut backlink = self.backlink.borrow_mut();
 
         let mut header = Header::<E> {
-            public_key: self.private_key.public_key(),
+            verifying_key: self.signing_key.verifying_key(),
             version: 1,
             signature: None,
             payload_size: body.size(),
@@ -59,7 +59,7 @@ impl TestLog {
             backlink: *backlink,
             extensions,
         };
-        header.sign(&self.private_key);
+        header.sign(&self.signing_key);
 
         *backlink = Some(header.hash());
         *seq_num += 1;

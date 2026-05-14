@@ -19,26 +19,26 @@ async fn mdns_discovery() {
     // Spawn both endpoint actors.
     let alice_endpoint = Endpoint::builder(alice_address_book.clone())
         .config(alice_args.iroh_config.clone())
-        .private_key(alice_args.private_key.clone())
+        .signing_key(alice_args.signing_key.clone())
         .spawn()
         .await
         .unwrap();
     let bob_endpoint = Endpoint::builder(bob_address_book.clone())
         .config(bob_args.iroh_config.clone())
-        .private_key(bob_args.private_key.clone())
+        .signing_key(bob_args.signing_key.clone())
         .spawn()
         .await
         .unwrap();
 
     // Alice and Bob do not yet know about one another.
     let result = bob_address_book
-        .node_info(alice_args.public_key)
+        .node_info(alice_args.verifying_key)
         .await
         .unwrap();
     assert!(result.is_none());
 
     let result = alice_address_book
-        .node_info(bob_args.public_key)
+        .node_info(bob_args.verifying_key)
         .await
         .unwrap();
     assert!(result.is_none());
@@ -73,13 +73,13 @@ async fn mdns_discovery() {
 
     // Alice should be in Bob's address book and vice-versa.
     let result = bob_address_book
-        .node_info(alice_args.public_key)
+        .node_info(alice_args.verifying_key)
         .await
         .unwrap();
     assert!(result.is_some());
 
     let result = alice_address_book
-        .node_info(bob_args.public_key)
+        .node_info(bob_args.verifying_key)
         .await
         .unwrap();
     assert!(result.is_some());

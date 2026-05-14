@@ -408,7 +408,7 @@ async fn panic_on_sink_closure_after_error_regression() {
     // transport. Here we use a connection between two iroh endpoints.
     setup_logging();
 
-    let topic = Topic::new();
+    let topic = Topic::random();
     let mut peer = Peer::new(0).await;
     peer.associate(&topic, &Logs::default()).await;
 

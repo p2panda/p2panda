@@ -3,13 +3,13 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use p2panda_core::{PrivateKey, Topic};
+use p2panda_core::{SigningKey, Topic};
 use p2panda_net::address_book::AddressBookError;
 use p2panda_net::addrs::{NodeInfo, TrustedTransportInfo};
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
 use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{
-    EndpointAddr, EndpointError, IrohConfig, RelayUrl, from_public_key,
+    EndpointAddr, EndpointError, IrohConfig, RelayUrl, from_verifying_key,
 };
 use p2panda_net::iroh_mdns::MdnsDiscoveryError;
 use p2panda_net::sync::LogSyncError;
@@ -36,7 +36,7 @@ pub(crate) struct Network {
 impl Network {
     pub async fn spawn(
         config: NetworkConfig,
-        private_key: PrivateKey,
+        signing_key: SigningKey,
         store: SqliteStore,
     ) -> Result<Self, NetworkError> {
         // TODO: Supervision of actors.
@@ -52,7 +52,7 @@ impl Network {
 
         let mut endpoint = Endpoint::builder(address_book.clone())
             .config(config.iroh)
-            .private_key(private_key)
+            .signing_key(signing_key)
             .network_id(config.network_id);
 
         for url in &config.relay_urls {
@@ -112,7 +112,8 @@ impl Network {
         relay_url: RelayUrl,
     ) -> Result<(), NetworkError> {
         let mut node_info = NodeInfo::new(node_id).bootstrap();
-        let endpoint_addr = EndpointAddr::new(from_public_key(node_id)).with_relay_url(relay_url);
+        let endpoint_addr =
+            EndpointAddr::new(from_verifying_key(node_id)).with_relay_url(relay_url);
         let transport_info = TrustedTransportInfo::from(endpoint_addr);
 
         if node_info.update_transports(transport_info.into()).is_ok() {

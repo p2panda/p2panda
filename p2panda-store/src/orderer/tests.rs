@@ -9,9 +9,9 @@ use crate::{SqliteStore, Transaction};
 async fn ready() {
     let store = SqliteStore::temporary().await;
 
-    let hash_1 = Hash::new(b"tick");
-    let hash_2 = Hash::new(b"trick");
-    let hash_3 = Hash::new(b"track");
+    let hash_1 = Hash::digest(b"tick");
+    let hash_2 = Hash::digest(b"trick");
+    let hash_3 = Hash::digest(b"track");
 
     let permit = store.begin().await.unwrap();
 
@@ -47,10 +47,10 @@ async fn ready() {
 async fn pending() {
     let store = SqliteStore::temporary().await;
 
-    let hash_1 = Hash::new(b"piff");
-    let hash_2 = Hash::new(b"puff");
-    let hash_3 = Hash::new(b"paff");
-    let hash_4 = Hash::new(b"peff");
+    let hash_1 = Hash::digest(b"piff");
+    let hash_2 = Hash::digest(b"puff");
+    let hash_3 = Hash::digest(b"paff");
+    let hash_4 = Hash::digest(b"peff");
 
     let permit = store.begin().await.unwrap();
 

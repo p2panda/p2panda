@@ -211,17 +211,17 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let identity_key = secret_key.public_key().unwrap();
+        let identity_key = secret_key.verifying_key().unwrap();
 
         let signed_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
         let signed_prekey = PreKey::new(
-            signed_prekey_secret.public_key().unwrap(),
+            signed_prekey_secret.verifying_key().unwrap(),
             Lifetime::default(),
         );
         let prekey_signature = xeddsa_sign(signed_prekey.as_bytes(), &secret_key, &rng).unwrap();
 
         let onetime_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let onetime_prekey = OneTimePreKey::new(onetime_prekey_secret.public_key().unwrap(), 1);
+        let onetime_prekey = OneTimePreKey::new(onetime_prekey_secret.verifying_key().unwrap(), 1);
 
         // Valid key-bundles.
         assert!(
@@ -242,7 +242,7 @@ mod tests {
 
         // Invalid lifetime of pre-key.
         let signed_prekey = PreKey::new(
-            signed_prekey_secret.public_key().unwrap(),
+            signed_prekey_secret.verifying_key().unwrap(),
             Lifetime::from_range(0, 0),
         );
         assert!(

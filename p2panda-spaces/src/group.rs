@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use p2panda_encryption::RngError;
 use thiserror::Error;
 
@@ -85,8 +85,8 @@ where
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
-            let private_key = PrivateKey::from_bytes(&manager.rng.random_array()?);
-            private_key.public_key().into()
+            let signing_key = SigningKey::from_bytes(&manager.rng.random_array()?);
+            signing_key.verifying_key().into()
         };
 
         let initial_members = typed_members(manager_ref.clone(), initial_members)

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -27,8 +27,8 @@ impl<S, T, L, E, TP> Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash, L>
-        + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
-        + TopicStore<TP, PublicKey, L>,
+        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + TopicStore<TP, VerifyingKey, L>,
     L: LogId,
     E: Extensions,
 {
@@ -46,8 +46,8 @@ impl<S, T, L, E, TP> Processor<T> for Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash, L>
-        + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
-        + TopicStore<TP, PublicKey, L>,
+        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
     L: LogId,
     E: Extensions,
@@ -152,7 +152,7 @@ mod tests {
                 let operation_2 = log.operation(b"Ho", ());
 
                 let log_id = 0;
-                let topic = Topic::new();
+                let topic = Topic::random();
 
                 let mut stream = stream::iter(vec![
                     Event {

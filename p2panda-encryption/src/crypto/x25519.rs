@@ -43,10 +43,10 @@ impl SecretKey {
         self.0.as_bytes()
     }
 
-    pub fn public_key(&self) -> Result<PublicKey, X25519Error> {
+    pub fn verifying_key(&self) -> Result<PublicKey, X25519Error> {
         let static_secret = x25519_dalek::StaticSecret::from(*self.0.as_bytes());
-        let public_key = x25519_dalek::PublicKey::from(&static_secret);
-        Ok(PublicKey(public_key.to_bytes()))
+        let verifying_key = x25519_dalek::PublicKey::from(&static_secret);
+        Ok(PublicKey(verifying_key.to_bytes()))
     }
 
     pub fn calculate_agreement(
@@ -65,8 +65,8 @@ impl SecretKey {
 pub struct PublicKey(#[serde(with = "serde_bytes")] [u8; PUBLIC_KEY_SIZE]);
 
 impl PublicKey {
-    pub fn from_bytes(public_key: [u8; PUBLIC_KEY_SIZE]) -> Self {
-        Self(public_key)
+    pub fn from_bytes(verifying_key: [u8; PUBLIC_KEY_SIZE]) -> Self {
+        Self(verifying_key)
     }
 
     pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_SIZE] {
@@ -105,16 +105,16 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let alice_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let alice_public_key = alice_secret_key.public_key().unwrap();
+        let alice_verifying_key = alice_secret_key.verifying_key().unwrap();
 
         let bob_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_public_key = bob_secret_key.public_key().unwrap();
+        let bob_verifying_key = bob_secret_key.verifying_key().unwrap();
 
         let alice_shared_secret = alice_secret_key
-            .calculate_agreement(&bob_public_key)
+            .calculate_agreement(&bob_verifying_key)
             .unwrap();
         let bob_shared_secret = bob_secret_key
-            .calculate_agreement(&alice_public_key)
+            .calculate_agreement(&alice_verifying_key)
             .unwrap();
 
         assert_eq!(alice_shared_secret, bob_shared_secret);

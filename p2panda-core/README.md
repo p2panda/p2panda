@@ -52,14 +52,14 @@ Stability guarantees will improve with the release of v1.0.0.
 ### Create and sign operation
 
 ```rust
-use p2panda_core::{Body, Header, PrivateKey, Timestamp};
+use p2panda_core::{Body, Header, SigningKey, Timestamp};
 
-let private_key = PrivateKey::new();
+let signing_key = SigningKey::generate();
 
 let body = Body::new("Hello, Panda!".as_bytes());
 let mut header = Header {
     version: 1,
-    public_key: private_key.public_key(),
+    verifying_key: signing_key.verifying_key(),
     signature: None,
     payload_size: body.size(),
     payload_hash: Some(body.hash()),
@@ -69,7 +69,7 @@ let mut header = Header {
     extensions: (),
 };
 
-header.sign(&private_key);
+header.sign(&signing_key);
 ```
 
 ### Custom extensions
@@ -78,7 +78,7 @@ Custom functionality can be added using extensions, for example, access-control
 tokens, self-destructing messages, or encryption schemas.
 
 ```rust
-use p2panda_core::{Extension, Header, PrivateKey};
+use p2panda_core::{Extension, Header};
 use serde::{Serialize, Deserialize};
 
 // Extend our operations with an "expiry" field we can use to implement

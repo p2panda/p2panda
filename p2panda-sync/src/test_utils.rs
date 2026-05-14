@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -44,20 +44,20 @@ pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, u64, ()>;
 /// protocols.
 pub struct Peer {
     pub store: SqliteStore,
-    pub private_key: PrivateKey,
+    pub signing_key: SigningKey,
 }
 
 impl Peer {
     pub async fn new(peer_id: u64) -> Self {
         let store = SqliteStore::temporary().await;
         let mut rng = <StdRng as rand::SeedableRng>::seed_from_u64(peer_id);
-        let private_key = PrivateKey::from_bytes(&rng.random());
-        Self { store, private_key }
+        let signing_key = SigningKey::from_bytes(&rng.random());
+        Self { store, signing_key }
     }
 
     /// The public key of this peer.
-    pub fn id(&self) -> PublicKey {
-        self.private_key.public_key()
+    pub fn id(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
     }
 
     /// Return a topic sync protocol.
@@ -116,12 +116,12 @@ impl Peer {
     ) -> (Header<()>, Vec<u8>) {
         let (seq_num, backlink) = <SqliteStore as LogStore<
             Operation<()>,
-            PublicKey,
+            VerifyingKey,
             u64,
             u64,
             p2panda_core::Hash,
         >>::get_latest_entry(
-            &self.store, &self.private_key.public_key(), &log_id
+            &self.store, &self.signing_key.verifying_key(), &log_id
         )
         .await
         .unwrap()
@@ -129,12 +129,12 @@ impl Peer {
         .unwrap_or((0, None));
 
         let (header, header_bytes) =
-            create_operation(&self.private_key, body, seq_num, rand::random(), backlink);
+            create_operation(&self.signing_key, body, seq_num, rand::random(), backlink);
 
         (header, header_bytes)
     }
 
-    pub async fn associate(&mut self, topic: &Topic, logs: &BTreeMap<PublicKey, Vec<u64>>) {
+    pub async fn associate(&mut self, topic: &Topic, logs: &BTreeMap<VerifyingKey, Vec<u64>>) {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {
@@ -213,7 +213,7 @@ where
 
 /// Create a single operation.
 pub fn create_operation(
-    private_key: &PrivateKey,
+    signing_key: &SigningKey,
     body: &Body,
     seq_num: u64,
     timestamp: u64,
@@ -221,7 +221,7 @@ pub fn create_operation(
 ) -> (Header<()>, Vec<u8>) {
     let mut header = Header::<()> {
         version: 1,
-        public_key: private_key.public_key(),
+        verifying_key: signing_key.verifying_key(),
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
@@ -230,7 +230,7 @@ pub fn create_operation(
         backlink,
         extensions: (),
     };
-    header.sign(private_key);
+    header.sign(signing_key);
     let header_bytes = header.to_bytes();
     (header, header_bytes)
 }

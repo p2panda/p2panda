@@ -54,10 +54,10 @@ pub fn x3dh_encrypt<KB: KeyBundle>(
     // Ensure we're not using an expired bundle of receiver.
     their_prekey_bundle.verify()?;
 
-    let our_identity_key = our_identity_secret.public_key()?;
+    let our_identity_key = our_identity_secret.verifying_key()?;
 
     let our_ephemeral_secret = SecretKey::from_bytes(rng.random_array()?);
-    let our_ephemeral_key = our_ephemeral_secret.public_key()?;
+    let our_ephemeral_key = our_ephemeral_secret.verifying_key()?;
 
     let mut ikm = Vec::with_capacity({
         if their_prekey_bundle.onetime_prekey().is_none() {
@@ -129,7 +129,7 @@ pub fn x3dh_decrypt(
     our_prekey_secret: &SecretKey,
     our_onetime_secret: Option<&SecretKey>,
 ) -> Result<Vec<u8>, X3dhError> {
-    let our_identity_key = our_identity_secret.public_key()?;
+    let our_identity_key = our_identity_secret.verifying_key()?;
 
     let mut ikm = Vec::with_capacity(if our_onetime_secret.is_none() {
         32 * 4
@@ -212,16 +212,18 @@ mod tests {
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
         let bob_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_signed_prekey =
-            PreKey::new(bob_prekey_secret.public_key().unwrap(), Lifetime::default());
+        let bob_signed_prekey = PreKey::new(
+            bob_prekey_secret.verifying_key().unwrap(),
+            Lifetime::default(),
+        );
 
         let bob_onetime_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_onetime_prekey = OneTimePreKey::new(bob_onetime_secret.public_key().unwrap(), 2);
+        let bob_onetime_prekey = OneTimePreKey::new(bob_onetime_secret.verifying_key().unwrap(), 2);
 
         let bob_prekey_signature = bob_signed_prekey.sign(&bob_identity_secret, &rng).unwrap();
 
         let bob_prekey_bundle = OneTimeKeyBundle::new(
-            bob_identity_secret.public_key().unwrap(),
+            bob_identity_secret.verifying_key().unwrap(),
             bob_signed_prekey,
             bob_prekey_signature,
             Some(bob_onetime_prekey),
@@ -255,13 +257,15 @@ mod tests {
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
 
         let bob_prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-        let bob_signed_prekey =
-            PreKey::new(bob_prekey_secret.public_key().unwrap(), Lifetime::default());
+        let bob_signed_prekey = PreKey::new(
+            bob_prekey_secret.verifying_key().unwrap(),
+            Lifetime::default(),
+        );
 
         let bob_prekey_signature = bob_signed_prekey.sign(&bob_identity_secret, &rng).unwrap();
 
         let bob_prekey_bundle = LongTermKeyBundle::new(
-            bob_identity_secret.public_key().unwrap(),
+            bob_identity_secret.verifying_key().unwrap(),
             bob_signed_prekey,
             bob_prekey_signature,
         );

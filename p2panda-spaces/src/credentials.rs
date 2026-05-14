@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_core::{SigningKey, VerifyingKey};
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::{Rng, RngError};
 use serde::{Deserialize, Serialize};
@@ -17,33 +17,33 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct Credentials {
-    pub(crate) private_key: PrivateKey,
+    pub(crate) signing_key: SigningKey,
     pub(crate) identity_secret: SecretKey,
 }
 
 impl Credentials {
     pub fn from_rng(rng: &Rng) -> Result<Self, RngError> {
-        let private_key = PrivateKey::from_bytes(&rng.random_array()?);
+        let signing_key = SigningKey::from_bytes(&rng.random_array()?);
         let identity_secret = SecretKey::from_rng(rng)?;
         Ok(Self {
-            private_key,
+            signing_key,
             identity_secret,
         })
     }
 
-    pub fn from_keys(private_key: PrivateKey, identity_secret: SecretKey) -> Self {
+    pub fn from_keys(signing_key: SigningKey, identity_secret: SecretKey) -> Self {
         Self {
-            private_key,
+            signing_key,
             identity_secret,
         }
     }
 
-    pub fn private_key(&self) -> PrivateKey {
-        self.private_key.clone()
+    pub fn signing_key(&self) -> SigningKey {
+        self.signing_key.clone()
     }
 
-    pub fn public_key(&self) -> PublicKey {
-        self.private_key.public_key()
+    pub fn verifying_key(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
     }
 
     pub fn identity_secret(&self) -> SecretKey {

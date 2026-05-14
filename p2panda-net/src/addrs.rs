@@ -26,15 +26,15 @@ use std::net::SocketAddr;
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::timestamp::{HybridTimestamp, Timestamp};
-use p2panda_core::{PrivateKey, Signature};
+use p2panda_core::{Signature, SigningKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::NodeId;
 #[cfg(any(test, feature = "test_utils"))]
-use crate::iroh_endpoint::from_public_key;
+use crate::iroh_endpoint::from_verifying_key;
 #[cfg(feature = "iroh_endpoint")]
-use crate::iroh_endpoint::to_public_key;
+use crate::iroh_endpoint::to_verifying_key;
 
 /// Record of a node we store locally in the address book.
 ///
@@ -142,7 +142,7 @@ impl TryFrom<NodeInfo> for iroh::EndpointAddr {
 #[cfg(feature = "iroh_endpoint")]
 impl From<iroh::EndpointAddr> for NodeInfo {
     fn from(addr: iroh::EndpointAddr) -> Self {
-        let node_id = to_public_key(addr.id);
+        let node_id = to_verifying_key(addr.id);
         let transports = TransportInfo::from(TrustedTransportInfo::from(addr));
 
         Self {
@@ -463,7 +463,7 @@ impl UnsignedTransportInfo {
     /// Authenticate transport info by signining it with our secret key.
     pub fn sign(
         self,
-        signing_key: &PrivateKey,
+        signing_key: &SigningKey,
     ) -> Result<AuthenticatedTransportInfo, NodeInfoError> {
         Ok(AuthenticatedTransportInfo {
             timestamp: self.timestamp,
@@ -621,7 +621,7 @@ impl TransportAddress {
         let transport_addrs = direct_addresses.into_iter().map(iroh::TransportAddr::Ip);
 
         let mut endpoint_addr =
-            iroh::EndpointAddr::new(from_public_key(node_id)).with_addrs(transport_addrs);
+            iroh::EndpointAddr::new(from_verifying_key(node_id)).with_addrs(transport_addrs);
 
         if let Some(url) = relay_url {
             endpoint_addr = endpoint_addr.with_relay_url(url);
@@ -635,7 +635,7 @@ impl TransportAddress {
         #[allow(irrefutable_let_patterns)]
         #[cfg(feature = "iroh_endpoint")]
         if let TransportAddress::Iroh(endpoint_addr) = self
-            && &to_public_key(endpoint_addr.id) != node_id
+            && &to_verifying_key(endpoint_addr.id) != node_id
         {
             return Err(NodeInfoError::NodeIdMismatch);
         }
@@ -717,7 +717,7 @@ mod tests {
     use std::time::Duration;
 
     use mock_instant::thread_local::MockClock;
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
 
     use crate::addrs::NodeTransportInfo;
 
@@ -727,8 +727,8 @@ mod tests {
 
     #[test]
     fn deduplicate_transport_address() {
-        let signing_key_1 = PrivateKey::new();
-        let node_id_1 = signing_key_1.public_key();
+        let signing_key_1 = SigningKey::generate();
+        let node_id_1 = signing_key_1.verifying_key();
 
         // De-duplicate addresses when transport is the same.
         let mut info = AuthenticatedTransportInfo::new_unsigned();
@@ -744,8 +744,8 @@ mod tests {
 
     #[test]
     fn authenticate_address_infos() {
-        let signing_key_1 = PrivateKey::new();
-        let node_id_1 = signing_key_1.public_key();
+        let signing_key_1 = SigningKey::generate();
+        let node_id_1 = signing_key_1.verifying_key();
 
         let mut unsigned = UnsignedTransportInfo::new();
         unsigned.add_addr(TransportAddress::from_iroh(
@@ -758,8 +758,8 @@ mod tests {
         assert!(info.verify(&node_id_1).is_ok());
 
         // Fails when node id does not match.
-        let signing_key_2 = PrivateKey::new();
-        let node_id_2 = signing_key_2.public_key();
+        let signing_key_2 = SigningKey::generate();
+        let node_id_2 = signing_key_2.verifying_key();
         assert!(info.verify(&node_id_2).is_err());
 
         // Fails when information got changed.
@@ -770,11 +770,11 @@ mod tests {
 
     #[test]
     fn node_id_mismatch() {
-        let signing_key_1 = PrivateKey::new();
-        let node_id_1 = signing_key_1.public_key();
+        let signing_key_1 = SigningKey::generate();
+        let node_id_1 = signing_key_1.verifying_key();
 
-        let signing_key_2 = PrivateKey::new();
-        let node_id_2 = signing_key_2.public_key();
+        let signing_key_2 = SigningKey::generate();
+        let node_id_2 = signing_key_2.verifying_key();
 
         // Create transport info for node 1.
         let mut unsigned = UnsignedTransportInfo::new();
@@ -798,8 +798,8 @@ mod tests {
 
     #[test]
     fn latest_transport_info_wins() {
-        let signing_key_1 = PrivateKey::new();
-        let node_id_1 = signing_key_1.public_key();
+        let signing_key_1 = SigningKey::generate();
+        let node_id_1 = signing_key_1.verifying_key();
 
         // Create "newer" transport info.
         let transport_info_1 = {
@@ -843,8 +843,8 @@ mod tests {
 
     #[test]
     fn stale_nodes() {
-        let signing_key = PrivateKey::new();
-        let node_id = signing_key.public_key();
+        let signing_key = SigningKey::generate();
+        let node_id = signing_key.verifying_key();
 
         let mut node_info = NodeInfo {
             node_id,

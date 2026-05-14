@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extension, Extensions, Hash, LogId, Operation, PublicKey};
+use p2panda_core::{Extension, Extensions, Hash, LogId, Operation, VerifyingKey};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
@@ -17,13 +17,13 @@ use crate::group;
 use crate::processor::{GroupsArgs, GroupsOperation};
 use crate::traits::{Conditions, IdentityHandle, Operation as GroupsOperationTrait, OperationId};
 
-type GroupsCrdt<C> = group::GroupCrdt<PublicKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
 type GroupsCrdtError<C> =
-    group::GroupCrdtError<PublicKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
-type StrongRemove<C> = group::resolver::StrongRemove<PublicKey, Hash, GroupsOperation<C>, C>;
-type GroupsState<C> = group::GroupCrdtState<PublicKey, Hash, GroupsOperation<C>, C>;
+    group::GroupCrdtError<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
+type GroupsState<C> = group::GroupCrdtState<VerifyingKey, Hash, GroupsOperation<C>, C>;
 
-impl IdentityHandle for PublicKey {}
+impl IdentityHandle for VerifyingKey {}
 impl OperationId for Hash {}
 
 /// Processor for groups operations.
@@ -86,7 +86,7 @@ where
 
         let groups_operation = GroupsOperation {
             id: operation.hash,
-            author: operation.header.public_key,
+            author: operation.header.verifying_key,
             dependencies: args.dependencies,
             group_id: args.group_id,
             action: args.action,
@@ -162,7 +162,7 @@ where
 
             GroupsOperation {
                 id: operation.hash,
-                author: operation.header.public_key,
+                author: operation.header.verifying_key,
                 dependencies: args.dependencies,
                 group_id: args.group_id,
                 action: args.action,
@@ -205,7 +205,7 @@ where
 mod tests {
     use p2panda_core::test_utils::TestLog;
     use p2panda_core::traits::Digest;
-    use p2panda_core::{Extension, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+    use p2panda_core::{Extension, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
     use p2panda_store::groups::GroupsStore;
     use p2panda_store::{SqliteStore, Transaction};
     use serde::{Deserialize, Serialize};
@@ -216,7 +216,7 @@ mod tests {
     use crate::test_utils::setup_logging;
 
     type LogId = u64;
-    type GroupsState = GroupCrdtState<PublicKey, Hash, GroupsOperation, ()>;
+    type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
     type GroupsProcessor = crate::processor::GroupsProcessor<Topic, TestExtensions, LogId>;
 
     const LOG_ID: u64 = 0;
@@ -251,7 +251,7 @@ mod tests {
     #[tokio::test]
     async fn ooo_operations() {
         setup_logging();
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         let alice_log = TestLog::new();
         let alice = alice_log.author();
@@ -261,7 +261,7 @@ mod tests {
         let cathy = cathy_log.author();
 
         let state_id = 0;
-        let group_id = PrivateKey::new().public_key();
+        let group_id = SigningKey::generate().verifying_key();
 
         let args = GroupsArgs {
             group_id,

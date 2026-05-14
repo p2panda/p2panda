@@ -105,20 +105,20 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::cbor::{decode_cbor, encode_cbor};
-    use crate::{Hash, Header, PrivateKey};
+    use crate::{Hash, Header, SigningKey};
 
     use super::{PruneFlag, validate_prunable_backlink};
 
     #[test]
     fn validate_pruned_log() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let mut header = Header::<()> {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             seq_num: 7,
-            backlink: Some(Hash::new([1, 2, 3])),
+            backlink: Some(Hash::digest([1, 2, 3])),
             ..Default::default()
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         // When no pruning flag was set we expect a backlink for this operation at seq_num = 7,
         // otherwise not
@@ -128,12 +128,12 @@ mod tests {
 
     #[test]
     fn seq_num_zero() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let mut header = Header::<()> {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             ..Default::default()
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         // Everything is fine at the beginning of the log
         assert!(validate_prunable_backlink(None, &header, false).is_ok());
@@ -142,21 +142,21 @@ mod tests {
 
     #[test]
     fn strictly_growing_log() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
 
         let mut header_0 = Header::<()> {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             ..Default::default()
         };
-        header_0.sign(&private_key);
+        header_0.sign(&signing_key);
 
         let mut header_1 = Header::<()> {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             seq_num: 1,
             backlink: Some(header_0.hash()),
             ..Default::default()
         };
-        header_1.sign(&private_key);
+        header_1.sign(&signing_key);
 
         // log reached seq_num 1 and got pruned.
         assert!(validate_prunable_backlink(Some(&header_0), &header_1, true).is_ok());

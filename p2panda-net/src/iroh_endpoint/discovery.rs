@@ -8,7 +8,7 @@ use futures_util::{FutureExt, Stream, StreamExt};
 use iroh::address_lookup::Error as AddressLookupError;
 use iroh::address_lookup::Item as AddressLookupItem;
 use iroh::address_lookup::{AddressLookup, EndpointData, EndpointInfo};
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use p2panda_store::address_book::NodeInfo as _;
 use tokio::sync::Semaphore;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -16,7 +16,7 @@ use tracing::{Instrument, error, info_span, trace, warn};
 
 use crate::address_book::AddressBook;
 use crate::addrs::{NodeTransportInfo, UnsignedTransportInfo};
-use crate::iroh_endpoint::{from_public_key, to_public_key};
+use crate::iroh_endpoint::{from_verifying_key, to_verifying_key};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
 /// implements iroh's `Discovery` trait.
@@ -25,7 +25,7 @@ use crate::iroh_endpoint::{from_public_key, to_public_key};
 /// about our own, changed address (for example if the home relay changed or we got an direct IP
 /// address, etc., in iroh this is called "publish").
 pub struct AddressBookDiscovery {
-    private_key: PrivateKey,
+    signing_key: SigningKey,
     address_book: AddressBook,
     semaphore: Arc<Semaphore>,
 }
@@ -41,9 +41,9 @@ impl std::fmt::Debug for AddressBookDiscovery {
 const PROVENANCE: &str = "address_book";
 
 impl AddressBookDiscovery {
-    pub fn new(private_key: PrivateKey, address_book: AddressBook) -> Self {
+    pub fn new(signing_key: SigningKey, address_book: AddressBook) -> Self {
         Self {
-            private_key,
+            signing_key,
             address_book,
             semaphore: Arc::new(Semaphore::new(1)),
         }
@@ -52,8 +52,8 @@ impl AddressBookDiscovery {
 
 impl AddressLookup for AddressBookDiscovery {
     fn publish(&self, data: &EndpointData) {
-        let private_key = self.private_key.clone();
-        let public_key = private_key.public_key();
+        let signing_key = self.signing_key.clone();
+        let verifying_key = signing_key.verifying_key();
         let data = data.to_owned();
         let semaphore = self.semaphore.clone();
         let address_book = self.address_book.clone();
@@ -66,7 +66,7 @@ impl AddressLookup for AddressBookDiscovery {
                 return;
             };
 
-            let Ok(node_info) = address_book.node_info(public_key).await else {
+            let Ok(node_info) = address_book.node_info(verifying_key).await else {
                 error!("failed getting own transport info from address book");
                 return;
             };
@@ -77,7 +77,7 @@ impl AddressLookup for AddressBookDiscovery {
             // other nodes about this.
             let Ok(transport_info) = if data.has_addrs() {
                 UnsignedTransportInfo::from_addrs([iroh::EndpointAddr {
-                    id: from_public_key(public_key),
+                    id: from_verifying_key(verifying_key),
                     addrs: BTreeSet::from_iter(data.addrs().cloned()),
                 }
                 .into()])
@@ -85,7 +85,7 @@ impl AddressLookup for AddressBookDiscovery {
                 UnsignedTransportInfo::new()
             }
             .increment_timestamp(previous_transport_info.as_ref())
-            .sign(&private_key) else {
+            .sign(&signing_key) else {
                 error!("failed signing own transport info");
                 return;
             };
@@ -100,7 +100,7 @@ impl AddressLookup for AddressBookDiscovery {
             // Update entry about ourselves in address book to allow this information to propagate
             // in other discovery mechanisms or side-channels outside of iroh.
             if let Err(err) = address_book
-                .insert_transport_info(public_key, transport_info.clone().into())
+                .insert_transport_info(verifying_key, transport_info.clone().into())
                 .await
             {
                 warn!("could not update address book with own transport info: {err:#?}");
@@ -119,7 +119,7 @@ impl AddressLookup for AddressBookDiscovery {
 
         let stream = async move {
             let subscription = address_book
-                .watch_node_info(to_public_key(endpoint_id), false)
+                .watch_node_info(to_verifying_key(endpoint_id), false)
                 .await
                 .map_err(|_| {
                     AddressLookupError::from_err_any(

@@ -51,7 +51,7 @@ where
                             hash,
                             log_id,
                             version,
-                            public_key,
+                            verifying_key,
                             signature,
                             payload_size,
                             payload_hash,
@@ -71,7 +71,7 @@ where
                         .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
                 )
                 .bind(operation.header.version.to_string())
-                .bind(operation.header.public_key.to_hex())
+                .bind(operation.header.verifying_key.to_hex())
                 .bind(operation.header.signature.map(|sig| sig.to_hex()))
                 .bind(operation.header.payload_size.to_string())
                 .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))

@@ -406,7 +406,7 @@ mod tests {
 
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
     use p2panda_store::address_book::AddressBookStore;
     use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo};
     use p2panda_store::{SqliteStore, tx_unwrap};
@@ -420,8 +420,8 @@ mod tests {
 
     #[tokio::test]
     async fn topic_discovery() {
-        let alice = PrivateKey::new().public_key();
-        let bob = PrivateKey::new().public_key();
+        let alice = SigningKey::generate().verifying_key();
+        let bob = SigningKey::generate().verifying_key();
 
         let mut alice_subscription = TestSubscription::default();
         alice_subscription.topics.insert([1; 32].into());
@@ -477,8 +477,8 @@ mod tests {
 
     #[tokio::test]
     async fn topic_out_of_order_alice() {
-        let alice = PrivateKey::new().public_key();
-        let bob = PrivateKey::new().public_key();
+        let alice = SigningKey::generate().verifying_key();
+        let bob = SigningKey::generate().verifying_key();
 
         let mut alice_subscription = TestSubscription::default();
         alice_subscription.topics.insert([1; 32].into());
@@ -511,8 +511,8 @@ mod tests {
 
     #[tokio::test]
     async fn topic_out_of_order_bob() {
-        let alice = PrivateKey::new().public_key();
-        let bob = PrivateKey::new().public_key();
+        let alice = SigningKey::generate().verifying_key();
+        let bob = SigningKey::generate().verifying_key();
 
         let mut bob_subscription = TestSubscription::default();
         bob_subscription.topics.insert([1; 32].into());
@@ -546,10 +546,10 @@ mod tests {
     async fn transport_info() {
         let mut rng = ChaCha20Rng::from_seed([1; 32]);
 
-        let alice = PrivateKey::new().public_key();
-        let bob = PrivateKey::new().public_key();
-        let charlie = PrivateKey::new().public_key();
-        let daphne = PrivateKey::new().public_key();
+        let alice = SigningKey::generate().verifying_key();
+        let bob = SigningKey::generate().verifying_key();
+        let charlie = SigningKey::generate().verifying_key();
+        let daphne = SigningKey::generate().verifying_key();
 
         // Alice, Bob and Charlie share the same topic [1; 32] while only Bob and Daphne share
         // topic [2; 32]. Alice should _not_ learn transport info about Daphne and only about

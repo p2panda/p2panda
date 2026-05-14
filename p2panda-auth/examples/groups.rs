@@ -36,7 +36,7 @@ use p2panda_auth::traits::Operation as GroupsOperationTrait;
 use p2panda_auth::{Access, AccessError};
 use p2panda_core::test_utils::TestLog;
 use p2panda_core::{
-    Extension, Hash, Header, IdentityError, Operation, PrivateKey, PublicKey, Topic,
+    Extension, Hash, Header, IdentityError, Operation, SigningKey, Topic, VerifyingKey,
 };
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
@@ -52,7 +52,7 @@ use tokio::task::LocalSet;
 use tracing::{debug, info};
 
 type LogId = u64;
-type GroupsState = GroupCrdtState<PublicKey, Hash, GroupsOperation<()>, ()>;
+type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation<()>, ()>;
 type GroupsProcessor = p2panda_auth::processor::GroupsProcessor<Topic, AppExtensions, LogId>;
 
 /// This application maintains only one log per author, this is why we can hard-code it.
@@ -86,8 +86,8 @@ impl Extension<LogId> for AppExtensions {
 async fn main() -> Result<()> {
     setup_logging();
 
-    let private_key = PrivateKey::new();
-    let public_key = private_key.public_key();
+    let signing_key = SigningKey::generate();
+    let verifying_key = signing_key.verifying_key();
     let topic = Topic::from(TOPIC);
 
     // Setup p2panda networking stack.
@@ -95,11 +95,11 @@ async fn main() -> Result<()> {
     let address_book = AddressBook::builder().spawn().await?;
 
     let endpoint = Endpoint::builder(address_book.clone())
-        .private_key(private_key.clone())
+        .signing_key(signing_key.clone())
         .spawn()
         .await?;
 
-    println!("public key: {}", public_key.to_hex());
+    println!("public key: {}", verifying_key.to_hex());
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
         .spawn()
@@ -168,10 +168,10 @@ async fn main() -> Result<()> {
         let local = LocalSet::new();
 
         local.spawn_local(async move {
-            let log = TestLog::from_private_key(private_key);
+            let log = TestLog::from_signing_key(signing_key);
 
             while let Some(text) = line_rx.recv().await {
-                let (group_id, action) = match text_2_action(&store, public_key, text).await {
+                let (group_id, action) = match text_2_action(&store, verifying_key, text).await {
                     Ok(action) => action,
                     Err(err) => {
                         debug!("error: {err:?}");
@@ -248,9 +248,9 @@ enum Text2ActionError {
 
 async fn text_2_action(
     store: &SqliteStore,
-    me: PublicKey,
+    me: VerifyingKey,
     text: String,
-) -> Result<(PublicKey, GroupAction<PublicKey>), Text2ActionError> {
+) -> Result<(VerifyingKey, GroupAction<VerifyingKey>), Text2ActionError> {
     let y = tx_unwrap!(store, {
         store
             .get_groups_state(&GROUPS_STATE_ID)
@@ -259,7 +259,7 @@ async fn text_2_action(
             .unwrap_or_default()
     });
     let args = if let Some(_text) = text.strip_prefix("create") {
-        let group_id = PrivateKey::new().public_key();
+        let group_id = SigningKey::generate().verifying_key();
         (
             group_id,
             GroupAction::Create {
@@ -282,7 +282,7 @@ async fn text_2_action(
             ));
         };
 
-        let group_id: PublicKey = group_id.trim().parse()?;
+        let group_id: VerifyingKey = group_id.trim().parse()?;
 
         let Some(access) = args.pop_front() else {
             return Err(Text2ActionError::InvalidArgs(
@@ -308,7 +308,7 @@ async fn text_2_action(
             ));
         };
 
-        let group_id: PublicKey = group_id.trim().parse()?;
+        let group_id: VerifyingKey = group_id.trim().parse()?;
         let action = GroupAction::Remove { member };
         (group_id, action)
     } else {
@@ -321,8 +321,8 @@ async fn text_2_action(
 fn parse_member(
     y: &GroupsState,
     member_id: &str,
-) -> Result<GroupMember<PublicKey>, Text2ActionError> {
-    let member_id: PublicKey = member_id.trim().parse()?;
+) -> Result<GroupMember<VerifyingKey>, Text2ActionError> {
+    let member_id: VerifyingKey = member_id.trim().parse()?;
 
     // Check if this member is a group or individual.
     let member = if y.has_group(member_id) {
@@ -338,7 +338,7 @@ async fn print_group(store: &SqliteStore, operation: &Operation<AppExtensions>) 
     let args = operation.header.extension::<GroupsArgs>().unwrap();
     let groups_operation = GroupsOperation {
         id: operation.hash,
-        author: operation.header.public_key,
+        author: operation.header.verifying_key,
         dependencies: args.dependencies,
         group_id: args.group_id,
         action: args.action,

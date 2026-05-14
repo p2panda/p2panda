@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_core::{Hash, PublicKey};
+use p2panda_core::{Hash, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use crate::group::GroupAction;
@@ -10,14 +10,14 @@ use crate::traits::{Conditions, Operation};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GroupsOperation<C = ()> {
     pub id: Hash,
-    pub author: PublicKey,
+    pub author: VerifyingKey,
     pub dependencies: Vec<Hash>,
-    pub group_id: PublicKey,
-    pub action: GroupAction<PublicKey, C>,
+    pub group_id: VerifyingKey,
+    pub action: GroupAction<VerifyingKey, C>,
 }
 
 /// Implementation of groups Operation trait.
-impl<C> Operation<PublicKey, Hash, C> for GroupsOperation<C>
+impl<C> Operation<VerifyingKey, Hash, C> for GroupsOperation<C>
 where
     C: Conditions,
 {
@@ -25,7 +25,7 @@ where
         self.id
     }
 
-    fn author(&self) -> PublicKey {
+    fn author(&self) -> VerifyingKey {
         self.author
     }
 
@@ -33,11 +33,11 @@ where
         self.dependencies.clone()
     }
 
-    fn group_id(&self) -> PublicKey {
+    fn group_id(&self) -> VerifyingKey {
         self.group_id
     }
 
-    fn action(&self) -> GroupAction<PublicKey, C> {
+    fn action(&self) -> GroupAction<VerifyingKey, C> {
         self.action.clone()
     }
 }

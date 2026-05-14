@@ -106,7 +106,7 @@ mod tests {
     fn insert_with_topic() {
         let (tx, _rx) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
-        let topic_a = Topic::new();
+        let topic_a = Topic::random();
 
         map.insert_with_topic(SESSION1, topic_a, tx.clone());
 
@@ -124,8 +124,8 @@ mod tests {
     fn drop_session() {
         let (tx, _rx) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
-        let topic_a = Topic::new();
-        let topic_b = Topic::new();
+        let topic_a = Topic::random();
+        let topic_b = Topic::random();
 
         map.insert_with_topic(SESSION1, topic_a, tx.clone());
         map.insert_with_topic(SESSION2, topic_a, tx.clone());
@@ -152,7 +152,7 @@ mod tests {
         let (tx2, _rx2) = mpsc::channel::<()>(128);
         let mut map = SessionTopicMap::default();
 
-        let topic_a = Topic::new();
+        let topic_a = Topic::random();
 
         map.insert_with_topic(SESSION1, topic_a, tx1);
         map.insert_with_topic(SESSION2, topic_a, tx2);

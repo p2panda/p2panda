@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::logs::LogHeights;
-use p2panda_core::{Cursor, PrivateKey, PublicKey};
+use p2panda_core::{Cursor, SigningKey, VerifyingKey};
 
 use crate::cursors::CursorStore;
 use crate::{SqliteStore, tx_unwrap};
@@ -10,7 +10,7 @@ use crate::{SqliteStore, tx_unwrap};
 async fn get_and_set_cursor() {
     let store = SqliteStore::temporary().await;
 
-    let mut cursor = Cursor::<PublicKey, u64>::new("test", LogHeights::default());
+    let mut cursor = Cursor::<VerifyingKey, u64>::new("test", LogHeights::default());
 
     // First insert.
     tx_unwrap!(store, {
@@ -23,7 +23,7 @@ async fn get_and_set_cursor() {
     );
 
     // Second insert should be an upsert.
-    let author = PrivateKey::new().public_key();
+    let author = SigningKey::generate().verifying_key();
     let log_id = 2;
     let log_height = 22;
 
@@ -33,7 +33,7 @@ async fn get_and_set_cursor() {
         store.set_cursor(&cursor).await.unwrap();
     });
 
-    let cursor_2: Cursor<PublicKey, u64> = store
+    let cursor_2: Cursor<VerifyingKey, u64> = store
         .get_cursor("test")
         .await
         .unwrap()
@@ -43,13 +43,13 @@ async fn get_and_set_cursor() {
 
     // Remove cursor.
     tx_unwrap!(store, {
-        <SqliteStore as CursorStore<PublicKey, u64>>::delete_cursor(&store, "test")
+        <SqliteStore as CursorStore<VerifyingKey, u64>>::delete_cursor(&store, "test")
             .await
             .unwrap();
     });
 
     assert!(
-        <SqliteStore as CursorStore<PublicKey, u64>>::get_cursor(&store, "test")
+        <SqliteStore as CursorStore<VerifyingKey, u64>>::get_cursor(&store, "test")
             .await
             .unwrap()
             .is_none()

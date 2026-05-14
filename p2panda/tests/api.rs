@@ -13,7 +13,7 @@ use p2panda::test_utils::setup_logging;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::logs::LogHeights;
 use p2panda_core::test_utils::TestLog;
-use p2panda_core::{Cursor, Hash, PrivateKey, Topic};
+use p2panda_core::{Cursor, Hash, SigningKey, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
@@ -33,7 +33,7 @@ async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
     // Customizable "builder" setup flow.
     let _node = p2panda::builder()
         .database_url("sqlite::memory:")
-        .private_key(PrivateKey::new())
+        .signing_key(SigningKey::generate())
         .spawn()
         .await?;
 
@@ -42,7 +42,7 @@ async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn ephemeral_stream() {
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     let panda = p2panda::spawn().await.unwrap();
     let icebear = p2panda::spawn().await.unwrap();
@@ -90,7 +90,7 @@ async fn ephemeral_stream() {
 async fn eventually_consistent_stream() {
     setup_logging();
 
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
@@ -120,7 +120,7 @@ async fn eventually_consistent_stream() {
 async fn event_stream() {
     setup_logging();
 
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
@@ -152,7 +152,7 @@ async fn event_stream() {
 async fn log_prefix_pruning() {
     setup_logging();
 
-    let topic = Topic::new();
+    let topic = Topic::random();
 
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
@@ -217,7 +217,7 @@ async fn log_prefix_pruning() {
 async fn automatic_acking() {
     setup_logging();
 
-    let topic = Topic::new();
+    let topic = Topic::random();
     let node = p2panda::builder().spawn().await.unwrap();
 
     let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
@@ -254,7 +254,7 @@ async fn automatic_acking() {
 async fn explicit_acking() {
     setup_logging();
 
-    let topic = Topic::new();
+    let topic = Topic::random();
     let node = p2panda::builder()
         .ack_policy(AckPolicy::Explicit)
         .spawn()
@@ -299,7 +299,7 @@ async fn explicit_acking() {
 async fn replay_stream_from_start() {
     setup_logging();
 
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();
@@ -343,7 +343,7 @@ async fn replay_stream_from_start() {
 async fn replay_stream_from_cursor() {
     setup_logging();
 
-    let topic = Topic::new();
+    let topic = Topic::random();
     let node = p2panda::builder().spawn().await.unwrap();
 
     let (tx, rx) = node.stream::<String>(topic).await.unwrap();
@@ -391,7 +391,7 @@ async fn replay_stream_from_cursor() {
 async fn import_external_stream() {
     setup_logging();
 
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     // Panda opens their app and publishes some messages into a chat.
     let panda_log = TestLog::new();
@@ -486,7 +486,7 @@ async fn import_external_stream() {
 async fn deduplicate_events() {
     setup_logging();
 
-    let chat_id = Topic::new();
+    let chat_id = Topic::random();
 
     let panda = p2panda::builder().spawn().await.unwrap();
     let icebear = p2panda::builder().spawn().await.unwrap();

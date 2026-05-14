@@ -11,7 +11,7 @@ use futures_util::stream::BoxStream;
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
-use p2panda_core::{Hash, PublicKey, Topic};
+use p2panda_core::{Hash, Topic, VerifyingKey};
 use p2panda_net::NodeId;
 use p2panda_net::sync::SyncHandle;
 use p2panda_net::utils::ShortFormat;
@@ -779,8 +779,8 @@ impl<M> ProcessedOperation<M> {
         self.event.hash()
     }
 
-    pub fn author(&self) -> PublicKey {
-        self.event.header().public_key
+    pub fn author(&self) -> VerifyingKey {
+        self.event.header().verifying_key
     }
 
     pub fn timestamp(&self) -> u64 {

@@ -2,7 +2,7 @@
 
 //! Ed25519 key pairs and signatures.
 //!
-//! The `PrivateKey` is used for creating digital signatures and the `PublicKey` is used for
+//! The `SigningKey` is used for creating digital signatures and the `VerifyingKey` is used for
 //! verifying that a signature was indeed created by it's private counterpart. The private part of
 //! a key pair is typically kept securely on one device and never transported, whereas the public
 //! part acts as a peer's unique identifier and can be shared freely.
@@ -10,15 +10,15 @@
 //! ## Example
 //!
 //! ```
-//! use p2panda_core::identity::PrivateKey;
+//! use p2panda_core::identity::SigningKey;
 //!
-//! let private_key = PrivateKey::new();
-//! let public_key = private_key.public_key();
+//! let signing_key = SigningKey::generate();
+//! let verifying_key = signing_key.verifying_key();
 //!
 //! let bytes: &[u8] = b"A very important message.";
-//! let signature = private_key.sign(bytes);
+//! let signature = signing_key.sign(bytes);
 //!
-//! assert!(public_key.verify(bytes, &signature))
+//! assert!(verifying_key.verify(bytes, &signature))
 //! ```
 use std::fmt;
 use std::hash::Hash as StdHash;
@@ -34,11 +34,11 @@ use thiserror::Error;
 /// The length of an Ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
-/// The length of an Ed25519 `PrivateKey`, in bytes.
-pub const PRIVATE_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
+/// The length of an Ed25519 `SigningKey`, in bytes.
+pub const SIGNING_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 
-/// The length of an Ed25519 `PublicKey`, in bytes.
-pub const PUBLIC_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
+/// The length of an Ed25519 `VerifyingKey`, in bytes.
+pub const VERIFYING_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
 pub trait Author:
     Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
@@ -47,126 +47,134 @@ pub trait Author:
 
 /// Private Ed25519 key used for digital signatures.
 #[derive(Clone, Eq, PartialEq)]
-pub struct PrivateKey(ed25519_dalek::SigningKey);
+pub struct SigningKey(ed25519_dalek::SigningKey);
 
-impl Default for PrivateKey {
+impl Default for SigningKey {
     fn default() -> Self {
-        Self::new()
+        Self::generate()
     }
 }
 
-impl PrivateKey {
-    /// Generates a new private key using the system's random number generator (CSPRNG) as a seed.
-    pub fn new() -> Self {
+impl SigningKey {
+    /// Generates a new signing key using the system's random number generator (CSPRNG) as a seed.
+    pub fn generate() -> Self {
         let mut csprng: OsRng = OsRng;
-        let private_key = ed25519_dalek::SigningKey::generate(&mut csprng);
-        Self(private_key)
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut csprng);
+        Self(signing_key)
     }
 
-    /// Create a `PrivateKey` from its raw bytes representation.
-    pub fn from_bytes(bytes: &[u8; PRIVATE_KEY_LEN]) -> Self {
+    /// Create a `SigningKey` from its raw bytes representation.
+    pub fn from_bytes(bytes: &[u8; SIGNING_KEY_LEN]) -> Self {
         Self(ed25519_dalek::SigningKey::from_bytes(bytes))
     }
 
-    /// Bytes of the private key.
-    pub fn as_bytes(&self) -> &[u8; PRIVATE_KEY_LEN] {
+    /// Bytes of the signing key.
+    pub fn as_bytes(&self) -> &[u8; SIGNING_KEY_LEN] {
         self.0.as_bytes()
     }
 
-    /// Convert the private key to a hex string.
+    /// Convert the signing key to a hex string.
     pub fn to_hex(&self) -> String {
         hex::encode(self.0.as_bytes())
     }
 
-    /// Returns public key using this private counterpart.
-    pub fn public_key(&self) -> PublicKey {
+    /// Returns public key using this signing counterpart.
+    pub fn verifying_key(&self) -> VerifyingKey {
         self.0.verifying_key().into()
     }
 
-    /// Sign the provided bytestring using this private key returning a digital signature.
+    /// Sign the provided bytestring using this signing key returning a digital signature.
     pub fn sign(&self, bytes: &[u8]) -> Signature {
         self.0.sign(bytes).into()
     }
 }
 
-impl fmt::Display for PrivateKey {
+impl fmt::Display for SigningKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_hex())
     }
 }
 
-impl fmt::Debug for PrivateKey {
+#[cfg(any(test, feature = "test_utils"))]
+impl fmt::Debug for SigningKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("PrivateKey")
+        f.debug_tuple("SigningKey")
             .field(self.0.as_bytes())
             .finish()
     }
 }
 
-impl From<[u8; PRIVATE_KEY_LEN]> for PrivateKey {
-    fn from(value: [u8; PRIVATE_KEY_LEN]) -> Self {
+#[cfg(not(any(test, feature = "test_utils")))]
+impl fmt::Debug for SigningKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SigningKey").field(&"***").finish()
+    }
+}
+
+impl From<[u8; SIGNING_KEY_LEN]> for SigningKey {
+    fn from(value: [u8; SIGNING_KEY_LEN]) -> Self {
         Self::from_bytes(&value)
     }
 }
 
-impl From<PrivateKey> for [u8; PRIVATE_KEY_LEN] {
-    fn from(value: PrivateKey) -> Self {
+impl From<SigningKey> for [u8; SIGNING_KEY_LEN] {
+    fn from(value: SigningKey) -> Self {
         *value.as_bytes()
     }
 }
 
-impl From<&[u8; PRIVATE_KEY_LEN]> for PrivateKey {
-    fn from(value: &[u8; PRIVATE_KEY_LEN]) -> Self {
+impl From<&[u8; SIGNING_KEY_LEN]> for SigningKey {
+    fn from(value: &[u8; SIGNING_KEY_LEN]) -> Self {
         Self::from_bytes(value)
     }
 }
 
-impl TryFrom<&[u8]> for PrivateKey {
+impl TryFrom<&[u8]> for SigningKey {
     type Error = IdentityError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let value_len = value.len();
 
-        let checked_value: [u8; PRIVATE_KEY_LEN] = value
+        let checked_value: [u8; SIGNING_KEY_LEN] = value
             .try_into()
-            .map_err(|_| IdentityError::InvalidLength(value_len, PRIVATE_KEY_LEN))?;
+            .map_err(|_| IdentityError::InvalidLength(value_len, SIGNING_KEY_LEN))?;
 
         Ok(Self::from(checked_value))
     }
 }
 
 #[cfg(feature = "arbitrary")]
-impl<'a> Arbitrary<'a> for PrivateKey {
+impl<'a> Arbitrary<'a> for SigningKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let bytes = <[u8; PRIVATE_KEY_LEN] as Arbitrary>::arbitrary(u)?;
-        Ok(PrivateKey::from_bytes(&bytes))
+        let bytes = <[u8; SIGNING_KEY_LEN] as Arbitrary>::arbitrary(u)?;
+        Ok(SigningKey::from_bytes(&bytes))
     }
 }
 
 /// Public Ed25519 key used for identifying peers and verifying signed data.
 #[derive(Default, Hash, PartialEq, Eq, Copy, Clone)]
-pub struct PublicKey(ed25519_dalek::VerifyingKey);
+pub struct VerifyingKey(ed25519_dalek::VerifyingKey);
 
-impl PartialOrd for PublicKey {
+impl PartialOrd for VerifyingKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for PublicKey {
+impl Ord for VerifyingKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.to_hex().cmp(&other.to_hex())
     }
 }
 
-impl PublicKey {
-    /// Create a `PublicKey` from its raw bytes representation.
-    pub fn from_bytes(bytes: &[u8; PUBLIC_KEY_LEN]) -> Result<Self, IdentityError> {
+impl VerifyingKey {
+    /// Create a `VerifyingKey` from its raw bytes representation.
+    pub fn from_bytes(bytes: &[u8; VERIFYING_KEY_LEN]) -> Result<Self, IdentityError> {
         Ok(Self(ed25519_dalek::VerifyingKey::from_bytes(bytes)?))
     }
 
     /// Bytes of the public key.
-    pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_LEN] {
+    pub fn as_bytes(&self) -> &[u8; VERIFYING_KEY_LEN] {
         self.0.as_bytes()
     }
 
@@ -181,67 +189,69 @@ impl PublicKey {
     }
 }
 
-impl fmt::Display for PublicKey {
+impl fmt::Display for VerifyingKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_hex())
     }
 }
 
-impl fmt::Debug for PublicKey {
+impl fmt::Debug for VerifyingKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("PublicKey").field(self.0.as_bytes()).finish()
+        f.debug_tuple("VerifyingKey")
+            .field(self.0.as_bytes())
+            .finish()
     }
 }
 
-impl From<PublicKey> for ed25519_dalek::VerifyingKey {
-    fn from(value: PublicKey) -> Self {
+impl From<VerifyingKey> for ed25519_dalek::VerifyingKey {
+    fn from(value: VerifyingKey) -> Self {
         value.0
     }
 }
 
-impl From<ed25519_dalek::VerifyingKey> for PublicKey {
+impl From<ed25519_dalek::VerifyingKey> for VerifyingKey {
     fn from(value: ed25519_dalek::VerifyingKey) -> Self {
         Self(value)
     }
 }
 
-impl TryFrom<[u8; PUBLIC_KEY_LEN]> for PublicKey {
+impl TryFrom<[u8; VERIFYING_KEY_LEN]> for VerifyingKey {
     type Error = IdentityError;
 
-    fn try_from(value: [u8; PUBLIC_KEY_LEN]) -> Result<Self, Self::Error> {
+    fn try_from(value: [u8; VERIFYING_KEY_LEN]) -> Result<Self, Self::Error> {
         Self::from_bytes(&value)
     }
 }
 
-impl From<PublicKey> for [u8; PUBLIC_KEY_LEN] {
-    fn from(value: PublicKey) -> Self {
+impl From<VerifyingKey> for [u8; VERIFYING_KEY_LEN] {
+    fn from(value: VerifyingKey) -> Self {
         *value.as_bytes()
     }
 }
 
-impl TryFrom<&[u8; PUBLIC_KEY_LEN]> for PublicKey {
+impl TryFrom<&[u8; VERIFYING_KEY_LEN]> for VerifyingKey {
     type Error = IdentityError;
 
-    fn try_from(value: &[u8; PUBLIC_KEY_LEN]) -> Result<Self, Self::Error> {
+    fn try_from(value: &[u8; VERIFYING_KEY_LEN]) -> Result<Self, Self::Error> {
         Self::from_bytes(value)
     }
 }
 
-impl TryFrom<&[u8]> for PublicKey {
+impl TryFrom<&[u8]> for VerifyingKey {
     type Error = IdentityError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let value_len = value.len();
 
-        let checked_value: [u8; PUBLIC_KEY_LEN] = value
+        let checked_value: [u8; VERIFYING_KEY_LEN] = value
             .try_into()
-            .map_err(|_| IdentityError::InvalidLength(value_len, PUBLIC_KEY_LEN))?;
+            .map_err(|_| IdentityError::InvalidLength(value_len, VERIFYING_KEY_LEN))?;
 
         Self::try_from(checked_value)
     }
 }
 
-impl FromStr for PublicKey {
+impl FromStr for VerifyingKey {
     type Err = IdentityError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -249,15 +259,15 @@ impl FromStr for PublicKey {
     }
 }
 
-impl Author for PublicKey {}
+impl Author for VerifyingKey {}
 
 #[cfg(feature = "arbitrary")]
-impl<'a> Arbitrary<'a> for PublicKey {
+impl<'a> Arbitrary<'a> for VerifyingKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let bytes = <[u8; PUBLIC_KEY_LEN] as Arbitrary>::arbitrary(u)?;
-        let public_key =
-            PublicKey::from_bytes(&bytes).map_err(|_| arbitrary::Error::IncorrectFormat)?;
-        Ok(public_key)
+        let bytes = <[u8; VERIFYING_KEY_LEN] as Arbitrary>::arbitrary(u)?;
+        let verifying_key =
+            VerifyingKey::from_bytes(&bytes).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        Ok(verifying_key)
     }
 }
 
@@ -369,7 +379,7 @@ pub enum IdentityError {
     /// * Being given bytes with a length different to what was expected.
     ///
     /// * A problem decompressing `r`, a curve point, in the `Signature`, or the curve point for a
-    ///   `PublicKey`.
+    ///   `VerifyingKey`.
     ///
     /// * Failure of a signature to satisfy the verification equation.
     #[error("invalid signature: {0}")]
@@ -378,21 +388,21 @@ pub enum IdentityError {
 
 #[cfg(test)]
 mod tests {
-    use super::PrivateKey;
+    use super::SigningKey;
 
     #[test]
     fn signing() {
-        let private_key = PrivateKey::new();
-        let public_key = private_key.public_key();
+        let signing_key = SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
         let bytes = b"test";
-        let signature = private_key.sign(bytes);
-        assert!(public_key.verify(bytes, &signature));
+        let signature = signing_key.sign(bytes);
+        assert!(verifying_key.verify(bytes, &signature));
 
         // Invalid data
-        assert!(!public_key.verify(b"not test", &signature));
+        assert!(!verifying_key.verify(b"not test", &signature));
 
         // Invalid public key
-        let public_key_2 = PrivateKey::new().public_key();
-        assert!(!public_key_2.verify(bytes, &signature));
+        let verifying_key_2 = SigningKey::generate().verifying_key();
+        assert!(!verifying_key_2.verify(bytes, &signature));
     }
 }

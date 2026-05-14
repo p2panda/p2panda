@@ -66,7 +66,7 @@ impl Node {
     ) -> Result<Self, NetworkError> {
         let network = Network::spawn(
             config.network.clone(),
-            forge.private_key().clone(),
+            forge.signing_key().clone(),
             store.clone(),
         )
         .await?;
@@ -184,7 +184,7 @@ impl Node {
     /// # use p2panda_core::Topic;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let topic = Topic::new();
+    /// # let topic = Topic::random();
     /// # let node = p2panda::builder().spawn().await?;
     /// #
     /// let (tx, _) = node.stream::<String>(topic).await?;
@@ -337,7 +337,7 @@ impl Node {
     }
 
     pub fn id(&self) -> NodeId {
-        self.forge.public_key()
+        self.forge.verifying_key()
     }
 
     pub fn network_id(&self) -> NetworkId {

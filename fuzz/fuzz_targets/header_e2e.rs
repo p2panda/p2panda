@@ -4,14 +4,14 @@
 
 use libfuzzer_sys::fuzz_target;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Header, PrivateKey};
+use p2panda_core::{Header, SigningKey};
 
 // Create arbitrary header, sign, serialize and deserialize it.
 fuzz_target!(|header: Header<()>| {
-    let private_key = PrivateKey::new();
+    let signing_key = SigningKey::generate();
 
     let mut header = header;
-    header.sign(&private_key);
+    header.sign(&signing_key);
     header.verify();
 
     let bytes = encode_cbor(&header).expect("header encoding");

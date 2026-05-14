@@ -115,7 +115,7 @@ pub struct TwoPartyState<KB: KeyBundle> {
     their_prekey_bundle: Option<KB>,
 
     /// Last known public key of the other peer. We use it to encrypt a message towards them.
-    their_public_key: Option<PublicKey>,
+    their_verifying_key: Option<PublicKey>,
 }
 
 // Public methods.
@@ -133,7 +133,7 @@ where
             our_secret_keys: HashMap::new(),
             our_received_secret_key: None,
             their_identity_key: *their_prekey_bundle.identity_key(),
-            their_public_key: None,
+            their_verifying_key: None,
             their_next_key_used: KeyUsed::PreKey,
             their_prekey_bundle: Some(their_prekey_bundle),
         }
@@ -151,7 +151,7 @@ where
         let plaintext_message = TwoPartyPlaintext {
             plaintext: plaintext.to_vec(),
             receiver_new_secret: for_them.their_new_secret.clone(),
-            sender_new_public_key: for_them.our_new_public_key,
+            sender_new_verifying_key: for_them.our_new_verifying_key,
             sender_next_index: y.our_next_key_index,
         };
         let plaintext_bytes = plaintext_message.to_bytes()?;
@@ -167,7 +167,7 @@ where
             .insert(y_i.our_next_key_index, for_us.our_new_secret);
         y_i.our_next_key_index += 1;
 
-        y_i.their_public_key = Some(for_us.their_new_public_key);
+        y_i.their_verifying_key = Some(for_us.their_new_verifying_key);
 
         y_i.their_next_key_used = KeyUsed::ReceivedKey;
 
@@ -184,7 +184,7 @@ where
             Self::decrypt(y, y_manager, message.ciphertext, message.key_used)?;
         let plaintext_message = TwoPartyPlaintext::from_bytes(&plaintext_bytes)?;
 
-        y_i.their_public_key = Some(plaintext_message.sender_new_public_key);
+        y_i.their_verifying_key = Some(plaintext_message.sender_new_verifying_key);
         y_i.their_next_key_used = KeyUsed::OwnKey(plaintext_message.sender_next_index);
         y_i.our_received_secret_key = Some(plaintext_message.receiver_new_secret);
 
@@ -237,7 +237,7 @@ pub struct TwoPartyPlaintext {
     receiver_new_secret: SecretKey,
 
     /// Newly generated public key of the sender, to be used in future 2SM rounds.
-    sender_new_public_key: PublicKey,
+    sender_new_verifying_key: PublicKey,
 
     /// Index of the newly generated key of the sender, the receiver refers to it when using it in
     /// future 2SM rounds.
@@ -269,7 +269,7 @@ where
         plaintext: &[u8],
         rng: &Rng,
     ) -> TwoPartyResult<(TwoPartyState<KB>, TwoPartyCiphertext)> {
-        let ciphertext = match &y.their_public_key {
+        let ciphertext = match &y.their_verifying_key {
             None => {
                 // Establish secret via X3DH from prekey when no secret is given yet.
                 let their_prekey_bundle = y
@@ -284,8 +284,8 @@ where
                 )?;
                 TwoPartyCiphertext::PreKey(ciphertext)
             }
-            Some(their_public_key) => {
-                let ciphertext = hpke_seal(their_public_key, None, None, plaintext)?;
+            Some(their_verifying_key) => {
+                let ciphertext = hpke_seal(their_verifying_key, None, None, plaintext)?;
                 TwoPartyCiphertext::Hpke(ciphertext)
             }
         };
@@ -371,18 +371,18 @@ impl<KMG, KB> TwoParty<KMG, KB> {
     /// secret message. Each party prepares the received keys to be available for future rounds.
     fn generate_keys(rng: &Rng) -> TwoPartyResult<(NewKeysForUs, NewKeysForThem)> {
         let our_new_secret = SecretKey::from_bytes(rng.random_array()?);
-        let our_new_public_key = our_new_secret.public_key()?;
+        let our_new_verifying_key = our_new_secret.verifying_key()?;
 
         let their_new_secret = SecretKey::from_bytes(rng.random_array()?);
-        let their_new_public_key = their_new_secret.public_key()?;
+        let their_new_verifying_key = their_new_secret.verifying_key()?;
 
         Ok((
             NewKeysForUs {
                 our_new_secret,
-                their_new_public_key,
+                their_new_verifying_key,
             },
             NewKeysForThem {
-                our_new_public_key,
+                our_new_verifying_key,
                 their_new_secret,
             },
         ))
@@ -391,11 +391,11 @@ impl<KMG, KB> TwoParty<KMG, KB> {
 
 struct NewKeysForUs {
     our_new_secret: SecretKey,
-    their_new_public_key: PublicKey,
+    their_new_verifying_key: PublicKey,
 }
 
 struct NewKeysForThem {
-    our_new_public_key: PublicKey,
+    our_new_verifying_key: PublicKey,
     their_new_secret: SecretKey,
 }
 
@@ -499,7 +499,7 @@ mod tests {
 
         // Alice also generated the secret key for Bob, so Alice also knows their public key
         // for the future already.
-        assert!(alice_2sm.their_public_key.is_some());
+        assert!(alice_2sm.their_verifying_key.is_some());
 
         // Alice didn't receive anything from Bob yet.
         assert!(alice_2sm.our_received_secret_key.is_none());
@@ -522,13 +522,13 @@ mod tests {
         // Bob learned about the new public key (1) of Alice.
         assert_eq!(
             bob_2sm
-                .their_public_key
+                .their_verifying_key
                 .expect("bob learned about public key of alice"),
             alice_2sm
                 .our_secret_keys
                 .get(&1)
                 .expect("alice has one secret key")
-                .public_key()
+                .verifying_key()
                 .unwrap()
         );
 
@@ -561,13 +561,13 @@ mod tests {
         // Bob learned about the new public key (2) of Alice.
         assert_eq!(
             bob_2sm
-                .their_public_key
+                .their_verifying_key
                 .expect("bob learned about public key of alice"),
             alice_2sm
                 .our_secret_keys
                 .get(&2)
                 .expect("alice has one secret key")
-                .public_key()
+                .verifying_key()
                 .unwrap()
         );
 
@@ -666,7 +666,7 @@ mod tests {
             LongTermTwoParty::send(alice_2sm_a, &alice_manager, b"Hello, Bob!", &rng).unwrap();
 
         // Public key of "Bob" for the first round in Group A.
-        let bob_public_key_1 = alice_2sm_a.their_public_key;
+        let bob_verifying_key_1 = alice_2sm_a.their_verifying_key;
 
         let (bob_2sm_a, bob_manager, receive_1) =
             LongTermTwoParty::receive(bob_2sm_a, bob_manager, message_1).unwrap();
@@ -691,7 +691,7 @@ mod tests {
                 .unwrap();
 
         // Public key of "Bob" for the first round in Group B.
-        let bob_public_key_2 = alice_2sm_b.their_public_key;
+        let bob_verifying_key_2 = alice_2sm_b.their_verifying_key;
 
         let (bob_2sm_b, bob_manager, receive_1) =
             LongTermTwoParty::receive(bob_2sm_b, bob_manager, message_1).unwrap();
@@ -706,7 +706,7 @@ mod tests {
 
         // The keys for the first round should be different across groups.
 
-        assert_ne!(bob_public_key_1, bob_public_key_2);
+        assert_ne!(bob_verifying_key_1, bob_verifying_key_2);
     }
 
     #[test]

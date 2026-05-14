@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, Topic};
+use p2panda_core::{Extensions, Hash, LogId, Operation, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
@@ -40,8 +40,8 @@ use crate::sync::log_sync::Builder;
 #[derive(Clone, Debug)]
 pub struct LogSync<S, L, E>
 where
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<Topic, PublicKey, L>
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+        + TopicStore<Topic, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
@@ -63,8 +63,8 @@ where
 
 impl<S, L, E> LogSync<S, L, E>
 where
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<Topic, PublicKey, L>
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+        + TopicStore<Topic, VerifyingKey, L>
         + Clone
         + Send
         + 'static,

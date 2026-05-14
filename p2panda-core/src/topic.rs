@@ -8,7 +8,7 @@ use rand::Rng;
 use rand::rngs::OsRng;
 use thiserror::Error;
 
-use crate::{Hash, PublicKey};
+use crate::{Hash, VerifyingKey};
 
 pub const TOPIC_LENGTH: usize = 32;
 
@@ -27,13 +27,17 @@ pub const TOPIC_LENGTH: usize = 32;
 pub struct Topic(pub(crate) [u8; TOPIC_LENGTH]);
 
 impl Topic {
-    pub fn new() -> Self {
+    pub fn random() -> Self {
         let mut rng = OsRng;
         Self::from_rng(&mut rng)
     }
 
     pub fn from_rng<R: Rng>(rng: &mut R) -> Self {
         Self(rng.r#gen())
+    }
+
+    pub fn from_bytes(&self, bytes: &[u8]) -> Result<Self, TopicError> {
+        Self::try_from(bytes)
     }
 
     pub fn as_bytes(&self) -> &[u8; TOPIC_LENGTH] {
@@ -43,11 +47,15 @@ impl Topic {
     pub fn to_bytes(self) -> [u8; TOPIC_LENGTH] {
         self.0
     }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0)
+    }
 }
 
 impl Default for Topic {
     fn default() -> Self {
-        Self::new()
+        Self::random()
     }
 }
 
@@ -75,8 +83,8 @@ impl From<Topic> for Hash {
     }
 }
 
-impl From<PublicKey> for Topic {
-    fn from(value: PublicKey) -> Self {
+impl From<VerifyingKey> for Topic {
+    fn from(value: VerifyingKey) -> Self {
         Self(*value.as_bytes())
     }
 }

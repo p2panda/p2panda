@@ -22,7 +22,7 @@ use tracing::{debug, warn};
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
-use crate::iroh_endpoint::{Endpoint, to_public_key};
+use crate::iroh_endpoint::{Endpoint, to_verifying_key};
 use crate::sync::actors::{ToTopicManager, TopicManager};
 use crate::utils::ShortFormat;
 use crate::{NodeId, ProtocolId};
@@ -511,7 +511,7 @@ where
         &self,
         connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
-        let node_id = to_public_key(connection.remote_id());
+        let node_id = to_verifying_key(connection.remote_id());
         let (tx, rx) = connection.accept_bi().await?;
 
         // As we are accepting a sync session here we don't yet know the topic which the initiator
@@ -548,5 +548,5 @@ where
 
 /// Hash the concatenation of a topic with a given value to derive new topic.
 fn derive_topic(topic: Topic, value: impl AsRef<[u8]>) -> Topic {
-    p2panda_core::Hash::new([topic.as_bytes(), value.as_ref()].concat()).into()
+    p2panda_core::Hash::digest([topic.as_bytes(), value.as_ref()].concat()).into()
 }

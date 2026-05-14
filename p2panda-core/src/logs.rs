@@ -70,15 +70,15 @@ where
     let mut remote_needs: LogRanges<A, L> = BTreeMap::default();
 
     // Iterate over all authors.
-    for (public_key, local_logs) in local {
-        let Some(remote_logs) = remote.get(public_key) else {
+    for (verifying_key, local_logs) in local {
+        let Some(remote_logs) = remote.get(verifying_key) else {
             // If the remote did not know of this author, then they need all entries in all of
             // their logs that the local knows of.
             let needs = local_logs
                 .iter()
                 .map(|(log_id, log_height)| (log_id.clone(), (None, Some(*log_height))))
                 .collect();
-            remote_needs.insert(public_key.to_owned(), needs);
+            remote_needs.insert(verifying_key.to_owned(), needs);
             continue;
         };
 
@@ -93,7 +93,7 @@ where
                 // If the remote did not know of this log, then they need all entries from the
                 // local.
                 remote_needs
-                    .entry(public_key.to_owned())
+                    .entry(verifying_key.to_owned())
                     .or_default()
                     .insert(log_id.clone(), (None, Some(*local_log_height)));
                 continue;
@@ -103,7 +103,7 @@ where
             // need in the diff.
             if remote_log_height < local_log_height {
                 remote_needs
-                    .entry(public_key.to_owned())
+                    .entry(verifying_key.to_owned())
                     .or_default()
                     .insert(
                         log_id.clone(),

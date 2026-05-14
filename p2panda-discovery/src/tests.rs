@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use futures_channel::mpsc;
 use futures_util::StreamExt;
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use p2panda_store::address_book::AddressBookStore;
 use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo, TestTransportInfo};
 use p2panda_store::{SqliteStore, tx_unwrap};
@@ -175,7 +175,7 @@ async fn peer_discovery_in_network() {
         let nodes = {
             let mut result = HashMap::new();
             for idx in 0..NUM_NODES {
-                let id = PrivateKey::new().public_key();
+                let id = SigningKey::generate().verifying_key();
 
                 nodes_id_map.insert(id, idx);
 

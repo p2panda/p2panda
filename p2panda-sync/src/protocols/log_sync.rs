@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, PublicKey};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -20,7 +20,7 @@ use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
 
 /// A map of author logs.
-pub type Logs<L> = BTreeMap<PublicKey, Vec<L>>;
+pub type Logs<L> = BTreeMap<VerifyingKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Debug, Default)]
@@ -33,16 +33,16 @@ enum State<L> {
     SendHave,
 
     /// Receive have message from remote and calculate operation diff.
-    ReceiveHave { local: LogHeights<PublicKey, L> },
+    ReceiveHave { local: LogHeights<VerifyingKey, L> },
 
     /// Send PreSync message to remote or Done if we have nothing to send.
     SendPreSync {
-        remote_needs: LogRanges<PublicKey, L>,
+        remote_needs: LogRanges<VerifyingKey, L>,
     },
 
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
-        remote_needs: LogRanges<PublicKey, L>,
+        remote_needs: LogRanges<VerifyingKey, L>,
         outbound_operations: u64,
         outbound_bytes: u64,
     },
@@ -50,7 +50,7 @@ enum State<L> {
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
     /// both peers have send Done messages.
     Sync {
-        remote_needs: LogRanges<PublicKey, L>,
+        remote_needs: LogRanges<VerifyingKey, L>,
         metrics: LogSyncMetrics,
     },
 
@@ -95,7 +95,7 @@ impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash> + Clone + Send + 'static,
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash> + Clone + Send + 'static,
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
@@ -140,11 +140,11 @@ where
                 State::SendPreSync { remote_needs } => {
                     let mut outbound_operations = 0;
                     let mut outbound_bytes = 0;
-                    for (public_key, log_range) in remote_needs.iter() {
+                    for (verifying_key, log_range) in remote_needs.iter() {
                         for (log_id, (after, until)) in log_range.iter() {
                             if let Some((inner_outbound_operations, inner_outbound_bytes)) = self
                                 .store
-                                .get_log_size(public_key, log_id, *after, *until)
+                                .get_log_size(verifying_key, log_id, *after, *until)
                                 .await
                                 .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
                             {
@@ -323,7 +323,7 @@ where
 
                                         trace!(
                                             phase = "sync",
-                                            public_key = %author.fmt_short(),
+                                            verifying_key = %author.fmt_short(),
                                             log_id = ?log_id,
                                             seq_num = header.seq_num,
                                             id = %hash.fmt_short(),
@@ -346,7 +346,7 @@ where
                                 if send_logs_len == 0 {
                                     trace!(
                                         phase = "sync",
-                                        public_key = %author.fmt_short(),
+                                        verifying_key = %author.fmt_short(),
                                         "send sync done message",
                                     );
                                     sink.send(LogSyncMessage::Done)
@@ -382,21 +382,21 @@ where
 async fn get_log_heights<L, E, S>(
     store: &S,
     logs: &Logs<L>,
-) -> Result<LogHeights<PublicKey, L>, LogSyncError>
+) -> Result<LogHeights<VerifyingKey, L>, LogSyncError>
 where
     L: LogId,
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash> + Clone + Send + 'static,
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash> + Clone + Send + 'static,
 {
     let mut result = BTreeMap::new();
-    for (public_key, log_ids) in logs {
+    for (verifying_key, log_ids) in logs {
         let Some(log_heights) = store
-            .get_log_heights(public_key, log_ids)
+            .get_log_heights(verifying_key, log_ids)
             .await
             .map_err(|err| LogSyncError::LogStore(format!("{err}")))?
         else {
             continue;
         };
-        result.insert(*public_key, log_heights);
+        result.insert(*verifying_key, log_heights);
     }
 
     Ok(result)
@@ -410,7 +410,7 @@ pub enum LogSyncMessage<L>
 where
     L: LogId,
 {
-    Have(LogHeights<PublicKey, L>),
+    Have(LogHeights<VerifyingKey, L>),
     PreSync {
         total_operations: u64,
         total_bytes: u64,
@@ -498,7 +498,7 @@ pub trait ShortFormat {
     fn fmt_short(&self) -> String;
 }
 
-impl ShortFormat for PublicKey {
+impl ShortFormat for VerifyingKey {
     fn fmt_short(&self) -> String {
         self.to_hex()[0..10].to_string()
     }

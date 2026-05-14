@@ -42,14 +42,14 @@ async fn establish_connection() {
     // Spawn both endpoint actors.
     let alice_endpoint = Endpoint::builder(alice_address_book)
         .config(alice_args.iroh_config.clone())
-        .private_key(alice_args.private_key.clone())
+        .signing_key(alice_args.signing_key.clone())
         .spawn()
         .await
         .unwrap();
 
     let bob_endpoint = Endpoint::builder(bob_address_book.clone())
         .config(bob_args.iroh_config.clone())
-        .private_key(bob_args.private_key.clone())
+        .signing_key(bob_args.signing_key.clone())
         .spawn()
         .await
         .unwrap();
@@ -68,7 +68,7 @@ async fn establish_connection() {
 
     // Bob connects to Alice using the "echo" protocol.
     let connection = bob_endpoint
-        .connect(alice_args.public_key, ECHO_PROTOCOL_ID)
+        .connect(alice_args.verifying_key, ECHO_PROTOCOL_ID)
         .await
         .expect("connection establishment should not fail");
 

@@ -8,7 +8,7 @@ use std::task::{Context, Poll};
 use futures_util::{Stream, StreamExt, ready};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::timestamp::{HybridTimestamp, LamportTimestamp, Timestamp};
-use p2panda_core::{PrivateKey, PublicKey, Signature, Topic};
+use p2panda_core::{Signature, SigningKey, Topic, VerifyingKey};
 use p2panda_net::gossip::{GossipHandle, GossipSubscription};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ const MESSAGE_VERSION: u64 = 1;
 /// ```plain
 /// (
 ///    version[u64],
-///    public_key[32 bytes],
+///    verifying_key[32 bytes],
 ///    signature[64 bytes],
 ///    timestamp[u64],
 ///    lamport_timestamp[u64],
@@ -41,7 +41,7 @@ const MESSAGE_VERSION: u64 = 1;
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct WrappedMessage<M> {
     version: u64,
-    public_key: PublicKey,
+    verifying_key: VerifyingKey,
     signature: Signature,
     timestamp: HybridTimestamp,
     body: M,
@@ -54,14 +54,14 @@ where
     pub fn new(
         body: M,
         timestamp: HybridTimestamp,
-        private_key: &PrivateKey,
+        signing_key: &SigningKey,
     ) -> Result<Self, EncodeError> {
-        let public_key = private_key.public_key();
-        let signature = Self::sign(private_key, public_key, timestamp, &body)?;
+        let verifying_key = signing_key.verifying_key();
+        let signature = Self::sign(signing_key, verifying_key, timestamp, &body)?;
 
         Ok(Self {
             version: MESSAGE_VERSION,
-            public_key,
+            verifying_key,
             signature,
             timestamp,
             body,
@@ -70,9 +70,9 @@ where
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, WrappedMessageError> {
         // Attempt deserializing message tuple. This fails if the encoding is invalid.
-        let (version, public_key, signature, timestamp, logical, body): (
+        let (version, verifying_key, signature, timestamp, logical, body): (
             u64,
-            PublicKey,
+            VerifyingKey,
             Signature,
             Timestamp,
             LamportTimestamp,
@@ -88,7 +88,7 @@ where
 
         let message = Self {
             version,
-            public_key,
+            verifying_key,
             signature,
             timestamp,
             body,
@@ -104,7 +104,7 @@ where
         let (timestamp, logical) = self.timestamp.to_parts();
         let message = (
             self.version,
-            self.public_key,
+            self.verifying_key,
             self.signature,
             timestamp,
             logical,
@@ -118,7 +118,7 @@ where
         let (timestamp, logical) = self.timestamp.to_parts();
         let message = (
             self.version,
-            self.public_key,
+            self.verifying_key,
             timestamp,
             logical,
             &self.body,
@@ -128,7 +128,7 @@ where
         // the data came from a remote (potentially malicious) node.
         let bytes = encode_cbor(&message).map_err(|_| WrappedMessageError::InvalidSignature)?;
 
-        if !self.public_key.verify(&bytes, &self.signature) {
+        if !self.verifying_key.verify(&bytes, &self.signature) {
             return Err(WrappedMessageError::InvalidSignature);
         }
 
@@ -136,15 +136,15 @@ where
     }
 
     fn sign(
-        private_key: &PrivateKey,
-        public_key: PublicKey,
+        signing_key: &SigningKey,
+        verifying_key: VerifyingKey,
         timestamp: HybridTimestamp,
         body: &M,
     ) -> Result<Signature, EncodeError> {
         let (timestamp, logical) = timestamp.to_parts();
-        let message = (MESSAGE_VERSION, public_key, timestamp, logical, body);
+        let message = (MESSAGE_VERSION, verifying_key, timestamp, logical, body);
         let bytes = encode_cbor(&message)?;
-        Ok(private_key.sign(&bytes))
+        Ok(signing_key.sign(&bytes))
     }
 }
 
@@ -174,8 +174,8 @@ where
         self.topic
     }
 
-    pub fn author(&self) -> PublicKey {
-        self.inner.public_key
+    pub fn author(&self) -> VerifyingKey {
+        self.inner.verifying_key
     }
 
     pub fn timestamp(&self) -> u64 {
@@ -249,7 +249,7 @@ where
         };
 
         let bytes = {
-            let wrapped = WrappedMessage::new(message, timestamp, self.forge.private_key())?;
+            let wrapped = WrappedMessage::new(message, timestamp, self.forge.signing_key())?;
             wrapped.to_bytes()?
         };
 
@@ -328,20 +328,20 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
     use p2panda_core::timestamp::HybridTimestamp;
 
     use super::WrappedMessage;
 
     #[test]
     fn encoding() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let timestamp = HybridTimestamp::now();
 
         let message_1 = WrappedMessage::new(
             "This message is signed!".to_string(),
             timestamp,
-            &private_key,
+            &signing_key,
         )
         .unwrap();
 
@@ -353,13 +353,13 @@ mod tests {
 
     #[test]
     fn signatures() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let timestamp = HybridTimestamp::now();
 
         let message = WrappedMessage::new(
             "This message is signed!".to_string(),
             timestamp,
-            &private_key,
+            &signing_key,
         )
         .unwrap();
 

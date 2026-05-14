@@ -107,7 +107,7 @@ where
         config: &Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<ID, S, K, F, M, C, RS>> {
-        let actor_id: ActorId = credentials.public_key().into();
+        let actor_id: ActorId = credentials.verifying_key().into();
         let identity = IdentityManager::new(key_store, forge, credentials, config, &rng).await?;
         let inner = ManagerInner {
             store,
