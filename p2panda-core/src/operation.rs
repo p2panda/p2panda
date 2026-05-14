@@ -302,9 +302,9 @@ impl<E> Header<E> {
     ///
     /// Fields instantiated with `None` values are excluded from the count.
     pub(crate) fn field_count(&self) -> usize {
-        // There will always be a minimum of 7 fields in a complete header.
-        // (this counts the `E` extensions field, even if it is zero-sized).
-        let mut count = 7;
+        // There will always be a minimum of 6 fields in a complete header. (this counts the `E`
+        // extensions field, even if it is zero-sized).
+        let mut count = 6;
 
         if self.signature.is_some() {
             count += 1;
