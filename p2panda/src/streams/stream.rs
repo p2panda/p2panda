@@ -340,7 +340,8 @@ where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     let log_id = LogId::from_topic(topic);
-    let prune_flag = operation.header.extensions.prune_flag;
+
+    let prune_flag = operation.header.extensions.prune_flag();
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
@@ -430,7 +431,7 @@ pub(crate) async fn process_published_operation(
     pipeline: &Pipeline<LogId, Extensions, Topic>,
 ) -> Event<LogId, Extensions, Topic> {
     let log_id = LogId::from_topic(topic);
-    let prune_flag = operation.header.extensions.prune_flag;
+    let prune_flag = operation.header.extensions.prune_flag();
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
@@ -642,7 +643,7 @@ where
         prune_flag: bool,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions::from_topic(self.topic()).prune_flag(prune_flag);
+        let extensions = Extensions::from_topic(self.topic()).set_prune_flag(prune_flag);
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),
@@ -651,7 +652,7 @@ where
 
         let operation = self
             .forge
-            .create_operation(self.topic(), extensions.log_id, body_bytes, extensions)
+            .create_operation(self.topic(), extensions.log_id(), body_bytes, extensions)
             .await?;
         let hash = operation.hash;
 
@@ -933,7 +934,7 @@ impl<M> ProcessedOperation<M> {
     ///
     /// Microseconds since the UNIX epoch based on system time.
     pub fn timestamp(&self) -> u64 {
-        self.event.header().extensions.timestamp.into()
+        self.event.header().extensions.timestamp().into()
     }
 
     /// Application message.
