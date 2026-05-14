@@ -7,7 +7,7 @@ mod tests;
 use std::collections::BTreeMap;
 
 use p2panda_core::cbor::encode_cbor;
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use sqlx::{query, query_as};
 
 use crate::logs::LogStore;
@@ -23,13 +23,13 @@ const GET_LATEST_ENTRY: &str = "
     FROM
         operations_v1
     WHERE
-        public_key = ?
+        verifying_key = ?
         AND log_id = ?
     ORDER BY
         CAST(seq_num AS NUMERIC) DESC LIMIT 1
 ";
 
-impl<L, E> LogStore<Operation<E>, PublicKey, L, SeqNum, Hash> for SqliteStore
+impl<L, E> LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> for SqliteStore
 where
     E: Extensions,
     L: LogId,
@@ -39,7 +39,7 @@ where
     /// Retrieve the latest entry in an author's log.
     async fn get_latest_entry(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         log_id: &L,
     ) -> Result<Option<Operation<E>>, Self::Error> {
         if let Some(latest) = query_as::<_, OperationRow>(GET_LATEST_ENTRY)
@@ -69,7 +69,7 @@ where
     // See: https://github.com/p2panda/p2panda/issues/1065
     async fn get_latest_entry_tx(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         log_id: &L,
     ) -> Result<Option<Operation<E>>, Self::Error> {
         let result = self
@@ -98,7 +98,7 @@ where
     /// Retrieve the latest sequence number for a set of author's logs.
     async fn get_log_heights(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         logs: &[L],
     ) -> Result<Option<BTreeMap<L, SeqNum>>, Self::Error> {
         let mut encoded_log_ids = Vec::new();
@@ -119,7 +119,7 @@ where
             FROM
                 operations_v1
             WHERE
-                public_key = ?
+                verifying_key = ?
                 AND log_id IN ( {} )
             GROUP BY
                 log_id
@@ -154,7 +154,7 @@ where
     /// Retrieve the count and total byte size of all operations in an author's log.
     async fn get_log_size(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
@@ -171,7 +171,7 @@ where
             FROM
                 operations_v1
             WHERE
-                public_key = ?
+                verifying_key = ?
                 AND log_id = ?
                 AND CAST(seq_num AS NUMERIC) {} CAST(? as NUMERIC)
                 AND CAST(seq_num AS NUMERIC) <= CAST(? as NUMERIC)
@@ -206,7 +206,7 @@ where
     /// Retrieve log entries representing operations from an author's log.
     async fn get_log_entries(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
@@ -224,7 +224,7 @@ where
             FROM
                 operations_v1
             WHERE
-                public_key = ?
+                verifying_key = ?
                 AND log_id = ?
                 AND CAST(seq_num AS NUMERIC) {} CAST(? as NUMERIC)
                 AND CAST(seq_num AS NUMERIC) <= CAST(? as NUMERIC)
@@ -263,7 +263,7 @@ where
     /// Pruning involves deletion of the entry bodies (ie. payloads) from the database.
     async fn prune_entries(
         &self,
-        author: &PublicKey,
+        author: &VerifyingKey,
         log_id: &L,
         until: &SeqNum,
     ) -> Result<u64, Self::Error> {
@@ -273,7 +273,7 @@ where
             FROM
                 operations_v1
             WHERE
-                public_key = ?
+                verifying_key = ?
                 AND log_id = ?
                 AND CAST(seq_num AS NUMERIC) < CAST(? as NUMERIC)
             ",

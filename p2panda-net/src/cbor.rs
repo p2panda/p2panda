@@ -188,7 +188,7 @@ impl From<std::io::Error> for CborCodecError {
 #[cfg(test)]
 mod tests {
     use futures_util::{FutureExt, SinkExt, StreamExt};
-    use p2panda_core::{Body, Hash, Header, PrivateKey, Timestamp};
+    use p2panda_core::{Body, Hash, Header, SigningKey, Timestamp};
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::FramedRead;
 
@@ -263,7 +263,7 @@ mod tests {
         type Payload = (Header<()>, Option<Body>);
 
         fn create_operation(
-            private_key: &PrivateKey,
+            signing_key: &SigningKey,
             body: &[u8],
             seq_num: u64,
             backlink: Option<Hash>,
@@ -271,7 +271,7 @@ mod tests {
             let body = Body::from(body);
             let mut header = Header {
                 version: 1,
-                public_key: private_key.public_key(),
+                verifying_key: signing_key.verifying_key(),
                 signature: None,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
@@ -280,7 +280,7 @@ mod tests {
                 backlink,
                 extensions: (),
             };
-            header.sign(private_key);
+            header.sign(signing_key);
             (header, Some(body))
         }
 
@@ -291,14 +291,14 @@ mod tests {
 
         // Create 100 operations, encode them as CBOR and send bytes to receiver.
         tokio::task::spawn(async move {
-            let private_key = PrivateKey::new();
+            let signing_key = SigningKey::generate();
 
             let mut seq_num = 0;
             let mut backlink = None;
 
             for _ in 0..100 {
                 let (header, body) =
-                    create_operation(&private_key, b"boom boom boom", seq_num, backlink);
+                    create_operation(&signing_key, b"boom boom boom", seq_num, backlink);
                 seq_num += 1;
                 backlink = Some(header.hash());
 

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use p2panda_core::test_utils::TestLog;
-use p2panda_core::{Operation, PrivateKey};
+use p2panda_core::{Operation, SigningKey};
 
 use crate::logs::LogStore;
 use crate::operations::OperationStore;
@@ -62,11 +62,11 @@ async fn get_log_heights() {
         .await
         .unwrap();
 
-    let private_key = PrivateKey::new();
+    let signing_key = SigningKey::generate();
 
     // Create two separate logs which share the same author.
-    let log_1 = TestLog::from_private_key(private_key.clone());
-    let log_2 = TestLog::from_private_key(private_key.clone());
+    let log_1 = TestLog::from_signing_key(signing_key.clone());
+    let log_2 = TestLog::from_signing_key(signing_key.clone());
 
     let operation_1 = log_1.operation(b"first", ());
     let operation_2 = log_1.operation(b"second", ());
@@ -97,7 +97,7 @@ async fn get_log_heights() {
 
     let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
         &store,
-        &private_key.public_key(),
+        &signing_key.verifying_key(),
         &[log_1.id(), log_2.id()],
     )
     .await

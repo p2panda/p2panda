@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
@@ -17,7 +17,7 @@ async fn insert_node_info() {
 
     let permit = store.begin().await.unwrap();
 
-    let node_id = PrivateKey::new().public_key();
+    let node_id = SigningKey::generate().verifying_key();
     let node_info = TestNodeInfo::new(node_id);
 
     let result = store.insert_node_info(node_info.clone()).await.unwrap();
@@ -35,9 +35,9 @@ async fn insert_node_info() {
 async fn set_and_query_topics() {
     let store = SqliteStore::temporary().await;
 
-    let billie = PrivateKey::new().public_key();
-    let daphne = PrivateKey::new().public_key();
-    let carlos = PrivateKey::new().public_key();
+    let billie = SigningKey::generate().verifying_key();
+    let daphne = SigningKey::generate().verifying_key();
+    let carlos = SigningKey::generate().verifying_key();
 
     let cats = [100; 32].into();
     let dogs = [102; 32].into();
@@ -126,8 +126,8 @@ async fn set_and_query_topics() {
 async fn remove_outdated_node_infos() {
     let store = SqliteStore::temporary().await;
 
-    let billie = PrivateKey::new().public_key();
-    let daphne = PrivateKey::new().public_key();
+    let billie = SigningKey::generate().verifying_key();
+    let daphne = SigningKey::generate().verifying_key();
 
     let permit = store.begin().await.unwrap();
 
@@ -184,7 +184,7 @@ async fn sample_random_nodes() {
     let permit = store.begin().await.unwrap();
 
     for _ in 0..100 {
-        let id = PrivateKey::new().public_key();
+        let id = SigningKey::generate().verifying_key();
         store
             .insert_node_info(TestNodeInfo::new(id).with_random_address(&mut rng))
             .await
@@ -192,7 +192,7 @@ async fn sample_random_nodes() {
     }
 
     for _ in 200..300 {
-        let id = PrivateKey::new().public_key();
+        let id = SigningKey::generate().verifying_key();
         store
             .insert_node_info(TestNodeInfo::new_bootstrap(id).with_random_address(&mut rng))
             .await

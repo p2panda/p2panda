@@ -125,18 +125,18 @@ pub enum UserDataInfoError {
 #[cfg(test)]
 mod tests {
     use iroh::address_lookup::UserData;
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
 
-    use crate::iroh_endpoint::from_public_key;
+    use crate::iroh_endpoint::from_verifying_key;
 
     use super::{AuthenticatedTransportInfo, UserDataTransportInfo};
 
     #[test]
     fn transport_info_to_user_data() {
         // Create simple transport info object without any addresses attached.
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let transport_info = AuthenticatedTransportInfo::new_unsigned()
-            .sign(&private_key)
+            .sign(&signing_key)
             .unwrap();
 
         // Extract information we want for our TXT record.
@@ -152,10 +152,10 @@ mod tests {
 
     #[test]
     fn transport_info_to_user_data_with_relay_url() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let mut transport_info = AuthenticatedTransportInfo::new_unsigned();
         transport_info.add_addr(
-            iroh::EndpointAddr::new(from_public_key(private_key.public_key()))
+            iroh::EndpointAddr::new(from_verifying_key(signing_key.verifying_key()))
                 .with_ip_addr("127.0.0.1:8080".parse().unwrap())
                 .with_relay_url(
                     "https://euc1-1.relay.n0.iroh-canary.iroh.link./"
@@ -164,7 +164,7 @@ mod tests {
                 )
                 .into(),
         );
-        let transport_info = transport_info.sign(&private_key).unwrap();
+        let transport_info = transport_info.sign(&signing_key).unwrap();
 
         // Extract information we want for our TXT record.
         let txt_info = UserDataTransportInfo::from_transport_info(transport_info);

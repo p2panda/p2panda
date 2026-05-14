@@ -124,7 +124,7 @@ where
 #[cfg(test)]
 mod tests {
     use futures_util::stream;
-    use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, Topic};
+    use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic};
     use p2panda_store::operations::OperationStore;
     use p2panda_store::{SqliteStore, tx_unwrap};
     use serde::{Deserialize, Serialize};
@@ -151,13 +151,13 @@ mod tests {
         // Create two operations, one by Panda and one by Icebear. Panda's operation points at
         // Icebear's.
         let operation_panda = {
-            let private_key = PrivateKey::new();
-            let public_key = private_key.public_key();
+            let signing_key = SigningKey::generate();
+            let verifying_key = signing_key.verifying_key();
 
             let body: Body = b"Hi, Icebear".to_vec().into();
 
             let mut header = Header {
-                public_key,
+                verifying_key,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
                 extensions: TestExtension {
@@ -165,7 +165,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            header.sign(&private_key);
+            header.sign(&signing_key);
 
             Operation {
                 hash: header.hash(),
@@ -175,13 +175,13 @@ mod tests {
         };
 
         let operation_icebear = {
-            let private_key = PrivateKey::new();
-            let public_key = private_key.public_key();
+            let signing_key = SigningKey::generate();
+            let verifying_key = signing_key.verifying_key();
 
             let body: Body = b"Hello, Pandasan!".to_vec().into();
 
             let mut header = Header {
-                public_key,
+                verifying_key,
                 payload_size: body.size(),
                 payload_hash: Some(body.hash()),
                 extensions: TestExtension {
@@ -189,7 +189,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            header.sign(&private_key);
+            header.sign(&signing_key);
 
             Operation {
                 hash: header.hash(),
@@ -206,7 +206,7 @@ mod tests {
 
                 // Insert operations into store.
                 tx_unwrap!(store, {
-                    let log_id = Topic::new();
+                    let log_id = Topic::random();
 
                     store
                         .insert_operation(&operation_panda.hash, &operation_panda, &log_id)

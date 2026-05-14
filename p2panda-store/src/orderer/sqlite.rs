@@ -126,7 +126,7 @@ where
             parent_ids.sort();
 
             // Derive a hash from id (child) and all it's dependencies (parents).
-            let set_digest = Hash::new({
+            let set_digest = Hash::digest({
                 let mut buf: Vec<u8> = Vec::new();
                 buf.extend_from_slice(child_id.as_bytes());
                 for id in &parent_ids {

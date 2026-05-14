@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::logs::LogRanges;
-use p2panda_core::{Cursor, PublicKey, Topic};
+use p2panda_core::{Cursor, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
@@ -33,11 +33,11 @@ pub enum StreamFrom {
     Frontier,
 
     /// Stream all events from _after_ the given cursor position.
-    Cursor(Cursor<PublicKey, LogId>),
+    Cursor(Cursor<VerifyingKey, LogId>),
 }
 
-impl From<Cursor<PublicKey, LogId>> for StreamFrom {
-    fn from(cursor: Cursor<PublicKey, LogId>) -> Self {
+impl From<Cursor<VerifyingKey, LogId>> for StreamFrom {
+    fn from(cursor: Cursor<VerifyingKey, LogId>) -> Self {
         Self::Cursor(cursor)
     }
 }
@@ -50,7 +50,7 @@ pub(crate) async fn replay_log_ranges<M>(
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     ack_policy: AckPolicy,
     acked: &Acked,
-    log_ranges: LogRanges<PublicKey, LogId>,
+    log_ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,

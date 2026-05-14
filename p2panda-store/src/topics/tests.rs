@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use p2panda_core::{PrivateKey, Topic};
+use p2panda_core::{SigningKey, Topic};
 
 use crate::topics::TopicStore;
 use crate::{SqliteStore, Transaction};
@@ -11,14 +11,14 @@ use crate::{SqliteStore, Transaction};
 async fn update_and_resolve_topic_mapping() {
     let store = SqliteStore::temporary().await;
 
-    let topic = Topic::new();
+    let topic = Topic::random();
 
     // The log id is the same as the topic, in a use case like this there will be one log
     // per-author in each topic.
     let log_id = topic;
 
-    let alice = PrivateKey::from_bytes(&[1u8; 32]).public_key();
-    let bob = PrivateKey::from_bytes(&[2u8; 32]).public_key();
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
+    let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
 
     let permit = store.begin().await.unwrap();
 
@@ -48,15 +48,15 @@ async fn update_and_resolve_topic_mapping() {
 async fn path_based_log_ids() {
     let store = SqliteStore::temporary().await;
 
-    let topic = Topic::new();
+    let topic = Topic::random();
 
     // Here we demonstrate use cases where there are multiple logs per-author in each topic.
     let log_id_kittens = "kittens".to_string();
     let log_id_kittens_sleepy = "kittens.sleepy".to_string();
     let log_id_puppies = "puppies".to_string();
 
-    let alice = PrivateKey::from_bytes(&[1u8; 32]).public_key();
-    let bob = PrivateKey::from_bytes(&[2u8; 32]).public_key();
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
+    let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
 
     let permit = store.begin().await.unwrap();
 
@@ -93,13 +93,13 @@ async fn path_based_log_ids() {
 async fn remove_association() {
     let store = SqliteStore::temporary().await;
 
-    let topic = Topic::new();
+    let topic = Topic::random();
 
     // Here we demonstrate use cases where there are multiple logs per-author in each topic.
     let log_id_kittens = "kittens".to_string();
     let log_id_kittens_sleepy = "kittens.sleepy".to_string();
 
-    let alice = PrivateKey::from_bytes(&[1u8; 32]).public_key();
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
 
     let permit = store.begin().await.unwrap();
 

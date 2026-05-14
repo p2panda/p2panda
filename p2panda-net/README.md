@@ -57,7 +57,7 @@ use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::{AddressBook, Discovery, Endpoint, MdnsDiscovery, Gossip};
 
 // Topics are used to discover other nodes and establish connections around them.
-let topic = Hash::new(b"shirokuma-cafe").into();
+let topic = Hash::digest(b"shirokuma-cafe").into();
 
 // Maintain an address book of newly discovered or manually added nodes.
 let address_book = AddressBook::builder().spawn().await?;

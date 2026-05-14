@@ -12,7 +12,7 @@ pub mod test_utils;
 
 // Useful external types we want to re-export for convenience.
 #[doc(no_inline)]
-pub use p2panda_core::{Cursor, Hash, PrivateKey, PublicKey, Topic};
+pub use p2panda_core::{Cursor, Hash, SigningKey, Topic, VerifyingKey};
 #[doc(no_inline)]
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 #[doc(no_inline)]

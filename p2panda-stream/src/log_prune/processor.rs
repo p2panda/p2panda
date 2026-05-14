@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, PublicKey, SeqNum};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use thiserror::Error;
 use tokio::sync::Notify;
@@ -22,7 +22,7 @@ pub struct LogPrune<S, T, L, E> {
 
 impl<S, T, L, E> LogPrune<S, T, L, E>
 where
-    S: LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>,
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>,
     L: LogId,
     E: Extensions,
 {
@@ -38,8 +38,8 @@ where
 
 impl<S, T, L, E> Processor<T> for LogPrune<S, T, L, E>
 where
-    S: LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>,
-    T: Borrow<LogPruneArgs<PublicKey, L, SeqNum>>,
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>,
+    T: Borrow<LogPruneArgs<VerifyingKey, L, SeqNum>>,
     L: LogId,
     E: Extensions,
 {
@@ -48,7 +48,7 @@ where
     type Error = (T, LogPruneError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let args: &LogPruneArgs<PublicKey, L, SeqNum> = input.borrow();
+        let args: &LogPruneArgs<VerifyingKey, L, SeqNum> = input.borrow();
 
         let result = if let LogPruneArgs::PruneEntriesUntil {
             author,

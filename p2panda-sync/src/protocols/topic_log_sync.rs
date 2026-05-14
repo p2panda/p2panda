@@ -10,7 +10,7 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, PublicKey};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
@@ -53,8 +53,8 @@ pub struct TopicLogSync<T, S, L, E> {
 impl<T, S, L, E> TopicLogSync<T, S, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<T, PublicKey, L>
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+        + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
@@ -100,8 +100,8 @@ where
 impl<T, S, L, E> Protocol for TopicLogSync<T, S, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, PublicKey, L, u64, Hash>
-        + TopicStore<T, PublicKey, L>
+    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+        + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
@@ -623,7 +623,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn sync_session_no_operations() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer = Peer::new(0).await;
         peer.associate(&topic, &BTreeMap::default()).await;
 
@@ -674,7 +674,7 @@ pub mod tests {
         setup_logging();
 
         let log_id = 0;
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer = Peer::new(0).await;
 
         let body = Body::new("Hello, Sloth!".as_bytes());
@@ -773,7 +773,7 @@ pub mod tests {
     #[tokio::test]
     async fn topic_log_sync_full_duplex() {
         setup_logging();
-        let topic = Topic::new();
+        let topic = Topic::random();
         let log_id = 0;
 
         let mut peer_a = Peer::new(0).await;
@@ -854,7 +854,7 @@ pub mod tests {
     #[tokio::test]
     async fn live_mode() {
         let log_id = 0;
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
@@ -965,7 +965,7 @@ pub mod tests {
     #[tokio::test]
     async fn dedup_live_mode_messages() {
         let log_id = 0;
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
@@ -1087,7 +1087,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn unexpected_stream_closure_sync() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer = Peer::new(0).await;
         peer.associate(&topic, &Default::default()).await;
 
@@ -1133,7 +1133,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn unexpected_stream_closure_live_mode() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let mut peer = Peer::new(0).await;
         peer.associate(&topic, &Default::default()).await;
 

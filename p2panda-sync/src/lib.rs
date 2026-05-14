@@ -18,7 +18,7 @@
 //! [`p2panda-net`] stack.
 //!
 //! [`p2panda-net`]: https://docs.rs/p2panda-net/latest/p2panda_net/
-use p2panda_core::PublicKey;
+use p2panda_core::VerifyingKey;
 
 mod dedup;
 pub mod manager;
@@ -32,7 +32,7 @@ pub mod traits;
 #[derive(Clone, Debug)]
 pub struct SessionConfig<T> {
     pub topic: T,
-    pub remote: PublicKey,
+    pub remote: VerifyingKey,
     pub live_mode: bool,
 }
 
@@ -47,7 +47,7 @@ pub enum ToSync<M> {
 #[derive(Clone, PartialEq, Debug)]
 pub struct FromSync<E> {
     pub session_id: u64,
-    pub remote: PublicKey,
+    pub remote: VerifyingKey,
     pub event: E,
 }
 
@@ -60,7 +60,7 @@ impl<E> FromSync<E> {
         &self.event
     }
 
-    pub fn remote(&self) -> &PublicKey {
+    pub fn remote(&self) -> &VerifyingKey {
         &self.remote
     }
 }

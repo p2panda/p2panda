@@ -134,7 +134,7 @@ struct TodoList {
 
 impl TodoList {
     pub fn new() -> Self {
-        Self::from_id(TodoListId::new())
+        Self::from_id(TodoListId::random())
     }
 
     pub fn from_id(id: TodoListId) -> Self {
@@ -175,7 +175,7 @@ impl TodoList {
 
     pub fn create(&mut self, description: &str) -> TodoEvent {
         TodoEvent {
-            id: Topic::new().into(),
+            id: Topic::random().into(),
             kind: TodoEventKind::Set {
                 description: description.into(),
             },

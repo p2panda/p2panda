@@ -117,7 +117,7 @@ impl PreKeyBundle {
         rng: &Rng,
     ) -> Result<Self, KeyManagerError> {
         let secret = SecretKey::from_bytes(rng.random_array()?);
-        let prekey = PreKey::new(secret.public_key()?, lifetime);
+        let prekey = PreKey::new(secret.verifying_key()?, lifetime);
         let signature = prekey.sign(identity_secret, rng)?;
 
         Ok(Self {
@@ -140,7 +140,7 @@ impl KeyManager {
     /// Returns newly initialised key-manager state, holding our identity secret.
     pub fn init(identity_secret: &SecretKey) -> Result<KeyManagerState, KeyManagerError> {
         Ok(KeyManagerState {
-            identity_key: identity_secret.public_key()?,
+            identity_key: identity_secret.verifying_key()?,
             identity_secret: identity_secret.clone(),
             prekeys: PreKeyBundlesState::new(),
             onetime_secrets: HashMap::new(),
@@ -155,7 +155,7 @@ impl KeyManager {
         prekeys: PreKeyBundlesState,
     ) -> Result<KeyManagerState, KeyManagerError> {
         Ok(KeyManagerState {
-            identity_key: identity_secret.public_key()?,
+            identity_key: identity_secret.verifying_key()?,
             identity_secret: identity_secret.clone(),
             prekeys,
             onetime_secrets: HashMap::new(),
@@ -175,7 +175,7 @@ impl KeyManager {
         let prekeys = PreKeyBundlesState::new().insert(bundle);
 
         Ok(KeyManagerState {
-            identity_key: identity_secret.public_key()?,
+            identity_key: identity_secret.verifying_key()?,
             identity_secret: identity_secret.clone(),
             prekeys,
             onetime_secrets: HashMap::new(),
@@ -258,7 +258,7 @@ impl PreKeyManager for KeyManager {
             .ok_or(KeyManagerError::NoPreKeysAvailable)?;
 
         let onetime_secret = SecretKey::from_bytes(rng.random_array()?);
-        let onetime_key = OneTimePreKey::new(onetime_secret.public_key()?, y.onetime_next_id);
+        let onetime_key = OneTimePreKey::new(onetime_secret.verifying_key()?, y.onetime_next_id);
 
         {
             let existing_key = y
@@ -351,7 +351,7 @@ mod tests {
             bundle_1.signed_prekey(),
             &KeyManager::prekey_secret(&state, bundle_1.signed_prekey())
                 .expect("non-expired prekey exists")
-                .public_key()
+                .verifying_key()
                 .unwrap()
         );
         assert_eq!(bundle_1.signed_prekey(), bundle_2.signed_prekey());
@@ -359,11 +359,11 @@ mod tests {
         // Identity key matches the identity secret.
         assert_eq!(
             bundle_1.identity_key(),
-            &identity_secret.public_key().unwrap()
+            &identity_secret.verifying_key().unwrap()
         );
         assert_eq!(
             bundle_2.identity_key(),
-            &identity_secret.public_key().unwrap()
+            &identity_secret.verifying_key().unwrap()
         );
 
         // Signature is correct.
@@ -394,11 +394,11 @@ mod tests {
         // One-time prekeys match the secret.
         assert_eq!(
             bundle_1.onetime_prekey().unwrap(),
-            &onetime_secret_1.unwrap().public_key().unwrap()
+            &onetime_secret_1.unwrap().verifying_key().unwrap()
         );
         assert_eq!(
             bundle_2.onetime_prekey().unwrap(),
-            &onetime_secret_2.unwrap().public_key().unwrap()
+            &onetime_secret_2.unwrap().verifying_key().unwrap()
         );
 
         // One-time prekeys are unique.

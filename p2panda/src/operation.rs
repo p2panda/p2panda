@@ -52,7 +52,7 @@ impl LogId {
     ///
     /// To keep topic itself private we derive it with a BLAKE3 digest.
     pub fn from_topic(topic: Topic) -> Self {
-        LogId(Hash::new(topic.as_bytes()))
+        LogId(Hash::digest(topic.as_bytes()))
     }
 
     pub fn as_bytes(&self) -> &[u8; HASH_LEN] {
@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn derive_from_topic() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let log_id = LogId::from_topic(topic);
         assert_ne!(topic.as_bytes(), log_id.as_bytes());
     }

@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
 use crate::address_book::AddressBook;
@@ -13,7 +13,7 @@ use crate::{DEFAULT_NETWORK_ID, NetworkId};
 
 pub struct Builder {
     network_id: Option<NetworkId>,
-    private_key: Option<PrivateKey>,
+    signing_key: Option<SigningKey>,
     config: Option<IrohConfig>,
     relay_urls: HashSet<iroh::RelayUrl>,
     address_book: AddressBook,
@@ -23,7 +23,7 @@ impl Builder {
     pub fn new(address_book: AddressBook) -> Self {
         Self {
             network_id: None,
-            private_key: None,
+            signing_key: None,
             config: None,
             address_book,
             relay_urls: HashSet::new(),
@@ -35,8 +35,8 @@ impl Builder {
         self
     }
 
-    pub fn private_key(mut self, private_key: PrivateKey) -> Self {
-        self.private_key = Some(private_key);
+    pub fn signing_key(mut self, signing_key: SigningKey) -> Self {
+        self.signing_key = Some(signing_key);
         self
     }
 
@@ -70,12 +70,12 @@ impl Builder {
 
     pub(crate) fn build_args(self) -> IrohEndpointArgs {
         let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
-        let private_key = self.private_key.unwrap_or_default();
+        let signing_key = self.signing_key.unwrap_or_default();
         let config = self.config.unwrap_or_default();
         let relay_map = iroh::RelayMap::from_iter(self.relay_urls);
         (
             network_id,
-            private_key,
+            signing_key,
             config,
             relay_map,
             self.address_book,

@@ -50,7 +50,7 @@ impl FailingNode {
 
         let endpoint = Endpoint::builder(address_book.clone())
             .config(args.iroh_config.clone())
-            .private_key(args.private_key.clone())
+            .signing_key(args.signing_key.clone())
             .spawn()
             .await
             .unwrap();
@@ -74,7 +74,7 @@ impl FailingNode {
     }
 
     pub fn node_id(&self) -> NodeId {
-        self.args.public_key
+        self.args.verifying_key
     }
 
     pub fn shutdown(&self) {

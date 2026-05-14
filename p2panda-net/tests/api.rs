@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use p2panda_core::PrivateKey;
+use p2panda_core::SigningKey;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::sync::SyncSubscription;
 use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery};
@@ -10,12 +10,12 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 
 #[tokio::test]
 async fn modular_api() {
-    let private_key = PrivateKey::new();
+    let signing_key = SigningKey::generate();
 
     let address_book = AddressBook::builder().spawn().await.unwrap();
 
     let endpoint = Endpoint::builder(address_book.clone())
-        .private_key(private_key)
+        .signing_key(signing_key)
         .network_id([42; 32])
         .spawn()
         .await

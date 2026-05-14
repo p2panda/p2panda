@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use p2panda_core::logs::{LogHeights, LogRanges};
-use p2panda_core::{Cursor, Hash, PublicKey, SeqNum, Topic};
+use p2panda_core::{Cursor, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::cursors::CursorStore;
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
@@ -16,7 +16,7 @@ use tokio::sync::Semaphore;
 use crate::operation::{Header, LogId, Operation};
 use crate::streams::StreamFrom;
 
-pub type Logs = BTreeMap<PublicKey, Vec<LogId>>;
+pub type Logs = BTreeMap<VerifyingKey, Vec<LogId>>;
 
 /// Tracks a named cursor for a given topic and persists it in the store.
 #[derive(Clone, Debug)]
@@ -52,15 +52,15 @@ impl Acked {
         &self.cursor_name
     }
 
-    pub async fn cursor(&self) -> Result<Cursor<PublicKey, LogId>, AckedError> {
+    pub async fn cursor(&self) -> Result<Cursor<VerifyingKey, LogId>, AckedError> {
         let cursor = self.store.get_cursor(&self.cursor_name).await?;
         Ok(cursor.unwrap_or(Cursor::new(&self.cursor_name, LogHeights::default())))
     }
 
     async fn replace_cursor(
         &self,
-        new_cursor: Cursor<PublicKey, LogId>,
-    ) -> Result<Cursor<PublicKey, LogId>, AckedError> {
+        new_cursor: Cursor<VerifyingKey, LogId>,
+    ) -> Result<Cursor<VerifyingKey, LogId>, AckedError> {
         // Fail if we try to use a cursor for a different acked state. This should help developers
         // to identify bugs.
         if new_cursor.name() != self.cursor_name {
@@ -81,7 +81,7 @@ impl Acked {
     pub async fn nacked_log_ranges(
         &self,
         from: StreamFrom,
-    ) -> Result<LogRanges<PublicKey, LogId>, AckedError> {
+    ) -> Result<LogRanges<VerifyingKey, LogId>, AckedError> {
         let _permit = self.semaphore.acquire().await;
 
         // Get state vector of local replica for all logs related to this topic.
@@ -125,7 +125,11 @@ impl Acked {
         }
 
         let mut cursor = self.cursor().await?;
-        cursor.advance(header.public_key, header.extensions.log_id, header.seq_num);
+        cursor.advance(
+            header.verifying_key,
+            header.extensions.log_id,
+            header.seq_num,
+        );
 
         tx!(self.store, {
             self.store.set_cursor(&cursor).await?;
@@ -152,20 +156,22 @@ impl Eq for Acked {}
 async fn get_log_heights(
     store: &SqliteStore,
     logs: &Logs,
-) -> Result<LogHeights<PublicKey, LogId>, SqliteError> {
+) -> Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
     let mut result = BTreeMap::new();
 
-    for (public_key, log_ids) in logs {
+    for (verifying_key, log_ids) in logs {
         let Some(log_heights) =
-            LogStore::<Operation, PublicKey, LogId, SeqNum, Hash>::get_log_heights(
-                store, public_key, log_ids,
+            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
+                store,
+                verifying_key,
+                log_ids,
             )
             .await?
         else {
             continue;
         };
 
-        result.insert(*public_key, log_heights);
+        result.insert(*verifying_key, log_heights);
     }
 
     Ok(result)
@@ -196,7 +202,7 @@ mod tests {
 
     #[tokio::test]
     async fn nacked_log_ranges() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let store = SqliteStore::temporary().await;
         let forge = OperationForge::new(store.clone());
         let log_id = LogId::from_topic(topic);
@@ -230,7 +236,7 @@ mod tests {
         let ranges = acked.nacked_log_ranges(StreamFrom::Frontier).await.unwrap();
         assert_eq!(
             ranges
-                .get(&forge.public_key())
+                .get(&forge.verifying_key())
                 .unwrap()
                 .get(&log_id)
                 .unwrap(),
@@ -250,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn custom_name() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let store = SqliteStore::temporary().await;
         let forge = OperationForge::new(store.clone());
         let log_id = LogId::from_topic(topic);
@@ -288,7 +294,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             ranges_2
-                .get(&forge.public_key())
+                .get(&forge.verifying_key())
                 .unwrap()
                 .get(&log_id)
                 .unwrap(),
@@ -298,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn replaying_mutates_cursor_state() {
-        let topic = Topic::new();
+        let topic = Topic::random();
         let store = SqliteStore::temporary().await;
         let forge = OperationForge::new(store.clone());
         let log_id = LogId::from_topic(topic);
@@ -329,7 +335,7 @@ mod tests {
         let ranges = acked.nacked_log_ranges(StreamFrom::Start).await.unwrap();
         assert_eq!(
             ranges
-                .get(&forge.public_key())
+                .get(&forge.verifying_key())
                 .unwrap()
                 .get(&log_id)
                 .unwrap(),
@@ -340,7 +346,7 @@ mod tests {
         let ranges = acked.nacked_log_ranges(StreamFrom::Frontier).await.unwrap();
         assert_eq!(
             ranges
-                .get(&forge.public_key())
+                .get(&forge.verifying_key())
                 .unwrap()
                 .get(&log_id)
                 .unwrap(),

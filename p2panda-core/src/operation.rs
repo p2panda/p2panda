@@ -4,7 +4,7 @@
 //!
 //! Operations are used to carry any data from one peer to another (distributed), while assuming no
 //! reliable network connection (offline-first) and untrusted machines (cryptographically secure).
-//! The author of an operation uses it's [`PrivateKey`] to cryptographically sign every operation.
+//! The author of an operation uses it's [`SigningKey`] to cryptographically sign every operation.
 //! This can be verified and used for authentication by any other peer.
 //!
 //! Every operation consists of a [`Header`] and an optional [`Body`]. The body holds arbitrary
@@ -29,14 +29,14 @@
 //! ### Construct and sign a header
 //!
 //! ```
-//! use p2panda_core::{Body, Header, PrivateKey, Timestamp};
+//! use p2panda_core::{Body, Header, SigningKey, Timestamp};
 //!
-//! let private_key = PrivateKey::new();
+//! let signing_key = SigningKey::generate();
 //!
 //! let body = Body::new("Hello, Sloth!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
-//!     public_key: private_key.public_key(),
+//!     verifying_key: signing_key.verifying_key(),
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
@@ -46,16 +46,16 @@
 //!     extensions: (),
 //! };
 //!
-//! header.sign(&private_key);
+//! header.sign(&signing_key);
 //! ```
 //!
 //! ### Custom extensions
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, PrivateKey, PruneFlag, Timestamp};
+//! use p2panda_core::{Body, Extension, Header, SigningKey, PruneFlag, Timestamp};
 //! use serde::{Serialize, Deserialize};
 //!
-//! let private_key = PrivateKey::new();
+//! let signing_key = SigningKey::generate();
 //!
 //! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 //! struct CustomExtensions {
@@ -75,7 +75,7 @@
 //! let body = Body::new("Prune from here please!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
-//!     public_key: private_key.public_key(),
+//!     verifying_key: signing_key.verifying_key(),
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
@@ -85,7 +85,7 @@
 //!     extensions,
 //! };
 //!
-//! header.sign(&private_key);
+//! header.sign(&signing_key);
 //!
 //! let prune_flag: PruneFlag = header.extension().unwrap();
 //! assert!(prune_flag.is_set())
@@ -97,7 +97,7 @@ use thiserror::Error;
 use crate::cbor::{DecodeError, decode_cbor, encode_cbor};
 use crate::extensions::{Extension, Extensions};
 use crate::hash::Hash;
-use crate::identity::{PrivateKey, PublicKey, Signature};
+use crate::identity::{Signature, SigningKey, VerifyingKey};
 use crate::logs::SeqNum;
 use crate::timestamp::Timestamp;
 use crate::traits::Digest;
@@ -170,14 +170,14 @@ impl<E> Digest<Hash> for Operation<E> {
 /// ## Example
 ///
 /// ```
-/// use p2panda_core::{Body, Header, Operation, PrivateKey, Timestamp};
+/// use p2panda_core::{Body, Header, Operation, SigningKey, Timestamp};
 ///
-/// let private_key = PrivateKey::new();
+/// let signing_key = SigningKey::generate();
 ///
 /// let body = Body::new("Hello, Sloth!".as_bytes());
 /// let mut header = Header {
 ///     version: 1,
-///     public_key: private_key.public_key(),
+///     verifying_key: signing_key.verifying_key(),
 ///     signature: None,
 ///     payload_size: body.size(),
 ///     payload_hash: Some(body.hash()),
@@ -188,7 +188,7 @@ impl<E> Digest<Hash> for Operation<E> {
 /// };
 ///
 /// // Sign the header with the author's private key.
-/// header.sign(&private_key);
+/// header.sign(&signing_key);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -197,7 +197,7 @@ pub struct Header<E = ()> {
     pub version: u64,
 
     /// Author of this operation.
-    pub public_key: PublicKey,
+    pub verifying_key: VerifyingKey,
 
     /// Signature by author over all fields in header, providing authenticity.
     pub signature: Option<Signature>,
@@ -231,7 +231,7 @@ impl<E: Default> Default for Header<E> {
     fn default() -> Self {
         Self {
             version: 1,
-            public_key: PublicKey::default(),
+            verifying_key: VerifyingKey::default(),
             signature: None,
             payload_size: 0,
             payload_hash: None,
@@ -255,16 +255,16 @@ where
             .expect("CBOR encoder failed due to an critical IO error")
     }
 
-    /// Add a signature to the header using the provided `PrivateKey`.
+    /// Add a signature to the header using the provided `SigningKey`.
     ///
     /// This method signs the byte representation of a header with any existing signature removed
     /// before adding back the newly generated signature.
-    pub fn sign(&mut self, private_key: &PrivateKey) {
+    pub fn sign(&mut self, signing_key: &SigningKey) {
         // Make sure the signature is not already set before we encode
         self.signature = None;
 
         let bytes = self.to_bytes();
-        self.signature = Some(private_key.sign(&bytes));
+        self.signature = Some(signing_key.sign(&bytes));
     }
 
     /// Verify that the signature contained in this `Header` was generated by the claimed
@@ -275,7 +275,8 @@ where
                 let mut unsigned_header = self.clone();
                 unsigned_header.signature = None;
                 let unsigned_bytes = unsigned_header.to_bytes();
-                self.public_key.verify(&unsigned_bytes, &claimed_signature)
+                self.verifying_key
+                    .verify(&unsigned_bytes, &claimed_signature)
             }
             None => false,
         }
@@ -285,7 +286,7 @@ where
     ///
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
-        Hash::new(self.to_bytes())
+        Hash::digest(self.to_bytes())
     }
 
     /// Extract an extension value from the header.
@@ -351,7 +352,7 @@ impl Body {
 
     /// BLAKE3 hash of the body bytes.
     pub fn hash(&self) -> Hash {
-        Hash::new(&self.0)
+        Hash::digest(&self.0)
     }
 
     /// Size of body bytes.
@@ -499,7 +500,7 @@ where
     let past_header = past_header.borrow();
     let header = header.borrow();
 
-    if past_header.public_key != header.public_key {
+    if past_header.verifying_key != header.verifying_key {
         return Err(OperationError::TooManyAuthors);
     }
 
@@ -528,17 +529,17 @@ where
 mod tests {
     use serde::{Deserialize, Serialize};
 
-    use crate::{Extension, PrivateKey};
+    use crate::{Extension, SigningKey};
 
     use super::*;
 
     #[test]
     fn simple_extension_type_parameter() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let body = Body::new("Hello, Sloth!".as_bytes());
         let mut header = Header {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
@@ -548,18 +549,18 @@ mod tests {
             extensions: (),
         };
 
-        header.sign(&private_key);
+        header.sign(&signing_key);
     }
 
     #[test]
     fn sign_and_verify() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let body = Body::new("Hello, Sloth!".as_bytes());
         type CustomExtensions = ();
 
         let mut header = Header {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
@@ -570,7 +571,7 @@ mod tests {
         };
         assert!(!header.verify());
 
-        header.sign(&private_key);
+        header.sign(&signing_key);
         assert!(header.verify());
 
         let operation = Operation {
@@ -583,11 +584,11 @@ mod tests {
 
     #[test]
     fn valid_backlink_header() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
 
         let mut header_0 = Header::<()> {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: 0,
             payload_hash: None,
@@ -596,12 +597,12 @@ mod tests {
             backlink: None,
             extensions: (),
         };
-        header_0.sign(&private_key);
+        header_0.sign(&signing_key);
         assert!(validate_header(&header_0).is_ok());
 
         let mut header_1 = Header::<()> {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: 0,
             payload_hash: None,
@@ -610,7 +611,7 @@ mod tests {
             backlink: Some(header_0.hash()),
             extensions: (),
         };
-        header_1.sign(&private_key);
+        header_1.sign(&signing_key);
         assert!(validate_header(&header_1).is_ok());
 
         assert!(validate_backlink(&header_0, &header_1).is_ok());
@@ -618,12 +619,12 @@ mod tests {
 
     #[test]
     fn invalid_operations() {
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let body: Body = Body::new("Hello, Sloth!".as_bytes());
 
         let header_base = Header::<()> {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
@@ -636,7 +637,7 @@ mod tests {
         // Incompatible operation format
         let mut header = header_base.clone();
         header.version = 0;
-        header.sign(&private_key);
+        header.sign(&signing_key);
         assert!(matches!(
             validate_header(&header),
             Err(OperationError::UnsupportedVersion(0, 1))
@@ -644,8 +645,8 @@ mod tests {
 
         // Signature doesn't match public key
         let mut header = header_base.clone();
-        header.public_key = PrivateKey::new().public_key();
-        header.sign(&private_key);
+        header.verifying_key = SigningKey::generate().verifying_key();
+        header.sign(&signing_key);
         assert!(matches!(
             validate_header(&header),
             Err(OperationError::SignatureMismatch)
@@ -654,7 +655,7 @@ mod tests {
         // Backlink missing
         let mut header = header_base.clone();
         header.seq_num = 1;
-        header.sign(&private_key);
+        header.sign(&signing_key);
         assert!(matches!(
             validate_header(&header),
             Err(OperationError::BacklinkMissing)
@@ -662,8 +663,8 @@ mod tests {
 
         // Backlink given but sequence number indicates none
         let mut header = header_base.clone();
-        header.backlink = Some(Hash::new(vec![4, 5, 6]));
-        header.sign(&private_key);
+        header.backlink = Some(Hash::digest(vec![4, 5, 6]));
+        header.sign(&signing_key);
         assert!(matches!(
             validate_header(&header),
             Err(OperationError::SeqNumMismatch)
@@ -672,7 +673,7 @@ mod tests {
         // Payload size does not match
         let mut header = header_base.clone();
         header.payload_size = 11;
-        header.sign(&private_key);
+        header.sign(&signing_key);
         assert!(matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
@@ -684,8 +685,8 @@ mod tests {
 
         // Payload hash does not match
         let mut header = header_base.clone();
-        header.payload_hash = Some(Hash::new(vec![4, 5, 6]));
-        header.sign(&private_key);
+        header.payload_hash = Some(Hash::digest(vec![4, 5, 6]));
+        header.sign(&signing_key);
         assert!(matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
@@ -731,12 +732,12 @@ mod tests {
             expires: Expiry(0123456),
         };
 
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
         let body: Body = Body::new("Hello, Sloth!".as_bytes());
 
         let mut header = Header {
             version: 1,
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
@@ -746,7 +747,7 @@ mod tests {
             extensions: extensions.clone(),
         };
 
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         // Thanks to blanket implementation of Extension<T> on Header we can extract the extension
         // value from the header itself.

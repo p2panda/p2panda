@@ -67,7 +67,7 @@ where
 
     /// The public key of the local actor.
     pub(crate) fn id(&self) -> ActorId {
-        self.credentials.public_key().into()
+        self.credentials.verifying_key().into()
     }
 
     /// The local actor id and their long-term key bundle.
@@ -278,7 +278,7 @@ mod tests {
 
         let message_store = TestStore::new();
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.private_key());
+        let forge = TestForge::new(message_store, credentials.signing_key());
 
         let mut identity_manager =
             IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
@@ -287,7 +287,7 @@ mod tests {
 
         let me = identity_manager.me().await.unwrap();
         let bundle: &LongTermKeyBundle = me.key_bundle();
-        let actor_id: ActorId = credentials.public_key().into();
+        let actor_id: ActorId = credentials.verifying_key().into();
 
         assert_eq!(me.id(), actor_id);
         assert!(bundle.verify().is_ok());
@@ -302,7 +302,7 @@ mod tests {
 
         let message_store = TestStore::new();
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.private_key());
+        let forge = TestForge::new(message_store, credentials.signing_key());
 
         let mut identity_manager =
             IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
@@ -311,7 +311,7 @@ mod tests {
 
         let msg = identity_manager.key_bundle_message().await.unwrap();
 
-        let actor_id: ActorId = credentials.private_key().public_key().into();
+        let actor_id: ActorId = credentials.signing_key().verifying_key().into();
         assert_eq!(msg.author(), actor_id);
         match msg.args() {
             SpacesArgs::KeyBundle { key_bundle } => {
@@ -329,7 +329,7 @@ mod tests {
 
         let alice_message_store = TestStore::new();
         let alice_key_store = TestKeyStore::new();
-        let alice_forge = TestForge::new(alice_message_store, alice_credentials.private_key());
+        let alice_forge = TestForge::new(alice_message_store, alice_credentials.signing_key());
 
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
@@ -347,7 +347,7 @@ mod tests {
 
         let bob_message_store = TestStore::new();
         let bob_key_store = TestKeyStore::new();
-        let bob_forge = TestForge::new(bob_message_store, bob_credentials.private_key());
+        let bob_forge = TestForge::new(bob_message_store, bob_credentials.signing_key());
 
         let mut bob_identity_manager = IdentityManager::new(
             bob_key_store,
@@ -358,7 +358,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let bob_id = bob_credentials.public_key().into();
+        let bob_id = bob_credentials.verifying_key().into();
 
         let bob_member = bob_identity_manager.me().await.unwrap();
         let bob_bundle = bob_member.key_bundle();
@@ -375,7 +375,7 @@ mod tests {
         assert_eq!(bundle_identity_key, *bob_bundle.identity_key());
         assert_eq!(
             bundle_identity_key,
-            bob_credentials.identity_secret().public_key().unwrap()
+            bob_credentials.identity_secret().verifying_key().unwrap()
         );
     }
 
@@ -387,7 +387,7 @@ mod tests {
 
         let message_store = TestStore::new();
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.private_key());
+        let forge = TestForge::new(message_store, credentials.signing_key());
 
         let mut alice_identity_manager =
             IdentityManager::new(key_store, forge, credentials, &config, &rng)

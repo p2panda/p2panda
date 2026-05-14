@@ -373,7 +373,7 @@ impl ThreadLocalActor for AddressBookActor {
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
     use p2panda_store::SqliteStore;
     use p2panda_store::address_book::NodeInfo as _;
     use ractor::call;
@@ -398,38 +398,42 @@ mod tests {
             .unwrap();
 
         // Insert new node info.
-        let node_info = NodeInfo::new(args.public_key.clone());
+        let node_info = NodeInfo::new(args.verifying_key.clone());
         let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(result.unwrap());
 
         // Overwriting node info should return "false".
-        let mut node_info = NodeInfo::new(args.public_key.clone());
+        let mut node_info = NodeInfo::new(args.verifying_key.clone());
         node_info.bootstrap = true;
         let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
         assert!(!result.unwrap());
 
         // Bootstrap should be set to "true", as node info was still overwritten.
-        let result = call!(actor, ToAddressBookActor::NodeInfo, args.public_key.clone())
-            .unwrap()
-            .expect("node info exists in store");
+        let result = call!(
+            actor,
+            ToAddressBookActor::NodeInfo,
+            args.verifying_key.clone()
+        )
+        .unwrap()
+        .expect("node info exists in store");
         assert!(result.bootstrap);
         assert!(result.transports().is_none());
 
         // Inserting invalid node info should fail.
         let node_info = {
             NodeInfo {
-                node_id: args.public_key.clone(),
+                node_id: args.verifying_key.clone(),
                 bootstrap: false,
                 transports: Some({
                     let mut unsigned = UnsignedTransportInfo::new();
                     unsigned.add_addr(TransportAddress::from_iroh(
-                        args.public_key.clone(),
+                        args.verifying_key.clone(),
                         Some("https://my.relay.net".parse().unwrap()),
                         [],
                     ));
-                    let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
+                    let mut transport_info = unsigned.sign(&args.signing_key.clone()).unwrap();
                     transport_info.timestamp = 1234.into(); // Manipulate timestamp to make signature invalid
                     transport_info.into()
                 }),
@@ -441,7 +445,7 @@ mod tests {
         assert!(result.is_err());
 
         // Inserting transport info should not overwrite "local" data.
-        let mut node_info = NodeInfo::new(args.public_key.clone());
+        let mut node_info = NodeInfo::new(args.verifying_key.clone());
         node_info.bootstrap = true;
         let result = call!(actor, ToAddressBookActor::InsertNodeInfo, node_info).unwrap();
         assert!(result.is_ok());
@@ -449,25 +453,29 @@ mod tests {
         let transport_info = {
             let mut unsigned = UnsignedTransportInfo::new();
             unsigned.add_addr(TransportAddress::from_iroh(
-                args.public_key.clone(),
+                args.verifying_key.clone(),
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            unsigned.sign(&args.private_key).unwrap()
+            unsigned.sign(&args.signing_key).unwrap()
         };
         let result = call!(
             actor,
             ToAddressBookActor::InsertTransportInfo,
-            args.public_key.clone(),
+            args.verifying_key.clone(),
             transport_info.into()
         )
         .unwrap();
         assert!(result.is_ok());
 
         // Even after insertion of new transport info, the "local" bootstrap config is still true.
-        let result = call!(actor, ToAddressBookActor::NodeInfo, args.public_key.clone())
-            .unwrap()
-            .expect("node info exists in store");
+        let result = call!(
+            actor,
+            ToAddressBookActor::NodeInfo,
+            args.verifying_key.clone()
+        )
+        .unwrap()
+        .expect("node info exists in store");
         assert!(result.bootstrap);
 
         // Transport info was set.
@@ -477,46 +485,46 @@ mod tests {
         let transport_info = {
             let mut unsigned = UnsignedTransportInfo::new();
             unsigned.add_addr(TransportAddress::from_iroh(
-                args.public_key.clone(),
+                args.verifying_key.clone(),
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            let mut transport_info = unsigned.sign(&args.private_key.clone()).unwrap();
+            let mut transport_info = unsigned.sign(&args.signing_key.clone()).unwrap();
             transport_info.timestamp = 1234.into(); // Manipulate timestamp to make signature invalid
             transport_info
         };
-        assert!(transport_info.verify(&args.public_key).is_err());
+        assert!(transport_info.verify(&args.verifying_key).is_err());
         let result = call!(
             actor,
             ToAddressBookActor::InsertTransportInfo,
-            args.public_key.clone(),
+            args.verifying_key.clone(),
             transport_info.into()
         )
         .unwrap();
         assert!(result.is_err());
 
         // Inserting new transport info just creates a "default" object.
-        let private_key = PrivateKey::new();
-        let public_key = private_key.public_key();
+        let signing_key = SigningKey::generate();
+        let verifying_key = signing_key.verifying_key();
         let transport_info = {
             let mut unsigned = UnsignedTransportInfo::new();
             unsigned.add_addr(TransportAddress::from_iroh(
-                public_key,
+                verifying_key,
                 Some("https://my.relay.net".parse().unwrap()),
                 [],
             ));
-            unsigned.sign(&private_key).unwrap()
+            unsigned.sign(&signing_key).unwrap()
         };
         let result = call!(
             actor,
             ToAddressBookActor::InsertTransportInfo,
-            public_key,
+            verifying_key,
             transport_info.into()
         )
         .unwrap();
         assert!(result.is_ok());
 
-        let result = call!(actor, ToAddressBookActor::NodeInfo, public_key)
+        let result = call!(actor, ToAddressBookActor::NodeInfo, verifying_key)
             .unwrap()
             .expect("node info exists in store");
         assert!(!result.bootstrap);

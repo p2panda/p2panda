@@ -13,7 +13,7 @@ use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::actors::session::ToGossipSession;
-use crate::iroh_endpoint::from_public_key;
+use crate::iroh_endpoint::from_verifying_key;
 use crate::watchers::WatcherReceiver;
 
 pub enum ToGossipHealer {
@@ -114,7 +114,7 @@ impl ThreadLocalActor for GossipHealer {
                         state.topic_endpoint_ids = Vec::from_iter(event.value.into_iter().filter_map(|node_id| {
                             // Remove ourselves from list.
                             if node_id != state.my_node_id {
-                                Some(from_public_key(node_id))
+                                Some(from_verifying_key(node_id))
                             } else {
                                 None
                             }

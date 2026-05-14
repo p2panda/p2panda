@@ -250,7 +250,7 @@ where
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use p2panda_core::PrivateKey;
+    use p2panda_core::SigningKey;
     use p2panda_store::address_book::AddressBookStore;
     use p2panda_store::address_book::test_utils::{TestNodeId, TestNodeInfo};
     use p2panda_store::{SqliteStore, tx_unwrap};
@@ -266,7 +266,7 @@ mod tests {
         let node_ids = {
             let mut map = Vec::with_capacity(9);
             for _ in 0..9 {
-                map.push(PrivateKey::new().public_key());
+                map.push(SigningKey::generate().verifying_key());
             }
             map
         };
@@ -341,7 +341,7 @@ mod tests {
         let node_ids = {
             let mut map = Vec::with_capacity(NUM_NODES);
             for _ in 0..NUM_NODES {
-                map.push(PrivateKey::new().public_key());
+                map.push(SigningKey::generate().verifying_key());
             }
             map
         };
@@ -398,7 +398,7 @@ mod tests {
         let rng = ChaCha20Rng::from_seed([1; 32]);
         let store = SqliteStore::temporary().await;
 
-        let node_id = PrivateKey::new().public_key();
+        let node_id = SigningKey::generate().verifying_key();
 
         tx_unwrap!(store, {
             store

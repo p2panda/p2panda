@@ -66,16 +66,16 @@ where
 #[cfg(test)]
 mod tests {
     use crate::logs::LogHeights;
-    use crate::{PrivateKey, PublicKey};
+    use crate::{SigningKey, VerifyingKey};
 
     use super::Cursor;
 
     #[test]
     fn advance_log_height() {
-        let author_1 = PrivateKey::new().public_key();
-        let author_2 = PrivateKey::new().public_key();
+        let author_1 = SigningKey::generate().verifying_key();
+        let author_2 = SigningKey::generate().verifying_key();
 
-        let mut cursor = Cursor::<PublicKey, u64>::new("test", LogHeights::default());
+        let mut cursor = Cursor::<VerifyingKey, u64>::new("test", LogHeights::default());
         assert_eq!(cursor.name(), "test");
 
         assert!(cursor.log_height(&author_1, &0).is_none());
@@ -94,8 +94,8 @@ mod tests {
 
     #[test]
     fn strict_monotonic_incremental() {
-        let author = PrivateKey::new().public_key();
-        let mut cursor = Cursor::<PublicKey, u64>::new("test", LogHeights::default());
+        let author = SigningKey::generate().verifying_key();
+        let mut cursor = Cursor::<VerifyingKey, u64>::new("test", LogHeights::default());
 
         // Ignore attempts to move the cursor "backwards".
         cursor.advance(author, 0, 10);
@@ -105,12 +105,12 @@ mod tests {
 
     #[test]
     fn compare() {
-        let author = PrivateKey::new().public_key();
+        let author = SigningKey::generate().verifying_key();
         let log_id_1 = 1;
         let log_id_2 = 2;
 
-        let mut cursor_1 = Cursor::<PublicKey, u64>::new("one", LogHeights::default());
-        let mut cursor_2 = Cursor::<PublicKey, u64>::new("two", LogHeights::default());
+        let mut cursor_1 = Cursor::<VerifyingKey, u64>::new("one", LogHeights::default());
+        let mut cursor_2 = Cursor::<VerifyingKey, u64>::new("two", LogHeights::default());
 
         cursor_1.advance(author, log_id_1, 121);
         cursor_1.advance(author, log_id_2, 13);

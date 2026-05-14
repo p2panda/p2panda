@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{LogId, PublicKey};
+use p2panda_core::{LogId, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 
@@ -12,7 +12,7 @@ use crate::topics::TopicStore;
 
 /// SQLite `TopicStore` implementation that can be used to map a topic to a set of (generic)
 /// per-author data identifiers.
-impl<T, S> TopicStore<T, PublicKey, S> for SqliteStore
+impl<T, S> TopicStore<T, VerifyingKey, S> for SqliteStore
 where
     T: Serialize + for<'de> Deserialize<'de>,
     S: LogId,
@@ -22,7 +22,7 @@ where
     async fn associate(
         &self,
         topic: &T,
-        author: &PublicKey,
+        author: &VerifyingKey,
         data_id: &S,
     ) -> Result<bool, SqliteError> {
         let result = self
@@ -60,7 +60,7 @@ where
     async fn remove(
         &self,
         topic: &T,
-        author: &PublicKey,
+        author: &VerifyingKey,
         data_id: &S,
     ) -> Result<bool, SqliteError> {
         let result = self
@@ -92,7 +92,7 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn resolve(&self, topic: &T) -> Result<BTreeMap<PublicKey, Vec<S>>, Self::Error> {
+    async fn resolve(&self, topic: &T) -> Result<BTreeMap<VerifyingKey, Vec<S>>, Self::Error> {
         let data_ids = self
             .execute(async |pool| {
                 query_as::<_, (String, Vec<u8>)>(
@@ -116,10 +116,10 @@ where
             })
             .await?;
 
-        let mut result: BTreeMap<PublicKey, Vec<S>> = BTreeMap::new();
+        let mut result: BTreeMap<VerifyingKey, Vec<S>> = BTreeMap::new();
 
         for (author, data_id) in data_ids {
-            let author: PublicKey = author
+            let author: VerifyingKey = author
                 .parse()
                 .map_err(|_| SqliteError::Decode("author".into(), DecodeError::FromStr))?;
 

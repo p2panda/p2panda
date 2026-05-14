@@ -3,7 +3,7 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use p2panda_core::{PrivateKey, PublicKey};
+use p2panda_core::{SigningKey, VerifyingKey};
 use tokio::sync::RwLock;
 
 use crate::message::SpacesArgs;
@@ -13,7 +13,7 @@ use crate::traits::{AuthoredMessage, Forge, MessageStore};
 
 #[derive(Debug, Clone)]
 pub struct TestForge<S> {
-    public_key: PublicKey,
+    verifying_key: VerifyingKey,
     store: S,
     inner: Arc<RwLock<TestForgeInner>>,
 }
@@ -22,13 +22,13 @@ impl<S> TestForge<S>
 where
     S: MessageStore<TestMessage>,
 {
-    pub fn new(store: S, private_key: PrivateKey) -> Self {
+    pub fn new(store: S, signing_key: SigningKey) -> Self {
         Self {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             store,
             inner: Arc::new(RwLock::new(TestForgeInner {
                 next_seq_num: 0,
-                private_key,
+                signing_key,
             })),
         }
     }
@@ -39,7 +39,7 @@ pub struct TestForgeInner {
     #[allow(unused)]
     next_seq_num: SeqNum,
     #[allow(unused)]
-    private_key: PrivateKey,
+    signing_key: SigningKey,
 }
 
 impl<S> Forge<TestSpaceId, TestMessage, TestConditions> for TestForge<S>
@@ -48,8 +48,8 @@ where
 {
     type Error = Infallible;
 
-    fn public_key(&self) -> PublicKey {
-        self.public_key
+    fn verifying_key(&self) -> VerifyingKey {
+        self.verifying_key
     }
 
     async fn forge(
@@ -65,7 +65,7 @@ where
 
         let message = TestMessage {
             seq_num,
-            public_key: self.public_key,
+            verifying_key: self.verifying_key,
             spaces_args: args,
         };
 

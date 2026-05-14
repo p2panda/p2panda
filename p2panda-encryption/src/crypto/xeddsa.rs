@@ -113,14 +113,14 @@ pub fn xeddsa_sign(
 /// Verifies a XEdDSA signature on provided data using the X25519 public counter-part.
 pub fn xeddsa_verify(
     bytes: &[u8],
-    their_public_key: &PublicKey,
+    their_verifying_key: &PublicKey,
     signature: &XSignature,
 ) -> Result<(), XEdDSAError> {
     // M = Message to sign (byte sequence)
     let cap_m = bytes;
 
     // u = Montgomery public key (byte sequence of b bits).
-    let u = their_public_key;
+    let u = their_verifying_key;
 
     // R || s = Signature to verify (byte sequence of 2b bits)
     let mut cap_r = [0u8; 32];
@@ -197,10 +197,10 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let public_key = secret_key.public_key().unwrap();
+        let verifying_key = secret_key.verifying_key().unwrap();
 
         let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
-        assert!(xeddsa_verify(b"Hello, Panda!", &public_key, &signature).is_ok());
+        assert!(xeddsa_verify(b"Hello, Panda!", &verifying_key, &signature).is_ok());
     }
 
     #[test]
@@ -208,26 +208,26 @@ mod tests {
         let rng = Rng::from_seed([1; 32]);
 
         let secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let public_key = secret_key.public_key().unwrap();
+        let verifying_key = secret_key.verifying_key().unwrap();
         let signature = xeddsa_sign(b"Hello, Panda!", &secret_key, &rng).unwrap();
 
         let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
-        let invalid_public_key = invalid_secret_key.public_key().unwrap();
+        let invalid_verifying_key = invalid_secret_key.verifying_key().unwrap();
         let invalid_signature = xeddsa_sign(b"Hello, Panda!", &invalid_secret_key, &rng).unwrap();
 
-        assert_ne!(public_key, invalid_public_key);
+        assert_ne!(verifying_key, invalid_verifying_key);
         assert_ne!(signature, invalid_signature);
 
         assert!(matches!(
-            xeddsa_verify(b"Invalid Data", &public_key, &signature),
+            xeddsa_verify(b"Invalid Data", &verifying_key, &signature),
             Err(XEdDSAError::VerificationFailed)
         ));
         assert!(matches!(
-            xeddsa_verify(b"Hello, Panda!", &invalid_public_key, &signature),
+            xeddsa_verify(b"Hello, Panda!", &invalid_verifying_key, &signature),
             Err(XEdDSAError::VerificationFailed)
         ));
         assert!(matches!(
-            xeddsa_verify(b"Hello, Panda!", &public_key, &invalid_signature),
+            xeddsa_verify(b"Hello, Panda!", &verifying_key, &invalid_signature),
             Err(XEdDSAError::VerificationFailed)
         ));
     }

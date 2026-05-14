@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 
 use p2panda_core::prune::validate_prunable_backlink;
 use p2panda_core::{
-    Extensions, Hash, LogId, Operation, OperationError, PublicKey, SeqNum, validate_operation,
+    Extensions, Hash, LogId, Operation, OperationError, SeqNum, VerifyingKey, validate_operation,
 };
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
@@ -27,8 +27,8 @@ pub async fn ingest_operation<S, T, L, E, TP>(
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash, L>
-        + LogStore<Operation<E>, PublicKey, L, SeqNum, Hash>
-        + TopicStore<TP, PublicKey, L>,
+        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>>,
     L: LogId,
     E: Extensions,
@@ -60,7 +60,7 @@ where
 
     // Validate log integrity.
     let past_header = store
-        .get_latest_entry_tx(&operation.header.public_key, log_id)
+        .get_latest_entry_tx(&operation.header.verifying_key, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?
         .map(|operation| operation.header);
@@ -71,14 +71,14 @@ where
 
     // Insert operation into store and associate its log with the given topic.
     let id = operation.hash;
-    let public_key = operation.header.public_key;
+    let verifying_key = operation.header.verifying_key;
 
     store
         .insert_operation(&id, operation, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
-    <S as TopicStore<TP, PublicKey, L>>::associate(store, topic, &public_key, log_id)
+    <S as TopicStore<TP, VerifyingKey, L>>::associate(store, topic, &verifying_key, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -106,7 +106,7 @@ pub enum IngestError {
 #[cfg(test)]
 mod tests {
     use p2panda_core::test_utils::TestLog;
-    use p2panda_core::{Hash, Header, Operation, PrivateKey, PublicKey, SeqNum, Timestamp};
+    use p2panda_core::{Hash, Header, Operation, SeqNum, SigningKey, Timestamp, VerifyingKey};
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
     use p2panda_store::topics::TopicStore;
@@ -180,7 +180,7 @@ mod tests {
 
         // Topic "dogs" contains two logs: 0 with two operations and 1 with one operation.
         let authors =
-            <SqliteStore as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &dogs)
+            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve(&store, &dogs)
                 .await
                 .unwrap();
         assert_eq!(*authors.get(&log_0.author()).unwrap(), [0]);
@@ -188,7 +188,7 @@ mod tests {
 
         let operation = <SqliteStore as LogStore<
             Operation<()>,
-            PublicKey,
+            VerifyingKey,
             usize,
             SeqNum,
             Hash,
@@ -200,14 +200,14 @@ mod tests {
 
         // Topic "cats" contains one log: 2 with four operations.
         let authors =
-            <SqliteStore as TopicStore<[u8; 32], PublicKey, usize>>::resolve(&store, &cats)
+            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve(&store, &cats)
                 .await
                 .unwrap();
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
         let operation = <SqliteStore as LogStore<
             Operation<()>,
-            PublicKey,
+            VerifyingKey,
             usize,
             SeqNum,
             Hash,
@@ -221,22 +221,22 @@ mod tests {
     #[tokio::test]
     async fn missing_prefix() {
         let store = SqliteStore::temporary().await;
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
 
         // Create an operation which has already advanced in the log (it has a backlink and higher
         // sequence number).
         let mut header = Header {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             version: 1,
             signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: Timestamp::now(),
             seq_num: 12, // we'll be missing 11 operations between the first and this one
-            backlink: Some(Hash::new(b"mock operation")),
+            backlink: Some(Hash::digest(b"mock operation")),
             extensions: (),
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         let operation = Operation {
             hash: header.hash(),
@@ -251,22 +251,22 @@ mod tests {
     #[tokio::test]
     async fn ignore_outdated_pruned_operations() {
         let store = SqliteStore::temporary().await;
-        let private_key = PrivateKey::new();
+        let signing_key = SigningKey::generate();
 
         // 1. Create an advanced operation in a log which assumes that all previous operations have
         //    been pruned.
         let mut header = Header {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             version: 1,
             signature: None,
             payload_size: 0,
             payload_hash: None,
             timestamp: Timestamp::now(),
             seq_num: 1,
-            backlink: Some(Hash::new(b"mock operation")),
+            backlink: Some(Hash::digest(b"mock operation")),
             extensions: (),
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         let operation = Operation {
             hash: header.hash(),
@@ -280,7 +280,7 @@ mod tests {
 
         // 2. Create an operation which is from an "outdated" seq from before the log was pruned.
         let mut header = Header {
-            public_key: private_key.public_key(),
+            verifying_key: signing_key.verifying_key(),
             version: 1,
             signature: None,
             payload_size: 0,
@@ -290,7 +290,7 @@ mod tests {
             backlink: None,
             extensions: (),
         };
-        header.sign(&private_key);
+        header.sign(&signing_key);
 
         let operation = Operation {
             hash: header.hash(),

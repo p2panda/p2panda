@@ -23,7 +23,7 @@ use crate::gossip::actors::joiner::{GossipJoiner, ToGossipJoiner};
 use crate::gossip::actors::listener::GossipListener;
 use crate::gossip::actors::receiver::{GossipReceiver, ToGossipReceiver};
 use crate::gossip::actors::sender::{GossipSender, ToGossipSender};
-use crate::iroh_endpoint::to_public_key;
+use crate::iroh_endpoint::to_verifying_key;
 use crate::utils::ShortFormat;
 
 pub enum ToGossipSession {
@@ -166,7 +166,7 @@ impl ThreadLocalActor for GossipSession {
         match message {
             ToGossipSession::ProcessJoined(nodes) => {
                 let topic = state.topic;
-                let nodes: Vec<NodeId> = nodes.into_iter().map(to_public_key).collect();
+                let nodes: Vec<NodeId> = nodes.into_iter().map(to_verifying_key).collect();
                 let session_id = myself.get_id();
 
                 let _ = state.gossip_actor.cast(ToGossipManager::Joined {
@@ -181,7 +181,7 @@ impl ThreadLocalActor for GossipSession {
                 }
                 IrohEvent::Received(msg) => {
                     let bytes = msg.content.into();
-                    let delivered_from = to_public_key(msg.delivered_from);
+                    let delivered_from = to_verifying_key(msg.delivered_from);
                     let delivery_scope = msg.scope;
                     let topic = state.topic;
                     let session_id = myself.get_id();
@@ -195,7 +195,7 @@ impl ThreadLocalActor for GossipSession {
                     });
                 }
                 IrohEvent::NeighborUp(peer) => {
-                    let node_id = to_public_key(peer);
+                    let node_id = to_verifying_key(peer);
                     let session_id = myself.get_id();
 
                     let _ = state.gossip_actor.cast(ToGossipManager::NeighborUp {
@@ -204,7 +204,7 @@ impl ThreadLocalActor for GossipSession {
                     });
                 }
                 IrohEvent::NeighborDown(peer) => {
-                    let node_id = to_public_key(peer);
+                    let node_id = to_verifying_key(peer);
                     let session_id = myself.get_id();
 
                     let _ = state.gossip_actor.cast(ToGossipManager::NeighborDown {

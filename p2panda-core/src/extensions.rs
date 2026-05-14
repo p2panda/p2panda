@@ -4,8 +4,8 @@
 //!
 //! User-defined extensions can be added to an operation's `Header` in order to extend the basic
 //! functionality of the core p2panda data types or to encode application-specific fields which
-//! should not be contained in the [`Body`](crate::Body). Extension values can themselves be
-//! derived from other header material, such as `PublicKey` or a headers' `Hash`.
+//! should not be contained in the [`Body`](crate::Body). Extension values can themselves be derived
+//! from other header material, such as `VerifingKey` or a headers' `Hash`.
 //!
 //! At a lower level this might be information relating to capabilities or group encryption schemes
 //! which is required to enforce access-control restrictions during sync. Alternatively, extensions
@@ -14,10 +14,9 @@
 //! enforce a single approach to such areas where there are rightly many different approaches, with
 //! the most suitable being dependent on specific use-case requirements.
 //!
-//! Interfaces which use p2panda core data types can require certain extensions to be present on
-//! any headers that their APIs accept using trait bounds. `p2panda-stream`, for example, uses the
-//! [`PruneFlag`](crate::PruneFlag) in order to implement automatic network-wide garbage
-//! collection.
+//! Interfaces which use p2panda core data types can require certain extensions to be present on any
+//! headers that their APIs accept using trait bounds. `p2panda-stream`, for example, uses the
+//! [`PruneFlag`](crate::PruneFlag) in order to implement automatic network-wide garbage collection.
 //!
 //! Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
 //! requirements that `Header` requires, including `Serialize` and `Deserialize`.
@@ -25,7 +24,7 @@
 //! //! ## Example
 //!
 //! ```
-//! use p2panda_core::{Body, Hash, Extension, Header, PrivateKey, Timestamp};
+//! use p2panda_core::{Body, Hash, Extension, Header, SigningKey, Timestamp};
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,12 +60,12 @@
 //!     expires: Expiry(0123456),
 //! };
 //!
-//! let private_key = PrivateKey::new();
+//! let signing_key = SigningKey::generate();
 //! let body: Body = Body::new("Hello, Sloth!".as_bytes());
 //!
 //! let mut header = Header {
 //!     version: 1,
-//!     public_key: private_key.public_key(),
+//!     verifying_key: signing_key.verifying_key(),
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
@@ -76,7 +75,7 @@
 //!     extensions: extensions.clone(),
 //! };
 //!
-//! header.sign(&private_key);
+//! header.sign(&signing_key);
 //!
 //! let log_id: LogId = header.extension().unwrap();
 //! let expiry: Expiry = header.extension().unwrap();

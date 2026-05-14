@@ -8,7 +8,7 @@
 //! use p2panda_core::Hash;
 //!
 //! let bytes: &[u8] = b"A very important message.";
-//! let hash = Hash::new(bytes);
+//! let hash = Hash::digest(bytes);
 //!
 //! assert_eq!(
 //!     "8d3ca6d66651182cd6a9c1fc5dad0260a0ee29fe9ed494734e60d259430ae8a4",
@@ -33,7 +33,7 @@ pub struct Hash(blake3::Hash);
 
 impl Hash {
     /// Calculate the hash of the provided bytes.
-    pub fn new(buf: impl AsRef<[u8]>) -> Self {
+    pub fn digest(buf: impl AsRef<[u8]>) -> Self {
         Self(blake3::hash(buf.as_ref()))
     }
 
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn hashing() {
-        let hash = Hash::new([1, 2, 3]);
+        let hash = Hash::digest([1, 2, 3]);
 
         assert_eq!(
             hash.as_bytes(),

@@ -3,7 +3,7 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, PrivateKey, PublicKey, SeqNum, Timestamp, Topic};
+use p2panda_core::{Body, Hash, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -16,9 +16,9 @@ use crate::operation::{Extensions, Header, LogId, Operation};
 pub trait Forge<TP, C, E> {
     type Error: StdError;
 
-    fn private_key(&self) -> &PrivateKey;
+    fn signing_key(&self) -> &SigningKey;
 
-    fn public_key(&self) -> PublicKey;
+    fn verifying_key(&self) -> VerifyingKey;
 
     fn create_operation(
         &self,
@@ -31,7 +31,7 @@ pub trait Forge<TP, C, E> {
 
 #[derive(Clone, Debug)]
 pub struct OperationForge {
-    private_key: Arc<PrivateKey>,
+    signing_key: Arc<SigningKey>,
     store: SqliteStore,
 }
 
@@ -42,13 +42,13 @@ impl OperationForge {
     /// The forge holds the private key used to sign operations. This method generates a new key
     /// using CSPRNG from the system.
     pub fn new(store: SqliteStore) -> Self {
-        Self::from_private_key(PrivateKey::new(), store)
+        Self::from_signing_key(SigningKey::generate(), store)
     }
 
     /// Create a forge using an existing private key.
-    pub fn from_private_key(private_key: PrivateKey, store: SqliteStore) -> Self {
+    pub fn from_signing_key(signing_key: SigningKey, store: SqliteStore) -> Self {
         Self {
-            private_key: Arc::new(private_key),
+            signing_key: Arc::new(signing_key),
             store,
         }
     }
@@ -57,12 +57,12 @@ impl OperationForge {
 impl Forge<Topic, LogId, Extensions> for OperationForge {
     type Error = ForgeError;
 
-    fn private_key(&self) -> &PrivateKey {
-        &self.private_key
+    fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
     }
 
-    fn public_key(&self) -> PublicKey {
-        self.private_key.public_key()
+    fn verifying_key(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
     }
 
     /// Create a signed operation and insert it into the store.
@@ -94,12 +94,12 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         let operation = tx!(self.store, {
             let (seq_num, backlink) = <SqliteStore as LogStore<
                 Operation,
-                PublicKey,
+                VerifyingKey,
                 LogId,
                 SeqNum,
                 Hash,
             >>::get_latest_entry_tx(
-                &self.store, &self.private_key.public_key(), &log_id
+                &self.store, &self.signing_key.verifying_key(), &log_id
             )
             .await?
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
@@ -107,7 +107,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 
             let mut header = Header {
                 version: 1,
-                public_key: self.private_key.public_key(),
+                verifying_key: self.signing_key.verifying_key(),
                 signature: None,
                 payload_size,
                 payload_hash,
@@ -117,7 +117,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 extensions,
             };
 
-            header.sign(&self.private_key);
+            header.sign(&self.signing_key);
             let hash = header.hash();
 
             let operation = Operation {
@@ -126,10 +126,10 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 body,
             };
 
-            <SqliteStore as TopicStore<Topic, PublicKey, LogId>>::associate(
+            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
                 &self.store,
                 &topic,
-                &self.private_key.public_key(),
+                &self.signing_key.verifying_key(),
                 &log_id,
             )
             .await?;
@@ -169,7 +169,7 @@ mod tests {
         let store = SqliteStore::temporary().await;
         let forge = OperationForge::new(store.clone());
 
-        let topic = Topic::new();
+        let topic = Topic::random();
         let log_id = LogId::from_topic(topic);
         let extensions = Extensions::from_topic(topic);
 
@@ -195,7 +195,7 @@ mod tests {
 
         let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
             &store,
-            &forge.public_key(),
+            &forge.verifying_key(),
             &[log_id],
         )
         .await

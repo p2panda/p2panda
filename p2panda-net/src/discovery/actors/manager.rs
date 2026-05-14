@@ -32,7 +32,7 @@ use crate::discovery::actors::session::{
 };
 use crate::discovery::actors::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkFromHere};
 use crate::discovery::events::{DiscoveryEvent, SessionRole};
-use crate::iroh_endpoint::{Endpoint, to_public_key};
+use crate::iroh_endpoint::{Endpoint, to_verifying_key};
 use crate::utils::ShortFormat;
 
 /// Maximum duration of inactivity to accept before timing out the connection.
@@ -661,7 +661,7 @@ impl ProtocolHandler for DiscoveryProtocolHandler {
     ) -> Result<(), iroh::protocol::AcceptError> {
         self.manager_ref
             .send_message(ToDiscoveryManager::AcceptSession(
-                to_public_key(connection.remote_id()),
+                to_verifying_key(connection.remote_id()),
                 connection,
             ))
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))

@@ -226,13 +226,13 @@ mod tests {
         let bundle_1 = {
             let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             let prekey = PreKey::new(
-                prekey_secret.public_key().unwrap(),
+                prekey_secret.verifying_key().unwrap(),
                 Lifetime::from_range(now - 60, now + 60),
             );
             let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
             LongTermKeyBundle::new(
-                identity_secret.public_key().unwrap(),
+                identity_secret.verifying_key().unwrap(),
                 prekey,
                 prekey_signature,
             )
@@ -242,13 +242,13 @@ mod tests {
         let bundle_2 = {
             let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             let prekey = PreKey::new(
-                prekey_secret.public_key().unwrap(),
+                prekey_secret.verifying_key().unwrap(),
                 Lifetime::from_range(now - 60, now + 30),
             );
             let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
             LongTermKeyBundle::new(
-                identity_secret.public_key().unwrap(),
+                identity_secret.verifying_key().unwrap(),
                 prekey,
                 prekey_signature,
             )
@@ -284,13 +284,13 @@ mod tests {
         let invalid_bundle = {
             let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             let prekey = PreKey::new(
-                prekey_secret.public_key().unwrap(),
+                prekey_secret.verifying_key().unwrap(),
                 Lifetime::from_range(now - 60, now - 30),
             );
             let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
             LongTermKeyBundle::new(
-                identity_secret.public_key().unwrap(),
+                identity_secret.verifying_key().unwrap(),
                 prekey,
                 prekey_signature,
             )
@@ -333,13 +333,13 @@ mod tests {
         let invalid_bundle = {
             let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             let prekey = PreKey::new(
-                prekey_secret.public_key().unwrap(),
+                prekey_secret.verifying_key().unwrap(),
                 Lifetime::from_range(now - 60, now - 30),
             );
             let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
             LongTermKeyBundle::new(
-                identity_secret.public_key().unwrap(),
+                identity_secret.verifying_key().unwrap(),
                 prekey,
                 prekey_signature,
             )
@@ -348,13 +348,13 @@ mod tests {
         let valid_bundle = {
             let prekey_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             let prekey = PreKey::new(
-                prekey_secret.public_key().unwrap(),
+                prekey_secret.verifying_key().unwrap(),
                 Lifetime::from_range(now - 60, now + 60),
             );
             let prekey_signature = prekey.sign(&identity_secret, &rng).unwrap();
 
             LongTermKeyBundle::new(
-                identity_secret.public_key().unwrap(),
+                identity_secret.verifying_key().unwrap(),
                 prekey,
                 prekey_signature,
             )

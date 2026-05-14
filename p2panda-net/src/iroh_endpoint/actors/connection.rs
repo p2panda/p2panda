@@ -9,7 +9,7 @@ use tracing::{Instrument, debug, info_span, warn};
 
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::iroh_endpoint::actors::endpoint::{ConnectError, ProtocolMap, ToIrohEndpoint};
-use crate::iroh_endpoint::to_public_key;
+use crate::iroh_endpoint::to_verifying_key;
 use crate::utils::ShortFormat;
 use crate::{NodeId, ProtocolId};
 
@@ -99,7 +99,7 @@ async fn establish_connection(
             reply,
         } => {
             tracing::Span::current().record("alpn", alpn.fmt_short());
-            let remote_node_id = to_public_key(endpoint_addr.id);
+            let remote_node_id = to_verifying_key(endpoint_addr.id);
 
             let mut connect_options = ConnectOptions::default();
             if let Some(config) = quic_transport_config {
@@ -197,7 +197,7 @@ async fn establish_connection(
 
             // Inform endpoint actor about this successful, incoming connection attempt.
             let _ = endpoint_ref.send_message(ToIrohEndpoint::Report {
-                remote_node_id: to_public_key(connection.remote_id()),
+                remote_node_id: to_verifying_key(connection.remote_id()),
                 role: ConnectionRole::Accept,
                 outcome: ConnectionOutcome::Successful,
             });

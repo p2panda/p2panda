@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Topic};
+use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -26,8 +26,8 @@ pub const TEST_NETWORK_ID: NetworkId = [1; 32];
 pub struct ApplicationArguments {
     pub network_id: NetworkId,
     pub rng: ChaCha20Rng,
-    pub private_key: PrivateKey,
-    pub public_key: PublicKey,
+    pub signing_key: SigningKey,
+    pub verifying_key: VerifyingKey,
     pub iroh_config: IrohConfig,
     pub discovery_config: DiscoveryConfig,
     pub mdns_mode: MdnsDiscoveryMode,
@@ -37,13 +37,13 @@ pub struct ApplicationArguments {
 impl ApplicationArguments {
     pub fn node_info(&mut self) -> NodeInfo {
         let transport_info = TrustedTransportInfo::from_addrs([TransportAddress::from_iroh(
-            self.public_key,
+            self.verifying_key,
             None,
             [(self.iroh_config.bind_ip_v4, self.iroh_config.bind_port_v4).into()],
         )]);
 
         NodeInfo {
-            node_id: self.public_key,
+            node_id: self.verifying_key,
             bootstrap: false,
             transports: Some(transport_info.into()),
             metrics: NodeMetrics::default(),
@@ -54,7 +54,7 @@ impl ApplicationArguments {
 pub struct ArgsBuilder {
     network_id: NetworkId,
     rng: Option<ChaCha20Rng>,
-    private_key: Option<PrivateKey>,
+    signing_key: Option<SigningKey>,
     iroh_config: Option<IrohConfig>,
     discovery_config: Option<DiscoveryConfig>,
     mdns_mode: Option<MdnsDiscoveryMode>,
@@ -65,7 +65,7 @@ impl ArgsBuilder {
         Self {
             network_id,
             rng: None,
-            private_key: None,
+            signing_key: None,
             iroh_config: None,
             discovery_config: None,
             mdns_mode: None,
@@ -97,20 +97,20 @@ impl ArgsBuilder {
         self
     }
 
-    pub fn with_private_key(mut self, private_key: PrivateKey) -> Self {
-        self.private_key = Some(private_key);
+    pub fn with_signing_key(mut self, signing_key: SigningKey) -> Self {
+        self.signing_key = Some(signing_key);
         self
     }
 
     pub fn build(self) -> ApplicationArguments {
-        let private_key = self.private_key.unwrap_or_default();
+        let signing_key = self.signing_key.unwrap_or_default();
         ApplicationArguments {
             network_id: self.network_id,
             rng: self
                 .rng
                 .unwrap_or(ChaCha20Rng::try_from_rng(&mut SysRng).unwrap()),
-            public_key: private_key.public_key(),
-            private_key,
+            verifying_key: signing_key.verifying_key(),
+            signing_key,
             iroh_config: self.iroh_config.unwrap_or_default(),
             discovery_config: self.discovery_config.unwrap_or_default(),
             mdns_mode: self.mdns_mode.unwrap_or_default(),
@@ -125,9 +125,9 @@ pub fn test_args() -> ApplicationArguments {
 
 pub fn test_args_from_seed(seed: [u8; 32]) -> ApplicationArguments {
     let mut rng = ChaCha20Rng::from_seed(seed);
-    let private_key_bytes: [u8; 32] = rng.random();
+    let signing_key_bytes: [u8; 32] = rng.random();
     ArgsBuilder::new(TEST_NETWORK_ID)
-        .with_private_key(PrivateKey::from_bytes(&private_key_bytes))
+        .with_signing_key(SigningKey::from_bytes(&signing_key_bytes))
         .with_iroh_config(IrohConfig {
             bind_ip_v4: Ipv4Addr::LOCALHOST,
             bind_port_v4: rng.random_range(49152..65535),
@@ -151,7 +151,7 @@ pub fn setup_logging() {
 fn deterministic_args() {
     let args_1 = test_args_from_seed([0; 32]);
     let args_2 = test_args_from_seed([0; 32]);
-    assert_eq!(args_1.public_key, args_2.public_key);
+    assert_eq!(args_1.verifying_key, args_2.verifying_key);
     assert_eq!(args_1.iroh_config, args_2.iroh_config);
 }
 
@@ -177,7 +177,7 @@ impl TestNode {
     ) -> Self {
         let client = TestClient::new(
             // The identity of the "author" or client has a different private key from the node.
-            PrivateKey::from_bytes(&args.rng.random::<[u8; 32]>()),
+            SigningKey::from_bytes(&args.rng.random::<[u8; 32]>()),
         )
         .await;
 
@@ -193,7 +193,7 @@ impl TestNode {
 
         let endpoint = Endpoint::builder(address_book.clone())
             .config(args.iroh_config.clone())
-            .private_key(args.private_key.clone())
+            .signing_key(args.signing_key.clone())
             .spawn()
             .await
             .unwrap();
@@ -234,14 +234,14 @@ impl TestNode {
     }
 
     pub fn node_id(&self) -> NodeId {
-        self.args.public_key
+        self.args.verifying_key
     }
 
     pub fn node_info(&mut self) -> NodeInfo {
         self.args.node_info()
     }
 
-    pub fn client_id(&self) -> PublicKey {
+    pub fn client_id(&self) -> VerifyingKey {
         self.client.id()
     }
 }
@@ -259,19 +259,19 @@ pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, 
 #[derive(Clone)]
 pub struct TestClient {
     pub store: SqliteStore,
-    pub private_key: PrivateKey,
+    pub signing_key: SigningKey,
 }
 
 impl TestClient {
-    pub async fn new(private_key: PrivateKey) -> Self {
+    pub async fn new(signing_key: SigningKey) -> Self {
         let store = SqliteStore::temporary().await;
 
-        Self { store, private_key }
+        Self { store, signing_key }
     }
 
     /// The public key of this client.
-    pub fn id(&self) -> PublicKey {
-        self.private_key.public_key()
+    pub fn id(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
     }
 
     /// Create and insert an operation to the store.
@@ -308,25 +308,25 @@ impl TestClient {
         let (header, header_bytes, body) = tx_unwrap!(&self.store, {
             let (seq_num, backlink) = <SqliteStore as LogStore<
                 Operation<TestExtensions>,
-                PublicKey,
+                VerifyingKey,
                 u64,
                 u64,
                 p2panda_core::Hash,
             >>::get_latest_entry_tx(
-                &self.store, &self.private_key.public_key(), &log_id
+                &self.store, &self.signing_key.verifying_key(), &log_id
             )
             .await
             .unwrap()
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
-            create_operation(&self.private_key, body, seq_num, seq_num, backlink)
+            create_operation(&self.signing_key, body, seq_num, seq_num, backlink)
         });
 
         (header, header_bytes, body)
     }
 
-    pub async fn associate(&mut self, topic: &Topic, logs: &HashMap<PublicKey, Vec<u64>>) {
+    pub async fn associate(&mut self, topic: &Topic, logs: &HashMap<VerifyingKey, Vec<u64>>) {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {
@@ -339,7 +339,7 @@ impl TestClient {
 
 /// Create a single operation.
 pub fn create_operation(
-    private_key: &PrivateKey,
+    signing_key: &SigningKey,
     body: &[u8],
     seq_num: u64,
     timestamp: u64,
@@ -349,7 +349,7 @@ pub fn create_operation(
 
     let mut header = Header::<()> {
         version: 1,
-        public_key: private_key.public_key(),
+        verifying_key: signing_key.verifying_key(),
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
@@ -359,7 +359,7 @@ pub fn create_operation(
         extensions: (),
     };
 
-    header.sign(private_key);
+    header.sign(signing_key);
     let header_bytes = header.to_bytes();
 
     (header, header_bytes, body)

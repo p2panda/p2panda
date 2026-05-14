@@ -34,9 +34,9 @@ use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Hash, Header, Operation, PrivateKey, PublicKey, Timestamp, Topic};
+use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Timestamp, Topic, VerifyingKey};
 use p2panda_net::addrs::NodeInfo;
-use p2panda_net::iroh_endpoint::from_public_key;
+use p2panda_net::iroh_endpoint::from_verifying_key;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::ShortFormat;
 use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery, NodeId};
@@ -61,13 +61,13 @@ const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
 /// Heartbeat message to be sent over gossip (ephemeral messaging).
 #[derive(Debug, Serialize, Deserialize)]
 struct Heartbeat {
-    sender: PublicKey,
+    sender: VerifyingKey,
     online: bool,
     rnd: u64,
 }
 
 impl Heartbeat {
-    fn new(sender: PublicKey, online: bool) -> Self {
+    fn new(sender: VerifyingKey, online: bool) -> Self {
         Self {
             sender,
             online,
@@ -105,15 +105,15 @@ async fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    let private_key = PrivateKey::new();
-    let public_key = private_key.public_key();
+    let signing_key = SigningKey::generate();
+    let verifying_key = signing_key.verifying_key();
 
     // Retrieve the chat topic ID from the provided arguments, otherwise generate a new, random,
     // cryptographically-secure identifier.
     let topic: Topic = if let Some(topic_str) = args.chat_topic_id {
         topic_str.parse().expect("topic id should be 32 bytes")
     } else {
-        Topic::new()
+        Topic::random()
     };
 
     // Create a temporary SQLite database to store topic associations and operations.
@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
 
     // Associate our local log with the chat topic and commit it to the database.
     let permit = store.begin().await?;
-    store.associate(&topic, &public_key, &LOG_ID).await?;
+    store.associate(&topic, &verifying_key, &LOG_ID).await?;
     store.commit(permit).await?;
 
     // Prepare address book.
@@ -129,7 +129,7 @@ async fn main() -> Result<()> {
 
     // Add a bootstrap node to our address book if one was supplied by the user.
     if let Some(id) = args.bootstrap_id {
-        let endpoint_addr = EndpointAddr::new(from_public_key(id));
+        let endpoint_addr = EndpointAddr::new(from_verifying_key(id));
         let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse()?);
         address_book
             .insert_node_info(NodeInfo::from(endpoint_addr).bootstrap())
@@ -137,14 +137,14 @@ async fn main() -> Result<()> {
     }
 
     let endpoint = Endpoint::builder(address_book.clone())
-        .private_key(private_key.clone())
+        .signing_key(signing_key.clone())
         .relay_url(RELAY_URL.parse().unwrap())
         .spawn()
         .await?;
 
     println!("network id: {}", endpoint.network_id().fmt_short());
     println!("chat topic: {}", topic);
-    println!("public key: {}", public_key.to_hex());
+    println!("public key: {}", verifying_key.to_hex());
     println!("relay url: {}", RELAY_URL);
 
     let _discovery = Discovery::builder(address_book.clone(), endpoint.clone())
@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
     let final_heartbeat_tx = heartbeat_tx.clone();
 
     // Mapping of public key to nickname.
-    let nicknames = Arc::new(RwLock::new(HashMap::<PublicKey, String>::new()));
+    let nicknames = Arc::new(RwLock::new(HashMap::<VerifyingKey, String>::new()));
 
     // Mapping of public key to the instant that the last heartbeat message was received.
     let status = Arc::new(RwLock::new(HashMap::new()));
@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         loop {
             // Create and serialize a heartbeat message.
-            let msg = Heartbeat::new(public_key, true);
+            let msg = Heartbeat::new(verifying_key, true);
             let encoded_msg = encode_cbor(&msg).unwrap();
 
             // Publish the message to the gossip topic.
@@ -261,8 +261,8 @@ async fn main() -> Result<()> {
                             continue;
                         }
 
-                        let remote_public_key = operation.header.public_key;
-                        let remote_id = remote_public_key.fmt_short();
+                        let remote_verifying_key = operation.header.verifying_key;
+                        let remote_id = remote_verifying_key.fmt_short();
 
                         let text =
                             String::from_utf8(operation.body.as_ref().unwrap().to_bytes()).unwrap();
@@ -270,7 +270,7 @@ async fn main() -> Result<()> {
                         // Check if the text of this operation is setting a nickname.
                         if let Some(nick) = text.strip_prefix("/nick ") {
                             if let Some(previous_nick) =
-                                nicknames.read().await.get(&remote_public_key)
+                                nicknames.read().await.get(&remote_verifying_key)
                             {
                                 print!("-> {} is now known as: {}", previous_nick, nick);
                             } else {
@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
                             nicknames
                                 .write()
                                 .await
-                                .insert(remote_public_key, nick.trim().to_owned());
+                                .insert(remote_verifying_key, nick.trim().to_owned());
                         } else {
                             // Print a regular chat message.
                             print!(
@@ -289,7 +289,7 @@ async fn main() -> Result<()> {
                                 nicknames
                                     .read()
                                     .await
-                                    .get(&remote_public_key)
+                                    .get(&remote_verifying_key)
                                     .unwrap_or(&remote_id),
                                 text
                             )
@@ -297,7 +297,7 @@ async fn main() -> Result<()> {
 
                         let permit = store.begin().await.unwrap();
                         let id = operation.hash;
-                        let author = operation.header.public_key;
+                        let author = operation.header.verifying_key;
                         store
                             .insert_operation(&id, &operation, &LOG_ID)
                             .await
@@ -322,7 +322,7 @@ async fn main() -> Result<()> {
     tokio::task::spawn(async move {
         while let Some(text) = line_rx.recv().await {
             let body = Body::new(text.as_bytes());
-            let (hash, operation) = create_operation(&private_key, &body, seq_num, backlink);
+            let (hash, operation) = create_operation(&signing_key, &body, seq_num, backlink);
             let permit = store.begin().await.unwrap();
             store
                 .insert_operation(&hash, &operation, &LOG_ID)
@@ -348,7 +348,7 @@ async fn main() -> Result<()> {
     // Create and serialize a final heartbeat message.
     //
     // This informs other chatters that we are going offline.
-    let msg = Heartbeat::new(public_key, false);
+    let msg = Heartbeat::new(verifying_key, false);
     let encoded_msg = encode_cbor(&msg)?;
 
     final_heartbeat_tx.publish(&encoded_msg[..]).await?;
@@ -370,14 +370,14 @@ fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
 }
 
 fn create_operation(
-    private_key: &PrivateKey,
+    signing_key: &SigningKey,
     body: &Body,
     seq_num: u64,
     backlink: Option<Hash>,
 ) -> (Hash, Operation) {
     let mut header = Header {
         version: 1,
-        public_key: private_key.public_key(),
+        verifying_key: signing_key.verifying_key(),
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
@@ -387,7 +387,7 @@ fn create_operation(
         extensions: (),
     };
 
-    header.sign(private_key);
+    header.sign(signing_key);
     let hash = header.hash();
 
     let operation = Operation {
