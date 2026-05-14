@@ -76,7 +76,8 @@ impl TestLog {
 mod tests {
     use crate::Header;
     use crate::cbor::{decode_cbor, encode_cbor};
-    use crate::test_utils::TestLog;
+
+    use super::TestLog;
 
     #[test]
     fn zero_byte_body() {
