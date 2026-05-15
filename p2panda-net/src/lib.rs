@@ -293,7 +293,7 @@ pub type NodeId = p2panda_core::PublicKey;
 /// if they are not using the same network identifier.
 ///
 /// **WARNING:** The network identifier is _not_ confidentially exchanged with a remote node and
-/// can not be treated as a secret value. See: https://github.com/p2panda/p2panda/issues/965
+/// can not be treated as a secret value. See: <https://github.com/p2panda/p2panda/issues/965>
 pub type NetworkId = [u8; 32];
 
 /// Identifier for a protocol.
