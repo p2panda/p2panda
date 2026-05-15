@@ -15,7 +15,9 @@ members = [
     "p2panda-sync",
 ]
 
-[workspace.lints.rust]
+[workspace.lints.clippy]
+unused_async = "warn"
+needless_pass_by_ref_mut = "warn"
 
 [workspace.dependencies]
 blake3 = { version = "1.8.5" }
