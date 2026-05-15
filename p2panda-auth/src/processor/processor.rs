@@ -312,7 +312,7 @@ mod tests {
 
     #[tokio::test]
     async fn device_groups_single_context() {
-        let topic = Topic::new();
+        let topic = Topic::random();
 
         // All operations are processed on the same groups state context.
         let state_id = 'S';
@@ -328,11 +328,11 @@ mod tests {
         let cathy_log = TestLog::new();
         let cathy = cathy_log.author();
 
-        let alice_device_group = PrivateKey::new().public_key();
-        let bobby_device_group = PrivateKey::new().public_key();
-        let cathy_device_group = PrivateKey::new().public_key();
-        let ab_chat = PrivateKey::new().public_key();
-        let bc_chat = PrivateKey::new().public_key();
+        let alice_device_group = SigningKey::generate().verifying_key();
+        let bobby_device_group = SigningKey::generate().verifying_key();
+        let cathy_device_group = SigningKey::generate().verifying_key();
+        let ab_chat = SigningKey::generate().verifying_key();
+        let bc_chat = SigningKey::generate().verifying_key();
 
         let alice_groups = GroupsProcessor::new(alice_store.clone());
         let bobby_groups = GroupsProcessor::new(bobby_store.clone());

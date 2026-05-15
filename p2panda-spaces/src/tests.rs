@@ -633,12 +633,7 @@ async fn remove_member() {
     let message_03 = messages[0].clone();
     let message_04 = messages[1].clone();
 
-    let SpacesArgs::Auth {
-        group_id,
-        group_action,
-        auth_dependencies,
-    } = message_03.args()
-    else {
+    let SpacesArgs::Auth { group_action, .. } = message_03.args() else {
         panic!("expected auth message");
     };
 
@@ -763,12 +758,7 @@ async fn concurrent_removal_conflict() {
     let message_05 = messages[0].clone();
     let message_06 = messages[1].clone();
 
-    let SpacesArgs::Auth {
-        group_id,
-        group_action,
-        auth_dependencies,
-    } = message_05.args()
-    else {
+    let SpacesArgs::Auth { group_action, .. } = message_05.args() else {
         panic!("expected auth message");
     };
 
@@ -856,12 +846,7 @@ async fn space_from_existing_auth_state() {
     let message_03 = messages[1].clone();
     let message_04 = messages[2].clone();
 
-    let SpacesArgs::Auth {
-        group_id,
-        group_action,
-        auth_dependencies,
-    } = message_02.args()
-    else {
+    let SpacesArgs::Auth { group_action, .. } = message_02.args() else {
         panic!("expected auth message");
     };
 
@@ -960,7 +945,7 @@ async fn create_group() {
     let SpacesArgs::Auth {
         group_id,
         group_action,
-        auth_dependencies,
+        ..
     } = message_01.args()
     else {
         panic!("expected auth message");
