@@ -661,7 +661,7 @@ mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert Peer B's events.
-        let events = drain_stream(event_stream).await;
+        let events = drain_stream(event_stream);
         assert_eq!(events.len(), 6);
         for (index, event) in events.into_iter().enumerate() {
             match index {
