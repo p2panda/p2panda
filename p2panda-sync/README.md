@@ -23,22 +23,23 @@
 </div>
 
 Data-type agnostic interfaces for implementing sync protocols and managers which can be used
-stand-alone or as part of the local-first stack provided by `p2panda-net`.
+stand-alone or as part of the local-first stack provided by [`p2panda-net`].
 
-Users can implement two-party sync protocols over a `Sink` / `Stream` pair with the `Protocol`
-trait and a system for instantiating and orchestrating concurrent sync sessions with the `Manager`
-trait. 
+Users can implement two-party sync protocols over a `Sink` / `Stream` pair with the `Protocol` trait
+and a system for instantiating and orchestrating concurrent sync sessions with the `Manager` trait.
 
-Concrete implementations for performing sync over p2panda append-only logs associated with a
-generic topic can be found in the `manager` and `protocols` modules.
+Concrete implementations for performing sync over p2panda append-only logs associated with a generic
+topic can be found in the `manager` and `protocols` modules.
 
 For most high-level users `p2panda-net` will be the entry point into local-first development with
 p2panda. Interfaces in this crate are intended for cases where users want to integrate their own
 base convergent data-type and sync protocols as a module in the `p2panda-net` stack.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
+
+[`p2panda-net`]: https://docs.rs/p2panda-net
 
 ## License
 
@@ -50,11 +51,9 @@ additional terms or conditions.
 
 [Apache License, Version 2.0]: https://github.com/p2panda/p2panda/blob/main/LICENSES/Apache-2.0.txt
 [MIT license]: https://github.com/p2panda/p2panda/blob/main/LICENSES/MIT.txt
-[p2panda-net]: https://docs.rs/p2panda-net/latest/p2panda_net/
 
 ---
 
-_This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594_.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._

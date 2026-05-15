@@ -22,13 +22,13 @@
   </h3>
 </div>
 
-This crate provides a networked blob store for streaming content-addressed blobs between peers.
-It can be used to import, export and download blobs. Both in-memory and filesystem-based
-persistence options are provided.
+This crate provides a networked blob store for streaming content-addressed blobs between peers. It
+can be used to import, export and download blobs. Both in-memory and filesystem-based persistence
+options are provided.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
 
 ## License
 
@@ -43,7 +43,6 @@ additional terms or conditions.
 
 ---
 
-*This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594*.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._

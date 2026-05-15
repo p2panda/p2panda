@@ -22,31 +22,30 @@
   </h3>
 </div>
 
-This crate provides an API for establishing and managing encryption contexts with dynamic groups
-of actors. The p2panda-encryption [Data
-Encryption](https://docs.rs/p2panda-encryption/latest/p2panda_encryption/data_scheme/index.html)
-scheme is used for key agreement and group management is achieved through an integration with
-[p2panda-auth groups](https://docs.rs/p2panda-auth/latest/p2panda_auth/). The main entry point for
-users is the `Manager` struct from which groups and spaces can be created.
+This crate provides an API for establishing and managing encryption contexts with dynamic groups of
+actors. The p2panda-encryption [Data Encryption](https://docs.rs/p2panda-encryption) scheme is used
+for key agreement and group management is achieved through an integration with [p2panda-auth
+groups](https://docs.rs/p2panda-auth). The main entry point for users is the `Manager` struct from
+which groups and spaces can be created.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
 
 ## Features
 
-* Decentralised group key agreement with forward secrecy and encrypted messaging with
+- Decentralised group key agreement with forward secrecy and encrypted messaging with
   post-compromise security
-* Decentralised group management with robust conflict resolution strategies
-* Private space identifiers
-* Re-use of groups across encryption boundaries
-* Nested groups allowing for modelling multi-device profiles
-* Generic over message type
+- Decentralised group management with robust conflict resolution strategies
+- Private space identifiers
+- Re-use of groups across encryption boundaries
+- Nested groups allowing for modelling multi-device profiles
+- Generic over message type
 
 ## Requirements
 
-* Messages must be ordered according to causal relations
-* Messages must be signed and verified
+- Messages must be ordered according to causal relations
+- Messages must be signed and verified
 
 Read more about the underlying [groups CRDT](https://docs.rs/p2panda-auth/latest/p2panda_auth/)
 and [encryption scheme](https://docs.rs/p2panda-encryption/latest/p2panda_encryption/).
@@ -64,7 +63,6 @@ additional terms or conditions.
 
 ---
 
-*This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594*.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._

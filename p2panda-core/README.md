@@ -22,16 +22,16 @@
   </h3>
 </div>
 
-Highly extensible data-types of the p2panda protocol for secure, distributed and efficient
-exchange of data, supporting networks from the internet to packet radio, LoRa or BLE. 
+Highly extensible data-types of the p2panda protocol for secure, distributed and efficient exchange
+of data, supporting networks from the internet to packet radio, LoRa or BLE.
 
 The primary data structure is an append-only implementation which supports history deletion,
 multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
 extensible depending on your application requirements.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
 
 ## Features
 
@@ -44,8 +44,8 @@ Stability guarantees will improve with the release of v1.0.0.
 - Compatible with any networking scenario (even broadcast-only, for example for packet radio)
 - Fork-tolerant
 - Pruning of outdated messages
-- Highly extensible with custom features, for example prefix-deletion, ephemeral
-  "self-destructing" messages, etc.
+- Highly extensible with custom features, for example prefix-deletion, ephemeral "self-destructing"
+  messages, etc.
 
 ## Examples
 
@@ -74,8 +74,8 @@ header.sign(&signing_key);
 
 ### Custom extensions
 
-Custom functionality can be added using extensions, for example, access-control
-tokens, self-destructing messages, or encryption schemas.
+Custom functionality can be added using extensions, for example, access-control tokens,
+self-destructing messages, or encryption schemas.
 
 ```rust
 use p2panda_core::{Extension, Header};
@@ -115,7 +115,6 @@ additional terms or conditions.
 
 ---
 
-_This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594_.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._
