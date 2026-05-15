@@ -6,7 +6,7 @@
 //! ```rust
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! # let topic = p2panda::Topic::new();
+//! # let topic = p2panda::Topic::random();
 //! let node = p2panda::spawn().await?;
 //! let (tx, rx) = node.stream(topic).await?;
 //! # tx.publish(b"Hello!".to_vec()).await?;
@@ -160,7 +160,7 @@
 //! let node = p2panda::spawn().await?;
 //!
 //! // Generate random topic.
-//! let chat_id = Topic::new();
+//! let chat_id = Topic::random();
 //!
 //! // Publish and subscribe topic stream with sync.
 //! let (tx, mut rx) = node.stream(chat_id).await?;
@@ -235,7 +235,7 @@
 //! }
 //!
 //! let node = p2panda::spawn().await?;
-//! let topic = Topic::new();
+//! let topic = Topic::random();
 //! let (tx, rx) = node.stream::<CalendarMessage>(topic).await?;
 //! # Ok(())
 //! # }

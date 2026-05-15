@@ -512,7 +512,7 @@ pub(crate) async fn ack_published_operation<M>(
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let node = p2panda::builder().spawn().await?;
 /// #
-/// let our_trees = Topic::new();
+/// let our_trees = Topic::random();
 ///
 /// #[derive(Clone, Debug, Serialize, Deserialize)]
 /// struct Tree {
@@ -716,7 +716,7 @@ impl Future for PublishFuture {
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let node = p2panda::spawn().await?;
-/// let topic = Topic::new();
+/// let topic = Topic::random();
 ///
 /// let (_tx, mut rx) = node.stream::<String>(topic).await?;
 ///
@@ -959,7 +959,7 @@ impl<M> ProcessedOperation<M> {
     ///     .spawn()
     ///     .await?;
     ///
-    /// let topic = Topic::new();
+    /// let topic = Topic::random();
     ///
     /// let (_tx, mut rx) = node.stream::<Vec<u8>>(topic).await?;
     ///

@@ -242,7 +242,7 @@ pub(crate) fn ephemeral_stream<M>(
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let node = p2panda::builder().spawn().await?;
 /// #
-/// let now_playing = Topic::new();
+/// let now_playing = Topic::random();
 ///
 /// #[derive(Clone, Debug, Serialize, Deserialize)]
 /// struct PlaylistItem {
@@ -336,7 +336,7 @@ pub enum EphemeralPublishError {
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # let node = p2panda::spawn().await?;
-/// let topic = Topic::new();
+/// let topic = Topic::random();
 ///
 /// let (_tx, mut rx) = node.ephemeral_stream::<String>(topic).await?;
 ///

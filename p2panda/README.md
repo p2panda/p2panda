@@ -26,7 +26,7 @@ p2panda's high-level Node API is an opiniated, out-of-the-box peer-to-peer stack
 all individual [p2panda] modules.
 
 ```rust
-let topic = Topic::new();
+let topic = Topic::random();
 let node = p2panda::spawn().await?;
 let (tx, rx) = node.stream(topic).await?;
 ```
