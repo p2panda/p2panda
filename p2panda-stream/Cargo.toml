@@ -2,6 +2,16 @@
 name = "p2panda-stream"
 version = "0.5.2"
 edition = "2024"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "glyph <glyph@mycelial.technology>",
+]
+description = "Event stream processing for p2p data-types"
+repository = "https://github.com/p2panda/p2panda"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["eventsourcing", "processing", "p2p", "local-first", "stream"]
 
 [package.metadata.docs.rs]
 all-features = true
