@@ -132,7 +132,6 @@ async fn e2e_log_sync() {
             header,
             body: Some(body),
         })
-        .await
         .unwrap();
 
     // Bob receives Alice's live message.
@@ -292,7 +291,6 @@ async fn e2e_three_party_sync() {
             header,
             body: Some(body),
         })
-        .await
         .unwrap();
 
     // Bob receives Alice's live message.

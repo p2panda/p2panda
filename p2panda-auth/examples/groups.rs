@@ -222,7 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     process_tx.send(operation.clone()).unwrap();
                     print_group(&store, &operation).await;
 
-                    sync_tx.publish(operation).await.unwrap();
+                    sync_tx.publish(operation).unwrap();
                 }
             });
 

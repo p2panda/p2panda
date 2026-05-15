@@ -671,7 +671,6 @@ where
         // sync protocol.
         self.sync_handle
             .publish(operation)
-            .await
             .map_err(|err| PublishError::SyncHandle(err.to_string()))?;
 
         Ok(PublishFuture { hash, processed_rx })

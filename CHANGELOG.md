@@ -45,6 +45,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - encryption: Update hpke-rs to 0.6.1 to fix RUSTSEC [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- ci: Check for unused mut and async, fix affected methods [#1163](https://github.com/p2panda/p2panda/pull/1163)
 
 ## [0.6.1] - 22/05/2026
 
