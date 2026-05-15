@@ -22,25 +22,24 @@
   </h3>
 </div>
 
-Discovery can be used to find nodes which share a common interest in a topic.
-During this process, transport information is exchanged in order to aid in the
-establishment of direct peer-to-peer connections. A topic in p2panda is a
-secret, randomly-generated hash that plays a similar role to a shared symmetric
-key. Topics usually represent identifiers or namespaces for data and documents
-associated with a specific group of people (for example a text document, chat
-group or image folder). For this reason, a topic should never be leaked to
-people outside of the intended group, whether accidentally or purposefully.
+`p2panda-discovery` can be used to find nodes which share a common interest in a topic.
 
-Our discovery protocol implementation is designed to ensure that topics are
-never leaked to unintended actors. Nodes will only ever exchange data when both
-parties have proven their knowledege of the same topic. This mutual
-acknowledgement is achieved using a secure multiparty cryptographic technique
-known as Private Equality Testing (PET) or Private Set Intersection (PSI) which
-prevents unrelated topics being leaked to other parties.
+During this process, transport information is exchanged in order to aid in the establishment of
+direct peer-to-peer connections. A topic in p2panda is a secret, randomly-generated hash that plays
+a similar role to a shared symmetric key. Topics usually represent identifiers or namespaces for
+data and documents associated with a specific group of people (for example a text document, chat
+group or image folder). For this reason, a topic should never be leaked to people outside of the
+intended group, whether accidentally or purposefully.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+Our discovery protocol implementation is designed to ensure that topics are never leaked to
+unintended actors. Nodes will only ever exchange data when both parties have proven their knowledege
+of the same topic. This mutual acknowledgement is achieved using a secure multiparty cryptographic
+technique known as Private Equality Testing (PET) or Private Set Intersection (PSI) which prevents
+unrelated topics being leaked to other parties.
+
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
 
 ## License
 
@@ -55,7 +54,6 @@ additional terms or conditions.
 
 ---
 
-_This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594_.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._

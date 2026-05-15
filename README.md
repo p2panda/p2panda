@@ -18,19 +18,51 @@
   </h3>
 </div>
 
-p2panda aims to provide everything you need to build modern, privacy-respecting and secure local-first applications.
+p2panda aims to provide everything you need to build modern, privacy-respecting and secure
+local-first applications.
 
-We have adopted a modular approach—allowing projects the freedom to pick what they need and integrate it with minimal friction. We believe this approach contributes the most to a wider, interoperable p2p ecosystem which outlives “framework lock-in”.
+We have adopted a modular approach—allowing projects the freedom to pick what they need and
+integrate it with minimal friction. We believe this approach contributes the most to a wider,
+interoperable p2p ecosystem which outlives “framework lock-in”.
 
-Many of our Rust crates operate over raw bytes and are fully compatible with your own data types and any CRDT. In case you don't plan on building your own peer-to-peer protocol, we have you covered with all features required to build a mobile or desktop application.
+Many of our Rust crates operate over raw bytes and are fully compatible with your own data types and
+any CRDT. In case you don't plan on building your own peer-to-peer protocol, we have you covered
+with all features required to build a mobile or desktop application.
 
-We're using existing libraries like [iroh](https://github.com/n0-computer/iroh) and well-established standards such as BLAKE3, Ed25519, STUN, CBOR, TLS, QUIC, [Double Ratchet](https://en.m.wikipedia.org/wiki/Double_Ratchet_Algorithm) and more - as long as they give us the radical offline-first guarantee we need.
+We're using existing libraries like [iroh](https://github.com/n0-computer/iroh) and well-established
+standards such as BLAKE3, Ed25519, CBOR, TLS, QUIC and more - as long as they give us the radical
+offline-first guarantee we need.
 
-We want collaboration, encryption and access-control to work even when operating over unstable or ephemeral connections. Towards this end, we're actively working alongside researchers to design and implement resilient solutions.
+We want collaboration, encryption and access-control to work even when operating over unstable or
+ephemeral connections. Towards this end, we're actively working alongside researchers to design and
+implement resilient solutions.
 
-p2panda is "broadcast-only" at it’s heart, making any data not only offline-first but also compatible with post-internet communication infrastructure, such as shortwave, packet radio, Bluetooth Low Energy, LoRa or simply a USB stick.
+p2panda is "broadcast-only" at it’s heart, making any data not only offline-first but also
+compatible with post-internet communication infrastructure, such as shortwave, packet radio,
+Bluetooth Low Energy, LoRa or simply a USB stick.
+
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
+
+## Getting Started
+
+The fastest path to get started with p2panda is to use our high-level [p2panda
+Node API](https://docs.rs/p2panda).
+
+For more low-level hacking check out the list of our libraries below.
+
+## Other languages / FFI
+
+There's experimental support for bindings of p2panda's Node API into alternative programming
+languages and flavours:
+
+- [`p2panda-gobject`] Introspectable GLib/GObject API for various languages
+- [`p2panda-ffi`] Node.js, Python and Go support via UniFFI
 
 ## Libraries
+
+📦 [`p2panda`](https://crates.io/crates/p2panda) - Out-of-the-box p2panda Node API for application developers.
 
 📦 [`p2panda-net`](https://crates.io/crates/p2panda-net) - Data-type-agnostic p2p networking, discovery, gossip and local-first sync.
 
@@ -50,7 +82,8 @@ p2panda is "broadcast-only" at it’s heart, making any data not only offline-fi
 
 📦 [`p2panda-auth`](https://crates.io/crates/p2panda-auth) - Decentralised group management with fine-grained, per-member permissions.
 
-📦  `p2panda` - High-level p2panda Node API for application developers.
+[`p2panda-ffi`]: https://github.com/p2panda/p2panda-ffi
+[`p2panda-gobject`]: https://github.com/p2panda/p2panda-gobject
 
 ## License
 
@@ -65,9 +98,6 @@ additional terms or conditions.
 
 ---
 
-*This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594*.
-
-[`p2panda`]: https://p2panda.org
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._

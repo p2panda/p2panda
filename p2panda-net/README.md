@@ -22,28 +22,25 @@
   </h3>
 </div>
 
-`p2panda-net` is a collection of Rust modules providing solutions for a whole
-set of peer-to-peer and [local-first] application requirements. Collectively
-these modules solve the problem of event delivery.
+`p2panda-net` is a collection of Rust modules providing solutions for a whole set of peer-to-peer
+and [local-first] application requirements. Collectively these modules solve the problem of event
+delivery.
 
-Applications subscribe to any topic they are interested in and `p2panda-net`
-will automatically discover similar peers and exchange messages between them.
+Applications subscribe to any topic they are interested in and `p2panda-net` will automatically
+discover similar peers and exchange messages between them.
 
-🚧 This library is under active development and the APIs are not yet considered stable for
-production use. Core data types and user-facing APIs may still undergo breaking changes.
-Stability guarantees will improve with the release of v1.0.0.
+> 🚧 This library is under active development and the APIs are not yet considered stable for
+> production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
+> guarantees will improve with the release of v1.0.0.
 
 ## Features
 
 - [Publish & Subscribe] for ephemeral messages (gossip protocol)
-- Publish & Subscribe for messages with [Eventual Consistency] guarantee (sync
-  protocol)
-- Confidentially discover nodes who are interested in the same topic ([Private
-  Set Intersection])
-- Establish and manage direct connections to any device over the Internet
-  (using [iroh])
-- Monitor system with supervisors and restart modules on critical failure
-  (Erlang-inspired [Supervision Trees])
+- Publish & Subscribe for messages with [Eventual Consistency] guarantee (sync protocol)
+- Confidentially discover nodes who are interested in the same topic ([Private Set Intersection])
+- Establish and manage direct connections to any device over the Internet (using [iroh])
+- Monitor system with supervisors and restart modules on critical failure (Erlang-inspired
+  [Supervision Trees])
 - Modular API allowing users to choose or replace the layers they want to use
 
 ## Getting Started
@@ -98,8 +95,8 @@ tokio::spawn(async move {
 });
 ```
 
-For a complete command-line application using `p2panda-net` with a sync
-protocol, see our [`chat.rs`] example.
+For a complete command-line application using `p2panda-net` with a sync protocol, see our
+[`chat.rs`] example.
 
 [local-first]: https://www.inkandswitch.com/local-first-software/
 [Publish & Subscribe]: https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern
@@ -123,7 +120,6 @@ additional terms or conditions.
 
 ---
 
-_This project has received funding from the European Union’s Horizon 2020
-research and innovation programme within the framework of the NGI-POINTER
-Project funded under grant agreement No 871528, NGI-ASSURE No 957073 and
-NGI0-ENTRUST No 101069594_.
+_This project has received funding from the European Union’s Horizon 2020 research and innovation
+programme within the framework of the NGI-POINTER Project funded under grant agreement No 871528,
+NGI-ASSURE No 957073, NGI0-ENTRUST No 101069594 and NGI0-COMMONS No 101135429._
