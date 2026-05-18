@@ -36,6 +36,7 @@ Highlights are marked with a pancake 🥞
 - Deduplicate received operations in sync manager event stream [#1147](https://github.com/p2panda/p2panda/pull/1147)
 - Todo list example with LWW-CRDT for Node API [#1148](https://github.com/p2panda/p2panda/pull/1148)
 - Method for getting filtered groups CRDT heads [#1102](https://github.com/p2panda/p2panda/pull/1102)
+- Add PartialEq and Eq derives to auth processor types [#1102](https://github.com/p2panda/p2panda/pull/1165)
 
 ### Changed
 
