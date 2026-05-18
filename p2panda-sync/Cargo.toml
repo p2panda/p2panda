@@ -24,6 +24,7 @@ default = []
 test_utils = [
   "dep:rand",
   "dep:tracing-subscriber",
+  "p2panda-store/test_utils",
 ]
 
 [dependencies]

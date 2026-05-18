@@ -25,8 +25,7 @@ use crate::iroh_endpoint::actors::connection::{
 use crate::iroh_endpoint::actors::is_globally_reachable_endpoint;
 use crate::iroh_endpoint::config::IrohConfig;
 use crate::iroh_endpoint::discovery::AddressBookDiscovery;
-use crate::iroh_endpoint::from_signing_key;
-use crate::utils::ShortFormat;
+use crate::utils::{ShortFormat, from_signing_key};
 use crate::{NetworkId, NodeId, ProtocolId, hash_protocol_id_with_network_id};
 
 /// Period of inactivity before sending a keep-alive packet.

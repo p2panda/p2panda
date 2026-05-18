@@ -32,8 +32,8 @@ use crate::discovery::actors::session::{
 };
 use crate::discovery::actors::walker::{DiscoveryWalker, ToDiscoveryWalker, WalkFromHere};
 use crate::discovery::events::{DiscoveryEvent, SessionRole};
-use crate::iroh_endpoint::{Endpoint, to_verifying_key};
-use crate::utils::ShortFormat;
+use crate::iroh_endpoint::Endpoint;
+use crate::utils::{ShortFormat, to_verifying_key};
 
 /// Maximum duration of inactivity to accept before timing out the connection.
 pub const MAX_IDLE_TIMEOUT: Duration = Duration::from_secs(3);

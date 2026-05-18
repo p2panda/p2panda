@@ -71,6 +71,7 @@ Highlights are marked with a pancake 🥞
 - Correct "Sync Ended" event semantics in Node API [#1154](https://github.com/p2panda/p2panda/pull/1154)
 - Fix header CBOR encoding with correct field count [#1157](https://github.com/p2panda/p2panda/pull/1157)
 - Fix issues caused by dependency feature flag changes [#1164](https://github.com/p2panda/p2panda/pull/1164)
+- Fix dependency issues for all possible feature-flag combinations [#1168](https://github.com/p2panda/p2panda/pull/1168)
 
 ## [0.5.2] - 09/03/2026
 

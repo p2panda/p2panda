@@ -18,18 +18,3 @@ pub use iroh::{EndpointAddr, RelayUrl};
 pub use api::{Endpoint, EndpointError};
 pub use builder::Builder;
 pub use config::IrohConfig;
-
-/// Converts an `iroh` public key type to the `p2panda-core` implementation.
-pub fn to_verifying_key(key: iroh_base::PublicKey) -> p2panda_core::VerifyingKey {
-    p2panda_core::VerifyingKey::from_bytes(key.as_bytes()).expect("already validated public key")
-}
-
-/// Converts a `p2panda-core` public key to the "iroh" type.
-pub fn from_verifying_key(key: p2panda_core::VerifyingKey) -> iroh_base::PublicKey {
-    iroh_base::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
-}
-
-/// Converts a `p2panda-core` private key to the "iroh" type.
-pub fn from_signing_key(key: p2panda_core::SigningKey) -> iroh_base::SecretKey {
-    iroh_base::SecretKey::from_bytes(key.as_bytes())
-}

@@ -16,7 +16,7 @@ use tracing::{Instrument, error, info_span, trace, warn};
 
 use crate::address_book::AddressBook;
 use crate::addrs::{NodeTransportInfo, UnsignedTransportInfo};
-use crate::iroh_endpoint::{from_verifying_key, to_verifying_key};
+use crate::utils::{from_verifying_key, to_verifying_key};
 
 /// Discovery service for iroh connecting iroh's endpoint with our address book actor. This
 /// implements iroh's `Discovery` trait.

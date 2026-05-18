@@ -11,9 +11,10 @@ use tracing::{debug, trace, warn};
 use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::{AuthenticatedTransportInfo, NodeInfo, NodeTransportInfo, TransportInfo};
+use crate::iroh_endpoint::Endpoint;
 use crate::iroh_endpoint::user_data::UserDataTransportInfo;
-use crate::iroh_endpoint::{Endpoint, from_verifying_key, to_verifying_key};
 use crate::iroh_mdns::MdnsDiscoveryMode;
+use crate::utils::{from_verifying_key, to_verifying_key};
 
 const MDNS_SERVICE_NAME: &str = "p2pandav1";
 

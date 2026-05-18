@@ -20,13 +20,14 @@ all-features = true
 default = ["processor"]
 processor = [
   "dep:p2panda-core",
-  "dep:p2panda-stream",
   "dep:p2panda-store",
+  "dep:p2panda-stream",
   "dep:tokio",
   "serde",
 ]
 test_utils = [
   "dep:p2panda-core",
+  "dep:p2panda-stream",
   "dep:rand",
   "dep:tokio",
   "dep:tracing-subscriber",

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::Display;
-
+#[cfg(any(test, feature = "data_scheme"))]
 use crate::crypto::xchacha20::XAeadNonce;
 #[cfg(any(test, feature = "data_scheme"))]
 use crate::data_scheme::{self, GroupSecretId};
@@ -56,7 +55,7 @@ pub enum GroupMessageContent<ID> {
 }
 
 #[cfg(any(test, feature = "data_scheme"))]
-impl<ID> Display for GroupMessageContent<ID> {
+impl<ID> std::fmt::Display for GroupMessageContent<ID> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -114,7 +113,7 @@ pub enum ForwardSecureMessageContent<ID, OP> {
 }
 
 #[cfg(any(test, feature = "message_scheme"))]
-impl<ID, OP> Display for ForwardSecureMessageContent<ID, OP> {
+impl<ID, OP> std::fmt::Display for ForwardSecureMessageContent<ID, OP> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

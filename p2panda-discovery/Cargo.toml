@@ -21,14 +21,11 @@ workspace = true
 [features]
 default = ["random_walk"]
 random_walk = [
-  "dep:rand",
-  "dep:thiserror",
   "dep:tokio",
 ]
 test_utils = [
-  "dep:rand",
   "dep:rand_chacha",
-  "dep:thiserror",
+  "p2panda-store/test_utils",
 ]
 
 [dependencies]
@@ -36,10 +33,10 @@ blake3 = "1.8.2"
 futures-util = { workspace = true, features = ["sink"] }
 p2panda-core = { workspace = true }
 p2panda-store = { workspace = true }
-rand = { workspace = true, optional = true }
+rand = { workspace = true }
 rand_chacha = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
-thiserror = { workspace = true, optional = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 
 [dev-dependencies]

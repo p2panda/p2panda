@@ -9,8 +9,7 @@ use tracing::{Instrument, debug, info_span, warn};
 
 use crate::address_book::report::{ConnectionOutcome, ConnectionRole};
 use crate::iroh_endpoint::actors::endpoint::{ConnectError, ProtocolMap, ToIrohEndpoint};
-use crate::iroh_endpoint::to_verifying_key;
-use crate::utils::ShortFormat;
+use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
 pub type ConnectReplyPort = RpcReplyPort<Result<iroh::endpoint::Connection, ConnectError>>;

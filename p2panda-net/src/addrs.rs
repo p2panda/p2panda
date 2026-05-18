@@ -14,7 +14,7 @@
 //!     .expect("valid hex-encoded Ed25519 public key");
 //! let relay_url = "https://my.relay.org".parse().expect("valid relay url");
 //!
-//! let endpoint_addr = iroh::EndpointAddr::new(node_id)
+//! let endpoint_addr = iroh_base::EndpointAddr::new(node_id)
 //!    .with_relay_url(relay_url);
 //! let bootstrap_node = NodeInfo::from(endpoint_addr).bootstrap();
 //! ```
@@ -31,10 +31,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::NodeId;
-#[cfg(any(test, feature = "test_utils"))]
-use crate::iroh_endpoint::from_verifying_key;
-#[cfg(feature = "iroh_endpoint")]
-use crate::iroh_endpoint::to_verifying_key;
+use crate::utils::to_verifying_key;
 
 /// Record of a node we store locally in the address book.
 ///
@@ -117,8 +114,7 @@ impl NodeInfo {
     }
 }
 
-#[cfg(feature = "iroh_endpoint")]
-impl TryFrom<NodeInfo> for iroh::EndpointAddr {
+impl TryFrom<NodeInfo> for iroh_base::EndpointAddr {
     type Error = NodeInfoError;
 
     fn try_from(node_info: NodeInfo) -> Result<Self, Self::Error> {
@@ -139,9 +135,8 @@ impl TryFrom<NodeInfo> for iroh::EndpointAddr {
     }
 }
 
-#[cfg(feature = "iroh_endpoint")]
-impl From<iroh::EndpointAddr> for NodeInfo {
-    fn from(addr: iroh::EndpointAddr) -> Self {
+impl From<iroh_base::EndpointAddr> for NodeInfo {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
         let node_id = to_verifying_key(addr.id);
         let transports = TransportInfo::from(TrustedTransportInfo::from(addr));
 
@@ -276,8 +271,8 @@ impl Display for TransportInfo {
     }
 }
 
-impl From<iroh::EndpointAddr> for TransportInfo {
-    fn from(addr: iroh::EndpointAddr) -> Self {
+impl From<iroh_base::EndpointAddr> for TransportInfo {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
         Self::from(TrustedTransportInfo::from(addr))
     }
 }
@@ -476,9 +471,8 @@ impl UnsignedTransportInfo {
     }
 }
 
-#[cfg(feature = "iroh_endpoint")]
-impl From<iroh::EndpointAddr> for UnsignedTransportInfo {
-    fn from(addr: iroh::EndpointAddr) -> Self {
+impl From<iroh_base::EndpointAddr> for UnsignedTransportInfo {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
     }
 }
@@ -573,9 +567,8 @@ impl NodeTransportInfo for TrustedTransportInfo {
     }
 }
 
-#[cfg(feature = "iroh_endpoint")]
-impl From<iroh::EndpointAddr> for TrustedTransportInfo {
-    fn from(addr: iroh::EndpointAddr) -> Self {
+impl From<iroh_base::EndpointAddr> for TrustedTransportInfo {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
         Self::from_addrs([addr.into()])
     }
 }
@@ -607,21 +600,23 @@ pub enum TransportAddress {
     /// To connect to another node either their "home relay" URL needs to be known (to coordinate
     /// holepunching or relayed connection fallback) or at least one reachable "direct address"
     /// (IPv4 or IPv6). If none of these are given, establishing a connection is not possible.
-    #[cfg(feature = "iroh_endpoint")]
-    Iroh(iroh::EndpointAddr),
+    Iroh(iroh_base::EndpointAddr),
 }
 
 impl TransportAddress {
     #[cfg(any(test, feature = "test_utils"))]
     pub fn from_iroh(
         node_id: NodeId,
-        relay_url: Option<iroh::RelayUrl>,
+        relay_url: Option<iroh_base::RelayUrl>,
         direct_addresses: impl IntoIterator<Item = SocketAddr>,
     ) -> Self {
-        let transport_addrs = direct_addresses.into_iter().map(iroh::TransportAddr::Ip);
+        let transport_addrs = direct_addresses
+            .into_iter()
+            .map(iroh_base::TransportAddr::Ip);
 
         let mut endpoint_addr =
-            iroh::EndpointAddr::new(from_verifying_key(node_id)).with_addrs(transport_addrs);
+            iroh_base::EndpointAddr::new(crate::utils::from_verifying_key(node_id))
+                .with_addrs(transport_addrs);
 
         if let Some(url) = relay_url {
             endpoint_addr = endpoint_addr.with_relay_url(url);
@@ -631,9 +626,8 @@ impl TransportAddress {
     }
 
     pub fn verify(&self, node_id: &NodeId) -> Result<(), NodeInfoError> {
-        // Make sure the given address matches the node id.
         #[allow(irrefutable_let_patterns)]
-        #[cfg(feature = "iroh_endpoint")]
+        // Make sure the given address matches the node id.
         if let TransportAddress::Iroh(endpoint_addr) = self
             && &to_verifying_key(endpoint_addr.id) != node_id
         {
@@ -644,9 +638,8 @@ impl TransportAddress {
     }
 }
 
-#[cfg(feature = "iroh_endpoint")]
-impl From<iroh::EndpointAddr> for TransportAddress {
-    fn from(addr: iroh::EndpointAddr) -> Self {
+impl From<iroh_base::EndpointAddr> for TransportAddress {
+    fn from(addr: iroh_base::EndpointAddr) -> Self {
         Self::Iroh(addr)
     }
 }
@@ -654,7 +647,6 @@ impl From<iroh::EndpointAddr> for TransportAddress {
 impl Display for TransportAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            #[cfg(feature = "iroh_endpoint")]
             TransportAddress::Iroh(endpoint_addr) => {
                 write!(f, "[iroh] {:?}", endpoint_addr.addrs)
             }
