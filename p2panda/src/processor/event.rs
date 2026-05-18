@@ -83,13 +83,13 @@ where
         self.operation.body.as_ref()
     }
 
-    /// Returns true if event has been successfully processed by the whole pipeline.
+    /// Returns `true` if event has been successfully processed by the whole pipeline.
     pub fn is_completed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Completed(_))
             && matches!(self.log_prune, ProcessorStatus::Completed(_))
     }
 
-    /// Returns true if event failed somewhere during processing.
+    /// Returns `true` if event failed somewhere during processing.
     pub fn is_failed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Failed(_))
             || matches!(self.log_prune, ProcessorStatus::Failed(_))

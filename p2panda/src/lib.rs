@@ -27,7 +27,7 @@
 //!   to a topic
 //! - Transport-agnostic event delivery architecture supporting Internet p2p today (QUIC/iroh) and
 //!   future mesh/radio transports such as BLE and LoRa
-//! - Built on single-writer append-only, fork-resistant CRDT operation logs with pruning,
+//! - Built on single-writer append-only, fork-tolerant CRDT operation logs with pruning,
 //!   multi-writer causal ordering, and efficient sync
 //! - Persistent local SQLite storage for operations, sync state, address books, stream cursors, and
 //!   soon encryption/access-control state

@@ -124,7 +124,7 @@ impl Network {
 /// mDNS discovery mode.
 ///
 /// By default this is set to "active" meaning we are actively advertising our address and public
-/// key on local-area networks on local-area networks.
+/// key on local-area networks.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum MdnsDiscoveryMode {
     /// mDNS discovery disabled.
