@@ -22,16 +22,16 @@ _This example assumes we are publishing version `v0.2.0`._
    Follow the formatting given by previous entries.
 7. Remember to update the links to your release and the unreleased git log at the bottom of
    `CHANGELOG.md`.
-8. Commit any changes made so far during release with `git add .` and
-   `git commit -m "Prepare for release v0.2.0"`.
 
 ## Publishing
 
-9. Open the manifest (`Cargo.toml`) of each crate and update the version at the top to `0.2.0`.
-10. Do a dry run via `cargo publish --workspace --dry-run`. Check the output; ensure everything
-    looks correct and there are no errors.
+8. Open the manifest (`Cargo.toml`) of each crate and update the version at the top to `0.2.0`.
+9. Do a dry run via `cargo publish --workspace --dry-run`. Check the output; ensure everything looks
+   correct and there are no errors.
+10. Commit any changes made so far with `git add .` and `git commit -m "v0.2.0"`.
 11. Run `cargo login` to ensure you're prepared to publish to `crates.io`.
-12. Finally, publish everything in the workspace with `cargo publish --workspace`
+12. Finally, publish everything in the workspace with `cargo publish --workspace` or use more
+    fine-grained commands if you don't want to publish everything.
 
 ## Tagging and release
 
