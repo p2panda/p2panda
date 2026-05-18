@@ -226,6 +226,11 @@ impl SqliteStore {
         Self::new(pool)
     }
 
+    /// Returns a reference to the connection pool.
+    pub fn pool(&self) -> &sqlx::SqlitePool {
+        &self.pool
+    }
+
     /// Builds an in-memory SQLite database with a randomised name for testing purposes.
     #[cfg(any(test, feature = "test_utils"))]
     pub async fn temporary() -> Self {
