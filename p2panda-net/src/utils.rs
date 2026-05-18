@@ -19,7 +19,7 @@ impl ShortFormat for NodeId {
     }
 }
 
-impl ShortFormat for iroh::EndpointId {
+impl ShortFormat for iroh_base::EndpointId {
     fn fmt_short(&self) -> String {
         self.to_string()[0..10].to_string()
     }
@@ -50,7 +50,7 @@ impl ShortFormat for Vec<NodeId> {
     }
 }
 
-impl ShortFormat for Vec<iroh::EndpointId> {
+impl ShortFormat for Vec<iroh_base::EndpointId> {
     fn fmt_short(&self) -> String {
         let list: Vec<String> = self
             .iter()
@@ -110,6 +110,21 @@ pub fn connectivity_status(addr: &SocketAddr) -> ConnectivityStatus {
             }
         }
     }
+}
+
+/// Converts an `iroh` public key type to the `p2panda-core` implementation.
+pub fn to_verifying_key(key: iroh_base::PublicKey) -> p2panda_core::VerifyingKey {
+    p2panda_core::VerifyingKey::from_bytes(key.as_bytes()).expect("already validated public key")
+}
+
+/// Converts a `p2panda-core` verifying key to the "iroh" type.
+pub fn from_verifying_key(key: p2panda_core::VerifyingKey) -> iroh_base::PublicKey {
+    iroh_base::PublicKey::from_bytes(key.as_bytes()).expect("already validated public key")
+}
+
+/// Converts a `p2panda-core` signing key to the "iroh" type.
+pub fn from_signing_key(key: p2panda_core::SigningKey) -> iroh_base::SecretKey {
+    iroh_base::SecretKey::from_bytes(key.as_bytes())
 }
 
 #[cfg(test)]

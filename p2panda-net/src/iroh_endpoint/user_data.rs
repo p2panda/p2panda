@@ -127,7 +127,7 @@ mod tests {
     use iroh::address_lookup::UserData;
     use p2panda_core::SigningKey;
 
-    use crate::iroh_endpoint::from_verifying_key;
+    use crate::utils::from_verifying_key;
 
     use super::{AuthenticatedTransportInfo, UserDataTransportInfo};
 

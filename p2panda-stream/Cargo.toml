@@ -25,29 +25,21 @@ default = [
   "log_prune",
   "orderer",
 ]
-ingest = [
-  "dep:p2panda-core",
-]
-log_prune = [
-  "dep:p2panda-core",
-]
-orderer = [
-  "dep:p2panda-core",
-  "dep:p2panda-store",
-  "dep:thiserror",
-]
+ingest = []
+log_prune = []
+orderer = []
 
 [dependencies]
 futures-core = { version = "0.3.31", default-features = false, features = ["alloc"] }
-p2panda-core = { workspace = true, default-features = true, optional = true }
-p2panda-store = { workspace = true, default-features = true, optional = true }
+p2panda-core = { workspace = true, default-features = true }
+p2panda-store = { workspace = true, default-features = true }
 pin-project = "1.1.10"
-thiserror = { workspace = true, optional = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["rt", "sync", "macros"] }
 
 [dev-dependencies]
 futures-test = { version = "0.3.31" }
-futures-util = { workspace = true, default-features = false, features = ["alloc"] }
+futures-util = { workspace = true, features = ["alloc"] }
 p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
 serde = { workspace = true }

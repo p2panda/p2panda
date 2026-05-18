@@ -16,8 +16,8 @@ use crate::gossip::GossipConfig;
 use crate::gossip::actors::session::{GossipSession, ToGossipSession};
 use crate::gossip::events::GossipEvent;
 use crate::hash_protocol_id_with_network_id;
-use crate::iroh_endpoint::{Endpoint, from_verifying_key};
-use crate::utils::ShortFormat;
+use crate::iroh_endpoint::Endpoint;
+use crate::utils::{ShortFormat, from_verifying_key};
 
 pub enum ToGossipManager {
     /// Accept incoming "gossip protocol" connection requests.

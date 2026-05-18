@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashSet;
-use std::error::Error;
-use std::fmt::Debug;
-
-use serde::{Deserialize, Serialize};
-
 /// Decentralised group membership (DGM) algorithm with acknowledgements.
 ///
 /// Tracking acknowledgements is required for understanding concurrent group operations and
@@ -15,9 +9,9 @@ use serde::{Deserialize, Serialize};
 /// This is the DGM interface for p2panda's "message encryption" scheme.
 #[cfg(any(test, feature = "message_scheme"))]
 pub trait AckedGroupMembership<ID, OP> {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + std::fmt::Debug + serde::Serialize + for<'a> serde::Deserialize<'a>;
 
-    type Error: Error;
+    type Error: std::error::Error;
 
     /// Creates a new group.
     fn create(my_id: ID, initial_members: &[ID]) -> Result<Self::State, Self::Error>;
@@ -54,7 +48,10 @@ pub trait AckedGroupMembership<ID, OP> {
     /// have been explicitly acknowledged by them. This is why different members can have different
     /// "views" on the same group. Note that we are still looking at all of that from our knowledge
     /// horizon aka the messages we could observe on the network.
-    fn members_view(y: &Self::State, viewer: &ID) -> Result<HashSet<ID>, Self::Error>;
+    fn members_view(
+        y: &Self::State,
+        viewer: &ID,
+    ) -> Result<std::collections::HashSet<ID>, Self::Error>;
 
     /// Returns true if given group operation added a member.
     fn is_add(y: &Self::State, operation_id: OP) -> bool;
@@ -68,9 +65,9 @@ pub trait AckedGroupMembership<ID, OP> {
 /// This is the DGM interface for p2panda's "data encryption" scheme.
 #[cfg(any(test, feature = "data_scheme"))]
 pub trait GroupMembership<ID, OP> {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + std::fmt::Debug + serde::Serialize + for<'a> serde::Deserialize<'a>;
 
-    type Error: Error;
+    type Error: std::error::Error;
 
     /// Creates a new group.
     fn create(my_id: ID, initial_members: &[ID]) -> Result<Self::State, Self::Error>;
@@ -95,5 +92,5 @@ pub trait GroupMembership<ID, OP> {
     ) -> Result<Self::State, Self::Error>;
 
     /// Returns the list of current members in the group.
-    fn members(y: &Self::State) -> Result<HashSet<ID>, Self::Error>;
+    fn members(y: &Self::State) -> Result<std::collections::HashSet<ID>, Self::Error>;
 }

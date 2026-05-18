@@ -19,7 +19,7 @@ impl ConnectionOutcome {
 pub enum ConnectionRole {
     Connect {
         #[allow(unused)]
-        remote_address: iroh::EndpointAddr,
+        remote_address: iroh_base::EndpointAddr,
     },
     Accept,
 }

@@ -17,13 +17,7 @@
 //!
 //! An "ordering" interface allows us to implement these requirements for our custom application
 //! data types.
-use std::error::Error;
-#[cfg(any(test, feature = "message_scheme"))]
-use std::fmt::Debug;
-
-#[cfg(any(test, feature = "message_scheme"))]
-use serde::{Deserialize, Serialize};
-
+#[cfg(any(test, feature = "data_scheme"))]
 use crate::crypto::xchacha20::XAeadNonce;
 #[cfg(any(test, feature = "data_scheme"))]
 use crate::data_scheme::{self, GroupSecretId};
@@ -59,7 +53,7 @@ where
 {
     type State;
 
-    type Error: Error;
+    type Error: std::error::Error;
 
     type Message: GroupMessage<ID, OP, DGM>;
 
@@ -179,14 +173,14 @@ pub trait ForwardSecureOrdering<ID, OP, DGM>
 where
     DGM: AckedGroupMembership<ID, OP>,
 {
-    type State: Clone + Debug + Serialize + for<'a> Deserialize<'a>;
+    type State: Clone + std::fmt::Debug + serde::Serialize + for<'a> serde::Deserialize<'a>;
 
-    type Error: Error;
+    type Error: std::error::Error;
 
     type Message: Clone
         + ForwardSecureGroupMessage<ID, OP, DGM>
-        + Serialize
-        + for<'a> Deserialize<'a>;
+        + serde::Serialize
+        + for<'a> serde::Deserialize<'a>;
 
     fn next_control_message(
         y: Self::State,

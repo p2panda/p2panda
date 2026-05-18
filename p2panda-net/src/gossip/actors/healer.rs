@@ -13,7 +13,7 @@ use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::actors::session::ToGossipSession;
-use crate::iroh_endpoint::from_verifying_key;
+use crate::utils::from_verifying_key;
 use crate::watchers::WatcherReceiver;
 
 pub enum ToGossipHealer {

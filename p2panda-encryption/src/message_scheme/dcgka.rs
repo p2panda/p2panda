@@ -1500,7 +1500,8 @@ impl UpdateSecret {
         Ok(Self::from_bytes(bytes))
     }
 
-    pub(crate) fn as_bytes(&self) -> &[u8; RATCHET_KEY_SIZE] {
+    #[cfg(any(test, feature = "test_utils"))]
+    pub fn as_bytes(&self) -> &[u8; RATCHET_KEY_SIZE] {
         self.0.as_bytes()
     }
 }

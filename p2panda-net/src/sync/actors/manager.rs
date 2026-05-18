@@ -22,9 +22,9 @@ use tracing::{debug, warn};
 
 use crate::cbor::{into_cbor_sink, into_cbor_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
-use crate::iroh_endpoint::{Endpoint, to_verifying_key};
+use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{ToTopicManager, TopicManager};
-use crate::utils::ShortFormat;
+use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
 type IsLiveModeEnabled = bool;
