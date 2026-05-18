@@ -157,6 +157,14 @@ impl Aggregator {
 }
 
 /// Which phase of a sync session an operation arrived in.
+///
+/// Nodes running the sync protocol will first exchange messages in order to catch up on past
+/// state. Once this initial `Sync` phase is complete, both nodes will hold identical sets of
+/// operations for the topic over which the sync session is running.
+///
+/// The nodes then move into the `Live` phase, where any newly-published messages for the relevant
+/// topic will be sent immediately over the sync session - without the nodes first having to
+/// announce and synchronise over their respective states.
 #[derive(Clone, Debug)]
 pub enum SessionPhase {
     Sync,
