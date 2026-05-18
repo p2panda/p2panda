@@ -7,7 +7,7 @@ use crate::group::GroupAction;
 use crate::traits::{Conditions, Operation};
 
 /// Concrete groups operation type.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupsOperation<C = ()> {
     pub id: Hash,
     pub author: VerifyingKey,
