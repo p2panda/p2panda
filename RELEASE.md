@@ -26,12 +26,12 @@ _This example assumes we are publishing version `v0.2.0`._
 ## Publishing
 
 8. Open the manifest (`Cargo.toml`) of each crate and update the version at the top to `0.2.0`.
-9. Do a dry run via `cargo publish --workspace --dry-run`. Check the output; ensure everything looks
-   correct and there are no errors.
+9. Do a dry run via `cargo publish --workspace --dry-run --allow-dirty`. Check the output; ensure
+   everything looks correct and there are no errors.
 10. Commit any changes made so far with `git add .` and `git commit -m "v0.2.0"`.
 11. Run `cargo login` to ensure you're prepared to publish to `crates.io`.
 12. Finally, publish everything in the workspace with `cargo publish --workspace` or use more
-    fine-grained commands if you don't want to publish everything.
+    fine-grained commands if you don't want to publish everything (`-p`, etc.).
 
 ## Tagging and release
 
