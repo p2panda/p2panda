@@ -27,22 +27,22 @@ test_utils = [
 
 [dependencies]
 futures-util = { workspace = true }
-p2panda-core = { workspace = true }
+p2panda-core = { workspace = true, default-features = true }
 p2panda-net = { workspace = true, default-features = true }
 p2panda-store = { workspace = true, default-features = true }
-p2panda-stream = { workspace = true, features = ["ingest", "log_prune"] }
-p2panda-sync = { workspace = true }
+p2panda-stream = { workspace = true, default-features = true, features = ["ingest", "log_prune"] }
+p2panda-sync = { workspace = true, default-features = true }
 pin-project = "1.1.10"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, default-features = true, features = ["sync"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"], optional = true }
 
 [dev-dependencies]
 mock_instant = "0.6.0"
-p2panda = { workspace = true, features = ["test_utils"] }
-p2panda-core = { workspace = true, features = ["test_utils"] }
-p2panda-store = { workspace = true, features = ["test_utils"] }
-tokio = { workspace = true, features = ["macros", "rt"] }
+p2panda = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
+tokio = { workspace = true, default-features = true, features = ["macros", "rt"] }

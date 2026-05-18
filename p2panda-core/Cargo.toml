@@ -27,9 +27,9 @@ test_utils = ["dep:mock_instant"]
 [dependencies]
 arbitrary = { version = "1.4.1", optional = true, features = ["derive"] }
 blake3 = "1.8.1"
-ciborium = { workspace = true, default-features = true }
+ciborium = { workspace = true }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
-hex = { workspace = true, features = ["serde"], default-features = true }
+hex = { workspace = true, features = ["serde"] }
 mock_instant = { version = "0.6.0", optional = true }
 rand = "0.8.5"
 serde = { workspace = true, features = ["derive"] }
@@ -37,5 +37,5 @@ serde_bytes = { version = "0.11.17" }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-p2panda-core = { workspace = true, features = ["test_utils"] }
+p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
 serde_json = "1.0.140"

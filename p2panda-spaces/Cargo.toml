@@ -24,16 +24,16 @@ test_utils = [
 ]
 
 [dependencies]
-p2panda-auth = { workspace = true, features = ["serde"] }
-p2panda-core = { workspace = true }
-p2panda-encryption = { workspace = true, features = ["data_scheme"] }
+p2panda-auth = { workspace = true, features = ["serde"], default-features = false }
+p2panda-core = { workspace = true, default-features = false }
+p2panda-encryption = { workspace = true, features = ["data_scheme"], default-features = false }
 petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, default-features = true, features = ["sync"] }
 
 [dev-dependencies]
 assert_matches = "1.5.0"
-p2panda-auth = { workspace = true, features = ["test_utils"] }
-p2panda-encryption = { workspace = true, features = ["test_utils"] }
-tokio = { workspace = true, features = ["rt", "macros"] }
+p2panda-auth = { workspace = true, features = ["test_utils"], default-features = false }
+p2panda-encryption = { workspace = true, features = ["test_utils"], default-features = false }
+tokio = { workspace = true, default-features = true, features = ["rt", "macros"] }

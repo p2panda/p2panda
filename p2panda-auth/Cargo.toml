@@ -36,26 +36,26 @@ serde = ["dep:serde"]
 test = ["test_utils"]
 
 [dependencies]
-p2panda-core = { workspace = true, optional = true }
-p2panda-store = { workspace = true, optional = true }
-p2panda-stream = { workspace = true, optional = true }
+p2panda-core = { workspace = true, default-features = true, optional = true }
+p2panda-store = { workspace = true, default-features = true, optional = true }
+p2panda-stream = { workspace = true, default-features = true, optional = true }
 petgraph = { version = "0.8.3", features = ["serde-1"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "signal"], optional = true }
+tokio = { workspace = true, default-features = true, features = ["sync", "signal"], optional = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"], optional = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.102"
-ciborium = { workspace = true }
-futures-util = { workspace = true }
-p2panda-auth = { workspace = true, features = ["test_utils"] }
-p2panda-core = { workspace = true, features = ["test_utils"] }
-p2panda-net = { workspace = true }
-p2panda-store = { workspace = true, features = ["test_utils"] }
-p2panda-sync = { workspace = true }
+ciborium = "0.2.2"
+futures-util = "0.3.32"
+p2panda-auth = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-net = { workspace = true, default-features = true }
+p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-sync = { workspace = true, default-features = true }
 
 [lints]
 workspace = true
