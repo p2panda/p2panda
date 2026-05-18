@@ -395,11 +395,7 @@ async fn import_external_stream() {
 
     // Panda opens their app and publishes some messages into a chat.
     let panda_log = TestLog::new();
-    let extensions = Extensions {
-        prune_flag: false.into(),
-        log_id: LogId::from_topic(chat_id),
-        version: Default::default(),
-    };
+    let extensions = Extensions::from_topic(chat_id);
     let operation_1 = panda_log.operation(
         &encode_cbor(&"Hello, Icebear!").unwrap(),
         extensions.clone(),

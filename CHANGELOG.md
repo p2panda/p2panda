@@ -58,6 +58,7 @@ Highlights are marked with a pancake 🥞
 - Update iroh to v0.98.2 [#1137](https://github.com/p2panda/p2panda/pull/1137)
 - Move shared dependencies into workspace Cargo.toml [#1150](https://github.com/p2panda/p2panda/pull/1150)
 - Rename core data types and methods [#1158](https://github.com/p2panda/p2panda/pull/1158)
+- Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
 
 ### Fixed
 
