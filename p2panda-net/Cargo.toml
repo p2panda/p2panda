@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-net"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -96,7 +96,7 @@ clap = { version = "4.5.54", features = ["derive"] }
 futures-test = "0.3.31"
 mock_instant = "0.6.0"
 p2panda-discovery = { workspace = true, default-features = true, features = ["test_utils"] }
-p2panda-net = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-net = { path = ".", features = ["test_utils"] }
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-sync = { workspace = true, default-features = true, features = ["test_utils"] }
 tokio = { workspace = true, default-features = true, features = ["rt", "sync", "time", "signal"] }

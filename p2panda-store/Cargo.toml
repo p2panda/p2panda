@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-store"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -49,5 +49,5 @@ tokio = { workspace = true, default-features = true, features = ["sync"], option
 [dev-dependencies]
 futures-test = "0.3.31"
 p2panda-core = { workspace = true, features = ["test_utils"] }
-p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
+p2panda-store = { path = ".", features = ["test_utils"] }
 tokio = { workspace = true, default-features = true, features = ["rt", "macros"] }

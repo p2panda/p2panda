@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-discovery"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -41,6 +41,6 @@ tokio = { workspace = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
 futures-channel = { version = "0.3.31", features = ["sink"] }
-p2panda-discovery = { workspace = true, features = ["test_utils"] }
+p2panda-discovery = { path = ".", features = ["test_utils"] }
 p2panda-store = { workspace = true, features = ["test_utils", "sqlite", "macros"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
