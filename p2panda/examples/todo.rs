@@ -297,11 +297,6 @@ async fn main() -> Result<()> {
 
             // Parse user input via stdin. These inputs trigger our "commands" which again will
             // create and publish single events into the topic stream via `tx`.
-            //
-            // We "prune" on every published event, which will automatically remove all previously
-            // published messages (also for other nodes) from us. Since we are working with a
-            // LWW-logic, we don't need to keep around old messages, keeping storage usage to a
-            // minimum.
             Some(input) = line_rx.recv() => {
                 // Create a new todo list item.
                 //
@@ -310,7 +305,7 @@ async fn main() -> Result<()> {
                 // ```
                 if let Some(description) = input.strip_prefix("/create") {
                     let event = todo_list.create(description.trim());
-                    tx.prune(Some(event)).await?;
+                    tx.publish(event).await?;
                 }
 
                 // Update an existing todo list item.
@@ -344,7 +339,7 @@ async fn main() -> Result<()> {
 
                     match todo_list.update(item_id, description.trim()) {
                         Ok(event) => {
-                            tx.prune(Some(event)).await?;
+                            tx.publish(event).await?;
                         }
                         Err(err) => {
                             println!("err: {}", err);
@@ -372,7 +367,7 @@ async fn main() -> Result<()> {
 
                     match todo_list.delete(item_id) {
                         Ok(event) => {
-                            tx.prune(Some(event)).await?;
+                            tx.publish(event).await?;
                         }
                         Err(err) => {
                             println!("✖ err: {err}");
