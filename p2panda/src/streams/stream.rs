@@ -9,6 +9,7 @@ use std::task::{Context, Poll};
 
 use futures_util::stream::BoxStream;
 use futures_util::{FutureExt, Stream, StreamExt};
+use p2panda_auth::processor::GroupsArgs;
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic, VerifyingKey};
@@ -594,7 +595,7 @@ where
     /// operations. It is possible to await the processing result which can be useful for some
     /// applications if they want to block UI components etc.
     pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
-        self.publish_inner(Some(message), false).await
+        self.publish_inner(Some(message), false, None).await
     }
 
     /// Deletes all our previously published messages in this topic stream.
@@ -609,7 +610,19 @@ where
     /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
     /// "older" / before the point where the prune flag was set.
     pub async fn prune(&self, message: Option<M>) -> Result<PublishFuture, PublishError> {
-        self.publish_inner(message, true).await
+        self.publish_inner(message, true, None).await
+    }
+
+    /// Publish a groups control message.
+    pub async fn publish_groups(
+        &self,
+        args: GroupsArgs,
+        message: M,
+    ) -> Result<PublishFuture, PublishError> {
+        // @NOTE: the message is compulsory so that these events are surfaced to the user on a
+        // subscription stream as groups control messages are not yet processed internally in the
+        // pipeline.
+        self.publish_inner(Some(message), false, Some(args)).await
     }
 
     /// Import an external source of operations.
@@ -640,9 +653,13 @@ where
         &self,
         message: Option<M>,
         prune_flag: bool,
+        groups_args: Option<GroupsArgs>,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions::from_topic(self.topic()).prune_flag(prune_flag);
+        let mut extensions = Extensions::from_topic(self.topic()).prune_flag(prune_flag);
+        if let Some(args) = groups_args {
+            extensions = extensions.groups_args(args);
+        }
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),

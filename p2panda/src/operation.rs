@@ -2,8 +2,9 @@
 
 use std::hash::Hash as StdHash;
 
+use p2panda_auth::processor::GroupsArgs;
 use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::{PruneFlag, Topic};
+use p2panda_core::{Extension, PruneFlag, Topic};
 use serde::{Deserialize, Serialize};
 
 /// Header type with our system-level extensions.
@@ -25,6 +26,7 @@ pub struct Extensions {
     )]
     pub prune_flag: PruneFlag,
     pub log_id: LogId,
+    pub groups_args: Option<GroupsArgs>,
     pub version: u64,
 }
 
@@ -33,6 +35,7 @@ impl Extensions {
         Self {
             log_id: LogId::from_topic(topic),
             prune_flag: PruneFlag::default(),
+            groups_args: None,
             version: VERSION,
         }
     }
@@ -40,6 +43,23 @@ impl Extensions {
     pub(crate) fn prune_flag(mut self, prune_flag: bool) -> Self {
         self.prune_flag = prune_flag.into();
         self
+    }
+
+    pub(crate) fn groups_args(mut self, args: GroupsArgs) -> Self {
+        self.groups_args = Some(args);
+        self
+    }
+}
+
+impl Extension<GroupsArgs> for Extensions {
+    fn extract(header: &p2panda_core::Header<Self>) -> Option<GroupsArgs> {
+        header.extensions.groups_args.clone()
+    }
+}
+
+impl Extension<LogId> for Extensions {
+    fn extract(header: &p2panda_core::Header<Self>) -> Option<LogId> {
+        Some(header.extensions.log_id.clone())
     }
 }
 

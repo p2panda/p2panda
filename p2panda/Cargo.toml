@@ -23,16 +23,18 @@ workspace = true
 
 [features]
 default = []
-test_utils = [
-  "dep:tracing-subscriber",
-]
+test_utils = ["dep:tracing-subscriber"]
 
 [dependencies]
 futures-util = { workspace = true }
+p2panda-auth = { workspace = true, default-features = true, features = ["processor"] }
 p2panda-core = { workspace = true, default-features = true }
 p2panda-net = { workspace = true, default-features = true }
 p2panda-store = { workspace = true, default-features = true }
-p2panda-stream = { workspace = true, default-features = true, features = ["ingest", "log_prune"] }
+p2panda-stream = { workspace = true, default-features = true, features = [
+  "ingest",
+  "log_prune",
+] }
 p2panda-sync = { workspace = true, default-features = true }
 pin-project = "1.1.10"
 serde = { workspace = true, features = ["derive"] }

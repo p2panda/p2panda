@@ -413,6 +413,7 @@ async fn import_external_stream() {
     let extensions = Extensions {
         prune_flag: false.into(),
         log_id: LogId::from_topic(chat_id),
+        groups_args: None,
         version: Default::default(),
     };
     let operation_1 = panda_log.operation(
