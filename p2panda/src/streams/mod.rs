@@ -19,6 +19,7 @@ pub use ephemeral_stream::{
 };
 pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
+pub use external_stream::ExternalStreamFuture;
 pub use replay::{ReplayError, StreamFrom};
 pub(crate) use stream::processed_stream;
 pub use stream::{
