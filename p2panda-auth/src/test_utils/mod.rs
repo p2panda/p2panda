@@ -4,7 +4,6 @@
 
 use std::fmt::Debug;
 
-use p2panda_stream::orderer::Ordering;
 use serde::{Deserialize, Serialize};
 
 use crate::Access;
@@ -52,12 +51,6 @@ impl Operation<char, u32, Conditions> for TestOperation {
 
     fn action(&self) -> GroupAction<char, Conditions> {
         self.action.clone()
-    }
-}
-
-impl Ordering<u32> for TestOperation {
-    fn dependencies(&self) -> &[u32] {
-        &self.dependencies
     }
 }
 

@@ -8,9 +8,6 @@ mod processor;
 mod tests;
 mod traits;
 
-// TODO: This will be made private as soon as we've integrated the auth / groups processor into
-// p2panda-stream and doesn't need to appear in the docs.
-#[doc(hidden)]
-pub use orderer::CausalOrderer;
+use orderer::CausalOrderer;
 pub use processor::{Orderer, OrdererError};
 pub use traits::Ordering;

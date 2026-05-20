@@ -24,17 +24,16 @@
 //! # add a member to an existing group
 //! remove <MEMBER_PUBLIC_KEY> <GROUP_ID>
 //! ```
+use std::borrow::Borrow;
 use std::collections::VecDeque;
 use std::thread;
 
 use anyhow::Result;
 use futures_util::StreamExt;
 use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
-use p2panda_auth::processor::{GroupsArgs, GroupsOperation};
 use p2panda_auth::traits::Operation as GroupsOperationTrait;
 use p2panda_auth::{Access, AccessError};
-use p2panda_core::test_utils::TestLog;
-use p2panda_core::test_utils::setup_logging;
+use p2panda_core::test_utils::{TestLog, setup_logging};
 use p2panda_core::{
     Extension, Hash, Header, IdentityError, Operation, SigningKey, Topic, VerifyingKey,
 };
@@ -43,23 +42,32 @@ use p2panda_net::utils::ShortFormat;
 use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::{SqliteStore, tx_unwrap};
+use p2panda_stream::Processor;
+use p2panda_stream::groups::{GroupsArgs, GroupsOperation, GroupsProcessorArgs};
+use p2panda_stream::ingest::{Ingest, IngestArgs};
 use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tokio::task::LocalSet;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
-type LogId = u64;
+type LogId = usize;
+type StateId = u8;
 type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation<()>, ()>;
-type GroupsProcessor = p2panda_auth::processor::GroupsProcessor<Topic, AppExtensions, LogId>;
+type GroupsProcessor = p2panda_stream::groups::GroupsProcessor<
+    StateId,
+    GroupsProcessorArgs<StateId, AppExtensions>,
+    AppExtensions,
+    LogId,
+>;
 
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
 
 /// Identifier for the singleton group state used in this example.
-const GROUPS_STATE_ID: u32 = 0;
+const GROUPS_STATE_ID: u8 = 0;
 
 /// Topic id for this example.
 const TOPIC: [u8; 32] = [1; 32];
@@ -79,6 +87,24 @@ impl Extension<GroupsArgs> for AppExtensions {
 impl Extension<LogId> for AppExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
         Some(header.extensions.log_id)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct IngestEvent<E> {
+    pub operation: Operation<E>,
+    pub args: IngestArgs<usize, Topic>,
+}
+
+impl<E> Borrow<IngestArgs<usize, Topic>> for IngestEvent<E> {
+    fn borrow(&self) -> &IngestArgs<usize, Topic> {
+        &self.args
+    }
+}
+
+impl<E> Borrow<Operation<E>> for IngestEvent<E> {
+    fn borrow(&self) -> &Operation<E> {
+        &self.operation
     }
 }
 
@@ -121,13 +147,12 @@ async fn main() -> Result<()> {
     let sync_tx = sync.stream(topic, true).await?;
     let mut sync_rx = sync_tx.subscribe().await?;
 
-    // Construct groups processor.
-    let groups = GroupsProcessor::new(store.clone());
+    let (process_tx, mut process_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Receive messages from the sync stream.
     {
         let store = store.clone();
-        let groups = groups.clone();
+        let process_tx = process_tx.clone();
         tokio::task::spawn(async move {
             while let Some(Ok(from_sync)) = sync_rx.next().await {
                 match from_sync.event {
@@ -140,12 +165,7 @@ async fn main() -> Result<()> {
                         );
                     }
                     SyncEvent::OperationReceived { operation, .. } => {
-                        if let Err(err) = groups.process(&GROUPS_STATE_ID, &topic, &operation).await
-                        {
-                            debug!("error: {err:?}");
-                            continue;
-                        };
-
+                        process_tx.send(*operation.clone()).unwrap();
                         print_group(&store, &operation).await;
                     }
                     _ => (),
@@ -163,57 +183,100 @@ async fn main() -> Result<()> {
         .build()
         .expect("runtime for current thread");
 
-    // Sign and encode each line of text input and broadcast it on the chat topic.
-    thread::spawn(move || {
-        let local = LocalSet::new();
+    {
+        let store = store.clone();
+        // Sign and encode each line of text input and broadcast it on the chat topic.
+        thread::spawn(move || {
+            let local = LocalSet::new();
 
-        local.spawn_local(async move {
-            let log = TestLog::from_signing_key(signing_key);
+            local.spawn_local(async move {
+                let log = TestLog::from_signing_key(signing_key);
 
-            while let Some(text) = line_rx.recv().await {
-                let (group_id, action) = match text_2_action(&store, verifying_key, text).await {
-                    Ok(action) => action,
-                    Err(err) => {
-                        debug!("error: {err:?}");
-                        continue;
-                    }
-                };
+                while let Some(text) = line_rx.recv().await {
+                    let (group_id, action) = match text_2_action(&store, verifying_key, text).await
+                    {
+                        Ok(action) => action,
+                        Err(err) => {
+                            debug!("error: {err:?}");
+                            continue;
+                        }
+                    };
 
-                let y: GroupsState = tx_unwrap!(store, {
-                    store
-                        .get_groups_state(&GROUPS_STATE_ID)
-                        .await
-                        .unwrap()
-                        .unwrap_or_default()
-                });
+                    let y: GroupsState = tx_unwrap!(store, {
+                        store
+                            .get_groups_state(&GROUPS_STATE_ID)
+                            .await
+                            .unwrap()
+                            .unwrap_or_default()
+                    });
 
-                let groups_args = GroupsArgs {
-                    group_id,
-                    action,
-                    dependencies: y.heads(),
-                };
+                    let groups_args = GroupsArgs {
+                        group_id,
+                        action,
+                        dependencies: y.heads(),
+                    };
 
-                let operation = log.operation(
-                    &[],
-                    AppExtensions {
-                        groups: Some(groups_args),
-                        log_id: LOG_ID,
-                    },
-                );
+                    let operation = log.operation(
+                        &[],
+                        AppExtensions {
+                            groups: Some(groups_args),
+                            log_id: LOG_ID,
+                        },
+                    );
 
-                if let Err(err) = groups.process(&GROUPS_STATE_ID, &topic, &operation).await {
-                    debug!("error: {err:?}");
-                    continue;
-                };
+                    process_tx.send(operation.clone()).unwrap();
+                    print_group(&store, &operation).await;
 
-                print_group(&store, &operation).await;
+                    sync_tx.publish(operation).await.unwrap();
+                }
+            });
 
-                sync_tx.publish(operation).await.unwrap();
-            }
+            rt.block_on(local);
         });
+    }
 
-        rt.block_on(local);
-    });
+    // Contruct the ingest processor.
+    let ingest = Ingest::new(store.clone());
+
+    // Construct groups processor.
+    let groups = GroupsProcessor::new(store.clone());
+
+    // Process each received operation from both local and remote sources.
+    while let Some(op) = process_rx.recv().await {
+        // Pass the received operation into the ingest processor.
+        if let Err(err) = ingest
+            .process(IngestEvent {
+                operation: op.clone(),
+                args: IngestArgs {
+                    log_id: LOG_ID,
+                    topic,
+                    prune_flag: false,
+                },
+            })
+            .await
+        {
+            error!("{err:?}");
+            continue;
+        };
+
+        // Wait for the ingested operation to be emitted.
+        let (
+            IngestEvent {
+                operation: ingested_op,
+                args: _,
+            },
+            _ingest_result,
+        ) = ingest.next().await.unwrap();
+
+        // Pass the ingested operation into the groups processor.
+        if let Err(err) = groups
+            .process(GroupsProcessorArgs::process(GROUPS_STATE_ID, ingested_op))
+            .await
+        {
+            error!("{err:?}");
+            continue;
+        };
+    }
 
     // Listen for `Ctrl+c` and shutdown the node.
     tokio::signal::ctrl_c().await?;
