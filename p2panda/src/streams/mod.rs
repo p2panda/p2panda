@@ -23,7 +23,7 @@ pub use external_stream::ExternalStreamFuture;
 pub use replay::{ReplayError, StreamFrom};
 pub(crate) use stream::processed_stream;
 pub use stream::{
-    ProcessedOperation, PublishError, PublishFuture, Source, StreamEvent, StreamPublisher,
-    StreamSubscription,
+    ImportError, ProcessedOperation, PublishError, PublishFuture, Source, StreamEvent,
+    StreamPublisher, StreamSubscription,
 };
 pub use sync_metrics::{SessionPhase, SyncError};
