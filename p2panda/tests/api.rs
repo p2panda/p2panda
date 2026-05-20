@@ -18,6 +18,19 @@ use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
 
+fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u64) {
+    let StreamEvent::ReplayStarted { total_operations } = event else {
+        panic!("unexpected event");
+    };
+    assert_eq!(total_operations, &expected_total_operations);
+}
+
+fn assert_replay_ended<M>(event: &StreamEvent<M>) {
+    let StreamEvent::ReplayEnded = event else {
+        panic!("unexpected event");
+    };
+}
+
 fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash) {
     let StreamEvent::Processed { operation, .. } = event else {
         panic!("unexpected event");
@@ -292,7 +305,9 @@ async fn explicit_acking() {
     let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
 
     // We except to receive only the un-acked messages from the subscription stream.
+    assert_replay_started(&rx.next().await.unwrap(), 1);
     assert_message_id(&rx.next().await.unwrap(), message_id_2);
+    assert_replay_ended(&rx.next().await.unwrap());
 }
 
 #[tokio::test]
@@ -310,7 +325,7 @@ async fn replay_stream_from_start() {
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
     }
 
-    // Panda subscribes again, this time asking to replay all messages.
+    // Panda subscribes again, this time asking to replay all messages from start.
     let (_panda_tx, mut panda_rx) = panda
         .stream_from::<String>(chat_id, StreamFrom::Start)
         .await
@@ -381,8 +396,10 @@ async fn replay_stream_from_cursor() {
         .unwrap();
 
     // We expect to only receive the second and third message.
+    assert_replay_started(&rx.next().await.unwrap(), 2);
     assert_message_id(&rx.next().await.unwrap(), message_id_2);
     assert_message_id(&rx.next().await.unwrap(), message_id_3);
+    assert_replay_ended(&rx.next().await.unwrap());
 }
 
 #[tokio::test]

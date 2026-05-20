@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Emit started & ended events with total operations count when re-playing topic stream [#1175](https://github.com/p2panda/p2panda/pull/1175)
+
 ### Changed
 
 - Deduplicate `setup_logging` test utility [#1178](https://github.com/p2panda/p2panda/pull/1178)

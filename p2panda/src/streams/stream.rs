@@ -875,6 +875,18 @@ pub enum StreamEvent<M> {
         source: Source,
     },
 
+    /// Re-playing of events in topic stream started.
+    ReplayStarted {
+        /// Number of operations to-be replayed.
+        total_operations: u64,
+    },
+
+    /// Re-playing of events in topic stream ended.
+    ReplayEnded,
+
+    /// Topic stream could not re-play events due to an internal error.
+    ReplayFailed { error: Arc<ReplayError> },
+
     /// Deserializing the application message into the specified type failed.
     ///
     /// This is an application-level error and indicates an invalid application payload.
@@ -885,9 +897,6 @@ pub enum StreamEvent<M> {
         error: DecodeError,
     },
 
-    /// Topic stream could not re-play events due to an internal error.
-    ReplayFailed { error: Arc<ReplayError> },
-
     /// Topic stream could not acknowledge events due to an internal error.
     AckFailed {
         event: Event<LogId, Extensions, Topic>,
@@ -896,7 +905,7 @@ pub enum StreamEvent<M> {
 }
 
 /// Processed operation with application message coming from a topic stream.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProcessedOperation<M> {
     event: Event<LogId, Extensions, Topic>,
     topic: Topic,
