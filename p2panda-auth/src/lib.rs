@@ -75,12 +75,20 @@
 //! 4) Invalidation of transitive operations; invalidation of an operation due to the application
 //!    of the aforementioned rules results in all dependent operations being invalidated
 mod access;
+mod extension;
 pub mod graph;
 pub mod group;
-#[cfg(feature = "processor")]
-pub mod processor;
+mod operation;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod traits;
 
 pub use access::{Access, AccessError, AccessLevel};
+pub use extension::GroupsExtensionArgs;
+pub use operation::GroupsOperation;
+
+use crate::traits::{IdentityHandle, OperationId};
+use p2panda_core::{Hash, VerifyingKey};
+
+impl IdentityHandle for VerifyingKey {}
+impl OperationId for Hash {}

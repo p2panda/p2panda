@@ -3,8 +3,8 @@
 use p2panda_core::{Hash, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
-use crate::group::GroupAction;
-use crate::traits::{Conditions, Operation};
+use p2panda_auth::group::GroupAction;
+use p2panda_auth::traits::{Conditions, Operation};
 
 /// Concrete groups operation type.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -24,6 +24,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Deduplicate `setup_logging` test utility [#1178](https://github.com/p2panda/p2panda/pull/1178)
+- Refactor the groups processor to use the `Processor` trait [#1174](https://github.com/p2panda/p2panda/pull/1174)
 
 ### Fixed
 

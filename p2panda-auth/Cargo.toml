@@ -19,17 +19,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["processor"]
-processor = [
-  "dep:p2panda-core",
-  "dep:p2panda-store",
-  "dep:p2panda-stream",
-  "dep:tokio",
-  "serde",
-]
+default = []
 test_utils = [
-  "dep:p2panda-core",
-  "dep:p2panda-stream",
   "dep:rand",
   "dep:tokio",
   "dep:tracing-subscriber",
@@ -39,9 +30,7 @@ serde = ["dep:serde"]
 test = ["test_utils"]
 
 [dependencies]
-p2panda-core = { workspace = true, default-features = true, optional = true }
-p2panda-store = { workspace = true, default-features = true, optional = true }
-p2panda-stream = { workspace = true, default-features = true, optional = true }
+p2panda-core = { workspace = true, default-features = true }
 petgraph = { version = "0.8.3", features = ["serde-1"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
@@ -59,6 +48,7 @@ p2panda-core = { workspace = true, default-features = true, features = ["test_ut
 p2panda-net = { workspace = true, default-features = true }
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-sync = { workspace = true, default-features = true }
+p2panda-stream = { workspace = true, features = ["ingest", "groups"] }
 
 [lints]
 workspace = true
