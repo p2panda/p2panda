@@ -777,7 +777,7 @@ where
 
 /// Operations with application messages, system events and errors coming from a topic stream
 /// subscription.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum StreamEvent<M> {
     /// Operation with application message coming from a topic stream.
