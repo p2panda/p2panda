@@ -243,13 +243,12 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
+    use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Operation, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::protocols::TopicLogSyncEvent;
-    use crate::test_utils::{
-        Peer, TestTopicSyncManager, drain_stream, run_protocol, setup_logging,
-    };
+    use crate::test_utils::{Peer, TestTopicSyncManager, drain_stream, run_protocol};
     use crate::traits::{Manager, Protocol};
     use crate::{FromSync, SessionConfig, ToSync};
 

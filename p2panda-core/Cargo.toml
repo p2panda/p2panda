@@ -22,7 +22,7 @@ workspace = true
 [features]
 default = ["prune"]
 prune = []
-test_utils = ["dep:mock_instant"]
+test_utils = ["dep:mock_instant", "dep:tracing-subscriber"]
 
 [dependencies]
 arbitrary = { version = "1.4.1", optional = true, features = ["derive"] }
@@ -35,6 +35,7 @@ rand = "0.8.5"
 serde = { workspace = true, features = ["derive"] }
 serde_bytes = { version = "0.11.17" }
 thiserror = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 p2panda-core = { path = ".", features = ["test_utils"] }

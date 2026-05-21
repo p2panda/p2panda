@@ -31,10 +31,10 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
 use p2panda_auth::processor::{GroupsArgs, GroupsOperation};
-use p2panda_auth::test_utils::setup_logging;
 use p2panda_auth::traits::Operation as GroupsOperationTrait;
 use p2panda_auth::{Access, AccessError};
 use p2panda_core::test_utils::TestLog;
+use p2panda_core::test_utils::setup_logging;
 use p2panda_core::{
     Extension, Hash, Header, IdentityError, Operation, SigningKey, Topic, VerifyingKey,
 };

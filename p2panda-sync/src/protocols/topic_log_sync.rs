@@ -610,13 +610,12 @@ pub mod tests {
     use assert_matches::assert_matches;
     use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
+    use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Operation, Topic};
 
     use crate::ToSync;
     use crate::protocols::{LogSyncError, LogSyncMessage};
-    use crate::test_utils::{
-        Peer, TestTopicSyncMessage, run_protocol, run_protocol_uni, setup_logging,
-    };
+    use crate::test_utils::{Peer, TestTopicSyncMessage, run_protocol, run_protocol_uni};
     use crate::traits::Protocol;
 
     use super::{TopicLogSyncError, TopicLogSyncEvent};

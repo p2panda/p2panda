@@ -2,13 +2,13 @@
 
 use std::sync::Arc;
 
+use p2panda_core::test_utils::setup_logging;
 use ractor::concurrency::Duration;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorRef, RpcReplyPort, call};
 use tokio::sync::RwLock;
 
 use crate::supervisor::{ChildActor, ChildActorFut, RestartStrategy, Supervisor};
-use crate::test_utils::setup_logging;
 
 #[derive(Clone)]
 struct TestApi {

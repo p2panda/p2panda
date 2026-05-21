@@ -204,6 +204,7 @@ where
 #[cfg(test)]
 mod tests {
     use p2panda_core::test_utils::TestLog;
+    use p2panda_core::test_utils::setup_logging;
     use p2panda_core::traits::Digest;
     use p2panda_core::{Extension, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
     use p2panda_store::groups::GroupsStore;
@@ -213,7 +214,6 @@ mod tests {
     use crate::Access;
     use crate::group::{GroupAction, GroupCrdtState, GroupMember};
     use crate::processor::{GroupsArgs, GroupsOperation};
-    use crate::test_utils::setup_logging;
 
     type LogId = u64;
     type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
