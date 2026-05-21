@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use iroh::protocol::ProtocolHandler;
+use p2panda_core::test_utils::setup_logging;
 
 use crate::address_book::AddressBook;
 use crate::iroh_endpoint::Endpoint;
-use crate::test_utils::{setup_logging, test_args};
+use crate::test_utils::test_args;
 
 const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 

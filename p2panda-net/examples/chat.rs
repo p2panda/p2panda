@@ -34,6 +34,7 @@ use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
+use p2panda_core::test_utils::setup_logging;
 use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Timestamp, Topic, VerifyingKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
@@ -47,8 +48,6 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, mpsc};
 use tokio::time::Instant;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::prelude::*;
 
 type LogId = u64;
 
@@ -73,14 +72,6 @@ impl Heartbeat {
             rnd: rand::random(),
         }
     }
-}
-
-pub fn setup_logging() {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-        .with(EnvFilter::from_default_env())
-        .try_init()
-        .ok();
 }
 
 #[derive(Parser)]

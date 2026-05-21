@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::test_utils::setup_logging;
 use tokio::task::JoinHandle;
 
 use crate::discovery::{DiscoveryEvent, SessionRole};
-use crate::test_utils::{TestNode, setup_logging};
+use crate::test_utils::TestNode;
 
 async fn session_ended_handle(node: &TestNode) -> JoinHandle<()> {
     let mut events = node.discovery.events().await.unwrap();

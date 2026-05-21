@@ -3,8 +3,9 @@
 use std::collections::HashMap;
 
 use futures_util::StreamExt;
+use p2panda_core::test_utils::setup_logging;
 use p2panda_core::{Body, Topic};
-use p2panda_net::test_utils::{TestNode, setup_logging};
+use p2panda_net::test_utils::TestNode;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 
 #[tokio::test]

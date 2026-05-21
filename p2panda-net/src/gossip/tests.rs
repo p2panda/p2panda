@@ -6,6 +6,7 @@ use std::time::Duration;
 use futures_test::task::noop_context;
 use futures_util::TryStreamExt;
 use p2panda_core::Topic;
+use p2panda_core::test_utils::setup_logging;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
@@ -13,7 +14,7 @@ use crate::address_book::AddressBook;
 use crate::gossip::api::GossipPublishError;
 use crate::gossip::{DEFAULT_MAX_MESSAGE_SIZE, Gossip, GossipEvent};
 use crate::iroh_endpoint::Endpoint;
-use crate::test_utils::{setup_logging, test_args};
+use crate::test_utils::test_args;
 
 #[tokio::test]
 async fn joined_and_left_events_are_received() {

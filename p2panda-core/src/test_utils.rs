@@ -3,8 +3,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use tracing_subscriber;
+
 use crate::timestamp::Timestamp;
 use crate::{Body, Extensions, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
+
+pub fn setup_logging() {
+    if std::env::var("RUST_LOG").is_ok() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct TestLog {

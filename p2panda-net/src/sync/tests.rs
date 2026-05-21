@@ -7,6 +7,7 @@ use std::time::Duration;
 use futures_channel::mpsc::{self, SendError};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::Topic;
+use p2panda_core::test_utils::setup_logging;
 use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -24,7 +25,7 @@ use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
 use crate::sync::handle::SyncHandle;
-use crate::test_utils::{ApplicationArguments, setup_logging, test_args_from_seed};
+use crate::test_utils::{ApplicationArguments, test_args_from_seed};
 
 const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
 

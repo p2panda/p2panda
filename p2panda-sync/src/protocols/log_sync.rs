@@ -517,14 +517,13 @@ mod tests {
     use assert_matches::assert_matches;
     use futures::StreamExt;
     use futures::channel::mpsc;
+    use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Hash};
     use p2panda_store::operations::OperationStore;
     use p2panda_store::{SqliteStore, tx_unwrap};
 
     use crate::protocols::log_sync::{LogSyncError, LogSyncEvent, Logs, Operation};
-    use crate::test_utils::{
-        Peer, TestLogSyncMessage, run_protocol, run_protocol_uni, setup_logging,
-    };
+    use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
     use crate::traits::Protocol;
 
     #[tokio::test]

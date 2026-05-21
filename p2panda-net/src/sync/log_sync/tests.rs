@@ -6,6 +6,7 @@ use assert_matches::assert_matches;
 use iroh::Endpoint;
 use iroh::endpoint::{Connection, presets};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
+use p2panda_core::test_utils::setup_logging;
 use p2panda_core::{Operation, Topic};
 use p2panda_net::cbor::{into_cbor_sink, into_cbor_stream};
 use p2panda_sync::FromSync;
@@ -14,7 +15,7 @@ use p2panda_sync::test_utils::{Peer, TestTopicSyncMessage};
 use p2panda_sync::traits::Protocol;
 use tokio_stream::StreamExt;
 
-use crate::test_utils::{TestNode, setup_logging};
+use crate::test_utils::TestNode;
 
 #[tokio::test]
 async fn e2e_log_sync() {

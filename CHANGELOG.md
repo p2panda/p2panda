@@ -13,6 +13,10 @@ Highlights are marked with a pancake 🥞
 
 - Remove pruning logic in LWW TODO example [#1172](https://github.com/p2panda/p2panda/pull/1172)
 
+### Changed
+
+- Deduplicate `setup_logging` test utility [#1178](https://github.com/p2panda/p2panda/pull/1178)
+
 ## [0.6.0] - 18/05/2026
 
 ### Added
