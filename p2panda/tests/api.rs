@@ -310,8 +310,6 @@ async fn replay_stream_from_start() {
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
     }
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
     // Panda subscribes again, this time asking to replay all messages.
     let (_panda_tx, mut panda_rx) = panda
         .stream_from::<String>(chat_id, StreamFrom::Start)

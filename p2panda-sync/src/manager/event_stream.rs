@@ -142,7 +142,7 @@ where
                         // it means we have received it before on this event stream and should not
                         // return it again to any consumers.
                         if !state.dedup.insert(operation.hash()) {
-                            return (state, None)
+                            continue;
                         }
                     }
 
