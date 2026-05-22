@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Traits and implementation of p2panda's confidential discovery protocol.
 //!
 //! ## Motivation

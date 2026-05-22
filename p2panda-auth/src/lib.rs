@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! `p2panda-auth` provides decentralised group management with fine-grained, per-member
 //! permissions.
 //!

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! `p2panda-encryption` provides decentralized, secure data- and message encryption for groups
 //! with post-compromise security and optional forward secrecy.
 //!
