@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.6.1] - 22/05/2026
+
 ### Added
 
 - Emit started & ended events with total operations count when re-playing topic stream [#1175](https://github.com/p2panda/p2panda/pull/1175)
@@ -241,7 +243,8 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.6.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/p2panda/p2panda/releases/tag/v0.6.1
 [0.6.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.0
 [0.5.2]: https://github.com/p2panda/p2panda/releases/tag/v0.5.2
 [0.5.1]: https://github.com/p2panda/p2panda/releases/tag/v0.5.1
