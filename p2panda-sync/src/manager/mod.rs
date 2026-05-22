@@ -562,13 +562,11 @@ mod tests {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            println!("A received operation: {}", operation.hash);
                             operations_a.push(operation.header().clone());
                         }
                     }
                     Some(event) = event_stream_b.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            println!("B received operation: {}", operation.hash);
                             operations_b.push(operation.header().clone());
                         }
                     }
