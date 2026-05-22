@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Interfaces to implement and compose event processors on top of data streams with some p2panda
 //! implementations out-of-the-box, wrapping existing p2panda crates for causal message ordering,
 //! log validation, access control and group encryption CRDTs which might come in handy for some

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! p2panda's high-level Node API is an opinionated, out-of-the-box peer-to-peer stack which
 //! orchestrates all individual [p2panda] modules.
 //!

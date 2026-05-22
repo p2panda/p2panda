@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - Emit started & ended events with total operations count when re-playing topic stream [#1175](https://github.com/p2panda/p2panda/pull/1175)
+- Show Rust feature flags on docs.rs [#1185](https://github.com/p2panda/p2panda/pull/1185)
 
 ### Changed
 

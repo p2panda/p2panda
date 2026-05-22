@@ -15,6 +15,7 @@ keywords = ["p2p", "data-types", "blake3", "cbor", "ed25519"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

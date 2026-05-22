@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![cfg_attr(doctest, doc=include_str!("../README.md"))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! Core data types used across the p2panda stack to offer distributed, secure and efficient data
 //! transfer between peers.

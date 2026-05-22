@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Trait definitions and SQLite implementations for persistent stores used by p2panda.
 //!
 //! This crate provides generic trait definitions to flexibly express storage and query behaviour

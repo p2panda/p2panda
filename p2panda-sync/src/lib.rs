@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Data-type agnostic interfaces for implementing sync protocols and managers which can be used
 //! stand-alone or as part of the local-first stack provided by
 //! [`p2panda-net`].

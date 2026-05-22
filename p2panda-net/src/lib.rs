@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Data-type-agnostic p2p networking, discovery, gossip and local-first sync.
 //!
 //! ## Features
