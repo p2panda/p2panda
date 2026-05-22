@@ -8,6 +8,10 @@ mod replay;
 mod stream;
 mod sync_metrics;
 
+// Useful external types we want to re-export for convenience.
+#[doc(no_inline)]
+pub use p2panda_core::cbor::DecodeError;
+
 pub use acked::AckedError;
 pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
@@ -15,7 +19,7 @@ pub use ephemeral_stream::{
 };
 pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
-pub use replay::StreamFrom;
+pub use replay::{ReplayError, StreamFrom};
 pub(crate) use stream::processed_stream;
 pub use stream::{
     ProcessedOperation, PublishError, PublishFuture, Source, StreamEvent, StreamPublisher,
