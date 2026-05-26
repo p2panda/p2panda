@@ -6,9 +6,9 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_auth::group;
 use p2panda_auth::traits::{Conditions, Operation as GroupsOperationTrait};
-use p2panda_core::{Extension, Extensions, Hash, LogId, Operation, VerifyingKey};
+use p2panda_auth::{GroupsExtensionArgs, group};
+use p2panda_core::{Extension, Extensions, Hash, LogId, VerifyingKey};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ use tokio::sync::Notify;
 use tracing::{debug, trace};
 
 use crate::Processor;
-use crate::groups::{GroupsArgs, GroupsOperation};
+use crate::groups::{GroupsOperation, GroupsProcessorArgs};
 use crate::ingest::IngestError;
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
@@ -25,31 +25,6 @@ type GroupsCrdtError<C> =
     group::GroupCrdtError<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
 type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
 type GroupsState<C> = group::GroupCrdtState<VerifyingKey, Hash, GroupsOperation<C>, C>;
-
-/// Input arguments for `GroupsProcessor::process()`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)]
-pub enum GroupsProcessorArgs<SID, E> {
-    Process {
-        state_id: SID,
-        operation: Operation<E>,
-    },
-    #[default]
-    Ignore,
-}
-
-impl<SID, E> GroupsProcessorArgs<SID, E> {
-    pub fn process(state_id: SID, operation: Operation<E>) -> Self {
-        Self::Process {
-            state_id,
-            operation,
-        }
-    }
-
-    pub fn ignore() -> Self {
-        Self::Ignore
-    }
-}
 
 #[derive(Clone)]
 pub enum GroupsProcessorResult {
@@ -76,7 +51,7 @@ pub struct GroupsProcessor<SID, T, E, L, C = ()> {
 
 impl<SID, T, E, L, C> GroupsProcessor<SID, T, E, L, C>
 where
-    E: Extensions + Extension<GroupsArgs<C>> + Extension<L>,
+    E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
@@ -94,7 +69,7 @@ impl<SID, T, E, L, C> Processor<T> for GroupsProcessor<SID, T, E, L, C>
 where
     SID: for<'a> Deserialize<'a> + Serialize,
     T: Borrow<GroupsProcessorArgs<SID, E>>,
-    E: Extensions + Extension<GroupsArgs<C>> + Extension<L>,
+    E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
@@ -113,7 +88,7 @@ where
             //
             // If this returns None then the groups extension was not present and we consider this
             // a non-groups operation which does not require processing.
-            let Some(args) = operation.header.extension::<GroupsArgs<C>>()
+            let Some(args) = operation.header.extension::<GroupsExtensionArgs<C>>()
         {
             // Construct a GroupsOperation from an Operation<E>.
             let groups_operation = GroupsOperation {
@@ -225,8 +200,8 @@ where
 mod tests {
     use std::borrow::Borrow;
 
-    use p2panda_auth::Access;
     use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
+    use p2panda_auth::{Access, GroupsExtensionArgs};
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
     use p2panda_core::{Extension, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
@@ -235,7 +210,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use crate::Processor;
-    use crate::groups::{GroupsArgs, GroupsOperation};
+    use crate::groups::GroupsOperation;
     use crate::ingest::{Ingest, IngestArgs};
     use crate::orderer::{Orderer, Ordering};
 
@@ -257,7 +232,7 @@ mod tests {
     struct TestExtensions {
         log_id: LogId,
         dependencies: Vec<Hash>,
-        groups: Option<GroupsArgs>,
+        groups: Option<GroupsExtensionArgs>,
     }
 
     impl Extension<LogId> for TestExtensions {
@@ -266,8 +241,8 @@ mod tests {
         }
     }
 
-    impl Extension<GroupsArgs> for TestExtensions {
-        fn extract(header: &Header<Self>) -> Option<GroupsArgs> {
+    impl Extension<GroupsExtensionArgs> for TestExtensions {
+        fn extract(header: &Header<Self>) -> Option<GroupsExtensionArgs> {
             header.extensions.groups.clone()
         }
     }
@@ -278,8 +253,8 @@ mod tests {
         }
     }
 
-    impl From<GroupsArgs> for TestExtensions {
-        fn from(args: GroupsArgs) -> Self {
+    impl From<GroupsExtensionArgs> for TestExtensions {
+        fn from(args: GroupsExtensionArgs) -> Self {
             TestExtensions {
                 log_id: LOG_ID,
                 dependencies: args.dependencies.clone(),
@@ -321,7 +296,7 @@ mod tests {
         let alice = alice_log.author();
         let bobby = bobby_log.author();
 
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id,
             action: GroupAction::Create {
                 initial_members: vec![
@@ -354,7 +329,10 @@ mod tests {
         // `DependencyProcessor` or something similar.
         let groups = GroupsProcessor::new(store.clone());
         groups
-            .process(GroupsProcessorArgs::process(state_id, op_00))
+            .process(GroupsProcessorArgs::Process {
+                state_id,
+                operation: op_00,
+            })
             .await
             .unwrap();
         let (_processed_op, result) = groups.next().await.unwrap();
@@ -387,7 +365,7 @@ mod tests {
         let cathy = cathy_log.author();
 
         // Alice operation.
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id,
             action: GroupAction::Create {
                 initial_members: vec![
@@ -400,7 +378,7 @@ mod tests {
         let op_00: Operation<TestExtensions> = alice_log.operation(&[], TestExtensions::from(args));
 
         // Bobby operation.
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id,
             action: GroupAction::Add {
                 member: GroupMember::Individual(cathy),
@@ -411,7 +389,7 @@ mod tests {
         let op_01: Operation<TestExtensions> = bobby_log.operation(&[], TestExtensions::from(args));
 
         // Cathy operation.
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id,
             action: GroupAction::Remove {
                 member: GroupMember::Individual(alice),
@@ -470,7 +448,10 @@ mod tests {
         for _op in 0..3 {
             let next_op = orderer.next().await.unwrap();
             groups
-                .process(GroupsProcessorArgs::process(state_id, next_op))
+                .process(GroupsProcessorArgs::Process {
+                    state_id,
+                    operation: next_op,
+                })
                 .await
                 .unwrap()
         }
@@ -518,7 +499,7 @@ mod tests {
 
         // All members create their own device groups and process them on their own stores.
 
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id: alice_device_group,
             action: GroupAction::Create {
                 initial_members: vec![(GroupMember::Individual(alice), Access::manage())],
@@ -542,14 +523,14 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_alice_device_00.clone(),
-            ))
+                operation: create_alice_device_00.clone(),
+            })
             .await
             .unwrap();
 
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id: bobby_device_group,
             action: GroupAction::Create {
                 initial_members: vec![(GroupMember::Individual(bobby), Access::manage())],
@@ -573,14 +554,14 @@ mod tests {
             .unwrap();
 
         bobby_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_bobby_device_01.clone(),
-            ))
+                operation: create_bobby_device_01.clone(),
+            })
             .await
             .unwrap();
 
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id: cathy_device_group,
             action: GroupAction::Create {
                 initial_members: vec![(GroupMember::Individual(cathy), Access::manage())],
@@ -604,10 +585,10 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_cathy_device_02.clone(),
-            ))
+                operation: create_cathy_device_02.clone(),
+            })
             .await
             .unwrap();
 
@@ -627,10 +608,10 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_bobby_device_01.clone(),
-            ))
+                operation: create_bobby_device_01.clone(),
+            })
             .await
             .unwrap();
 
@@ -643,7 +624,7 @@ mod tests {
             .unwrap();
         alice_store.commit(permit).await.unwrap();
 
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id: ab_chat,
             action: GroupAction::Create {
                 initial_members: vec![
@@ -669,10 +650,10 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_alice_bobby_chat_03.clone(),
-            ))
+                operation: create_alice_bobby_chat_03.clone(),
+            })
             .await
             .unwrap();
 
@@ -690,7 +671,10 @@ mod tests {
                 .await
                 .unwrap();
             bobby_groups
-                .process(GroupsProcessorArgs::process(state_id, op))
+                .process(GroupsProcessorArgs::Process {
+                    state_id,
+                    operation: op,
+                })
                 .await
                 .unwrap();
         }
@@ -724,10 +708,10 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_bobby_device_01,
-            ))
+                operation: create_bobby_device_01,
+            })
             .await
             .unwrap();
 
@@ -739,7 +723,7 @@ mod tests {
             .unwrap()
             .unwrap();
         cathy_store.commit(permit).await.unwrap();
-        let args = GroupsArgs {
+        let args = GroupsExtensionArgs {
             group_id: bc_chat,
             action: GroupAction::Create {
                 initial_members: vec![
@@ -765,10 +749,10 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::process(
+            .process(GroupsProcessorArgs::Process {
                 state_id,
-                create_bobby_cathy_chat_04.clone(),
-            ))
+                operation: create_bobby_cathy_chat_04.clone(),
+            })
             .await
             .unwrap();
 
@@ -787,7 +771,10 @@ mod tests {
                 .unwrap();
 
             bobby_groups
-                .process(GroupsProcessorArgs::process(state_id, op))
+                .process(GroupsProcessorArgs::Process {
+                    state_id,
+                    operation: op,
+                })
                 .await
                 .unwrap();
         }

@@ -5,6 +5,6 @@ mod args;
 mod operation;
 mod processor;
 
-pub use args::GroupsArgs;
+pub use args::GroupsProcessorArgs;
 pub use operation::GroupsOperation;
-pub use processor::{GroupsProcessor, GroupsProcessorArgs, GroupsProcessorError};
+pub use processor::{GroupsProcessor, GroupsProcessorError};
