@@ -204,7 +204,7 @@ async fn main() -> Result<()> {
 
                     let y: GroupsState = tx_unwrap!(store, {
                         store
-                            .get_groups_state(&GROUPS_STATE_ID)
+                            .get_groups_state_tx(&GROUPS_STATE_ID)
                             .await
                             .unwrap()
                             .unwrap_or_default()
@@ -319,7 +319,7 @@ async fn text_2_action(
 ) -> Result<(VerifyingKey, GroupAction<VerifyingKey>), Text2ActionError> {
     let y = tx_unwrap!(store, {
         store
-            .get_groups_state(&GROUPS_STATE_ID)
+            .get_groups_state_tx(&GROUPS_STATE_ID)
             .await
             .unwrap()
             .unwrap_or_default()
@@ -411,7 +411,7 @@ async fn print_group(store: &SqliteStore, operation: &Operation<AppExtensions>) 
     };
     let y: GroupsState = tx_unwrap!(store, {
         store
-            .get_groups_state(&GROUPS_STATE_ID)
+            .get_groups_state_tx(&GROUPS_STATE_ID)
             .await
             .unwrap()
             .unwrap_or_default()
