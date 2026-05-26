@@ -17,7 +17,7 @@ use tokio::sync::Notify;
 use tracing::{debug, trace};
 
 use crate::Processor;
-use crate::groups::{GroupsOperation, GroupsProcessorArgs};
+use crate::groups::{GroupsArgs, GroupsOperation};
 use crate::ingest::IngestError;
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
@@ -27,12 +27,12 @@ type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsO
 type GroupsState<C> = group::GroupCrdtState<VerifyingKey, Hash, GroupsOperation<C>, C>;
 
 #[derive(Clone)]
-pub enum GroupsProcessorResult {
+pub enum GroupsResult {
     Processed,
     Noop,
 }
 
-impl GroupsProcessorResult {
+impl GroupsResult {
     pub fn was_processed(self) -> bool {
         match self {
             Self::Processed => true,
@@ -42,14 +42,14 @@ impl GroupsProcessorResult {
 }
 
 /// Processor for groups operations.
-pub struct GroupsProcessor<SID, T, E, L, C = ()> {
+pub struct Groups<SID, T, E, L, C = ()> {
     store: SqliteStore,
     notify: Notify,
-    queue: RefCell<VecDeque<(T, GroupsProcessorResult)>>,
+    queue: RefCell<VecDeque<(T, GroupsResult)>>,
     _marker: PhantomData<(SID, E, L, C)>,
 }
 
-impl<SID, T, E, L, C> GroupsProcessor<SID, T, E, L, C>
+impl<SID, T, E, L, C> Groups<SID, T, E, L, C>
 where
     E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
@@ -65,22 +65,22 @@ where
     }
 }
 
-impl<SID, T, E, L, C> Processor<T> for GroupsProcessor<SID, T, E, L, C>
+impl<SID, T, E, L, C> Processor<T> for Groups<SID, T, E, L, C>
 where
     SID: for<'a> Deserialize<'a> + Serialize,
-    T: Borrow<GroupsProcessorArgs<SID, E>>,
+    T: Borrow<GroupsArgs<SID, E>>,
     E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
-    type Output = (T, GroupsProcessorResult);
+    type Output = (T, GroupsResult);
 
-    type Error = (T, GroupsProcessorError<C>);
+    type Error = (T, GroupsError<C>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &GroupsProcessorArgs<SID, E> = input.borrow();
+        let input_args: &GroupsArgs<SID, E> = input.borrow();
 
-        let result = if let GroupsProcessorArgs::Process {
+        let result = if let GroupsArgs::Process {
             state_id,
             operation,
         } = input_args &&
@@ -146,10 +146,10 @@ where
                 y.members(groups_operation.group_id())
             );
 
-            (input, GroupsProcessorResult::Processed)
+            (input, GroupsResult::Processed)
         } else {
             trace!("ignore non-groups operation");
-            (input, GroupsProcessorResult::Noop)
+            (input, GroupsResult::Noop)
         };
 
         self.queue.borrow_mut().push_back(result);
@@ -173,7 +173,7 @@ where
 /// Error types which can occur in the groups processor.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error)]
-pub enum GroupsProcessorError<C>
+pub enum GroupsError<C>
 where
     C: Conditions,
 {
@@ -214,17 +214,13 @@ mod tests {
     use crate::ingest::{Ingest, IngestArgs};
     use crate::orderer::{Orderer, Ordering};
 
-    use super::GroupsProcessorArgs;
+    use super::GroupsArgs;
 
     type LogId = usize;
     type StateId = u8;
     type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
-    type GroupsProcessor = crate::groups::GroupsProcessor<
-        StateId,
-        GroupsProcessorArgs<StateId, TestExtensions>,
-        TestExtensions,
-        LogId,
-    >;
+    type Groups =
+        crate::groups::Groups<StateId, GroupsArgs<StateId, TestExtensions>, TestExtensions, LogId>;
 
     const LOG_ID: usize = 0;
 
@@ -324,12 +320,9 @@ mod tests {
             .await
             .unwrap();
 
-        // TODO(glyph): Naming disparity between `Ingest` and `GroupsProcessor`. Maybe we could
-        // rename `Ingest` to `IngestProcessor`? Then `Orderer` would become `OrderProcessor` or
-        // `DependencyProcessor` or something similar.
-        let groups = GroupsProcessor::new(store.clone());
+        let groups = Groups::new(store.clone());
         groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: op_00,
             })
@@ -401,7 +394,7 @@ mod tests {
         let store = SqliteStore::temporary().await;
         let ingest = Ingest::new(store.clone());
         let orderer = Orderer::new(store.clone());
-        let groups = GroupsProcessor::new(store.clone());
+        let groups = Groups::new(store.clone());
 
         ingest
             .process(IngestEvent {
@@ -448,7 +441,7 @@ mod tests {
         for _op in 0..3 {
             let next_op = orderer.next().await.unwrap();
             groups
-                .process(GroupsProcessorArgs::Process {
+                .process(GroupsArgs::Process {
                     state_id,
                     operation: next_op,
                 })
@@ -493,9 +486,9 @@ mod tests {
         let ab_chat = SigningKey::generate().verifying_key();
         let bc_chat = SigningKey::generate().verifying_key();
 
-        let alice_groups = GroupsProcessor::new(alice_store.clone());
-        let bobby_groups = GroupsProcessor::new(bobby_store.clone());
-        let cathy_groups = GroupsProcessor::new(cathy_store.clone());
+        let alice_groups = Groups::new(alice_store.clone());
+        let bobby_groups = Groups::new(bobby_store.clone());
+        let cathy_groups = Groups::new(cathy_store.clone());
 
         // All members create their own device groups and process them on their own stores.
 
@@ -523,7 +516,7 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_alice_device_00.clone(),
             })
@@ -554,7 +547,7 @@ mod tests {
             .unwrap();
 
         bobby_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_bobby_device_01.clone(),
             })
@@ -585,7 +578,7 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_cathy_device_02.clone(),
             })
@@ -608,7 +601,7 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_bobby_device_01.clone(),
             })
@@ -650,7 +643,7 @@ mod tests {
             .unwrap();
 
         alice_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_alice_bobby_chat_03.clone(),
             })
@@ -671,7 +664,7 @@ mod tests {
                 .await
                 .unwrap();
             bobby_groups
-                .process(GroupsProcessorArgs::Process {
+                .process(GroupsArgs::Process {
                     state_id,
                     operation: op,
                 })
@@ -708,7 +701,7 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_bobby_device_01,
             })
@@ -749,7 +742,7 @@ mod tests {
             .unwrap();
 
         cathy_groups
-            .process(GroupsProcessorArgs::Process {
+            .process(GroupsArgs::Process {
                 state_id,
                 operation: create_bobby_cathy_chat_04.clone(),
             })
@@ -771,7 +764,7 @@ mod tests {
                 .unwrap();
 
             bobby_groups
-                .process(GroupsProcessorArgs::Process {
+                .process(GroupsArgs::Process {
                     state_id,
                     operation: op,
                 })
