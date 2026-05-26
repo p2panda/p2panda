@@ -15,7 +15,7 @@ where
 {
     type Error = SqliteError;
 
-    async fn set_groups_state(&self, id: &ID, state: &S) -> Result<(), SqliteError> {
+    async fn set_groups_state_tx(&self, id: &ID, state: &S) -> Result<(), SqliteError> {
         self.tx(async |tx| {
             query(
                 "
@@ -40,7 +40,7 @@ where
         Ok(())
     }
 
-    async fn get_groups_state(&self, id: &ID) -> Result<Option<S>, SqliteError> {
+    async fn get_groups_state_tx(&self, id: &ID) -> Result<Option<S>, SqliteError> {
         let row = self
             .tx(async |tx| {
                 query_as::<_, (Vec<u8>,)>(

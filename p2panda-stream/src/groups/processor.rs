@@ -106,14 +106,16 @@ where
             };
 
             // Retrieve the current groups state from the store.
-            let mut y =
-                match GroupsStore::<SID, GroupsState<C>>::get_groups_state(&self.store, state_id)
-                    .await
-                {
-                    Err(err) => return Err((input, err.into())),
-                    Ok(Some(y)) => y,
-                    Ok(None) => Default::default(),
-                };
+            let mut y = match GroupsStore::<SID, GroupsState<C>>::get_groups_state_tx(
+                &self.store,
+                state_id,
+            )
+            .await
+            {
+                Err(err) => return Err((input, err.into())),
+                Ok(Some(y)) => y,
+                Ok(None) => Default::default(),
+            };
 
             debug!(
                 group_id = groups_operation.group_id().to_hex(),
@@ -131,7 +133,7 @@ where
             };
 
             // Set the groups state after processing is finished.
-            if let Err(err) = self.store.set_groups_state(state_id, &y).await {
+            if let Err(err) = self.store.set_groups_state_tx(state_id, &y).await {
                 return Err((input, err.into()));
             }
 
@@ -332,7 +334,7 @@ mod tests {
         assert!(result.was_processed());
 
         let permit = store.begin().await.unwrap();
-        let y: GroupsState = store.get_groups_state(&state_id).await.unwrap().unwrap();
+        let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
         store.commit(permit).await.unwrap();
 
         let members = y.members(group_id);
@@ -450,7 +452,7 @@ mod tests {
         }
 
         let permit = store.begin().await.unwrap();
-        let y: GroupsState = store.get_groups_state(&state_id).await.unwrap().unwrap();
+        let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
         store.commit(permit).await.unwrap();
 
         let members = y.members(group_id);
@@ -611,7 +613,7 @@ mod tests {
         // Then they create the chat group.
         let permit = alice_store.begin().await.unwrap();
         let y: GroupsState = alice_store
-            .get_groups_state(&state_id)
+            .get_groups_state_tx(&state_id)
             .await
             .unwrap()
             .unwrap();
@@ -675,7 +677,7 @@ mod tests {
         // Both Alice and Bobby have the correct groups state.
         for store in [alice_store.clone(), bobby_store.clone()] {
             let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state(&state_id).await.unwrap().unwrap();
+            let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
             store.commit(permit).await.unwrap();
             let mut members = y.members(ab_chat);
             members.sort();
@@ -711,7 +713,7 @@ mod tests {
         // Then they create the chat group.
         let permit = cathy_store.begin().await.unwrap();
         let y: GroupsState = cathy_store
-            .get_groups_state(&state_id)
+            .get_groups_state_tx(&state_id)
             .await
             .unwrap()
             .unwrap();
@@ -775,7 +777,7 @@ mod tests {
         // Both Cathy and Bobby have the correct groups state.
         for store in [cathy_store, bobby_store] {
             let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state(&state_id).await.unwrap().unwrap();
+            let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
             store.commit(permit).await.unwrap();
             let mut members = y.members(bc_chat);
             members.sort();
