@@ -32,7 +32,7 @@ use anyhow::Result;
 use futures_util::StreamExt;
 use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
 use p2panda_auth::traits::Operation as GroupsOperationTrait;
-use p2panda_auth::{Access, AccessError};
+use p2panda_auth::{Access, AccessError, GroupsExtensionArgs};
 use p2panda_core::test_utils::{TestLog, setup_logging};
 use p2panda_core::{
     Extension, Hash, Header, IdentityError, Operation, SigningKey, Topic, VerifyingKey,
@@ -43,7 +43,7 @@ use p2panda_net::{AddressBook, Discovery, Endpoint, Gossip, LogSync, MdnsDiscove
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::{SqliteStore, tx_unwrap};
 use p2panda_stream::Processor;
-use p2panda_stream::groups::{GroupsArgs, GroupsOperation, GroupsProcessorArgs};
+use p2panda_stream::groups::{GroupsArgs, GroupsOperation};
 use p2panda_stream::ingest::{Ingest, IngestArgs};
 use p2panda_sync::protocols::TopicLogSyncEvent as SyncEvent;
 use serde::{Deserialize, Serialize};
@@ -56,9 +56,9 @@ use tracing::{debug, error, info};
 type LogId = usize;
 type StateId = u8;
 type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation<()>, ()>;
-type GroupsProcessor = p2panda_stream::groups::GroupsProcessor<
+type Groups = p2panda_stream::groups::Groups<
     StateId,
-    GroupsProcessorArgs<StateId, AppExtensions>,
+    GroupsArgs<StateId, AppExtensions>,
     AppExtensions,
     LogId,
 >;
@@ -74,12 +74,12 @@ const TOPIC: [u8; 32] = [1; 32];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct AppExtensions {
-    groups: Option<GroupsArgs>,
+    groups: Option<GroupsExtensionArgs>,
     log_id: LogId,
 }
 
-impl Extension<GroupsArgs> for AppExtensions {
-    fn extract(header: &Header<Self>) -> Option<GroupsArgs> {
+impl Extension<GroupsExtensionArgs> for AppExtensions {
+    fn extract(header: &Header<Self>) -> Option<GroupsExtensionArgs> {
         header.extensions.groups.clone()
     }
 }
@@ -210,7 +210,7 @@ async fn main() -> Result<()> {
                             .unwrap_or_default()
                     });
 
-                    let groups_args = GroupsArgs {
+                    let groups_extension_args = GroupsExtensionArgs {
                         group_id,
                         action,
                         dependencies: y.heads(),
@@ -219,7 +219,7 @@ async fn main() -> Result<()> {
                     let operation = log.operation(
                         &[],
                         AppExtensions {
-                            groups: Some(groups_args),
+                            groups: Some(groups_extension_args),
                             log_id: LOG_ID,
                         },
                     );
@@ -239,7 +239,7 @@ async fn main() -> Result<()> {
     let ingest = Ingest::new(store.clone());
 
     // Construct groups processor.
-    let groups = GroupsProcessor::new(store.clone());
+    let groups = Groups::new(store.clone());
 
     // Process each received operation from both local and remote sources.
     while let Some(op) = process_rx.recv().await {
@@ -270,7 +270,10 @@ async fn main() -> Result<()> {
 
         // Pass the ingested operation into the groups processor.
         if let Err(err) = groups
-            .process(GroupsProcessorArgs::process(GROUPS_STATE_ID, ingested_op))
+            .process(GroupsArgs::Process {
+                state_id: GROUPS_STATE_ID,
+                operation: ingested_op,
+            })
             .await
         {
             error!("{err:?}");
@@ -398,7 +401,7 @@ fn parse_member(
 }
 
 async fn print_group(store: &SqliteStore, operation: &Operation<AppExtensions>) {
-    let args = operation.header.extension::<GroupsArgs>().unwrap();
+    let args = operation.header.extension::<GroupsExtensionArgs>().unwrap();
     let groups_operation = GroupsOperation {
         id: operation.hash,
         author: operation.header.verifying_key,

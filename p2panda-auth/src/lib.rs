@@ -87,8 +87,9 @@ pub use access::{Access, AccessError, AccessLevel};
 pub use extension::GroupsExtensionArgs;
 pub use operation::GroupsOperation;
 
-use crate::traits::{IdentityHandle, OperationId};
 use p2panda_core::{Hash, VerifyingKey};
+
+use crate::traits::{IdentityHandle, OperationId};
 
 impl IdentityHandle for VerifyingKey {}
 impl OperationId for Hash {}

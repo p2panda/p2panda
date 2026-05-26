@@ -4,7 +4,7 @@ use p2panda_core::Operation;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
-pub enum GroupsProcessorArgs<SID, E> {
+pub enum GroupsArgs<SID, E> {
     Process {
         state_id: SID,
         operation: Operation<E>,
