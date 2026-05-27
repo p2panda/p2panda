@@ -66,7 +66,7 @@ type Groups = p2panda_stream::groups::Groups<
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
 
-/// Identifier for the singleton group state used in this example.
+/// Identifier for the group state used in this example.
 const GROUPS_STATE_ID: u8 = 0;
 
 /// Topic id for this example.
