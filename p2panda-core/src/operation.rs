@@ -161,6 +161,8 @@ impl<E> Digest<Hash> for Operation<E> {
     }
 }
 
+pub type Version = u16;
+
 /// Header of a p2panda operation.
 ///
 /// The header holds all metadata required to cryptographically secure and authenticate a message
@@ -194,7 +196,7 @@ impl<E> Digest<Hash> for Operation<E> {
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
-    pub version: u64,
+    pub version: Version,
 
     /// Author of this operation.
     pub verifying_key: VerifyingKey,
@@ -376,7 +378,7 @@ impl From<Vec<u8>> for Body {
 #[derive(Clone, Debug, Error)]
 pub enum OperationError {
     #[error("operation version {0} is not supported, needs to be <= {1}")]
-    UnsupportedVersion(u64, u64),
+    UnsupportedVersion(Version, Version),
 
     #[error("operation needs to be signed")]
     MissingSignature,

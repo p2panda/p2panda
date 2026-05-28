@@ -12,7 +12,7 @@ use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
 use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
 use crate::logs::{LogHeights, LogId, SeqNum};
-use crate::operation::{Body, Header};
+use crate::operation::{Body, Header, Version};
 use crate::timestamp::Timestamp;
 use crate::topic::{Topic, TopicError};
 
@@ -197,7 +197,7 @@ where
             where
                 A: SeqAccess<'de>,
             {
-                let version: u64 = seq
+                let version: Version = seq
                     .next_element()?
                     .ok_or(SerdeError::custom("version missing"))?;
 
