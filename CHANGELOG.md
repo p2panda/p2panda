@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Changed
+
+- Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+
 ## [0.6.1] - 22/05/2026
 
 ### Added
@@ -19,6 +23,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Deduplicate `setup_logging` test utility [#1178](https://github.com/p2panda/p2panda/pull/1178)
+- Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
 
 ### Fixed
 
