@@ -5,9 +5,7 @@ use std::rc::Rc;
 
 use tracing_subscriber;
 
-use crate::{
-    Body, Extensions, Hash, Header, Operation, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey,
-};
+use crate::{Body, Extensions, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 
 pub fn setup_logging() {
     if std::env::var("RUST_LOG").is_ok() {
@@ -65,7 +63,6 @@ impl TestLog {
             } else {
                 Some(body.hash())
             },
-            timestamp: Timestamp::now(),
             seq_num: *seq_num,
             backlink: *backlink,
             extensions,

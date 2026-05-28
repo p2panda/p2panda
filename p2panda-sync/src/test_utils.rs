@@ -128,8 +128,7 @@ impl Peer {
         .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
         .unwrap_or((0, None));
 
-        let (header, header_bytes) =
-            create_operation(&self.signing_key, body, seq_num, rand::random(), backlink);
+        let (header, header_bytes) = create_operation(&self.signing_key, body, seq_num, backlink);
 
         (header, header_bytes)
     }
@@ -208,7 +207,6 @@ pub fn create_operation(
     signing_key: &SigningKey,
     body: &Body,
     seq_num: SeqNum,
-    timestamp: u64,
     backlink: Option<Hash>,
 ) -> (Header<()>, Vec<u8>) {
     let mut header = Header::<()> {
@@ -217,7 +215,6 @@ pub fn create_operation(
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp: timestamp.into(),
         seq_num,
         backlink,
         extensions: (),

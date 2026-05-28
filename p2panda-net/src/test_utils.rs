@@ -312,9 +312,7 @@ impl TestClient {
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
-            let timestamp = seq_num as u64;
-
-            create_operation(&self.signing_key, body, seq_num, timestamp, backlink)
+            create_operation(&self.signing_key, body, seq_num, backlink)
         });
 
         (header, header_bytes, body)
@@ -336,7 +334,6 @@ pub fn create_operation(
     signing_key: &SigningKey,
     body: &[u8],
     seq_num: SeqNum,
-    timestamp: u64,
     backlink: Option<Hash>,
 ) -> (Header<TestExtensions>, Vec<u8>, Body) {
     let body = Body::new(body);
@@ -347,7 +344,6 @@ pub fn create_operation(
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp: timestamp.into(),
         seq_num,
         backlink,
         extensions: (),

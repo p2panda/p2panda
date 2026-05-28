@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 - Core header type changes & stabilisation
     - `payload_size` and `seq_num` from `u64` to `u32` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - `version` from `u64` to `u16` [#1194](https://github.com/p2panda/p2panda/pull/1194)
+    - Remove `timestamp` [#1195](https://github.com/p2panda/p2panda/pull/1195)
 
 ## [0.6.1] - 22/05/2026
 

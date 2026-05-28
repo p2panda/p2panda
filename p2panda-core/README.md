@@ -52,7 +52,7 @@ extensible depending on your application requirements.
 ### Create and sign operation
 
 ```rust
-use p2panda_core::{Body, Header, SigningKey, Timestamp};
+use p2panda_core::{Body, Header, SigningKey};
 
 let signing_key = SigningKey::generate();
 
@@ -63,7 +63,6 @@ let mut header = Header {
     signature: None,
     payload_size: body.size(),
     payload_hash: Some(body.hash()),
-    timestamp: Timestamp::now(),
     seq_num: 0,
     backlink: None,
     extensions: (),
