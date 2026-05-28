@@ -6,9 +6,9 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 
 use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
-use p2panda_auth::traits::{Conditions, IdentityHandle as AuthIdentityHandle, Resolver};
+use p2panda_auth::traits::{Conditions, Resolver};
 use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::identity::{VERIFYING_KEY_LEN, VerifyingKey};
+use p2panda_core::identity::{Author, VERIFYING_KEY_LEN, VerifyingKey};
 use p2panda_core::traits::OperationId as AuthOperationId;
 use p2panda_core::{HashError, IdentityError};
 use p2panda_encryption::key_manager::KeyManager;
@@ -30,7 +30,7 @@ pub const OPERATION_ID_SIZE: usize = HASH_LEN;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ActorId(pub(crate) VerifyingKey);
 
-impl AuthIdentityHandle for ActorId {}
+impl Author for ActorId {}
 
 impl EncryptionIdentityHandle for ActorId {}
 
