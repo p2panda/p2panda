@@ -3,8 +3,6 @@
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 
-use crate::traits::IdentityHandle;
-
 /// A group member which can be a single individual or another group.
 ///
 /// The `Group` variant can be used to express nested group relations. In both cases, the member
@@ -41,5 +39,3 @@ where
         !self.is_group()
     }
 }
-
-impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}

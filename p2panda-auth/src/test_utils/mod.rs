@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::Access;
 use crate::group::resolver::StrongRemove;
 use crate::group::{GroupAction, GroupCrdt, GroupCrdtError, GroupCrdtState, GroupMember};
-use crate::traits::{IdentityHandle, Operation};
-
-impl IdentityHandle for char {}
+use crate::traits::Operation;
 
 pub type MemberId = char;
 pub type MessageId = u32;

@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 
+use p2panda_core::identity::Author;
 use p2panda_core::traits::OperationId;
 use petgraph::algo::toposort;
 use petgraph::dot::{Config, Dot};
@@ -11,7 +12,7 @@ use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
 use crate::group::{GroupAction, GroupCrdtState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation};
+use crate::traits::{Conditions, Operation};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_MUTUAL_REMOVE_NODE: &str = "#9a0aad";
@@ -24,7 +25,7 @@ const DEPENDENCIES_EDGE: &str = "#B748E37F";
 
 impl<ID, OP, M, C> GroupCrdtState<ID, OP, M, C>
 where
-    ID: IdentityHandle + Ord + Display,
+    ID: Author + Ord + Display,
     OP: OperationId + Ord + Display,
     M: Operation<ID, OP, C>,
     C: Conditions,
