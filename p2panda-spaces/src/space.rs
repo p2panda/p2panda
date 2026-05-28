@@ -455,7 +455,7 @@ where
         // Make the DGM aware of group members after this group membership change has been
         // processed.
         encryption_y.dcgka.dgm = EncryptionMembershipState {
-            members: HashSet::from_iter(next_members.clone().into_iter()),
+            members: HashSet::from_iter(next_members.clone()),
         };
 
         let mut direct_messages = vec![];

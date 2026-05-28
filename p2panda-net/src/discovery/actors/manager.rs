@@ -577,15 +577,12 @@ impl ThreadLocalActor for DiscoveryManager {
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
         match message {
-            SupervisionEvent::ActorTerminated(actor_cell, _, _) => {
-                if state.walkers.contains_key(&actor_cell.get_id()) {
-                    // Shutting down a walker means we're shutting down the discovery system,
-                    // including this manager.
-                    myself.stop(Some("walker shutting down".into()));
-                } else {
-                    // When a discovery session terminates successfully we will deal with it in
-                    // "FinishSession" instead.
-                }
+            SupervisionEvent::ActorTerminated(actor_cell, _, _)
+                if state.walkers.contains_key(&actor_cell.get_id()) =>
+            {
+                // Shutting down a walker means we're shutting down the discovery system,
+                // including this manager.
+                myself.stop(Some("walker shutting down".into()));
             }
             SupervisionEvent::ActorFailed(actor_cell, err) => {
                 if state.walkers.contains_key(&actor_cell.get_id()) {
