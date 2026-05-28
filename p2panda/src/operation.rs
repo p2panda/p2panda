@@ -3,7 +3,7 @@
 use std::hash::Hash as StdHash;
 
 use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::{PruneFlag, Topic};
+use p2panda_core::{PruneFlag, Timestamp, Topic};
 use serde::{Deserialize, Serialize};
 
 /// Header type with our system-level extensions.
@@ -25,6 +25,7 @@ pub struct Extensions {
     )]
     pub prune_flag: PruneFlag,
     pub log_id: LogId,
+    pub timestamp: Timestamp,
     pub version: u64,
 }
 
@@ -33,6 +34,7 @@ impl Extensions {
         Self {
             log_id: LogId::from_topic(topic),
             prune_flag: PruneFlag::default(),
+            timestamp: Timestamp::now(),
             version: VERSION,
         }
     }
