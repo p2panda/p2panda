@@ -11,6 +11,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "discovery", "confidential"]
+rust-version = "1.94"
 
 [package.metadata.docs.rs]
 all-features = true
