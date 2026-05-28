@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, VerifyingKey};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -43,8 +43,8 @@ enum State<L> {
     /// Receive PreSync message from remote or Done if they have nothing to send.
     ReceivePreSyncOrDone {
         remote_needs: LogRanges<VerifyingKey, L>,
-        outbound_operations: u64,
-        outbound_bytes: u64,
+        outbound_operations: u32,
+        outbound_bytes: u32,
     },
 
     /// Enter sync loop where we exchange operations with the remote, moves onto next state when
@@ -95,7 +95,7 @@ impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash> + Clone + Send + 'static,
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
@@ -252,7 +252,7 @@ where
                                         metrics.received_bytes += {
                                             header.len()
                                                 + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
-                                        } as u64;
+                                        } as u32;
                                         metrics.received_operations += 1;
 
                                         let header: Header<E> = decode_cbor(&header[..])?;
@@ -318,7 +318,7 @@ where
 
                                         metrics.sent_bytes += { header_bytes.len() +
                                             body.as_ref().map(|body|
-                                        body.to_bytes().len()).unwrap_or_default() } as u64;
+                                        body.to_bytes().len()).unwrap_or_default() } as u32;
                                         metrics.sent_operations += 1;
 
                                         trace!(
@@ -385,7 +385,7 @@ async fn get_log_heights<L, E, S>(
 ) -> Result<LogHeights<VerifyingKey, L>, LogSyncError>
 where
     L: LogId,
-    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash> + Clone + Send + 'static,
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
 {
     let mut result = BTreeMap::new();
     for (verifying_key, log_ids) in logs {
@@ -412,8 +412,8 @@ where
 {
     Have(LogHeights<VerifyingKey, L>),
     PreSync {
-        total_operations: u64,
-        total_bytes: u64,
+        total_operations: u32,
+        total_bytes: u32,
     },
     Operation(Vec<u8>, Option<Vec<u8>>),
     Done,
@@ -454,14 +454,14 @@ pub enum LogSyncEvent<E> {
 /// Sync metrics emitted in event messages.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct LogSyncMetrics {
-    pub outbound_operations: u64,
-    pub outbound_bytes: u64,
-    pub inbound_operations: u64,
-    pub inbound_bytes: u64,
-    pub sent_operations: u64,
-    pub sent_bytes: u64,
-    pub received_operations: u64,
-    pub received_bytes: u64,
+    pub outbound_operations: u32,
+    pub outbound_bytes: u32,
+    pub inbound_operations: u32,
+    pub inbound_bytes: u32,
+    pub sent_operations: u32,
+    pub sent_bytes: u32,
+    pub received_operations: u32,
+    pub received_bytes: u32,
 }
 
 /// Protocol error types.
@@ -589,11 +589,11 @@ mod tests {
         .unwrap();
 
         let expected_bytes = header_0.payload_size
-            + header_bytes_0.len() as u64
+            + header_bytes_0.len() as u32
             + header_1.payload_size
-            + header_bytes_1.len() as u64
+            + header_bytes_1.len() as u32
             + header_2.payload_size
-            + header_bytes_2.len() as u64;
+            + header_bytes_2.len() as u32;
 
         let metrics = assert_matches!(
             event_rx.recv().await.unwrap(),

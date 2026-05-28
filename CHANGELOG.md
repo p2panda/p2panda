@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
 - Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- Operation format: change `payload_size` and `seq_num` to `u32` [#1194](https://github.com/p2panda/p2panda/pull/1194)
 
 ## [0.6.1] - 22/05/2026
 

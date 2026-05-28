@@ -21,7 +21,7 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Hash, LogId, Operation, VerifyingKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -104,7 +104,7 @@ where
 impl<T, S, L, E> Manager<T> for TopicSyncManager<T, S, L, E>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send

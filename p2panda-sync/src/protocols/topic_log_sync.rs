@@ -10,7 +10,7 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, VerifyingKey};
+use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
@@ -53,7 +53,7 @@ pub struct TopicLogSync<T, S, L, E> {
 impl<T, S, L, E> TopicLogSync<T, S, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
@@ -100,7 +100,7 @@ where
 impl<T, S, L, E> Protocol for TopicLogSync<T, S, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, u64, Hash>
+    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
@@ -211,7 +211,7 @@ where
                                     }
 
                                     metrics.sent_live_bytes +=
-                                        operation.header.to_bytes().len() as u64 + operation.header.payload_size;
+                                        operation.header.to_bytes().len() as u32 + operation.header.payload_size;
                                     metrics.sent_live_operations += 1;
 
                                     trace!(
@@ -284,7 +284,7 @@ where
                                         continue;
                                     }
 
-                                    metrics.received_live_bytes += header.to_bytes().len() as u64 + header.payload_size;
+                                    metrics.received_live_bytes += header.to_bytes().len() as u32 + header.payload_size;
                                     metrics.received_live_operations += 1;
 
                                     trace!(
@@ -410,34 +410,34 @@ pub enum TopicLogSyncError {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Metrics {
-    pub outbound_sync_bytes: u64,
-    pub outbound_sync_operations: u64,
-    pub inbound_sync_bytes: u64,
-    pub inbound_sync_operations: u64,
-    pub sent_sync_bytes: u64,
-    pub sent_sync_operations: u64,
-    pub received_sync_bytes: u64,
-    pub received_sync_operations: u64,
-    pub sent_live_bytes: u64,
-    pub sent_live_operations: u64,
-    pub received_live_bytes: u64,
-    pub received_live_operations: u64,
+    pub outbound_sync_bytes: u32,
+    pub outbound_sync_operations: u32,
+    pub inbound_sync_bytes: u32,
+    pub inbound_sync_operations: u32,
+    pub sent_sync_bytes: u32,
+    pub sent_sync_operations: u32,
+    pub received_sync_bytes: u32,
+    pub received_sync_operations: u32,
+    pub sent_live_bytes: u32,
+    pub sent_live_operations: u32,
+    pub received_live_bytes: u32,
+    pub received_live_operations: u32,
 }
 
 impl Metrics {
-    pub fn sent_bytes(&self) -> u64 {
+    pub fn sent_bytes(&self) -> u32 {
         self.sent_sync_bytes + self.sent_live_bytes
     }
 
-    pub fn received_bytes(&self) -> u64 {
+    pub fn received_bytes(&self) -> u32 {
         self.received_sync_bytes + self.received_live_bytes
     }
 
-    pub fn sent_operations(&self) -> u64 {
+    pub fn sent_operations(&self) -> u32 {
         self.sent_sync_operations + self.sent_live_operations
     }
 
-    pub fn received_operations(&self) -> u64 {
+    pub fn received_operations(&self) -> u32 {
         self.received_sync_operations + self.received_live_operations
     }
 }
@@ -722,11 +722,11 @@ pub mod tests {
                 ),
                 1 => {
                     let expected_bytes = header_0.payload_size
-                        + header_bytes_0.len() as u64
+                        + header_bytes_0.len() as u32
                         + header_1.payload_size
-                        + header_bytes_1.len() as u64
+                        + header_bytes_1.len() as u32
                         + header_2.payload_size
-                        + header_bytes_2.len() as u64;
+                        + header_bytes_2.len() as u32;
 
                     assert_eq!(
                         message,
@@ -868,11 +868,11 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u64
+            + header_0.to_bytes().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u64;
+            + header_1.to_bytes().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u64;
+        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
@@ -894,7 +894,7 @@ pub mod tests {
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
                     total_operations: 1,
-                    total_bytes: total_bytes as u64,
+                    total_bytes: total_bytes as u32,
                 }),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                     header_bytes_0,
@@ -979,11 +979,11 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u64
+            + header_0.to_bytes().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u64;
+            + header_1.to_bytes().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u64;
+        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
@@ -1016,7 +1016,7 @@ pub mod tests {
                 TestTopicSyncMessage::Sync(LogSyncMessage::Have(BTreeMap::default())),
                 TestTopicSyncMessage::Sync(LogSyncMessage::PreSync {
                     total_operations: 1,
-                    total_bytes: total_bytes as u64,
+                    total_bytes: total_bytes as u32,
                 }),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                     header_bytes_0,

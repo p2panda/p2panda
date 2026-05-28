@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -302,7 +302,7 @@ impl TestClient {
                 Operation<TestExtensions>,
                 VerifyingKey,
                 u64,
-                u64,
+                SeqNum,
                 p2panda_core::Hash,
             >>::get_latest_entry_tx(
                 &self.store, &self.signing_key.verifying_key(), &log_id
@@ -312,7 +312,9 @@ impl TestClient {
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
-            create_operation(&self.signing_key, body, seq_num, seq_num, backlink)
+            let timestamp = seq_num as u64;
+
+            create_operation(&self.signing_key, body, seq_num, timestamp, backlink)
         });
 
         (header, header_bytes, body)
@@ -333,7 +335,7 @@ impl TestClient {
 pub fn create_operation(
     signing_key: &SigningKey,
     body: &[u8],
-    seq_num: u64,
+    seq_num: SeqNum,
     timestamp: u64,
     backlink: Option<Hash>,
 ) -> (Header<TestExtensions>, Vec<u8>, Body) {

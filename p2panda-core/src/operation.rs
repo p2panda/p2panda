@@ -203,7 +203,7 @@ pub struct Header<E = ()> {
     pub signature: Option<Signature>,
 
     /// Number of bytes of the body of this operation, must be zero if no body is given.
-    pub payload_size: u64,
+    pub payload_size: u32,
 
     /// Hash of the body of this operation, must be included if payload_size is non-zero and
     /// omitted otherwise.
@@ -356,8 +356,8 @@ impl Body {
     }
 
     /// Size of body bytes.
-    pub fn size(&self) -> u64 {
-        self.0.len() as u64
+    pub fn size(&self) -> u32 {
+        self.0.len() as u32
     }
 }
 
@@ -400,7 +400,7 @@ pub enum OperationError {
     TooManyAuthors,
 
     #[error("expected sequence number {0} but found {1}")]
-    SeqNumNonIncremental(u64, u64),
+    SeqNumNonIncremental(SeqNum, SeqNum),
 
     #[error("expected backlink but none was given")]
     BacklinkMissing,

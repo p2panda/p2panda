@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{collections::BTreeMap, error::Error};
+use std::collections::BTreeMap;
+use std::error::Error;
 
 type LogEntries<T> = Vec<(T, Vec<u8>)>;
 
@@ -53,7 +54,7 @@ pub trait LogStore<T, A, L, S, ID> {
         log_id: &L,
         after: Option<S>,
         until: Option<S>,
-    ) -> impl Future<Output = Result<Option<(u64, u64)>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<(u32, u32)>, Self::Error>>;
 
     /// Get all entries in a log after an optional starting point.
     ///

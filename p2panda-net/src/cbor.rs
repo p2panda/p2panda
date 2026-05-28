@@ -188,7 +188,7 @@ impl From<std::io::Error> for CborCodecError {
 #[cfg(test)]
 mod tests {
     use futures_util::{FutureExt, SinkExt, StreamExt};
-    use p2panda_core::{Body, Hash, Header, SigningKey, Timestamp};
+    use p2panda_core::{Body, Hash, Header, SeqNum, SigningKey, Timestamp};
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::FramedRead;
 
@@ -265,7 +265,7 @@ mod tests {
         fn create_operation(
             signing_key: &SigningKey,
             body: &[u8],
-            seq_num: u64,
+            seq_num: SeqNum,
             backlink: Option<Hash>,
         ) -> Payload {
             let body = Body::from(body);

@@ -1,18 +1,16 @@
 -- SPDX-License-Identifier: MIT OR Apache-2.0
 
--- NOTE: SQLite doesn't support u64 values, we're storing large integers as
--- defined in the p2panda specification as TEXT.
 CREATE TABLE IF NOT EXISTS operations_v1 (
-    hash                    TEXT            NOT NULL    PRIMARY KEY,
-    log_id                  TEXT            NOT NULL,
-    version                 TEXT            NOT NULL,
-    public_key              TEXT            NOT NULL,
-    signature               TEXT            NOT NULL,
-    payload_size            TEXT            NOT NULL,
-    payload_hash            TEXT            NULL,
+    hash                    VARCHAR(32)     NOT NULL    PRIMARY KEY,
+    log_id                  BLOB            NOT NULL,
+    version                 INTEGER         NOT NULL,
+    public_key              VARCHAR(32)     NOT NULL,
+    signature               VARCHAR(64)     NOT NULL,
+    payload_size            INTEGER         NOT NULL,
+    payload_hash            VARCHAR(32)     NULL,
     timestamp               TEXT            NOT NULL,
-    seq_num                 TEXT            NOT NULL,
+    seq_num                 INTEGER         NOT NULL,
     header                  BLOB            NOT NULL,
-    header_size             TEXT            NOT NULL,
+    header_size             INTEGER         NOT NULL,
     body                    BLOB            NULL
 );
