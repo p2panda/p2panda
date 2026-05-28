@@ -12,6 +12,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["eventsourcing", "processing", "p2p", "local-first", "stream"]
+rust-version = "1.94"
 
 [package.metadata.docs.rs]
 all-features = true
