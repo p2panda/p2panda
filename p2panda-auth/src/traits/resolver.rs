@@ -2,14 +2,13 @@
 
 use std::fmt::Debug;
 
+use p2panda_core::identity::Author;
 use p2panda_core::traits::OperationId;
-
-use crate::traits::IdentityHandle;
 
 /// Interface for implementing a custom group crdt resolver.
 pub trait Resolver<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
 {
     type State;
