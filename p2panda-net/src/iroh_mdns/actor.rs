@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use futures_util::StreamExt;
-use iroh::address_lookup::mdns::DiscoveryEvent;
-use iroh::address_lookup::{AddressLookup, EndpointData, MdnsAddressLookup, UserData};
+use iroh::address_lookup::{AddressLookup, EndpointData, UserData};
+use iroh_mdns_address_lookup::{DiscoveryEvent, MdnsAddressLookup};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
