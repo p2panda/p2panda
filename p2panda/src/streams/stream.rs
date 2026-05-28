@@ -933,7 +933,7 @@ impl<M> ProcessedOperation<M> {
     ///
     /// Microseconds since the UNIX epoch based on system time.
     pub fn timestamp(&self) -> u64 {
-        self.event.header().timestamp.into()
+        self.event.header().extensions.timestamp.into()
     }
 
     /// Application message.
