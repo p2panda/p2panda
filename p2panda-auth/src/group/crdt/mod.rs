@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use p2panda_core::traits::OperationId;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
@@ -14,7 +15,7 @@ use thiserror::Error;
 
 use crate::access::Access;
 use crate::group::{GroupAction, GroupMember, GroupMembersState, GroupMembershipError};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, IdentityHandle, Operation, Resolver};
 
 /// Max depth of group nesting allowed.
 ///

@@ -6,11 +6,10 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 
 use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
-use p2panda_auth::traits::{
-    Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver,
-};
+use p2panda_auth::traits::{Conditions, IdentityHandle as AuthIdentityHandle, Resolver};
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::identity::{VERIFYING_KEY_LEN, VerifyingKey};
+use p2panda_core::traits::OperationId as AuthOperationId;
 use p2panda_core::{HashError, IdentityError};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;

@@ -6,10 +6,12 @@ use petgraph::visit::{IntoNodeIdentifiers, Topo};
 use std::collections::{HashMap, HashSet};
 use std::{fmt::Debug, marker::PhantomData};
 
+use p2panda_core::traits::OperationId;
+
 use crate::graph::{concurrent_bubbles, split_bubble};
 use crate::group::crdt::{GroupCrdtInnerError, apply_remove_unsafe};
 use crate::group::{AuthorityGraphs, GroupAction, GroupCrdtInnerState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, IdentityHandle, Operation, Resolver};
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.  
 ///
