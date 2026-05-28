@@ -2,11 +2,12 @@
 
 use std::collections::{HashMap, HashSet};
 
+use p2panda_core::traits::OperationId;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::DiGraphMap;
 
 use crate::graph::{has_path, is_concurrent};
-use crate::traits::{IdentityHandle, OperationId};
+use crate::traits::IdentityHandle;
 
 /// Removal graph edge (remover, removed, operation id).
 type Removal<ID, OP> = (ID, ID, OP);

@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 
+use p2panda_core::traits::OperationId;
 use petgraph::algo::toposort;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -10,7 +11,7 @@ use petgraph::visit::IntoNodeReferences;
 
 use crate::group::crdt::StateChangeResult;
 use crate::group::{GroupAction, GroupCrdtState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId};
+use crate::traits::{Conditions, IdentityHandle, Operation};
 
 const OP_FILTER_NODE: &str = "#E63C3F";
 const OP_MUTUAL_REMOVE_NODE: &str = "#9a0aad";
