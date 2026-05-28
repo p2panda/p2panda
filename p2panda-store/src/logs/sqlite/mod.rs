@@ -26,7 +26,7 @@ const GET_LATEST_ENTRY: &str = "
         verifying_key = ?
         AND log_id = ?
     ORDER BY
-        CAST(seq_num AS NUMERIC) DESC LIMIT 1
+        seq_num DESC LIMIT 1
 ";
 
 impl<L, E> LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> for SqliteStore
@@ -115,7 +115,7 @@ where
             "
             SELECT
                 log_id,
-                CAST(MAX(CAST(seq_num AS NUMERIC)) AS TEXT) as seq_num
+                MAX(seq_num) as seq_num
             FROM
                 operations_v1
             WHERE
@@ -158,23 +158,23 @@ where
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
-    ) -> Result<Option<(u64, u64)>, Self::Error> {
+    ) -> Result<Option<(u32, u32)>, Self::Error> {
         // We need to use an inclusive greater-than to ensure our
         // query includes the operation with sequence number 0.
         let after_operator = if after.is_none() { ">=" } else { ">" };
         let query_str = format!(
             "
             SELECT
-                CAST(SUM(CAST(header_size AS NUMERIC)) AS TEXT) AS total_header_bytes,
-                CAST(SUM(CAST(payload_size AS NUMERIC)) AS TEXT) AS total_payload_bytes,
-                CAST(COUNT(*) AS TEXT) AS total_operation_count
+                SUM(header_size) AS total_header_bytes,
+                SUM(payload_size) AS total_payload_bytes,
+                COUNT(*) AS total_operation_count
             FROM
                 operations_v1
             WHERE
                 verifying_key = ?
                 AND log_id = ?
-                AND CAST(seq_num AS NUMERIC) {} CAST(? as NUMERIC)
-                AND CAST(seq_num AS NUMERIC) <= CAST(? as NUMERIC)
+                AND seq_num {} ?
+                AND seq_num <= ?
             ",
             after_operator
         );
@@ -186,21 +186,18 @@ where
                     .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
             )
             .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(u64::MAX).to_string())
+            .bind(until.unwrap_or(SeqNum::MAX).to_string())
             .fetch_optional(&self.pool)
             .await?;
 
-        if let Some(row) = log_meta {
-            let (total_header_bytes, total_payload_bytes, total_operation_count) =
-                row.try_into()?;
+        let Some(row) = log_meta else {
+            return Ok(None);
+        };
 
-            return Ok(Some((
-                total_operation_count,
-                total_header_bytes + total_payload_bytes,
-            )));
-        }
-
-        Ok(None)
+        Ok(Some((
+            row.total_operation_count,
+            row.total_header_bytes + row.total_payload_bytes,
+        )))
     }
 
     /// Retrieve log entries representing operations from an author's log.
@@ -226,10 +223,10 @@ where
             WHERE
                 verifying_key = ?
                 AND log_id = ?
-                AND CAST(seq_num AS NUMERIC) {} CAST(? as NUMERIC)
-                AND CAST(seq_num AS NUMERIC) <= CAST(? as NUMERIC)
+                AND seq_num {} ?
+                AND seq_num <= ?
             ORDER BY
-                CAST(seq_num AS NUMERIC)
+                seq_num
             ",
             after_operator
         );
@@ -241,7 +238,7 @@ where
                     .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
             )
             .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(u64::MAX).to_string())
+            .bind(until.unwrap_or(SeqNum::MAX).to_string())
             .fetch_all(&self.pool)
             .await?;
 
@@ -275,7 +272,7 @@ where
             WHERE
                 verifying_key = ?
                 AND log_id = ?
-                AND CAST(seq_num AS NUMERIC) < CAST(? as NUMERIC)
+                AND seq_num < ?
             ",
         )
         .bind(author.to_string())

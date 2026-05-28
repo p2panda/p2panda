@@ -36,7 +36,7 @@ pub trait LogId: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'
 impl<T> LogId for T where T: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de> {}
 
 /// Sequence number of an entry in an append-only log.
-pub type SeqNum = u64;
+pub type SeqNum = u32;
 
 /// Map of log heights grouped by author.
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
@@ -53,7 +53,7 @@ pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNu
 /// the remote knows of some entries in a log, then the range representing only the entries they
 /// need will be included.
 ///
-/// Log ranges are represented by `(Option<u64>, Option<u64>)` tuples where the first value is an
+/// Log ranges are represented by `(Option<u32>, Option<u32>)` tuples where the first value is an
 /// exclusive "from" sequence number and the later is an inclusive "until" sequence number. If
 /// either values are `None` that signifies that all entries from the start, or to the end, are
 /// required.
@@ -131,19 +131,19 @@ mod tests {
 
     #[test]
     fn both_empty() {
-        let local: BTreeMap<Author, BTreeMap<u64, u64>> = BTreeMap::new();
-        let remote: BTreeMap<Author, BTreeMap<u64, u64>> = BTreeMap::new();
+        let local: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
+        let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
         let result = compare(&local, &remote);
         assert!(result.is_empty());
     }
 
     #[test]
     fn remote_empty() {
-        let mut local: BTreeMap<Author, BTreeMap<u64, u64>> = BTreeMap::new();
+        let mut local: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
         let logs = BTreeMap::from([(1, 5), (2, 10)]);
         local.insert(ALICE, logs);
 
-        let remote: BTreeMap<Author, BTreeMap<u64, u64>> = BTreeMap::new();
+        let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
 
         let result = compare(&local, &remote);
         let needs = result.get(&ALICE).unwrap();

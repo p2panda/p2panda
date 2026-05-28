@@ -5,8 +5,9 @@ use std::rc::Rc;
 
 use tracing_subscriber;
 
-use crate::timestamp::Timestamp;
-use crate::{Body, Extensions, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
+use crate::{
+    Body, Extensions, Hash, Header, Operation, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey,
+};
 
 pub fn setup_logging() {
     if std::env::var("RUST_LOG").is_ok() {
@@ -20,7 +21,7 @@ pub fn setup_logging() {
 pub struct TestLog {
     signing_key: SigningKey,
     backlink: Rc<RefCell<Option<Hash>>>,
-    seq_num: Rc<RefCell<u64>>,
+    seq_num: Rc<RefCell<SeqNum>>,
     log_id: Topic,
 }
 

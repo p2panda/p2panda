@@ -35,7 +35,9 @@ use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::test_utils::setup_logging;
-use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Timestamp, Topic, VerifyingKey};
+use p2panda_core::{
+    Body, Hash, Header, Operation, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey,
+};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::{ShortFormat, from_verifying_key};
@@ -362,7 +364,7 @@ fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
 fn create_operation(
     signing_key: &SigningKey,
     body: &Body,
-    seq_num: u64,
+    seq_num: SeqNum,
     backlink: Option<Hash>,
 ) -> (Hash, Operation) {
     let mut header = Header {

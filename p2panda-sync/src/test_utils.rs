@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
-use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -118,7 +118,7 @@ impl Peer {
             Operation<()>,
             VerifyingKey,
             u64,
-            u64,
+            SeqNum,
             p2panda_core::Hash,
         >>::get_latest_entry(
             &self.store, &self.signing_key.verifying_key(), &log_id
@@ -207,7 +207,7 @@ where
 pub fn create_operation(
     signing_key: &SigningKey,
     body: &Body,
-    seq_num: u64,
+    seq_num: SeqNum,
     timestamp: u64,
     backlink: Option<Hash>,
 ) -> (Header<()>, Vec<u8>) {

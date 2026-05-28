@@ -18,7 +18,7 @@ use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
 
-fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u64) {
+fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32) {
     let StreamEvent::ReplayStarted { total_operations } = event else {
         panic!("unexpected event");
     };

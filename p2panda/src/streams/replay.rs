@@ -114,7 +114,7 @@ where
 }
 
 /// Returns the number of all operations in the given log ranges.
-fn total_operations<A, L>(log_ranges: &LogRanges<A, L>) -> u64 {
+fn total_operations<A, L>(log_ranges: &LogRanges<A, L>) -> u32 {
     log_ranges.iter().fold(0, |mut acc, (_, logs)| {
         logs.iter().for_each(|(_, (after, until))| {
             // Ignore open-ended ranges.

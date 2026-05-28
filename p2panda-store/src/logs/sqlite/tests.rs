@@ -153,9 +153,9 @@ async fn get_log_size() {
 
     assert_eq!(operations_num, 2);
 
-    let expected_size = operation_1.header.to_bytes().len() as u64
+    let expected_size = operation_1.header.to_bytes().len() as u32
         + operation_1.header.payload_size
-        + operation_2.header.to_bytes().len() as u64
+        + operation_2.header.to_bytes().len() as u32
         + operation_2.header.payload_size;
     assert_eq!(size, expected_size);
 }

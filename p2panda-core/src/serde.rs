@@ -11,11 +11,10 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
 use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
-use crate::logs::LogHeights;
+use crate::logs::{LogHeights, LogId, SeqNum};
 use crate::operation::{Body, Header};
 use crate::timestamp::Timestamp;
-use crate::topic::TopicError;
-use crate::{LogId, Topic};
+use crate::topic::{Topic, TopicError};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -210,7 +209,7 @@ where
                     .next_element()?
                     .ok_or(SerdeError::custom("signature missing"))?;
 
-                let payload_size: u64 = seq
+                let payload_size: u32 = seq
                     .next_element()?
                     .ok_or(SerdeError::custom("payload size missing"))?;
 
@@ -228,7 +227,7 @@ where
                     .next_element()?
                     .ok_or(SerdeError::custom("timestamp missing"))?;
 
-                let seq_num: u64 = seq
+                let seq_num: SeqNum = seq
                     .next_element()?
                     .ok_or(SerdeError::custom("sequence number missing"))?;
 

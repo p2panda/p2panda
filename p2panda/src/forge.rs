@@ -80,7 +80,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         extensions: Extensions,
     ) -> Result<Operation, Self::Error> {
         // Perform prerequisite computations outside of the locked transaction.
-        let payload_size = body.as_ref().map(|bytes| bytes.len()).unwrap_or(0) as u64;
+        let payload_size = body.as_ref().map(|bytes| bytes.len()).unwrap_or(0) as u32;
         let body: Option<Body> = body.map(|bytes| bytes.into());
         let payload_hash = body.as_ref().map(|body| body.hash());
 

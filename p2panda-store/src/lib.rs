@@ -44,7 +44,7 @@
 //! transaction.
 //!
 //! ```rust
-//! # use p2panda_core::{Topic, Header, Hash, Body, Operation, VerifyingKey, SigningKey, Timestamp};
+//! # use p2panda_core::{Topic, Header, SeqNum, Hash, Body, Operation, VerifyingKey, SigningKey, Timestamp};
 //! # use p2panda_store::logs::LogStore;
 //! # use p2panda_store::operations::OperationStore;
 //! # use p2panda_store::topics::TopicStore;
@@ -72,7 +72,7 @@
 //!         Operation<()>,
 //!         VerifyingKey,
 //!         u64,
-//!         u64,
+//!         SeqNum,
 //!         Hash,
 //!     >>::get_latest_entry_tx(
 //!         &store, &signing_key.verifying_key(), &log_id
