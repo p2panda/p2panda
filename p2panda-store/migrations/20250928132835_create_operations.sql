@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS operations_v1 (
     signature               VARCHAR(64)     NOT NULL,
     payload_size            INTEGER         NOT NULL,
     payload_hash            VARCHAR(32)     NULL,
-    timestamp               TEXT            NOT NULL,
     seq_num                 INTEGER         NOT NULL,
     header                  BLOB            NOT NULL,
     header_size             INTEGER         NOT NULL,

@@ -3,7 +3,7 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey};
+use p2panda_core::{Body, Hash, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -111,7 +111,6 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 signature: None,
                 payload_size,
                 payload_hash,
-                timestamp: Timestamp::now(),
                 seq_num,
                 backlink,
                 extensions,

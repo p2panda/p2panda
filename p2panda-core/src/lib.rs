@@ -50,7 +50,7 @@
 //! ## Example
 //!
 //! ```
-//! use p2panda_core::{Body, Header, Operation, SigningKey, Timestamp};
+//! use p2panda_core::{Body, Header, Operation, SigningKey};
 //!
 //! // Every operation is cryptographically authenticated by an author by signing it with an
 //! // Ed25519 key pair. This method generates a new private key for us which needs to be securely
@@ -66,7 +66,6 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions: (),

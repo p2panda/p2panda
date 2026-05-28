@@ -55,7 +55,6 @@ where
                             signature,
                             payload_size,
                             payload_hash,
-                            timestamp,
                             seq_num,
                             header,
                             header_size,
@@ -75,7 +74,6 @@ where
                 .bind(operation.header.signature.map(|sig| sig.to_hex()))
                 .bind(operation.header.payload_size.to_string())
                 .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))
-                .bind(operation.header.timestamp.to_string())
                 .bind(operation.header.seq_num.to_string())
                 .bind(
                     encode_cbor(&operation.header)

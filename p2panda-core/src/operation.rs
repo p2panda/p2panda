@@ -14,8 +14,7 @@
 //!
 //! Operations have a `backlink` and `seq_num` field in the header. These are used to form a linked
 //! list of operations, where every subsequent operation points to the previous one by referencing
-//! its cryptographically secured hash. The `timestamp` field can be used when verifiable causal
-//! ordering is not required.
+//! its cryptographically secured hash.
 //!
 //! [Header extensions](crate::extensions) can be used to add additional information, like
 //! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
@@ -29,7 +28,7 @@
 //! ### Construct and sign a header
 //!
 //! ```
-//! use p2panda_core::{Body, Header, SigningKey, Timestamp};
+//! use p2panda_core::{Body, Header, SigningKey};
 //!
 //! let signing_key = SigningKey::generate();
 //!
@@ -40,7 +39,6 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions: (),
@@ -52,7 +50,7 @@
 //! ### Custom extensions
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, SigningKey, PruneFlag, Timestamp};
+//! use p2panda_core::{Body, Extension, Header, SigningKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
 //!
 //! let signing_key = SigningKey::generate();
@@ -79,7 +77,6 @@
 //!     signature: None,
 //!     payload_size: body.size(),
 //!     payload_hash: Some(body.hash()),
-//!     timestamp: Timestamp::now(),
 //!     seq_num: 0,
 //!     backlink: None,
 //!     extensions,
@@ -99,7 +96,6 @@ use crate::extensions::{Extension, Extensions};
 use crate::hash::Hash;
 use crate::identity::{Signature, SigningKey, VerifyingKey};
 use crate::logs::SeqNum;
-use crate::timestamp::Timestamp;
 use crate::traits::Digest;
 
 /// Encoded bytes of an operation header and optional body.
@@ -172,7 +168,7 @@ pub type Version = u16;
 /// ## Example
 ///
 /// ```
-/// use p2panda_core::{Body, Header, Operation, SigningKey, Timestamp};
+/// use p2panda_core::{Body, Header, Operation, SigningKey};
 ///
 /// let signing_key = SigningKey::generate();
 ///
@@ -183,7 +179,6 @@ pub type Version = u16;
 ///     signature: None,
 ///     payload_size: body.size(),
 ///     payload_hash: Some(body.hash()),
-///     timestamp: Timestamp::now(),
 ///     seq_num: 0,
 ///     backlink: None,
 ///     extensions: (),
@@ -214,9 +209,6 @@ pub struct Header<E = ()> {
     /// ability to check the signature of the header.
     pub payload_hash: Option<Hash>,
 
-    /// Time in microseconds since the Unix epoch.
-    pub timestamp: Timestamp,
-
     /// Number of operations this author has published to this log, begins with 0 and is always
     /// incremented by 1 with each new operation by the same author.
     pub seq_num: SeqNum,
@@ -237,7 +229,6 @@ impl<E: Default> Default for Header<E> {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: E::default(),
@@ -305,9 +296,9 @@ impl<E> Header<E> {
     ///
     /// Fields instantiated with `None` values are excluded from the count.
     pub(crate) fn field_count(&self) -> usize {
-        // There will always be a minimum of 6 fields in a complete header. (this counts the `E`
+        // There will always be a minimum of 5 fields in a complete header. (this counts the `E`
         // extensions field, even if it is zero-sized).
-        let mut count = 6;
+        let mut count = 5;
 
         if self.signature.is_some() {
             count += 1;
@@ -545,7 +536,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -566,7 +556,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: None::<CustomExtensions>,
@@ -594,7 +583,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: Timestamp::now(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -608,7 +596,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: Timestamp::now(),
             seq_num: 1,
             backlink: Some(header_0.hash()),
             extensions: (),
@@ -630,7 +617,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -743,7 +729,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: extensions.clone(),

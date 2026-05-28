@@ -44,7 +44,7 @@
 //! transaction.
 //!
 //! ```rust
-//! # use p2panda_core::{Topic, Header, SeqNum, Hash, Body, Operation, VerifyingKey, SigningKey, Timestamp};
+//! # use p2panda_core::{Topic, Header, SeqNum, Hash, Body, Operation, VerifyingKey, SigningKey};
 //! # use p2panda_store::logs::LogStore;
 //! # use p2panda_store::operations::OperationStore;
 //! # use p2panda_store::topics::TopicStore;
@@ -87,7 +87,6 @@
 //!         signature: None,
 //!         payload_size: body.size(),
 //!         payload_hash: Some(body.hash()),
-//!         timestamp: Timestamp::now(),
 //!         seq_num,
 //!         backlink,
 //!         extensions: (),

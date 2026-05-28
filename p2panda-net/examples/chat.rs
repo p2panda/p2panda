@@ -35,9 +35,7 @@ use futures_util::StreamExt;
 use iroh::EndpointAddr;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::test_utils::setup_logging;
-use p2panda_core::{
-    Body, Hash, Header, Operation, SeqNum, SigningKey, Timestamp, Topic, VerifyingKey,
-};
+use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::iroh_mdns::MdnsDiscoveryMode;
 use p2panda_net::utils::{ShortFormat, from_verifying_key};
@@ -373,7 +371,6 @@ fn create_operation(
         signature: None,
         payload_size: body.size(),
         payload_hash: Some(body.hash()),
-        timestamp: Timestamp::now(),
         seq_num,
         backlink,
         extensions: (),

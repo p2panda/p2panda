@@ -13,7 +13,6 @@ use crate::hash::{Hash, HashError};
 use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
 use crate::logs::{LogHeights, LogId, SeqNum};
 use crate::operation::{Body, Header, Version};
-use crate::timestamp::Timestamp;
 use crate::topic::{Topic, TopicError};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -156,7 +155,6 @@ where
             seq.serialize_element(&hash)?;
         }
 
-        seq.serialize_element(&self.timestamp)?;
         seq.serialize_element(&self.seq_num)?;
 
         if let Some(backlink) = &self.backlink {
@@ -223,10 +221,6 @@ where
                     }
                 };
 
-                let timestamp: Timestamp = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("timestamp missing"))?;
-
                 let seq_num: SeqNum = seq
                     .next_element()?
                     .ok_or(SerdeError::custom("sequence number missing"))?;
@@ -259,7 +253,6 @@ where
                     signature: Some(signature),
                     payload_hash,
                     payload_size,
-                    timestamp,
                     seq_num,
                     backlink,
                     extensions,
@@ -509,7 +502,6 @@ mod tests {
                 verifying_key: signing_key.verifying_key(),
                 payload_size: 123,
                 payload_hash: Some(Hash::digest(vec![1, 2, 3])),
-                timestamp: 0.into(),
                 seq_num: 0,
                 backlink: None,
                 extensions: extensions.clone(),
@@ -524,7 +516,6 @@ mod tests {
                 verifying_key: signing_key.verifying_key(),
                 payload_size: 0,
                 payload_hash: None,
-                timestamp: 0.into(),
                 seq_num: 0,
                 backlink: None,
                 extensions: extensions,
@@ -545,7 +536,6 @@ mod tests {
             signature: None,
             payload_size: 2829099,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -562,7 +552,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: Some(Hash::digest([0, 1, 2])),
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -579,7 +568,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: Some(Hash::digest([0, 1, 2])),
             extensions: (),
@@ -596,7 +584,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 10,
             backlink: None,
             extensions: (),
@@ -624,7 +611,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -654,7 +640,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -662,12 +647,12 @@ mod tests {
         header_0.sign(&signing_key);
 
         let bytes = [
-            135, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
             92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 42,
-            11, 253, 219, 220, 200, 239, 31, 142, 159, 42, 215, 225, 66, 212, 199, 224, 81, 213,
-            150, 90, 253, 202, 2, 201, 94, 12, 1, 167, 36, 158, 173, 165, 8, 136, 9, 73, 19, 163,
-            174, 10, 96, 73, 198, 119, 18, 195, 129, 13, 114, 121, 16, 81, 155, 179, 182, 112, 123,
-            160, 63, 147, 206, 219, 7, 0, 0, 0, 246,
+            249, 41, 222, 3, 40, 165, 97, 82, 165, 149, 139, 187, 31, 244, 99, 202, 235, 56, 114,
+            16, 74, 202, 42, 234, 198, 129, 18, 86, 202, 226, 206, 149, 13, 245, 108, 46, 142, 92,
+            177, 22, 56, 183, 145, 195, 194, 220, 12, 170, 139, 99, 81, 188, 223, 100, 166, 56,
+            117, 127, 162, 194, 171, 42, 0, 0, 0, 246,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
@@ -681,7 +666,6 @@ mod tests {
             signature: None,
             payload_size: body.size(),
             payload_hash: Some(body.hash()),
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
@@ -689,14 +673,14 @@ mod tests {
         header_0_with_body.sign(&signing_key);
 
         let bytes = [
-            136, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
-            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 27,
-            199, 136, 138, 253, 125, 87, 20, 50, 247, 40, 93, 111, 176, 15, 63, 216, 239, 129, 134,
-            100, 162, 66, 133, 249, 181, 26, 79, 119, 128, 192, 86, 237, 32, 146, 71, 175, 180,
-            118, 146, 240, 172, 149, 99, 246, 177, 182, 110, 84, 49, 220, 60, 65, 70, 206, 79, 92,
-            237, 4, 43, 41, 202, 94, 10, 13, 88, 32, 191, 127, 68, 13, 227, 43, 252, 155, 49, 148,
-            176, 2, 162, 217, 175, 171, 49, 44, 181, 215, 71, 113, 211, 195, 29, 128, 192, 169, 5,
-            138, 160, 142, 0, 0, 246,
+            135, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 119,
+            137, 205, 208, 11, 214, 198, 198, 54, 107, 245, 15, 170, 245, 171, 177, 146, 52, 245,
+            113, 249, 63, 6, 132, 42, 101, 187, 193, 59, 232, 75, 23, 165, 118, 177, 140, 150, 57,
+            55, 161, 60, 12, 13, 55, 12, 105, 222, 44, 35, 137, 104, 15, 80, 103, 30, 175, 129, 51,
+            97, 60, 106, 57, 24, 0, 13, 88, 32, 191, 127, 68, 13, 227, 43, 252, 155, 49, 148, 176,
+            2, 162, 217, 175, 171, 49, 44, 181, 215, 71, 113, 211, 195, 29, 128, 192, 169, 5, 138,
+            160, 142, 0, 246,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
@@ -709,7 +693,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 1,
             backlink: Some(header_0.hash()),
             extensions: (),
@@ -717,14 +700,14 @@ mod tests {
         header_1.sign(&signing_key);
 
         let bytes = [
-            136, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
-            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 198,
-            228, 65, 150, 97, 52, 1, 243, 222, 62, 11, 115, 104, 187, 64, 118, 179, 178, 190, 109,
-            15, 67, 36, 224, 172, 166, 199, 117, 59, 92, 164, 141, 190, 191, 151, 194, 193, 241,
-            115, 149, 98, 43, 39, 113, 255, 105, 24, 154, 136, 110, 250, 84, 159, 127, 192, 17,
-            240, 82, 84, 223, 41, 29, 150, 7, 0, 0, 1, 88, 32, 140, 19, 67, 147, 71, 66, 239, 37,
-            103, 212, 94, 71, 203, 133, 40, 89, 241, 1, 120, 215, 147, 204, 180, 108, 5, 39, 2,
-            178, 190, 77, 146, 144, 246,
+            135, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 16,
+            129, 27, 30, 250, 193, 92, 182, 76, 117, 240, 211, 234, 139, 187, 8, 125, 201, 235,
+            199, 157, 191, 253, 171, 235, 104, 46, 192, 108, 135, 232, 175, 50, 79, 172, 208, 143,
+            4, 76, 91, 87, 24, 185, 223, 184, 156, 127, 58, 246, 59, 64, 162, 225, 56, 39, 81, 25,
+            57, 94, 131, 154, 231, 88, 6, 0, 1, 88, 32, 36, 141, 119, 169, 72, 122, 252, 134, 237,
+            51, 123, 139, 198, 63, 62, 8, 66, 252, 52, 244, 212, 190, 182, 253, 64, 115, 148, 221,
+            245, 210, 8, 104, 246,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
@@ -741,7 +724,6 @@ mod tests {
             signature: None,
             payload_size: 0,
             payload_hash: None,
-            timestamp: 0.into(),
             seq_num: 0,
             backlink: None,
             extensions: (),
