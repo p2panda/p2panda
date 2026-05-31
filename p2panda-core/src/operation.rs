@@ -342,6 +342,16 @@ impl<E> Header<E> {
     }
 }
 
+#[cfg(any(test, feature = "test_utils"))]
+impl<E> Header<E>
+where
+    E: Extensions,
+{
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.to_bytes())
+    }
+}
+
 impl TryFrom<&[u8]> for Header {
     type Error = DecodeError;
 
@@ -377,6 +387,13 @@ impl Body {
     /// Size of body bytes.
     pub fn size(&self) -> u32 {
         self.0.len() as u32
+    }
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl Body {
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.as_bytes())
     }
 }
 
