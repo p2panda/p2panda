@@ -248,7 +248,7 @@ mod tests {
     use p2panda_store::SqliteStore;
 
     use crate::protocols::TopicLogSyncEvent;
-    use crate::test_utils::{Peer, TestTopicSyncManager, drain_stream, run_protocol};
+    use crate::test_utils::{Peer, TestLogId, TestTopicSyncManager, drain_stream, run_protocol};
     use crate::traits::{Manager, Protocol};
     use crate::{FromSync, SessionConfig, ToSync};
 
@@ -262,7 +262,7 @@ mod tests {
     async fn manager_e2e() {
         setup_logging();
 
-        const LOG_ID: u64 = 0;
+        const LOG_ID: TestLogId = 0;
         const SESSION_ID: u64 = 0;
 
         let topic = Topic::random();
@@ -418,7 +418,7 @@ mod tests {
     async fn live_mode_three_peer_forwarding() {
         setup_logging();
 
-        const LOG_ID: u64 = 0;
+        const LOG_ID: TestLogId = 0;
         const SESSION_AB: u64 = 0;
         const SESSION_AC: u64 = 1;
         const SESSION_BA: u64 = 2;
@@ -599,7 +599,7 @@ mod tests {
 
     #[tokio::test]
     async fn non_blocking_manager_stream() {
-        const LOG_ID: u64 = 0;
+        const LOG_ID: TestLogId = 0;
         const SESSION_ID: u64 = 0;
 
         let topic = Topic::random();
