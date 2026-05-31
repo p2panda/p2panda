@@ -405,7 +405,6 @@ where
 /// Protocol messages.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(bound(deserialize = "L: LogId"))]
-#[serde(tag = "type", content = "value")]
 pub enum LogSyncMessage<L>
 where
     L: LogId,
