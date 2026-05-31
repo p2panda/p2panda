@@ -15,7 +15,7 @@ use ractor::{ActorProcessingErr, ActorRef};
 use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 
-use crate::cbor::{into_cbor_sink, into_cbor_stream};
+use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::iroh_endpoint::Endpoint;
 use crate::utils::ShortFormat;
 use crate::{NodeId, ProtocolId};
@@ -88,8 +88,8 @@ where
 
                 // First run the TopicHandshake protocol.
                 let (tx, rx) = connection.open_bi().await?;
-                let mut tx = into_cbor_sink::<TopicHandshakeMessage<Topic>, _>(tx);
-                let mut rx = into_cbor_stream::<TopicHandshakeMessage<Topic>, _>(rx);
+                let mut tx = into_codec_sink::<TopicHandshakeMessage<Topic>, _>(tx);
+                let mut rx = into_codec_stream::<TopicHandshakeMessage<Topic>, _>(rx);
 
                 // We don't need to observe these events here as the topic is returned as output
                 // when the protocol completes, so these channels are actually only just to satisfy
@@ -101,8 +101,8 @@ where
                 // Then we run the actual sync protocol.
                 let span = tracing::debug_span!("sync", responder = %node_id.fmt_short(), topic = %topic.fmt_short(), session_id);
                 let (tx, rx) = connection.open_bi().await?;
-                let mut tx = into_cbor_sink::<P::Message, _>(tx);
-                let mut rx = into_cbor_stream::<P::Message, _>(rx);
+                let mut tx = into_codec_sink::<P::Message, _>(tx);
+                let mut rx = into_codec_stream::<P::Message, _>(rx);
                 protocol
                     .run(&mut tx, &mut rx)
                     .instrument(span.clone())
@@ -124,8 +124,8 @@ where
                 // The TopicHandshake protocol has already been run by the accepting party which is
                 // why we don't perform that additional step here.
                 let (tx, rx) = connection.accept_bi().await?;
-                let mut tx = into_cbor_sink::<P::Message, _>(tx);
-                let mut rx = into_cbor_stream::<P::Message, _>(rx);
+                let mut tx = into_codec_sink::<P::Message, _>(tx);
+                let mut rx = into_codec_stream::<P::Message, _>(rx);
                 let remote = connection.remote_id();
                 let span = tracing::debug_span!(parent: None, "sync", requester = %remote.fmt_short(), topic = %topic.fmt_short(), session_id);
                 protocol.run(&mut tx, &mut rx).instrument(span).await?;

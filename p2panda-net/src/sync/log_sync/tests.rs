@@ -8,7 +8,7 @@ use iroh::endpoint::{Connection, presets};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
 use p2panda_core::test_utils::setup_logging;
 use p2panda_core::{Operation, Topic};
-use p2panda_net::cbor::{into_cbor_sink, into_cbor_stream};
+use p2panda_net::codec::{into_codec_sink, into_codec_stream};
 use p2panda_sync::FromSync;
 use p2panda_sync::protocols::{Logs, TopicLogSyncEvent as Event};
 use p2panda_sync::test_utils::{Peer, TestTopicSyncMessage};
@@ -424,8 +424,8 @@ async fn panic_on_sink_closure_after_error_regression() {
     let initiator = Endpoint::bind(presets::Minimal).await.unwrap();
     let connection = initiator.connect(addr, ALPN).await.unwrap();
     let (tx, rx) = connection.open_bi().await.unwrap();
-    let mut tx = into_cbor_sink::<TestTopicSyncMessage, _>(tx);
-    let mut rx = into_cbor_stream::<TestTopicSyncMessage, _>(rx);
+    let mut tx = into_codec_sink::<TestTopicSyncMessage, _>(tx);
+    let mut rx = into_codec_stream::<TestTopicSyncMessage, _>(rx);
 
     let handle = tokio::spawn(async move { session.run(&mut tx, &mut rx).await });
 

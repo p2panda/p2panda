@@ -20,7 +20,7 @@ use tokio::sync::{RwLock, broadcast};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::cbor::{into_cbor_sink, into_cbor_stream};
+use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{ToTopicManager, TopicManager};
@@ -519,10 +519,10 @@ where
         // actual sync session. We may choose to reject the sync session if the handshake resolves
         // to a topic we aren't subscribed to.
 
-        // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
-        // encoding for message framing.
-        let mut tx = into_cbor_sink::<TopicHandshakeMessage<Topic>, _>(tx);
-        let mut rx = into_cbor_stream::<TopicHandshakeMessage<Topic>, _>(rx);
+        // Establish bi-directional QUIC stream as part of the direct connection and use our codec
+        // for message framing and encoding.
+        let mut tx = into_codec_sink::<TopicHandshakeMessage<Topic>, _>(tx);
+        let mut rx = into_codec_stream::<TopicHandshakeMessage<Topic>, _>(rx);
 
         // Channels for sending and receiving protocol events.
         //

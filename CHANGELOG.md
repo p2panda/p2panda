@@ -18,6 +18,7 @@ Highlights are marked with a pancake 🥞
     - `version` from `u64` to `u16` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - Remove `timestamp` [#1195](https://github.com/p2panda/p2panda/pull/1195)
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
+- Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 
 ## [0.6.1] - 22/05/2026
 
