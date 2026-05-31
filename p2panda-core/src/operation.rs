@@ -217,7 +217,16 @@ pub struct Header<E = ()> {
     /// operation in log.
     pub backlink: Option<Hash>,
 
-    /// Custom meta data.
+    /// Custom additional data.
+    //
+    // NOTE: If `E` is a Zero-Sized Type (ZST) we use unsafe code to skip the redundant field when
+    // encoding or decoding the header. See `zero_sized_extensions` for safety details.
+    //
+    // This allows us to keep the usage of Header ergonomic while assuring operations are encoded
+    // most efficiently and correctly according to p2panda's specification.
+    //
+    // An alternative would be to make this field an `Option` or introduce `E: Default` bounds to
+    // allow initialisation in safe code which both are annoying to deal with.
     pub extensions: E,
 }
 
@@ -292,13 +301,26 @@ where
 }
 
 impl<E> Header<E> {
+    pub(crate) const fn has_non_zero_sized_extensions() -> bool {
+        std::mem::size_of::<E>() > 0
+    }
+
+    pub(crate) fn zero_sized_extensions() -> E {
+        assert!(!Self::has_non_zero_sized_extensions());
+
+        // SAFETY: The assertion guarantees E is a zero-sized type.
+        //
+        // For ZSTs, there are no bytes to initialize. std::mem::zeroed() on a ZST is a compile-time
+        // no-op with no actual memory operations.
+        unsafe { std::mem::zeroed() }
+    }
+
     /// Number of fields included in the header.
     ///
     /// Fields instantiated with `None` values are excluded from the count.
     pub(crate) fn field_count(&self) -> usize {
-        // There will always be a minimum of 5 fields in a complete header. (this counts the `E`
-        // extensions field, even if it is zero-sized).
-        let mut count = 5;
+        // There will always be a minimum of 4 fields in an unsigned header.
+        let mut count = 4;
 
         if self.signature.is_some() {
             count += 1;
@@ -309,6 +331,10 @@ impl<E> Header<E> {
         }
 
         if self.backlink.is_some() {
+            count += 1;
+        }
+
+        if Self::has_non_zero_sized_extensions() {
             count += 1;
         }
 
@@ -743,5 +769,17 @@ mod tests {
 
         assert_eq!(header.hash(), log_id.0);
         assert_eq!(extensions.expires.0, expiry.0);
+    }
+
+    #[test]
+    fn zst_size_matches_mem_checks() {
+        struct ZstExtensions;
+        assert_eq!(std::mem::size_of::<ZstExtensions>(), 0);
+        assert!(!Header::<ZstExtensions>::has_non_zero_sized_extensions());
+
+        #[allow(unused)]
+        struct NonZstExtensions(u32);
+        assert_ne!(std::mem::size_of::<NonZstExtensions>(), 0);
+        assert!(Header::<NonZstExtensions>::has_non_zero_sized_extensions());
     }
 }

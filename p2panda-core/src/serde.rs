@@ -161,9 +161,9 @@ where
             seq.serialize_element(backlink)?;
         }
 
-        // @TODO: there is an opportunity to skip serializing if `E` is a zero-sized type,
-        // and save one byte.
-        seq.serialize_element(&self.extensions)?;
+        if Self::has_non_zero_sized_extensions() {
+            seq.serialize_element(&self.extensions)?;
+        }
 
         seq.end()
     }
@@ -235,11 +235,12 @@ where
                     }
                 };
 
-                // @TODO: If `E` is a zero-sized type, use `mem::conjure_zst` when ready.
-                // See https://github.com/rust-lang/rust/pull/146479
-                let extensions: E = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("extensions missing"))?;
+                let extensions: E = if Header::<E>::has_non_zero_sized_extensions() {
+                    seq.next_element()?
+                        .ok_or(SerdeError::custom("extensions missing"))?
+                } else {
+                    Header::<E>::zero_sized_extensions()
+                };
 
                 if let Some(remainder) = seq.size_hint()
                     && remainder > 0
@@ -634,7 +635,7 @@ mod tests {
         ]);
 
         // header at seq num 0
-        let mut header_0 = Header::<()> {
+        let mut header = Header::<()> {
             version: 1,
             verifying_key: signing_key.verifying_key(),
             signature: None,
@@ -644,23 +645,23 @@ mod tests {
             backlink: None,
             extensions: (),
         };
-        header_0.sign(&signing_key);
+        header.sign(&signing_key);
 
         let bytes = [
-            134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
-            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 42,
-            249, 41, 222, 3, 40, 165, 97, 82, 165, 149, 139, 187, 31, 244, 99, 202, 235, 56, 114,
-            16, 74, 202, 42, 234, 198, 129, 18, 86, 202, 226, 206, 149, 13, 245, 108, 46, 142, 92,
-            177, 22, 56, 183, 145, 195, 194, 220, 12, 170, 139, 99, 81, 188, 223, 100, 166, 56,
-            117, 127, 162, 194, 171, 42, 0, 0, 0, 246,
+            133, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 17,
+            129, 90, 32, 212, 224, 74, 141, 219, 82, 160, 35, 19, 205, 82, 55, 247, 204, 121, 153,
+            128, 203, 123, 102, 108, 90, 60, 23, 223, 176, 251, 154, 243, 131, 177, 54, 142, 210,
+            0, 231, 125, 90, 206, 28, 240, 37, 179, 88, 200, 246, 185, 49, 246, 135, 242, 133, 128,
+            127, 22, 118, 23, 102, 22, 2, 0, 0,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(header_0, header_again);
+        assert_eq!(header, header_again);
 
         // header at seq num 0 with body
         let body = Body::new("Hello, Sloth!".as_bytes());
-        let mut header_0_with_body = Header::<()> {
+        let mut header = Header::<()> {
             version: 1,
             verifying_key: signing_key.verifying_key(),
             signature: None,
@@ -670,48 +671,48 @@ mod tests {
             backlink: None,
             extensions: (),
         };
-        header_0_with_body.sign(&signing_key);
+        header.sign(&signing_key);
 
         let bytes = [
-            135, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
-            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 119,
-            137, 205, 208, 11, 214, 198, 198, 54, 107, 245, 15, 170, 245, 171, 177, 146, 52, 245,
-            113, 249, 63, 6, 132, 42, 101, 187, 193, 59, 232, 75, 23, 165, 118, 177, 140, 150, 57,
-            55, 161, 60, 12, 13, 55, 12, 105, 222, 44, 35, 137, 104, 15, 80, 103, 30, 175, 129, 51,
-            97, 60, 106, 57, 24, 0, 13, 88, 32, 191, 127, 68, 13, 227, 43, 252, 155, 49, 148, 176,
-            2, 162, 217, 175, 171, 49, 44, 181, 215, 71, 113, 211, 195, 29, 128, 192, 169, 5, 138,
-            160, 142, 0, 246,
+            134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 187,
+            89, 157, 165, 197, 22, 79, 145, 227, 116, 226, 203, 231, 213, 225, 253, 197, 253, 240,
+            147, 16, 224, 186, 146, 94, 126, 79, 185, 150, 84, 102, 16, 109, 56, 241, 228, 164,
+            191, 153, 47, 142, 189, 12, 71, 159, 143, 81, 204, 108, 124, 22, 39, 222, 122, 88, 198,
+            123, 125, 2, 211, 28, 196, 90, 0, 13, 88, 32, 191, 127, 68, 13, 227, 43, 252, 155, 49,
+            148, 176, 2, 162, 217, 175, 171, 49, 44, 181, 215, 71, 113, 211, 195, 29, 128, 192,
+            169, 5, 138, 160, 142, 0,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(header_0_with_body, header_again);
+        assert_eq!(header, header_again);
 
         // header at seq num 1 with backlink
-        let mut header_1 = Header::<()> {
+        let mut header = Header::<()> {
             version: 1,
             verifying_key: signing_key.verifying_key(),
             signature: None,
             payload_size: 0,
             payload_hash: None,
             seq_num: 1,
-            backlink: Some(header_0.hash()),
+            backlink: Some(header.hash()),
             extensions: (),
         };
-        header_1.sign(&signing_key);
+        header.sign(&signing_key);
 
         let bytes = [
-            135, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
-            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 16,
-            129, 27, 30, 250, 193, 92, 182, 76, 117, 240, 211, 234, 139, 187, 8, 125, 201, 235,
-            199, 157, 191, 253, 171, 235, 104, 46, 192, 108, 135, 232, 175, 50, 79, 172, 208, 143,
-            4, 76, 91, 87, 24, 185, 223, 184, 156, 127, 58, 246, 59, 64, 162, 225, 56, 39, 81, 25,
-            57, 94, 131, 154, 231, 88, 6, 0, 1, 88, 32, 36, 141, 119, 169, 72, 122, 252, 134, 237,
-            51, 123, 139, 198, 63, 62, 8, 66, 252, 52, 244, 212, 190, 182, 253, 64, 115, 148, 221,
-            245, 210, 8, 104, 246,
+            134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
+            92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 90,
+            241, 219, 179, 113, 96, 207, 245, 193, 3, 115, 166, 84, 177, 236, 191, 194, 134, 34,
+            214, 117, 182, 130, 121, 97, 9, 110, 170, 35, 44, 155, 205, 147, 180, 234, 188, 17, 39,
+            109, 146, 142, 68, 181, 186, 119, 197, 71, 45, 245, 246, 32, 139, 46, 197, 150, 12,
+            255, 110, 134, 99, 5, 139, 223, 13, 0, 1, 88, 32, 68, 43, 250, 251, 47, 151, 121, 58,
+            30, 144, 24, 129, 171, 35, 89, 56, 161, 112, 75, 91, 168, 201, 195, 121, 169, 155, 85,
+            104, 129, 60, 141, 161,
         ];
 
         let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(header_1, header_again);
+        assert_eq!(header, header_again);
     }
 
     #[test]
@@ -744,5 +745,51 @@ mod tests {
 
         let result: Result<Header<()>, _> = ciborium::de::from_reader(&incomplete[..]);
         assert!(matches!(result, Err(ciborium::de::Error::Io(_))));
+    }
+
+    #[test]
+    fn zero_sized_extensions() {
+        #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+        struct Zilch;
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct ZeroSizedExtension {
+            field_a: [u8; 0],
+            field_b: (),
+            field_c: Zilch,
+        }
+
+        let signing_key = SigningKey::generate();
+        let body = Body::new(b"look, no bytes!");
+
+        let mut header = Header::<ZeroSizedExtension> {
+            version: 1,
+            verifying_key: signing_key.verifying_key(),
+            signature: None,
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            seq_num: 0,
+            backlink: None,
+            extensions: ZeroSizedExtension {
+                field_a: [],
+                field_b: (),
+                field_c: Zilch,
+            },
+        };
+        header.sign(&signing_key);
+
+        let bytes = header.to_bytes();
+
+        // Make sure we skip the extensions field which means we only need 6 fields for the header.
+        //
+        // In CBOR this shows in the first byte where the "array" type + its length is declared
+        // (array(6)). In hex this would be represented by `86`, in decimal its `134`:
+        assert!(bytes[0] == 134);
+
+        // We correctly deserialize to the ZST.
+        let result: Header<ZeroSizedExtension> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(result.extensions.field_a.len(), 0);
+        assert_eq!(result.extensions.field_b, ());
+        assert_eq!(result.extensions.field_c, Zilch);
     }
 }
