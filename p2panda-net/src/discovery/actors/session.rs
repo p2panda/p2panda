@@ -14,7 +14,7 @@ use ractor::{ActorProcessingErr, ActorRef};
 
 use crate::NodeId;
 use crate::addrs::NodeInfo;
-use crate::cbor::{into_cbor_sink, into_cbor_stream};
+use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::discovery::actors::{DISCOVERY_PROTOCOL_ID, ToDiscoveryManager};
 use crate::iroh_endpoint::Endpoint;
 
@@ -112,10 +112,10 @@ impl ThreadLocalActor for DiscoverySession {
             }
         };
 
-        // Establish bi-directional QUIC stream as part of the direct connection and use CBOR
+        // Establish bi-directional QUIC stream as part of the direct connection and use our
         // encoding for message framing.
-        let mut tx = into_cbor_sink::<PsiHashMessage<NodeId, NodeInfo>, _>(tx);
-        let mut rx = into_cbor_stream::<PsiHashMessage<NodeId, NodeInfo>, _>(rx);
+        let mut tx = into_codec_sink::<PsiHashMessage<NodeId, NodeInfo>, _>(tx);
+        let mut rx = into_codec_stream::<PsiHashMessage<NodeId, NodeInfo>, _>(rx);
 
         // Run the discovery protocol.
         // TODO: Have a timeout to cancel session if it's running overtime.

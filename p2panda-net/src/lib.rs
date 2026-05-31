@@ -235,7 +235,7 @@
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;
-pub mod cbor;
+pub mod codec;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]
