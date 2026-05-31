@@ -168,7 +168,6 @@ where
 
 /// Protocol message types.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-#[serde(tag = "type", content = "value")]
 pub enum TopicHandshakeMessage<T> {
     Topic(T),
     Done,

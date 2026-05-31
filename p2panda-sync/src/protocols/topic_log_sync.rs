@@ -520,7 +520,6 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
 /// Protocol message types.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(bound(deserialize = "L: LogId"))]
-#[serde(tag = "type", content = "value")]
 #[allow(clippy::large_enum_variant)]
 pub enum TopicLogSyncMessage<L, E>
 where
