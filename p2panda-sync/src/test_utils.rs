@@ -24,19 +24,21 @@ use crate::protocols::{
 };
 use crate::traits::Protocol;
 
+pub type TestLogId = usize;
+pub type TestExtensions = TestLogId;
+
 // Types used in log sync protocol tests.
-pub type TestLogSyncMessage = LogSyncMessage<u64>;
-pub type TestLogSyncEvent = LogSyncEvent<()>;
-pub type TestLogSync = LogSync<u64, (), SqliteStore, TestLogSyncEvent>;
+pub type TestLogSyncMessage = LogSyncMessage<TestLogId>;
+pub type TestLogSyncEvent = LogSyncEvent<TestExtensions>;
+pub type TestLogSync = LogSync<TestLogId, TestExtensions, SqliteStore, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
-pub type TestTopicSyncMessage = TopicLogSyncMessage<u64, ()>;
-pub type TestTopicSyncEvent = TopicLogSyncEvent<()>;
-pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, u64, ()>;
+pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId, TestExtensions>;
+pub type TestTopicSyncEvent = TopicLogSyncEvent<TestExtensions>;
+pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId, TestExtensions>;
 pub type TestTopicSyncError = TopicLogSyncError;
-
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, u64, ()>;
+pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
 
 /// Peer abstraction used in tests.
 ///
@@ -68,7 +70,7 @@ impl Peer {
     ) -> (
         TestTopicSync,
         broadcast::Receiver<TestTopicSyncEvent>,
-        mpsc::Sender<ToSync<Operation<()>>>,
+        mpsc::Sender<ToSync<Operation<TestExtensions>>>,
     ) {
         let (event_tx, event_rx) = broadcast::channel(512);
         let (live_tx, live_rx) = mpsc::channel(512);
@@ -80,7 +82,7 @@ impl Peer {
     /// Return a log sync protocol.
     pub fn log_sync_protocol(
         &mut self,
-        logs: &Logs<u64>,
+        logs: &Logs<TestLogId>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = broadcast::channel(512);
         let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
@@ -88,7 +90,11 @@ impl Peer {
     }
 
     /// Create and insert an operation to the store.
-    pub async fn create_operation(&mut self, body: &Body, log_id: u64) -> (Header<()>, Vec<u8>) {
+    pub async fn create_operation(
+        &mut self,
+        body: &Body,
+        log_id: TestLogId,
+    ) -> (Header<TestExtensions>, Vec<u8>) {
         let (header, header_bytes) = self.create_operation_no_insert(body, log_id).await;
 
         let id = header.hash();
@@ -112,12 +118,12 @@ impl Peer {
     pub async fn create_operation_no_insert(
         &mut self,
         body: &Body,
-        log_id: u64,
-    ) -> (Header<()>, Vec<u8>) {
+        log_id: TestLogId,
+    ) -> (Header<TestExtensions>, Vec<u8>) {
         let (seq_num, backlink) = <SqliteStore as LogStore<
-            Operation<()>,
+            Operation<TestExtensions>,
             VerifyingKey,
-            u64,
+            TestLogId,
             SeqNum,
             p2panda_core::Hash,
         >>::get_latest_entry(
@@ -128,12 +134,17 @@ impl Peer {
         .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
         .unwrap_or((0, None));
 
-        let (header, header_bytes) = create_operation(&self.signing_key, body, seq_num, backlink);
+        let (header, header_bytes) =
+            create_operation(&self.signing_key, body, seq_num, backlink, log_id);
 
         (header, header_bytes)
     }
 
-    pub async fn associate(&mut self, topic: &Topic, logs: &BTreeMap<VerifyingKey, Vec<u64>>) {
+    pub async fn associate(
+        &mut self,
+        topic: &Topic,
+        logs: &BTreeMap<VerifyingKey, Vec<TestLogId>>,
+    ) {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {
@@ -208,8 +219,9 @@ pub fn create_operation(
     body: &Body,
     seq_num: SeqNum,
     backlink: Option<Hash>,
-) -> (Header<()>, Vec<u8>) {
-    let mut header = Header::<()> {
+    log_id: TestLogId,
+) -> (Header<TestExtensions>, Vec<u8>) {
+    let mut header = Header::<TestExtensions> {
         version: 1,
         verifying_key: signing_key.verifying_key(),
         signature: None,
@@ -217,7 +229,7 @@ pub fn create_operation(
         payload_hash: Some(body.hash()),
         seq_num,
         backlink,
-        extensions: (),
+        extensions: log_id,
     };
     header.sign(signing_key);
     let header_bytes = header.to_bytes();

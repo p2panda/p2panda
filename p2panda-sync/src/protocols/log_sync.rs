@@ -523,7 +523,7 @@ mod tests {
     use p2panda_store::{SqliteStore, tx_unwrap};
 
     use crate::protocols::log_sync::{LogSyncError, LogSyncEvent, Logs, Operation};
-    use crate::test_utils::{Peer, TestLogSyncMessage, run_protocol, run_protocol_uni};
+    use crate::test_utils::{Peer, TestLogId, TestLogSyncMessage, run_protocol, run_protocol_uni};
     use crate::traits::Protocol;
 
     #[tokio::test]
@@ -655,7 +655,7 @@ mod tests {
     async fn log_sync_bidirectional_exchange() {
         setup_logging();
 
-        const LOG_ID: u64 = 0;
+        const LOG_ID: TestLogId = 0;
 
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
@@ -749,7 +749,7 @@ mod tests {
     #[tokio::test]
     async fn log_sync_unexpected_operation_before_presend() {
         let mut peer = Peer::new(0).await;
-        const LOG_ID: u64 = 1;
+        const LOG_ID: TestLogId = 1;
 
         let body = Body::new(b"unexpected op before presend");
         let (_, header_bytes) = peer.create_operation(&body, LOG_ID).await;
@@ -777,7 +777,7 @@ mod tests {
     #[tokio::test]
     async fn log_sync_unexpected_presend_twice() {
         let mut peer = Peer::new(0).await;
-        const LOG_ID: u64 = 1;
+        const LOG_ID: TestLogId = 1;
 
         let body = Body::new(b"two presends");
         peer.create_operation(&body, LOG_ID).await;
@@ -821,7 +821,7 @@ mod tests {
     #[tokio::test]
     async fn log_sync_unexpected_have_after_presend() {
         let mut peer = Peer::new(0).await;
-        const LOG_ID: u64 = 1;
+        const LOG_ID: TestLogId = 1;
 
         let body = Body::new(b"bad have order");
         peer.create_operation(&body, LOG_ID).await;
