@@ -670,9 +670,11 @@ where
     let members_y = if action.is_create() {
         GroupMembersState::default()
     } else {
-        groups_y
-            .remove(&group_id)
-            .expect("group already present in states map")
+        match groups_y
+            .remove(&group_id) {
+                Some(y) => y,
+                None => return StateChangeResult::Error { state: groups_y, error:  GroupMembershipError::MissingGroup(format!("{group_id:?}"))},
+            }
     };
 
     if filter.contains(&id) {
