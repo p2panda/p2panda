@@ -53,6 +53,9 @@ where
     #[error("attempted to add group {0} with manage access")]
     ManagerGroupsNotAllowed(ID),
 
+    #[error("non-create operations must have dependencies")]
+    NonCreateMissingDependencies(ID, OP),
+
     #[error("resolver error: {0}")]
     Resolver(RS::Error),
 }
@@ -523,6 +526,11 @@ where
                 operation.group_id(),
             ));
         }
+
+        // All non-create operations should have dependencies.
+        if !operation.action().is_create() && operation.dependencies().is_empty() {
+            return Err(GroupCrdtError::NonCreateMissingDependencies(operation.group_id(), operation.id()))
+        } 
 
         // Adding a group as a manager of another group is currently not
         // supported.
