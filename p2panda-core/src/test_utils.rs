@@ -82,8 +82,7 @@ impl TestLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::Header;
-    use crate::cbor::{decode_cbor, encode_cbor};
+    use crate::operation::AnyHeader;
 
     use super::TestLog;
 
@@ -91,7 +90,7 @@ mod tests {
     fn zero_byte_body() {
         let log = TestLog::new();
         let operation = log.operation(&[], ());
-        let bytes = encode_cbor(operation.header()).unwrap();
-        assert!(decode_cbor::<Header, _>(&bytes[..]).is_ok());
+        let bytes = operation.header.encode();
+        assert!(AnyHeader::decode(&bytes).is_ok());
     }
 }

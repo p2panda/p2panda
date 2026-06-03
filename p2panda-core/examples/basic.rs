@@ -10,7 +10,7 @@ fn main() {
     let signing_key = SigningKey::generate();
 
     // An operation body contains application data.
-    let body = Body::new("Hello, Sloth!".as_bytes());
+    let body = Body::from_bytes("Hello, Sloth!".as_bytes());
 
     // Create a header.
     let mut header = Header {

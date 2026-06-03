@@ -61,7 +61,7 @@
 //! };
 //!
 //! let signing_key = SigningKey::generate();
-//! let body: Body = Body::new("Hello, Sloth!".as_bytes());
+//! let body: Body = Body::from_bytes("Hello, Sloth!".as_bytes());
 //!
 //! let mut header = Header {
 //!     version: 1,

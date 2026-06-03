@@ -56,7 +56,7 @@ use p2panda_core::{Body, Header, SigningKey};
 
 let signing_key = SigningKey::generate();
 
-let body = Body::new("Hello, Panda!".as_bytes());
+let body = Body::from_bytes("Hello, Panda!".as_bytes());
 let mut header = Header {
     version: 1,
     verifying_key: signing_key.verifying_key(),

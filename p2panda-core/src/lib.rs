@@ -59,7 +59,7 @@
 //!
 //! // Operations consist of an body (with the actual application data) and a header,
 //! // enhancing the data to be used in distributed networks.
-//! let body = Body::new("Hello, Sloth!".as_bytes());
+//! let body = Body::from_bytes("Hello, Sloth!".as_bytes());
 //! let mut header = Header {
 //!     version: 1,
 //!     verifying_key: signing_key.verifying_key(),
@@ -81,7 +81,6 @@ pub mod hash;
 pub mod identity;
 pub mod logs;
 pub mod operation;
-#[cfg(feature = "prune")]
 pub mod prune;
 mod serde;
 #[cfg(any(test, feature = "test_utils"))]
@@ -96,10 +95,9 @@ pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, Signature, SigningKey, VerifyingKey};
 pub use logs::{LogId, SeqNum};
 pub use operation::{
-    Body, Header, Operation, OperationError, RawOperation, validate_backlink, validate_header,
-    validate_operation,
+    AnyHeader, AnyHeaderError, AnyOperation, Body, Header, Operation, OperationError, RawOperation,
+    validate_backlink, validate_header, validate_operation,
 };
-#[cfg(feature = "prune")]
 pub use prune::PruneFlag;
 pub use timestamp::Timestamp;
 pub use topic::Topic;

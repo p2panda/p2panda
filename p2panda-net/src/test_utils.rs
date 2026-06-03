@@ -336,7 +336,7 @@ pub fn create_operation(
     seq_num: SeqNum,
     backlink: Option<Hash>,
 ) -> (Header<TestExtensions>, Vec<u8>, Body) {
-    let body = Body::new(body);
+    let body = Body::from_bytes(body);
 
     let mut header = Header::<()> {
         version: 1,
@@ -350,7 +350,7 @@ pub fn create_operation(
     };
 
     header.sign(signing_key);
-    let header_bytes = header.to_bytes();
+    let header_bytes = header.encode();
 
     (header, header_bytes, body)
 }

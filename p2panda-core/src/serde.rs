@@ -11,8 +11,8 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
 use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
-use crate::logs::{LogHeights, LogId, SeqNum};
-use crate::operation::{Body, Header, Version};
+use crate::logs::{LogHeights, LogId};
+use crate::operation::{Body, Header};
 use crate::topic::{Topic, TopicError};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -169,103 +169,103 @@ where
     }
 }
 
-impl<'de, E> Deserialize<'de> for Header<E>
-where
-    E: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct HeaderVisitor<E> {
-            _marker: PhantomData<E>,
-        }
-
-        impl<'de, E> Visitor<'de> for HeaderVisitor<E>
-        where
-            E: Deserialize<'de>,
-        {
-            type Value = Header<E>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("Header encoded as a sequence")
-            }
-
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let version: Version = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("version missing"))?;
-
-                let verifying_key: VerifyingKey = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("public key missing"))?;
-
-                let signature: Signature = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("signature missing"))?;
-
-                let payload_size: u32 = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("payload size missing"))?;
-
-                let payload_hash: Option<Hash> = match payload_size {
-                    0 => None,
-                    _ => {
-                        let hash: Hash = seq
-                            .next_element()?
-                            .ok_or(SerdeError::custom("payload hash missing"))?;
-                        Some(hash)
-                    }
-                };
-
-                let seq_num: SeqNum = seq
-                    .next_element()?
-                    .ok_or(SerdeError::custom("sequence number missing"))?;
-
-                let backlink: Option<Hash> = match seq_num {
-                    0 => None,
-                    _ => {
-                        let hash: Hash = seq
-                            .next_element()?
-                            .ok_or(SerdeError::custom("backlink missing"))?;
-                        Some(hash)
-                    }
-                };
-
-                let extensions: E = if Header::<E>::has_non_zero_sized_extensions() {
-                    seq.next_element()?
-                        .ok_or(SerdeError::custom("extensions missing"))?
-                } else {
-                    Header::<E>::zero_sized_extensions()
-                };
-
-                if let Some(remainder) = seq.size_hint()
-                    && remainder > 0
-                {
-                    return Err(SerdeError::custom("unexpected excessive fields in header"));
-                }
-
-                Ok(Header {
-                    version,
-                    verifying_key,
-                    signature: Some(signature),
-                    payload_hash,
-                    payload_size,
-                    seq_num,
-                    backlink,
-                    extensions,
-                })
-            }
-        }
-
-        deserializer.deserialize_seq(HeaderVisitor::<E> {
-            _marker: PhantomData,
-        })
-    }
-}
+// impl<'de, E> Deserialize<'de> for Header<E>
+// where
+//     E: Deserialize<'de>,
+// {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         struct HeaderVisitor<E> {
+//             _marker: PhantomData<E>,
+//         }
+//
+//         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
+//         where
+//             E: Deserialize<'de>,
+//         {
+//             type Value = Header<E>;
+//
+//             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+//                 formatter.write_str("Header encoded as a sequence")
+//             }
+//
+//             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+//             where
+//                 A: SeqAccess<'de>,
+//             {
+//                 let version: Version = seq
+//                     .next_element()?
+//                     .ok_or(SerdeError::custom("version missing"))?;
+//
+//                 let verifying_key: VerifyingKey = seq
+//                     .next_element()?
+//                     .ok_or(SerdeError::custom("public key missing"))?;
+//
+//                 let signature: Signature = seq
+//                     .next_element()?
+//                     .ok_or(SerdeError::custom("signature missing"))?;
+//
+//                 let payload_size: u32 = seq
+//                     .next_element()?
+//                     .ok_or(SerdeError::custom("payload size missing"))?;
+//
+//                 let payload_hash: Option<Hash> = match payload_size {
+//                     0 => None,
+//                     _ => {
+//                         let hash: Hash = seq
+//                             .next_element()?
+//                             .ok_or(SerdeError::custom("payload hash missing"))?;
+//                         Some(hash)
+//                     }
+//                 };
+//
+//                 let seq_num: SeqNum = seq
+//                     .next_element()?
+//                     .ok_or(SerdeError::custom("sequence number missing"))?;
+//
+//                 let backlink: Option<Hash> = match seq_num {
+//                     0 => None,
+//                     _ => {
+//                         let hash: Hash = seq
+//                             .next_element()?
+//                             .ok_or(SerdeError::custom("backlink missing"))?;
+//                         Some(hash)
+//                     }
+//                 };
+//
+//                 let extensions: E = if Header::<E>::has_non_zero_sized_extensions() {
+//                     seq.next_element()?
+//                         .ok_or(SerdeError::custom("extensions missing"))?
+//                 } else {
+//                     Header::<E>::zero_sized_extensions()
+//                 };
+//
+//                 if let Some(remainder) = seq.size_hint()
+//                     && remainder > 0
+//                 {
+//                     return Err(SerdeError::custom("unexpected excessive fields in header"));
+//                 }
+//
+//                 Ok(Header {
+//                     version,
+//                     verifying_key,
+//                     signature: Some(signature),
+//                     payload_hash,
+//                     payload_size,
+//                     seq_num,
+//                     backlink,
+//                     extensions,
+//                 })
+//             }
+//         }
+//
+//         deserializer.deserialize_seq(HeaderVisitor::<E> {
+//             _marker: PhantomData,
+//         })
+//     }
+// }
 
 impl Serialize for Body {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -373,13 +373,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
-    use crate::Body;
+    use crate::cbor::{decode_cbor, encode_cbor};
     use crate::hash::Hash;
     use crate::identity::{SigningKey, VerifyingKey};
-    use crate::operation::Header;
+    use crate::operation::{AnyHeader, Header};
+    use crate::{Body, Extensions};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -390,12 +390,11 @@ mod tests {
 
     #[test]
     fn serialize() {
-        let mut bytes: Vec<u8> = Vec::new();
         let test = Test(vec![1, 2, 3]);
 
         // For CBOR the bytes just get serialized straight away as it is not a human readable
-        // encoding
-        ciborium::ser::into_writer(&test, &mut bytes).unwrap();
+        // encoding.
+        let bytes = encode_cbor(&test).unwrap();
         assert_eq!(vec![67, 1, 2, 3], bytes);
     }
 
@@ -405,16 +404,15 @@ mod tests {
 
         // For CBOR the bytes just get deserialized straight away as an array as it is not a human
         // readable encoding
-        let test: Test = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let test: Test = decode_cbor(&bytes[..]).unwrap();
         assert_eq!(test.0, vec![1, 2, 3]);
     }
 
     #[test]
     fn serialize_hash() {
         // Serialize CBOR (non human-readable byte encoding)
-        let mut bytes: Vec<u8> = Vec::new();
         let hash = Hash::digest([1, 2, 3]);
-        ciborium::ser::into_writer(&hash, &mut bytes).unwrap();
+        let bytes = encode_cbor(&hash).unwrap();
         assert_eq!(
             bytes,
             vec![
@@ -438,7 +436,7 @@ mod tests {
             88, 32, 177, 119, 236, 27, 242, 109, 251, 59, 112, 16, 212, 115, 230, 212, 71, 19, 178,
             155, 118, 91, 153, 198, 230, 14, 203, 250, 231, 66, 222, 73, 101, 67,
         ];
-        let hash: Hash = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let hash: Hash = decode_cbor(&bytes[..]).unwrap();
         assert_eq!(hash, Hash::digest([1, 2, 3]));
 
         // Deserialize JSON (human-readable hex encoding)
@@ -450,13 +448,12 @@ mod tests {
     #[test]
     fn serialize_verifying_key() {
         // Serialize CBOR (non human-readable byte encoding)
-        let mut bytes: Vec<u8> = Vec::new();
         let verifying_key = VerifyingKey::from_bytes(&[
             215, 90, 152, 1, 130, 177, 10, 183, 213, 75, 254, 211, 201, 100, 7, 58, 14, 225, 114,
             243, 218, 166, 35, 37, 175, 2, 26, 104, 247, 7, 81, 26,
         ])
         .unwrap();
-        ciborium::ser::into_writer(&verifying_key, &mut bytes).unwrap();
+        let bytes = encode_cbor(&verifying_key).unwrap();
         assert_eq!(
             bytes,
             vec![
@@ -473,17 +470,16 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<
-        E: Clone + std::fmt::Debug + PartialEq + Serialize + DeserializeOwned,
-    >(
-        mut header: Header<E>,
-        signing_key: &SigningKey,
-    ) {
+    fn assert_serde_roundtrip<E>(mut header: Header<E>, signing_key: &SigningKey)
+    where
+        E: Extensions + PartialEq,
+    {
         header.sign(signing_key);
 
-        let mut bytes = Vec::new();
-        ciborium::ser::into_writer(&header, &mut bytes).unwrap();
-        let header_again: Header<E> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let bytes = header.encode();
+        let any_header = AnyHeader::decode(&bytes).expect("valid header");
+        let header_again: Header<E> = any_header.try_into().expect("valid extensions");
+
         assert_eq!(header, header_again);
     }
 
@@ -527,109 +523,8 @@ mod tests {
     }
 
     #[test]
-    fn expected_de_error() {
-        let signing_key = SigningKey::generate();
-
-        // payload size given without payload hash
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 2829099,
-            payload_hash: None,
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
-        assert!(result.is_err());
-
-        // payload hash given without payload size
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: Some(Hash::digest([0, 1, 2])),
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
-        assert!(result.is_err());
-
-        // backlink given with seq number 0
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 0,
-            backlink: Some(Hash::digest([0, 1, 2])),
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
-        assert!(result.is_err());
-
-        // backlink not given with seq number > 0
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 10,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn serde_header_with_other_types() {
-        let signing_key = SigningKey::generate();
-
-        #[derive(Debug, PartialEq, Serialize, Deserialize)]
-        struct Message {
-            header: Header<()>,
-            body: Body,
-        }
-
-        let body = Body::new(b"hello");
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: Some(body.hash()),
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let message = Message { header, body };
-
-        let mut bytes = Vec::new();
-        ciborium::ser::into_writer(&message, &mut bytes).unwrap();
-
-        let message_again: Message = ciborium::de::from_reader(&bytes[..]).unwrap();
-        assert_eq!(message_again, message);
-    }
-
-    #[test]
     fn fixtures() {
-        let signing_key = SigningKey::from_bytes(&[
+        let signing_key = SigningKey::from([
             244, 123, 85, 215, 161, 204, 94, 227, 239, 253, 128, 164, 228, 160, 195, 49, 18, 49,
             125, 4, 50, 218, 157, 230, 174, 1, 154, 231, 231, 142, 22, 170,
         ]);
@@ -647,7 +542,7 @@ mod tests {
         };
         header.sign(&signing_key);
 
-        let bytes = [
+        let bytes = vec![
             133, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
             92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 17,
             129, 90, 32, 212, 224, 74, 141, 219, 82, 160, 35, 19, 205, 82, 55, 247, 204, 121, 153,
@@ -656,11 +551,14 @@ mod tests {
             127, 22, 118, 23, 102, 22, 2, 0, 0,
         ];
 
-        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(bytes, header.encode());
+
+        let any_header: AnyHeader = bytes.try_into().expect("valid header");
+        let header_again: Header<()> = any_header.try_into().expect("valid extensions");
         assert_eq!(header, header_again);
 
         // header at seq num 0 with body
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let mut header = Header::<()> {
             version: 1,
             verifying_key: signing_key.verifying_key(),
@@ -673,7 +571,7 @@ mod tests {
         };
         header.sign(&signing_key);
 
-        let bytes = [
+        let bytes = vec![
             134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
             92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 187,
             89, 157, 165, 197, 22, 79, 145, 227, 116, 226, 203, 231, 213, 225, 253, 197, 253, 240,
@@ -684,7 +582,10 @@ mod tests {
             169, 5, 138, 160, 142, 0,
         ];
 
-        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        assert_eq!(bytes, header.encode());
+
+        let any_header: AnyHeader = bytes.try_into().expect("valid header");
+        let header_again: Header<()> = any_header.try_into().expect("valid extensions");
         assert_eq!(header, header_again);
 
         // header at seq num 1 with backlink
@@ -700,7 +601,7 @@ mod tests {
         };
         header.sign(&signing_key);
 
-        let bytes = [
+        let bytes = vec![
             134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
             92, 42, 222, 249, 148, 139, 23, 91, 43, 92, 17, 225, 69, 17, 181, 22, 32, 88, 64, 90,
             241, 219, 179, 113, 96, 207, 245, 193, 3, 115, 166, 84, 177, 236, 191, 194, 134, 34,
@@ -711,40 +612,21 @@ mod tests {
             104, 129, 60, 141, 161,
         ];
 
-        let header_again: Header<()> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let any_header: AnyHeader = bytes.try_into().expect("valid header");
+        let header_again: Header<()> = any_header.try_into().expect("valid extensions");
         assert_eq!(header, header_again);
     }
 
     #[test]
-    fn decode_non_map_extensions() {
-        let signing_key = SigningKey::generate();
-
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let result = ciborium::de::from_reader::<Header<()>, _>(&header.to_bytes()[..]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
     fn unexpected_eof_when_incomplete() {
-        // ciborium should be able to detect an "Unexpected EOF" error if we're giving it an
+        // The CBOR decoder should be able to detect an "Unexpected EOF" error if we're giving it an
         // incomplete header.
         let incomplete = [
             137, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
         ];
 
-        let result: Result<Header<()>, _> = ciborium::de::from_reader(&incomplete[..]);
-        assert!(matches!(result, Err(ciborium::de::Error::Io(_))));
+        let result = AnyHeader::decode(&incomplete);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -760,7 +642,7 @@ mod tests {
         }
 
         let signing_key = SigningKey::generate();
-        let body = Body::new(b"look, no bytes!");
+        let body = Body::from_bytes(b"look, no bytes!");
 
         let mut header = Header::<ZeroSizedExtension> {
             version: 1,
@@ -778,7 +660,7 @@ mod tests {
         };
         header.sign(&signing_key);
 
-        let bytes = header.to_bytes();
+        let bytes = header.encode();
 
         // Make sure we skip the extensions field which means we only need 6 fields for the header.
         //
@@ -787,7 +669,8 @@ mod tests {
         assert!(bytes[0] == 134);
 
         // We correctly deserialize to the ZST.
-        let result: Header<ZeroSizedExtension> = ciborium::de::from_reader(&bytes[..]).unwrap();
+        let any_header: AnyHeader = bytes.try_into().expect("valid header");
+        let result: Header<ZeroSizedExtension> = any_header.try_into().expect("valid extensions");
         assert_eq!(result.extensions.field_a.len(), 0);
         assert_eq!(result.extensions.field_b, ());
         assert_eq!(result.extensions.field_c, Zilch);
