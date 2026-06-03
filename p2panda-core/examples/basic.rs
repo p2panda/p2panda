@@ -10,22 +10,10 @@ fn main() {
     let signing_key = SigningKey::generate();
 
     // An operation body contains application data.
-    let body = Body::new("Hello, Sloth!".as_bytes());
+    let body = Body::from_bytes("Hello, Sloth!".as_bytes());
 
-    // Create a header.
-    let mut header = Header {
-        version: 1,
-        verifying_key: signing_key.verifying_key(),
-        signature: None,
-        payload_size: body.size(),
-        payload_hash: Some(body.hash()),
-        seq_num: 0,
-        backlink: None,
-        extensions: None::<()>,
-    };
-
-    // Sign the header.
-    header.sign(&signing_key);
+    // Create and sign a header.
+    let header = Header::builder().body(&body).build(&signing_key, ());
 
     // An operation containing the header hash (the operation id), the header itself and an optional body.
     let operation = Operation {
