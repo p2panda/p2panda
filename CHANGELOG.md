@@ -27,6 +27,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
+- stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
 
 ## [0.6.1] - 22/05/2026
 

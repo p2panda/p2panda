@@ -34,6 +34,8 @@ pub mod log_prune;
 #[cfg(feature = "orderer")]
 pub mod orderer;
 mod processors;
+#[cfg(feature = "spaces")]
+pub mod spaces;
 #[cfg(test)]
 mod test_utils;
 
