@@ -211,7 +211,7 @@ where
                                     }
 
                                     metrics.sent_live_bytes +=
-                                        operation.header.to_bytes().len() as u32 + operation.header.payload_size;
+                                        operation.header.encode().len() as u32 + operation.header.payload_size;
                                     metrics.sent_live_operations += 1;
 
                                     trace!(
@@ -284,7 +284,7 @@ where
                                         continue;
                                     }
 
-                                    metrics.received_live_bytes += header.to_bytes().len() as u32 + header.payload_size;
+                                    metrics.received_live_bytes += header.encode().len() as u32 + header.payload_size;
                                     metrics.received_live_operations += 1;
 
                                     trace!(
@@ -675,7 +675,7 @@ pub mod tests {
         let topic = Topic::random();
         let mut peer = Peer::new(0).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
         let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
         let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
@@ -741,7 +741,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_0);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 3 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
@@ -749,7 +749,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_1);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 4 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
@@ -757,7 +757,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_2);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 5 => {
                     assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done));
@@ -777,7 +777,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, _) = peer_a.create_operation(&body, 0).await;
         let (header_1, _) = peer_a.create_operation(&body, 0).await;
         let (header_2, _) = peer_a.create_operation(&body, 0).await;
@@ -856,7 +856,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
         let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
@@ -867,11 +867,11 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u32
+            + header_0.encode().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u32;
+            + header_1.encode().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
+        let expected_bytes_sent = header_2.payload_size + header_2.encode().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
@@ -967,7 +967,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
         let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
@@ -978,11 +978,11 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u32
+            + header_0.encode().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u32;
+            + header_1.encode().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
+        let expected_bytes_sent = header_2.payload_size + header_2.encode().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);

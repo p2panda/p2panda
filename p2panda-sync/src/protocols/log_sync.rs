@@ -256,7 +256,7 @@ where
                                         metrics.received_operations += 1;
 
                                         let header: Header<E> = decode_cbor(&header[..])?;
-                                        let body = body.map(|ref bytes| Body::new(bytes));
+                                        let body = body.map(|ref bytes| Body::from_bytes(bytes));
 
                                         // Insert message hash into deduplication buffer.
                                         if !dedup.insert(header.hash()) {
@@ -568,7 +568,7 @@ mod tests {
         let mut peer = Peer::new(0).await;
         let log_id = 0;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
         let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
         let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
@@ -631,21 +631,21 @@ mod tests {
             TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
         );
         assert_eq!(header, header_bytes_0);
-        assert_eq!(Body::new(&body_inner), body);
+        assert_eq!(Body::from_bytes(&body_inner), body);
 
         let (header, body_inner) = assert_matches!(
             &messages[3],
             TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
         );
         assert_eq!(header, header_bytes_1);
-        assert_eq!(Body::new(&body_inner), body);
+        assert_eq!(Body::from_bytes(&body_inner), body);
 
         let (header, body_inner) = assert_matches!(
             &messages[4],
             TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
         );
         assert_eq!(header, header_bytes_2);
-        assert_eq!(Body::new(&body_inner), body);
+        assert_eq!(Body::from_bytes(&body_inner), body);
 
         assert_eq!(messages[5], TestLogSyncMessage::Done);
     }
@@ -659,8 +659,8 @@ mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body_a = Body::new("From Alice".as_bytes());
-        let body_b = Body::new("From Bob".as_bytes());
+        let body_a = Body::from_bytes("From Alice".as_bytes());
+        let body_b = Body::from_bytes("From Bob".as_bytes());
 
         let (header_a0, _) = peer_a.create_operation(&body_a, LOG_ID).await;
         let (header_a1, _) = peer_a.create_operation(&body_a, LOG_ID).await;
@@ -750,7 +750,7 @@ mod tests {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
 
-        let body = Body::new(b"unexpected op before presend");
+        let body = Body::from_bytes(b"unexpected op before presend");
         let (_, header_bytes) = peer.create_operation(&body, LOG_ID).await;
 
         let mut logs = Logs::default();
@@ -778,7 +778,7 @@ mod tests {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
 
-        let body = Body::new(b"two presends");
+        let body = Body::from_bytes(b"two presends");
         peer.create_operation(&body, LOG_ID).await;
 
         let mut logs = Logs::default();
@@ -822,7 +822,7 @@ mod tests {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
 
-        let body = Body::new(b"bad have order");
+        let body = Body::from_bytes(b"bad have order");
         peer.create_operation(&body, LOG_ID).await;
 
         let mut logs = Logs::default();
@@ -856,7 +856,7 @@ mod tests {
         let mut peer_b = Peer::new(1).await;
         let mut peer_c = Peer::new(2).await;
 
-        let body = Body::new(&[0; 1000]);
+        let body = Body::from_bytes(&[0; 1000]);
 
         for _ in 0..100 {
             let _ = peer_a.create_operation(&body, 0).await;

@@ -231,6 +231,6 @@ pub fn create_operation(
         extensions: log_id,
     };
     header.sign(signing_key);
-    let header_bytes = header.to_bytes();
+    let header_bytes = header.encode();
     (header, header_bytes)
 }

@@ -81,7 +81,7 @@ where
                     encode_cbor(&operation.header)
                         .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
                 )
-                .bind(operation.header.to_bytes().len().to_string())
+                .bind(operation.header.encode().len().to_string())
                 .bind(operation.body().map(|body| body.to_bytes()))
                 .execute(&mut **tx)
                 .await
