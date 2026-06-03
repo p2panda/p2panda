@@ -53,21 +53,13 @@ impl TestLog {
         let mut seq_num = self.seq_num.borrow_mut();
         let mut backlink = self.backlink.borrow_mut();
 
-        let mut header = Header::<E> {
-            verifying_key: self.signing_key.verifying_key(),
-            version: 1,
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: if body.size() == 0 {
-                None
-            } else {
-                Some(body.hash())
-            },
-            seq_num: *seq_num,
-            backlink: *backlink,
-            extensions,
-        };
-        header.sign(&self.signing_key);
+        let mut header = Header::<E>::builder().body(&body);
+
+        if let Some(backlink) = *backlink {
+            header = header.chain(*seq_num, backlink);
+        }
+
+        let header = header.build(&self.signing_key, extensions);
 
         *backlink = Some(header.hash());
         *seq_num += 1;
@@ -82,16 +74,19 @@ impl TestLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::Header;
-    use crate::cbor::{decode_cbor, encode_cbor};
-
-    use super::TestLog;
+    use crate::{AnyHeader, Header, SigningKey};
 
     #[test]
     fn zero_byte_body() {
-        let log = TestLog::new();
-        let operation = log.operation(&[], ());
-        let bytes = encode_cbor(operation.header()).unwrap();
-        assert!(decode_cbor::<Header, _>(&bytes[..]).is_ok());
+        let signing_key = SigningKey::generate();
+        let header = Header::builder().body(&[]).build(&signing_key, ());
+
+        // Assure that setting an _empty_ body is equals having no body at all.
+        assert_eq!(header.payload_size, 0);
+        assert!(header.payload_hash.is_none());
+
+        // Decoding works.
+        let bytes = header.encode();
+        assert!(AnyHeader::decode(&bytes).is_ok());
     }
 }
