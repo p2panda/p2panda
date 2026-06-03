@@ -15,7 +15,8 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Extensions, Header, OperationError, validate_backlink};
+use crate::traits::{Chain, Digest, Provenance};
+use crate::{Hash, OperationError, VerifyingKey, validate_backlink};
 
 /// Flag indicating that all preceding operations in a log can be deleted.
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -71,20 +72,20 @@ impl Deref for PruneFlag {
 /// otherwise we go on with validation as usual.
 ///
 /// Use this method instead of [`validate_backlink`] if you want to support prunable logs.
-pub fn validate_prunable_backlink<E>(
-    past_header: Option<&Header<E>>,
-    header: &Header<E>,
+pub fn validate_prunable_backlink<T>(
+    past_header: Option<&T>,
+    header: &T,
     prune_flag: bool,
 ) -> Result<(), OperationError>
 where
-    E: Extensions,
+    T: Provenance<VerifyingKey> + Digest<Hash> + Chain<Hash>,
 {
-    if header.seq_num > 0 {
+    if header.seq_num() > 0 {
         // If no pruning flag is set, we expect the log to have integrity with the previously given
         // operation.
         if !prune_flag {
             match past_header {
-                Some(past_header) => validate_backlink(past_header, header),
+                Some(past_header) => validate_backlink::<T>(past_header, header),
                 None => Err(OperationError::BacklinkMissing),
             }
         } else {
@@ -94,7 +95,7 @@ where
         // Operation is at the beginning of log but we've already progressed and assume a strictly
         // growing sequence.
         match past_header {
-            Some(past_header) => validate_backlink(past_header, header),
+            Some(past_header) => validate_backlink::<T>(past_header, header),
             None => Ok(()),
         }
     }
