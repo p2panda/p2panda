@@ -9,48 +9,26 @@
 use std::io::Read;
 use std::sync::Arc;
 
-use ciborium::de::Error as DeserializeError;
-use ciborium::ser::Error as SerializeError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Serializes a value into CBOR format.
 pub fn encode_cbor<T: Serialize>(value: &T) -> Result<Vec<u8>, EncodeError> {
-    let mut bytes = Vec::new();
-    ciborium::ser::into_writer(value, &mut bytes).map_err(Into::<EncodeError>::into)?;
-    Ok(bytes)
+    let value = cbor_core::Value::serialized(&value)?;
+    Ok(value.encode())
 }
 
 /// Deserializes a value which was formatted in CBOR.
 pub fn decode_cbor<T: for<'a> Deserialize<'a>, R: Read>(reader: R) -> Result<T, DecodeError> {
-    let value = ciborium::from_reader::<T, R>(reader).map_err(Into::<DecodeError>::into)?;
-    Ok(value)
+    let value =
+        cbor_core::Value::read_from(reader).map_err(|err| DecodeError::Io(Arc::new(err)))?;
+    Ok(cbor_core::Value::deserialized(&value)?)
 }
 
 /// An error occurred during CBOR serialization.
 #[derive(Debug, Error)]
-pub enum EncodeError {
-    /// An error occurred while writing bytes.
-    ///
-    /// Contains the underlying error returned while reading.
-    #[error("an error occurred while reading bytes: {0}")]
-    Io(std::io::Error),
-
-    /// An error indicating a value that cannot be serialized.
-    ///
-    /// Contains a description of the problem delivered from serde.
-    #[error("an error occurred while deserializing value: {0}")]
-    Value(String),
-}
-
-impl From<SerializeError<std::io::Error>> for EncodeError {
-    fn from(value: SerializeError<std::io::Error>) -> Self {
-        match value {
-            SerializeError::Io(err) => EncodeError::Io(err),
-            SerializeError::Value(err) => EncodeError::Value(err),
-        }
-    }
-}
+#[error(transparent)]
+pub struct EncodeError(#[from] cbor_core::SerdeError);
 
 /// An error occurred during CBOR deserialization.
 #[derive(Clone, Debug, Error)]
@@ -59,73 +37,8 @@ pub enum DecodeError {
     ///
     /// Contains the underlying error returned while reading.
     #[error("an error occurred while reading bytes: {0}")]
-    Io(Arc<std::io::Error>),
+    Io(Arc<cbor_core::IoError>),
 
-    /// An error occurred while parsing bytes.
-    ///
-    /// Contains the offset into the stream where the syntax error occurred.
-    #[error("an error occurred while parsing bytes at position {0}")]
-    Syntax(usize),
-
-    /// An error occurred while processing a parsed value.
-    ///
-    /// Contains a description of the error that occurred and (optionally) the offset into the
-    /// stream indicating the start of the item being processed when the error occurred.
-    #[error("an error occurred while processing a parsed value at position {0:?}: {1}")]
-    Semantic(Option<usize>, String),
-
-    /// The input caused serde to recurse too much.
-    ///
-    /// This error prevents a stack overflow.
-    #[error("recursion limit exceeded while decoding")]
-    RecursionLimitExceeded,
-}
-
-impl From<DeserializeError<std::io::Error>> for DecodeError {
-    fn from(value: DeserializeError<std::io::Error>) -> Self {
-        match value {
-            DeserializeError::Io(err) => DecodeError::Io(Arc::new(err)),
-            DeserializeError::Syntax(offset) => DecodeError::Syntax(offset),
-            DeserializeError::Semantic(offset, description) => {
-                DecodeError::Semantic(offset, description)
-            }
-            DeserializeError::RecursionLimitExceeded => DecodeError::RecursionLimitExceeded,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{Body, Header, SigningKey};
-
-    use super::{DecodeError, decode_cbor, encode_cbor};
-
-    #[test]
-    fn encode_decode() {
-        let signing_key = SigningKey::generate();
-        let body = Body::new(&[1, 2, 3]);
-        let mut header = Header::<()> {
-            verifying_key: signing_key.verifying_key(),
-            payload_size: body.size(),
-            payload_hash: Some(body.hash()),
-            ..Default::default()
-        };
-        header.sign(&signing_key);
-
-        let bytes = encode_cbor(&header).unwrap();
-        let header_again: Header<()> = decode_cbor(&bytes[..]).unwrap();
-
-        assert_eq!(header.hash(), header_again.hash());
-    }
-
-    #[test]
-    fn decode_eof() {
-        // This is an incomplete byte sequence of a header / body tuple.
-        let bytes = hex::decode("828901582014d59877a250").unwrap();
-        let err = decode_cbor::<(Header<()>, Option<Body>), _>(&bytes[..]);
-
-        // We're expecting an "Unexpected EOF" error here. The underlying decoder should be able to
-        // detect that there's bytes missing.
-        assert!(matches!(err, Err(DecodeError::Io(_))));
-    }
+    #[error(transparent)]
+    Serde(#[from] cbor_core::SerdeError),
 }

@@ -12,7 +12,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "data-types", "blake3", "cbor", "ed25519"]
-rust-version = "1.94"
+rust-version = "1.96"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -22,20 +22,17 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [features]
-default = [
-  "prune",
-]
-prune = []
+default = []
 test_utils = [
   "dep:mock_instant",
   "dep:tracing-subscriber",
 ]
 
 [dependencies]
-arbitrary = { version = "1.4.1", optional = true, features = ["derive"] }
+arbitrary = { version = "1.4.2", optional = true, features = ["derive"] }
 blake3 = { workspace = true }
-ciborium = { version = "0.2.2" }
-ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+cbor-core = { version = "0.10.1", features = ["serde"] }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 hex = { workspace = true, features = ["serde"] }
 mock_instant = { workspace = true, optional = true }
 rand = "0.8.5"
@@ -46,4 +43,4 @@ tracing-subscriber = { workspace = true, features = ["env-filter"], optional = t
 
 [dev-dependencies]
 p2panda-core = { path = ".", features = ["test_utils"] }
-serde_json = "1.0.140"
+serde_json = "1.0.150"
