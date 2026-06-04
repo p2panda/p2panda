@@ -442,6 +442,41 @@ where
         Builder::new()
     }
 
+    pub fn encode(&self) -> Vec<u8> {
+        let mut cbor = Value::array([
+            Value::from(self.version),
+            Value::from(self.verifying_key.as_bytes()),
+            Value::from(self.signature.to_bytes()),
+            Value::from(self.payload_size),
+        ]);
+
+        if let Some(payload_hash) = &self.payload_hash {
+            cbor.append(payload_hash.as_bytes());
+        }
+
+        cbor.append(self.seq_num);
+
+        if let Some(backlink) = &self.backlink {
+            cbor.append(backlink.as_bytes());
+        }
+
+        if Header::<E>::has_non_zero_sized_extensions() {
+            cbor.append(cbor_core::Value::serialized(&self.extensions).unwrap());
+        }
+
+        cbor.encode()
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, AnyHeaderError> {
+        // Decode header.
+        let any_header = AnyHeader::decode(bytes)?;
+
+        // Decode extensions.
+        let header: Self = Self::try_from(any_header)?;
+
+        Ok(header)
+    }
+
     /// BLAKE3 hash of the header bytes.
     ///
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
@@ -793,6 +828,31 @@ impl AnyHeader {
             digest,
             extensions,
         })
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut cbor = Value::array([
+            Value::from(self.version),
+            Value::from(self.verifying_key.as_bytes()),
+            Value::from(self.signature.to_bytes()),
+            Value::from(self.payload_size),
+        ]);
+
+        if let Some(payload_hash) = &self.payload_hash {
+            cbor.append(payload_hash.as_bytes());
+        }
+
+        cbor.append(self.seq_num);
+
+        if let Some(backlink) = &self.backlink {
+            cbor.append(backlink.as_bytes());
+        }
+
+        if let Some(extensions) = &self.extensions {
+            cbor.append(extensions.clone());
+        }
+
+        cbor.encode()
     }
 
     /// BLAKE3 hash of the header bytes.
