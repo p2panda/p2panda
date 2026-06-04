@@ -21,7 +21,7 @@ use futures::channel::mpsc;
 use futures::future::ready;
 use futures::stream::SelectAll;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -38,7 +38,7 @@ use crate::{FromSync, SessionConfig, ToSync};
 
 static CHANNEL_BUFFER: usize = 1028;
 
-pub type ToTopicSync<E> = ToSync<Operation<E>>;
+pub type ToTopicSync = ToSync<AnyOperation>;
 
 /// Create and manage topic log sync sessions.
 ///
@@ -58,36 +58,33 @@ pub type ToTopicSync<E> = ToSync<Operation<E>>;
 /// reduces unnecessary noise on the network.
 #[allow(clippy::type_complexity)]
 #[derive(Debug)]
-pub struct TopicSyncManager<T, S, L, E>
+pub struct TopicSyncManager<T, S, L>
 where
     T: Clone,
-    E: Extensions,
 {
     store: S,
-    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
-    from_session_tx: HashMap<(u64, VerifyingKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
-    from_session_rx: HashMap<(u64, VerifyingKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
-    manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
+    session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync>>,
+    from_session_tx: HashMap<(u64, VerifyingKey), broadcast::Sender<TopicLogSyncEvent>>,
+    from_session_rx: HashMap<(u64, VerifyingKey), broadcast::Receiver<TopicLogSyncEvent>>,
+    manager_tx: Vec<mpsc::Sender<SessionStream<T>>>,
     _phantom: PhantomData<L>,
 }
 
 #[derive(Debug)]
-pub(crate) struct SessionStream<T, E>
+pub(crate) struct SessionStream<T>
 where
     T: Clone,
-    E: Clone,
 {
     pub session_id: u64,
     pub topic: T,
     pub remote: VerifyingKey,
-    pub event_rx: broadcast::Receiver<TopicLogSyncEvent<E>>,
-    pub live_tx: mpsc::Sender<ToTopicSync<E>>,
+    pub event_rx: broadcast::Receiver<TopicLogSyncEvent>,
+    pub live_tx: mpsc::Sender<ToTopicSync>,
 }
 
-impl<T, S, L, E> TopicSyncManager<T, S, L, E>
+impl<T, S, L> TopicSyncManager<T, S, L>
 where
     T: Clone,
-    E: Extensions,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -101,21 +98,20 @@ where
     }
 }
 
-impl<T, S, L, E> Manager<T> for TopicSyncManager<T, S, L, E>
+impl<T, S, L> Manager<T> for TopicSyncManager<T, S, L>
 where
     T: Clone + Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
     L: LogId + Debug + Send + 'static,
-    E: Extensions + Send + 'static,
 {
-    type Protocol = TopicLogSync<T, S, L, E>;
+    type Protocol = TopicLogSync<T, S, L>;
     type Args = S;
-    type Event = TopicLogSyncEvent<E>;
-    type Message = Operation<E>;
+    type Event = TopicLogSyncEvent;
+    type Message = AnyOperation;
     type Error = TopicSyncManagerError;
 
     /// Instantiate a manager from arguments.
@@ -165,7 +161,7 @@ where
     async fn session_handle(
         &self,
         session_id: u64,
-    ) -> Option<Pin<Box<dyn Sink<ToTopicSync<E>, Error = Self::Error>>>> {
+    ) -> Option<Pin<Box<dyn Sink<ToTopicSync, Error = Self::Error>>>> {
         let map_fn = |to_sync: ToSync<Self::Message>| {
             ready({
                 match to_sync {
@@ -177,7 +173,7 @@ where
 
         self.session_topic_map.sender(session_id).map(|tx| {
             Box::pin(tx.clone().with(map_fn))
-                as Pin<Box<dyn Sink<ToTopicSync<E>, Error = Self::Error>>>
+                as Pin<Box<dyn Sink<ToTopicSync, Error = Self::Error>>>
         })
     }
 
@@ -193,17 +189,16 @@ where
             let stream = BroadcastStream::new(tx.subscribe());
 
             #[allow(clippy::type_complexity)]
-            let stream: Pin<
-                Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent<E>>>>>,
-            > = Box::pin(stream.map(Box::new(
-                move |event: Result<TopicLogSyncEvent<E>, BroadcastStreamRecvError>| {
-                    event.ok().map(|event| FromSync {
-                        session_id,
-                        remote,
-                        event,
-                    })
-                },
-            )));
+            let stream: Pin<Box<dyn StreamDebug<Option<FromSync<TopicLogSyncEvent>>>>> =
+                Box::pin(stream.map(Box::new(
+                    move |event: Result<TopicLogSyncEvent, BroadcastStreamRecvError>| {
+                        event.ok().map(|event| FromSync {
+                            session_id,
+                            remote,
+                            event,
+                        })
+                    },
+                )));
             session_rx_set.push(stream);
         }
 
@@ -562,17 +557,17 @@ mod tests {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_a.push(operation.header().clone());
+                            operations_a.push(operation.header.clone());
                         }
                     }
                     Some(event) = event_stream_b.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_b.push(operation.header().clone());
+                            operations_b.push(operation.header.clone());
                         }
                     }
                     Some(event) = event_stream_c.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_c.push(operation.header().clone());
+                            operations_c.push(operation.header.clone());
                         }
                     }
                     else => tokio::time::sleep(Duration::from_millis(20)).await

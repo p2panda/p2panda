@@ -162,7 +162,7 @@ impl<E> Offchain<Hash> for Operation<E> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnyOperation {
     pub hash: Hash,
     pub header: AnyHeader,

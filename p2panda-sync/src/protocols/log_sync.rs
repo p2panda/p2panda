@@ -3,12 +3,12 @@
 //! Two-party sync protocol over append-only logs.
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
-use std::marker::PhantomData;
 
 use futures::{Sink, SinkExt, Stream, StreamExt, stream};
-use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{
+    AnyHeader, AnyHeaderError, AnyOperation, Body, Hash, LogId, SeqNum, VerifyingKey,
+};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -60,16 +60,15 @@ enum State<L> {
 
 /// Efficient sync protocol for append-only log data types.
 #[derive(Debug)]
-pub struct LogSync<L, E, S, Evt> {
+pub struct LogSync<L, S, Evt> {
     state: State<L>,
     logs: Logs<L>,
     store: S,
     event_tx: broadcast::Sender<Evt>,
     buffer_capacity: usize,
-    _marker: PhantomData<E>,
 }
 
-impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
+impl<L, S, Evt> LogSync<L, S, Evt> {
     pub fn new(store: S, logs: Logs<L>, event_tx: broadcast::Sender<Evt>) -> Self {
         Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
     }
@@ -86,17 +85,15 @@ impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
             event_tx,
             logs,
             buffer_capacity,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
+impl<L, S, Evt> Protocol for LogSync<L, S, Evt>
 where
     L: LogId + Debug + Send + 'static,
-    E: Extensions + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
-    Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
+    Evt: Debug + From<LogSyncEvent> + Send + 'static,
 {
     type Error = LogSyncError;
     type Output = (DeduplicationBuffer<Hash>, LogSyncMetrics);
@@ -248,25 +245,31 @@ where
                                     message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                                 match message {
-                                    LogSyncMessage::Operation(header, body) => {
+                                    LogSyncMessage::Operation(header_bytes, body_bytes) => {
                                         metrics.received_bytes += {
-                                            header.len()
-                                                + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
+                                            header_bytes.len()
+                                                + body_bytes.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
                                         } as u32;
                                         metrics.received_operations += 1;
 
-                                        let header: Header<E> = decode_cbor(&header[..])?;
-                                        let body = body.map(|ref bytes| Body::from_bytes(bytes));
+                                        let header = AnyHeader::decode(&header_bytes)?;
+                                        let hash = header.hash();
+                                        let body = body_bytes.map(|bytes| Body::from_bytes(bytes));
 
                                         // Insert message hash into deduplication buffer.
-                                        if !dedup.insert(header.hash()) {
-                                            trace!(phase = "sync", operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
+                                        if !dedup.insert(hash) {
+                                            trace!(
+                                                phase = "sync",
+                                                operation_id = %hash.fmt_short(),
+                                                "ignore duplicate operation sent from remote"
+                                            );
+
                                             continue;
                                         }
 
                                         trace!(
                                             phase = "sync",
-                                            id = ?header.hash().fmt_short(),
+                                            id = %hash.fmt_short(),
                                             received_ops = metrics.received_operations,
                                             received_bytes = metrics.received_bytes,
                                             "received operation"
@@ -275,7 +278,14 @@ where
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(
-                                                LogSyncEvent::OperationReceived{operation:Box::new(Operation{hash:header.hash(),header,body,}), metrics: metrics.clone() }
+                                                LogSyncEvent::OperationReceived {
+                                                    operation: Box::new(AnyOperation {
+                                                        hash,
+                                                        header,
+                                                        body
+                                                    }),
+                                                    metrics: metrics.clone()
+                                                }
                                                 .into(),
                                             )
                                             .map_err(|_| LogSyncError::BroadcastSend)?;
@@ -379,13 +389,13 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-async fn get_log_heights<L, E, S>(
+async fn get_log_heights<L, S>(
     store: &S,
     logs: &Logs<L>,
 ) -> Result<LogHeights<VerifyingKey, L>, LogSyncError>
 where
     L: LogId,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
 {
     let mut result = BTreeMap::new();
     for (verifying_key, log_ids) in logs {
@@ -437,7 +447,7 @@ where
 
 /// Events emitted from log sync sessions.
 #[derive(Clone, Debug, PartialEq)]
-pub enum LogSyncEvent<E> {
+pub enum LogSyncEvent {
     /// We have calculated and sent the estimated bytes and operations to be sent during this sync
     /// session and received the remotes' estimates.
     ///
@@ -446,7 +456,7 @@ pub enum LogSyncEvent<E> {
 
     /// An operation has been received from the remote.
     OperationReceived {
-        operation: Box<Operation<E>>,
+        operation: Box<AnyOperation>,
         metrics: LogSyncMetrics,
     },
 }
@@ -468,7 +478,7 @@ pub struct LogSyncMetrics {
 #[derive(Debug, Error)]
 pub enum LogSyncError {
     #[error(transparent)]
-    Decode(#[from] DecodeError),
+    Decode(#[from] AnyHeaderError),
 
     #[error("log store error: {0}")]
     LogStore(String),
@@ -518,11 +528,11 @@ mod tests {
     use futures::StreamExt;
     use futures::channel::mpsc;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_core::{Body, Hash};
+    use p2panda_core::{AnyOperation, Body, Hash};
     use p2panda_store::operations::OperationStore;
     use p2panda_store::{SqliteStore, tx_unwrap};
 
-    use crate::protocols::log_sync::{LogSyncError, LogSyncEvent, Logs, Operation};
+    use crate::protocols::log_sync::{LogSyncError, LogSyncEvent, Logs};
     use crate::test_utils::{Peer, TestLogId, TestLogSyncMessage, run_protocol, run_protocol_uni};
     use crate::traits::Protocol;
 
@@ -687,7 +697,7 @@ mod tests {
         let (header, body_inner) = assert_matches!(
             peer_a_event_rx.recv().await.unwrap(),
             LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -697,7 +707,7 @@ mod tests {
         let (header, body_inner) = assert_matches!(
             peer_a_event_rx.recv().await.unwrap(),
             LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -712,7 +722,7 @@ mod tests {
         let (header, body_inner) = assert_matches!(
             peer_b_event_rx.recv().await.unwrap(),
             LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -722,7 +732,7 @@ mod tests {
         let (header, body_inner) = assert_matches!(
             peer_b_event_rx.recv().await.unwrap(),
             LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );

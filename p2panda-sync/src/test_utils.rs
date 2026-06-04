@@ -6,7 +6,9 @@ use std::collections::BTreeMap;
 use futures::{FutureExt, SinkExt, Stream, StreamExt};
 
 use futures::channel::mpsc;
-use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{
+    AnyOperation, Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey,
+};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -29,16 +31,16 @@ pub type TestExtensions = TestLogId;
 
 // Types used in log sync protocol tests.
 pub type TestLogSyncMessage = LogSyncMessage<TestLogId>;
-pub type TestLogSyncEvent = LogSyncEvent<TestExtensions>;
-pub type TestLogSync = LogSync<TestLogId, TestExtensions, SqliteStore, TestLogSyncEvent>;
+pub type TestLogSyncEvent = LogSyncEvent;
+pub type TestLogSync = LogSync<TestLogId, SqliteStore, TestLogSyncEvent>;
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
-pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId, TestExtensions>;
-pub type TestTopicSyncEvent = TopicLogSyncEvent<TestExtensions>;
-pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId, TestExtensions>;
+pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId>;
+pub type TestTopicSyncEvent = TopicLogSyncEvent;
+pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId>;
 pub type TestTopicSyncError = TopicLogSyncError;
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
+pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId>;
 
 /// Peer abstraction used in tests.
 ///
@@ -70,7 +72,7 @@ impl Peer {
     ) -> (
         TestTopicSync,
         broadcast::Receiver<TestTopicSyncEvent>,
-        mpsc::Sender<ToSync<Operation<TestExtensions>>>,
+        mpsc::Sender<ToSync<AnyOperation>>,
     ) {
         let (event_tx, event_rx) = broadcast::channel(512);
         let (live_tx, live_rx) = mpsc::channel(512);
@@ -121,7 +123,7 @@ impl Peer {
         log_id: TestLogId,
     ) -> (Header<TestExtensions>, Vec<u8>) {
         let (seq_num, backlink) = <SqliteStore as LogStore<
-            Operation<TestExtensions>,
+            AnyOperation,
             VerifyingKey,
             TestLogId,
             SeqNum,
