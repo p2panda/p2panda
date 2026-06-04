@@ -53,21 +53,13 @@ impl TestLog {
         let mut seq_num = self.seq_num.borrow_mut();
         let mut backlink = self.backlink.borrow_mut();
 
-        let mut header = Header::<E> {
-            verifying_key: self.signing_key.verifying_key(),
-            version: 1,
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: if body.size() == 0 {
-                None
-            } else {
-                Some(body.hash())
-            },
-            seq_num: *seq_num,
-            backlink: *backlink,
-            extensions,
-        };
-        header.sign(&self.signing_key);
+        let mut header = Header::<E>::builder().body(&body);
+
+        if let Some(backlink) = *backlink {
+            header = header.chain(*seq_num, backlink);
+        }
+
+        let header = header.build(&self.signing_key, extensions);
 
         *backlink = Some(header.hash());
         *seq_num += 1;
@@ -82,6 +74,7 @@ impl TestLog {
 
 #[cfg(test)]
 mod tests {
+    use crate::cbor::encode_cbor;
     use crate::operation::AnyHeader;
 
     use super::TestLog;
@@ -90,7 +83,7 @@ mod tests {
     fn zero_byte_body() {
         let log = TestLog::new();
         let operation = log.operation(&[], ());
-        let bytes = operation.header.encode();
+        let bytes = encode_cbor(&operation.header).unwrap();
         assert!(AnyHeader::decode(&bytes).is_ok());
     }
 }

@@ -145,12 +145,9 @@ where
         let mut seq = serializer.serialize_seq(Some(self.field_count()))?;
         seq.serialize_element(&self.version)?;
         seq.serialize_element(&self.verifying_key)?;
-
-        if let Some(signature) = &self.signature {
-            seq.serialize_element(signature)?;
-        }
-
+        seq.serialize_element(&self.signature)?;
         seq.serialize_element(&self.payload_size)?;
+
         if let Some(hash) = &self.payload_hash {
             seq.serialize_element(&hash)?;
         }
@@ -470,12 +467,10 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<E>(mut header: Header<E>, signing_key: &SigningKey)
+    fn assert_serde_roundtrip<E>(mut header: Header<E>)
     where
         E: Extensions + PartialEq,
     {
-        header.sign(signing_key);
-
         let bytes = header.encode();
         let any_header = AnyHeader::decode(&bytes).expect("valid header");
         let header_again: Header<E> = any_header.try_into().expect("valid extensions");
@@ -494,32 +489,11 @@ mod tests {
         let signing_key = SigningKey::generate();
 
         assert_serde_roundtrip(
-            Header::<CustomExtensions> {
-                version: 1,
-                verifying_key: signing_key.verifying_key(),
-                payload_size: 123,
-                payload_hash: Some(Hash::digest(vec![1, 2, 3])),
-                seq_num: 0,
-                backlink: None,
-                extensions: extensions.clone(),
-                signature: None,
-            },
-            &signing_key,
+            Header::builder()
+                .body(b"test")
+                .build(&signing_key, extensions),
         );
-
-        assert_serde_roundtrip(
-            Header::<CustomExtensions> {
-                version: 1,
-                verifying_key: signing_key.verifying_key(),
-                payload_size: 0,
-                payload_hash: None,
-                seq_num: 0,
-                backlink: None,
-                extensions: extensions,
-                signature: None,
-            },
-            &signing_key,
-        );
+        assert_serde_roundtrip(Header::builder().build(&signing_key, ()));
     }
 
     #[test]
@@ -530,17 +504,7 @@ mod tests {
         ]);
 
         // header at seq num 0
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
+        let header = Header::builder().build(&signing_key, ());
 
         let bytes = vec![
             133, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -558,18 +522,9 @@ mod tests {
         assert_eq!(header, header_again);
 
         // header at seq num 0 with body
-        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: Some(body.hash()),
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
+        let header = Header::builder()
+            .body(b"Hello, Sloth!")
+            .build(&signing_key, ());
 
         let bytes = vec![
             134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -589,17 +544,9 @@ mod tests {
         assert_eq!(header, header_again);
 
         // header at seq num 1 with backlink
-        let mut header = Header::<()> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 1,
-            backlink: Some(header.hash()),
-            extensions: (),
-        };
-        header.sign(&signing_key);
+        let header = Header::builder()
+            .chain(1, header.hash())
+            .build(&signing_key, ());
 
         let bytes = vec![
             134, 1, 88, 32, 228, 21, 196, 25, 12, 199, 241, 100, 122, 89, 46, 191, 142, 95, 144,
@@ -642,23 +589,15 @@ mod tests {
         }
 
         let signing_key = SigningKey::generate();
-        let body = Body::from_bytes(b"look, no bytes!");
 
-        let mut header = Header::<ZeroSizedExtension> {
-            version: 1,
-            verifying_key: signing_key.verifying_key(),
-            signature: None,
-            payload_size: body.size(),
-            payload_hash: Some(body.hash()),
-            seq_num: 0,
-            backlink: None,
-            extensions: ZeroSizedExtension {
+        let header = Header::builder().body(b"look, no bytes!").build(
+            &signing_key,
+            ZeroSizedExtension {
                 field_a: [],
                 field_b: (),
                 field_c: Zilch,
             },
-        };
-        header.sign(&signing_key);
+        );
 
         let bytes = header.encode();
 
