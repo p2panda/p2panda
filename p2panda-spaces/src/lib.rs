@@ -25,4 +25,4 @@ pub use config::Config;
 pub use credentials::Credentials;
 pub use event::Event;
 pub use message::SpacesArgs;
-pub use types::{ActorId, OperationId};
+pub use types::{ActorId, AuthGroupState, OperationId};

@@ -40,7 +40,10 @@ test_utils = [
 ]
 
 [dependencies]
+p2panda-auth = { workspace = true }
 p2panda-core = { workspace = true }
+p2panda-encryption = { workspace = true }
+p2panda-spaces = { workspace = true }
 rand = { workspace = true, optional = true }
 rand_chacha = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
