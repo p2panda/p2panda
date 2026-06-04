@@ -279,7 +279,6 @@ where
         let bytes = bytes.as_ref();
 
         self.payload_size = bytes.len() as PayloadSize;
-
         self.payload_hash = if self.payload_size == 0 {
             None
         } else {
@@ -295,6 +294,7 @@ where
         if self.seq_num > 0 {
             self.backlink = Some(backlink);
         } else {
+            // Ignore backlink if user tries to set one at seq_num = 0.
             self.backlink = None;
         }
 
@@ -306,32 +306,37 @@ where
 
         let verifying_key = signing_key.verifying_key();
 
-        let mut cbor = Value::array([
-            Value::from(version),
-            Value::from(verifying_key.as_bytes()),
-            Value::from(self.payload_size),
-        ]);
+        let extensions_cbor = if Header::<E>::has_non_zero_sized_extensions() {
+            let extensions_cbor = Value::serialized(&extensions).expect("serializable extensions");
+            Some(extensions_cbor)
+        } else {
+            None
+        };
 
-        if let Some(payload_hash) = &self.payload_hash {
-            cbor.append(payload_hash.as_bytes());
-        }
+        let signing_bytes = encode_header(
+            version,
+            verifying_key,
+            None,
+            self.payload_size,
+            self.payload_hash,
+            self.seq_num,
+            self.backlink,
+            extensions_cbor.as_ref(),
+        );
 
-        cbor.append(self.seq_num);
-
-        if let Some(backlink) = &self.backlink {
-            cbor.append(backlink.as_bytes());
-        }
-
-        if Header::<E>::has_non_zero_sized_extensions() {
-            cbor.append(cbor_core::Value::serialized(&extensions).unwrap());
-        }
-
-        let signing_bytes = cbor.encode();
         let signature = signing_key.sign(&signing_bytes);
 
-        cbor.insert(2, signature.to_bytes());
+        let bytes = encode_header(
+            version,
+            verifying_key,
+            Some(&signature),
+            self.payload_size,
+            self.payload_hash,
+            self.seq_num,
+            self.backlink,
+            extensions_cbor.as_ref(),
+        );
 
-        let bytes = cbor.encode();
         let digest = Hash::digest(&bytes);
         let size = bytes.len() as u32;
 
@@ -344,8 +349,9 @@ where
             seq_num: self.seq_num,
             backlink: self.backlink,
             extensions,
-            size,
+            extensions_cbor,
             digest,
+            size,
         }
     }
 }
@@ -369,7 +375,6 @@ where
 ///     .build(&signing_key, ());
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Header<E = ()> {
     /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: Version,
@@ -410,6 +415,13 @@ pub struct Header<E = ()> {
     // allow initialisation in safe code which both are annoying to deal with.
     pub extensions: E,
 
+    /// Original extensions representation in CBOR AST.
+    ///
+    /// This allows us to correctly re-encode this header to bytes if necessary. If we would encode
+    /// the extensions from the Rust type `E` we might not be able to re-construct the original
+    /// bytes. A different system might have interpreted the extensions differently.
+    pub(crate) extensions_cbor: Option<cbor_core::Value<'static>>,
+
     /// Size of header in encoded CBOR bytes.
     pub(crate) size: u32,
 
@@ -422,7 +434,11 @@ impl<E> Default for Header<E>
 where
     E: Default,
 {
-    // This is for hacky low-level access to this type, don't use this in production.
+    /// This is for hacky low-level access to this type, don't use this in production.
+    ///
+    /// Size and digest get re-computed whenever called in test environments. Note that we can't
+    /// re-encode `extensions_cbor` if `E` was changed in a test. Ideally you don't want to test
+    /// extensions-related code here anyway.
     fn default() -> Self {
         Self {
             version: 1,
@@ -433,6 +449,7 @@ where
             seq_num: 0,
             backlink: None,
             extensions: E::default(),
+            extensions_cbor: None,
             size: 0,
             digest: Hash::from([0; HASH_LEN]),
         }
@@ -452,39 +469,16 @@ where
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        self.encode_inner(false)
-    }
-
-    fn encode_inner(&self, skip_signature: bool) -> Vec<u8> {
-        let mut cbor = Value::array([
-            Value::from(self.version),
-            Value::from(self.verifying_key.as_bytes()),
-        ]);
-
-        if !skip_signature {
-            cbor.append(Value::from(self.signature.to_bytes()));
-        }
-
-        cbor.append(Value::from(self.payload_size));
-
-        if let Some(payload_hash) = &self.payload_hash {
-            cbor.append(payload_hash.as_bytes());
-        }
-
-        cbor.append(self.seq_num);
-
-        if let Some(backlink) = &self.backlink {
-            cbor.append(backlink.as_bytes());
-        }
-
-        if Header::<E>::has_non_zero_sized_extensions() {
-            cbor.append(
-                cbor_core::Value::serialized(&self.extensions)
-                    .expect("serde and cbor_core to encode extensions"),
-            );
-        }
-
-        cbor.encode()
+        encode_header(
+            self.version,
+            self.verifying_key,
+            Some(&self.signature),
+            self.payload_size,
+            self.payload_hash,
+            self.seq_num,
+            self.backlink,
+            self.extensions_cbor.as_ref(),
+        )
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, AnyHeaderError> {
@@ -500,10 +494,6 @@ where
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
         // Re-calculate hash and size in test environments.
-        //
-        // NOTE: This will lead to a different hash if trying to decode an unknown extensions format
-        // since this re-encodes the extensions as well. Use `AnyHeader` for safe re-encoding in
-        // test environments.
         if cfg!(any(test, feature = "test_utils")) {
             return Hash::digest(self.encode());
         }
@@ -519,26 +509,6 @@ where
         }
 
         self.size
-    }
-
-    #[cfg(any(test, feature = "test_utils"))]
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.encode())
-    }
-
-    #[cfg(any(test, feature = "test_utils"))]
-    pub fn sign(&mut self, signing_key: &SigningKey) {
-        let signing_bytes = self.encode_inner(true);
-        self.signature = signing_key.sign(&signing_bytes);
-    }
-
-    #[cfg(any(test, feature = "test_utils"))]
-    pub fn verify(&self) -> bool {
-        // NOTE: This will lead to an invalid signature if trying to decode an unknown extensions
-        // format since this re-encodes the extensions as well. Use `AnyHeader` for safe re-encoding
-        // in test environments.
-        let signing_bytes = self.encode_inner(true);
-        self.verifying_key.verify(&signing_bytes, &self.signature)
     }
 
     /// Extract an extension value from the header.
@@ -564,27 +534,38 @@ impl<E> Header<E> {
         // no-op with no actual memory operations.
         unsafe { std::mem::zeroed() }
     }
+}
 
-    /// Number of fields included in the header.
-    ///
-    /// Fields instantiated with `None` values are excluded from the count.
-    pub(crate) fn field_count(&self) -> usize {
-        // There will always be a minimum of 5 fields in an header.
-        let mut count = 5;
+#[cfg(any(test, feature = "test_utils"))]
+impl<E> Header<E>
+where
+    E: Extensions,
+{
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.encode())
+    }
 
-        if self.payload_hash.is_some() {
-            count += 1;
-        }
+    fn encode_signing_bytes(&self) -> Vec<u8> {
+        encode_header(
+            self.version,
+            self.verifying_key,
+            None,
+            self.payload_size,
+            self.payload_hash,
+            self.seq_num,
+            self.backlink,
+            self.extensions_cbor.as_ref(),
+        )
+    }
 
-        if self.backlink.is_some() {
-            count += 1;
-        }
+    pub fn sign(&mut self, signing_key: &SigningKey) {
+        let signing_bytes = self.encode_signing_bytes();
+        self.signature = signing_key.sign(&signing_bytes);
+    }
 
-        if Self::has_non_zero_sized_extensions() {
-            count += 1;
-        }
-
-        count
+    pub fn verify(&self) -> bool {
+        let signing_bytes = self.encode_signing_bytes();
+        self.verifying_key.verify(&signing_bytes, &self.signature)
     }
 }
 
@@ -678,6 +659,43 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn encode_header(
+    version: Version,
+    verifying_key: VerifyingKey,
+    signature: Option<&Signature>,
+    payload_size: PayloadSize,
+    payload_hash: Option<Hash>,
+    seq_num: SeqNum,
+    backlink: Option<Hash>,
+    extensions: Option<&Value<'static>>,
+) -> Vec<u8> {
+    let mut cbor = Value::array([Value::from(version), Value::from(verifying_key.as_bytes())]);
+
+    // Signature can be omitted to encode bytes for signing.
+    if let Some(signature) = &signature {
+        cbor.append(signature.to_bytes());
+    }
+
+    cbor.append(payload_size);
+
+    if let Some(payload_hash) = &payload_hash {
+        cbor.append(payload_hash.as_bytes());
+    }
+
+    cbor.append(seq_num);
+
+    if let Some(backlink) = &backlink {
+        cbor.append(backlink.as_bytes());
+    }
+
+    if let Some(extensions) = extensions {
+        cbor.append(extensions.to_owned());
+    }
+
+    cbor.encode()
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnyHeader {
     pub version: Version,
@@ -687,9 +705,9 @@ pub struct AnyHeader {
     pub payload_hash: Option<Hash>,
     pub seq_num: SeqNum,
     pub backlink: Option<Hash>,
-    size: u32,
-    digest: Hash,
-    extensions: Option<cbor_core::Value<'static>>,
+    pub(crate) size: u32,
+    pub(crate) digest: Hash,
+    pub(crate) extensions: Option<cbor_core::Value<'static>>,
 }
 
 impl AnyHeader {
@@ -700,15 +718,24 @@ impl AnyHeader {
         let cbor = {
             let strict = cbor_core::DecodeOptions::new()
                 // Reduce strictness as we can't enforce it for all possible ways users will encode
-                // their extensions. On top we want to uphold the "robustness principle":
-                //
-                // > be conservative in what you do, be liberal in what you accept from others.
-                .strictness(cbor_core::Strictness::LENIENT)
+                // their extensions. On top we want to uphold the robustness principle:
+                // "be conservative in what you do, be liberal in what you accept from others"
+                .strictness(cbor_core::Strictness {
+                    // We're fine with non-canonical encodings.
+                    allow_non_shortest_integers: true,
+                    allow_non_shortest_floats: true,
+                    allow_oversized_bigints: true,
+                    allow_unsorted_map_keys: true,
+                    // Can lead to undefined behaviour and is simply wrong.
+                    allow_duplicate_map_keys: false,
+                    // Respect length limit right from the beginning.
+                    allow_indefinite_length: false,
+                })
                 // Still, we want to make sure some attacks are mitigated and set rather low
                 // / pessimistic thresholds.
                 .recursion_limit(64)
-                .length_limit(64 * 1024)
-                .oom_mitigation(64 * 1024);
+                .length_limit(512) // 0.5kb
+                .oom_mitigation(64);
 
             strict
                 .decode(bytes)
@@ -882,28 +909,16 @@ impl AnyHeader {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let mut cbor = Value::array([
-            Value::from(self.version),
-            Value::from(self.verifying_key.as_bytes()),
-            Value::from(self.signature.to_bytes()),
-            Value::from(self.payload_size),
-        ]);
-
-        if let Some(payload_hash) = &self.payload_hash {
-            cbor.append(payload_hash.as_bytes());
-        }
-
-        cbor.append(self.seq_num);
-
-        if let Some(backlink) = &self.backlink {
-            cbor.append(backlink.as_bytes());
-        }
-
-        if let Some(extensions) = &self.extensions {
-            cbor.append(extensions.clone());
-        }
-
-        cbor.encode()
+        encode_header(
+            self.version,
+            self.verifying_key,
+            Some(&self.signature),
+            self.payload_size,
+            self.payload_hash,
+            self.seq_num,
+            self.backlink,
+            self.extensions.as_ref(),
+        )
     }
 
     /// BLAKE3 hash of the header bytes.
@@ -943,7 +958,7 @@ where
 
     fn try_from(value: AnyHeader) -> Result<Self, Self::Error> {
         let extensions = match value.extensions {
-            Some(cbor) => {
+            Some(ref cbor) => {
                 // For ZST extension types we don't expect the extensions field in the header to be
                 // set. Since we now know E we can assure that this is the case.
                 if !Header::<E>::has_non_zero_sized_extensions() {
@@ -973,6 +988,7 @@ where
             seq_num: value.seq_num,
             backlink: value.backlink,
             extensions,
+            extensions_cbor: value.extensions,
             size: value.size,
             digest: value.digest,
         })
@@ -1277,7 +1293,6 @@ where
 mod tests {
     use serde::{Deserialize, Serialize};
 
-    use crate::cbor::encode_cbor;
     use crate::identity::SigningKey;
 
     use super::*;
@@ -1321,9 +1336,6 @@ mod tests {
 
         let header_again = Header::<()>::from_any(any_header.clone()).unwrap();
         assert_eq!(header, header_again);
-
-        let serde_bytes = encode_cbor(&header).unwrap();
-        assert_eq!(serde_bytes, header.encode());
     }
 
     #[test]
@@ -1629,6 +1641,8 @@ mod tests {
         // It can even parse the extensions, will omit the unknown prune_flag field.
         let header = Header::<LegacyExtensionsFormat>::from_any(any_header).unwrap();
         assert_eq!(header.extensions.timestamp, 1780572316919.into());
+        assert_eq!(new_header_hash, header.hash());
+        assert!(header.verify());
 
         // The old system can still parse headers with the new extensions format, not too important
         // for this test, but nice to show:

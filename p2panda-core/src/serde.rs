@@ -12,7 +12,7 @@ use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
 use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
 use crate::logs::{LogHeights, LogId};
-use crate::operation::{Body, Header};
+use crate::operation::Body;
 use crate::topic::{Topic, TopicError};
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
@@ -133,136 +133,6 @@ impl<'de> Deserialize<'de> for Signature {
             .map_err(|err: IdentityError| serde::de::Error::custom(err.to_string()))
     }
 }
-
-impl<E> Serialize for Header<E>
-where
-    E: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut seq = serializer.serialize_seq(Some(self.field_count()))?;
-        seq.serialize_element(&self.version)?;
-        seq.serialize_element(&self.verifying_key)?;
-        seq.serialize_element(&self.signature)?;
-        seq.serialize_element(&self.payload_size)?;
-
-        if let Some(hash) = &self.payload_hash {
-            seq.serialize_element(&hash)?;
-        }
-
-        seq.serialize_element(&self.seq_num)?;
-
-        if let Some(backlink) = &self.backlink {
-            seq.serialize_element(backlink)?;
-        }
-
-        if Self::has_non_zero_sized_extensions() {
-            seq.serialize_element(&self.extensions)?;
-        }
-
-        seq.end()
-    }
-}
-
-// impl<'de, E> Deserialize<'de> for Header<E>
-// where
-//     E: Deserialize<'de>,
-// {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         struct HeaderVisitor<E> {
-//             _marker: PhantomData<E>,
-//         }
-//
-//         impl<'de, E> Visitor<'de> for HeaderVisitor<E>
-//         where
-//             E: Deserialize<'de>,
-//         {
-//             type Value = Header<E>;
-//
-//             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-//                 formatter.write_str("Header encoded as a sequence")
-//             }
-//
-//             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-//             where
-//                 A: SeqAccess<'de>,
-//             {
-//                 let version: Version = seq
-//                     .next_element()?
-//                     .ok_or(SerdeError::custom("version missing"))?;
-//
-//                 let verifying_key: VerifyingKey = seq
-//                     .next_element()?
-//                     .ok_or(SerdeError::custom("public key missing"))?;
-//
-//                 let signature: Signature = seq
-//                     .next_element()?
-//                     .ok_or(SerdeError::custom("signature missing"))?;
-//
-//                 let payload_size: u32 = seq
-//                     .next_element()?
-//                     .ok_or(SerdeError::custom("payload size missing"))?;
-//
-//                 let payload_hash: Option<Hash> = match payload_size {
-//                     0 => None,
-//                     _ => {
-//                         let hash: Hash = seq
-//                             .next_element()?
-//                             .ok_or(SerdeError::custom("payload hash missing"))?;
-//                         Some(hash)
-//                     }
-//                 };
-//
-//                 let seq_num: SeqNum = seq
-//                     .next_element()?
-//                     .ok_or(SerdeError::custom("sequence number missing"))?;
-//
-//                 let backlink: Option<Hash> = match seq_num {
-//                     0 => None,
-//                     _ => {
-//                         let hash: Hash = seq
-//                             .next_element()?
-//                             .ok_or(SerdeError::custom("backlink missing"))?;
-//                         Some(hash)
-//                     }
-//                 };
-//
-//                 let extensions: E = if Header::<E>::has_non_zero_sized_extensions() {
-//                     seq.next_element()?
-//                         .ok_or(SerdeError::custom("extensions missing"))?
-//                 } else {
-//                     Header::<E>::zero_sized_extensions()
-//                 };
-//
-//                 if let Some(remainder) = seq.size_hint()
-//                     && remainder > 0
-//                 {
-//                     return Err(SerdeError::custom("unexpected excessive fields in header"));
-//                 }
-//
-//                 Ok(Header {
-//                     version,
-//                     verifying_key,
-//                     signature: Some(signature),
-//                     payload_hash,
-//                     payload_size,
-//                     seq_num,
-//                     backlink,
-//                     extensions,
-//                 })
-//             }
-//         }
-//
-//         deserializer.deserialize_seq(HeaderVisitor::<E> {
-//             _marker: PhantomData,
-//         })
-//     }
-// }
 
 impl Serialize for Body {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

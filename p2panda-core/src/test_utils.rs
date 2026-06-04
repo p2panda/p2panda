@@ -74,16 +74,19 @@ impl TestLog {
 
 #[cfg(test)]
 mod tests {
-    use crate::cbor::encode_cbor;
-    use crate::operation::AnyHeader;
-
-    use super::TestLog;
+    use crate::{AnyHeader, Header, SigningKey};
 
     #[test]
     fn zero_byte_body() {
-        let log = TestLog::new();
-        let operation = log.operation(&[], ());
-        let bytes = encode_cbor(&operation.header).unwrap();
+        let signing_key = SigningKey::generate();
+        let header = Header::builder().body(&[]).build(&signing_key, ());
+
+        // Assure that setting an _empty_ body is equals having no body at all.
+        assert_eq!(header.payload_size, 0);
+        assert!(header.payload_hash.is_none());
+
+        // Decoding works.
+        let bytes = header.encode();
         assert!(AnyHeader::decode(&bytes).is_ok());
     }
 }
