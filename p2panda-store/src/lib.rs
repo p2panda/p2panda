@@ -58,7 +58,7 @@
 //! # let log_id = 2;
 //! # let topic = Topic::random();
 //! # let signing_key = SigningKey::generate();
-//! # let body = Body::new(b"Transaction! Yay!");
+//! # let body = Body::from_bytes(b"Transaction! Yay!");
 //! #
 //! // Acquire a lock on the store for the duration of the read to write cycle.
 //! //
@@ -81,23 +81,17 @@
 //!     .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
 //!     .unwrap_or((0, None));
 //!
-//!     let mut header = Header {
-//!         version: 1,
-//!         verifying_key: signing_key.verifying_key(),
-//!         signature: None,
-//!         payload_size: body.size(),
-//!         payload_hash: Some(body.hash()),
-//!         seq_num,
-//!         backlink,
-//!         extensions: (),
-//!     };
+//!     let mut header = Header::builder().body(&body);
+//!     if let Some(backlink) = backlink {
+//!         header = header.chain(seq_num, backlink)
+//!     }
+//!     let header = header.build(&signing_key, ());
 //!
-//!     header.sign(&signing_key);
 //!     let hash = header.hash();
 //!
 //!     let operation = Operation {
 //!         hash,
-//!         header: header.clone(),
+//!         header,
 //!         body: Some(body),
 //!     };
 //!

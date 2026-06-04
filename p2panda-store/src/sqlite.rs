@@ -429,6 +429,9 @@ pub enum DecodeError {
     DecodeCbor(#[from] p2panda_core::cbor::DecodeError),
 
     #[error(transparent)]
+    Header(#[from] p2panda_core::AnyHeaderError),
+
+    #[error(transparent)]
     Hash(#[from] p2panda_core::hash::HashError),
 
     #[error(transparent)]
