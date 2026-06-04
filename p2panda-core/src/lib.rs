@@ -50,7 +50,7 @@
 //! ## Example
 //!
 //! ```
-//! use p2panda_core::{Body, Header, Operation, SigningKey};
+//! use p2panda_core::{Body, Header, SigningKey};
 //!
 //! // Every operation is cryptographically authenticated by an author by signing it with an
 //! // Ed25519 key pair. This method generates a new private key for us which needs to be securely
@@ -60,19 +60,11 @@
 //! // Operations consist of an body (with the actual application data) and a header,
 //! // enhancing the data to be used in distributed networks.
 //! let body = Body::from_bytes("Hello, Sloth!".as_bytes());
-//! let mut header = Header {
-//!     version: 1,
-//!     verifying_key: signing_key.verifying_key(),
-//!     signature: None,
-//!     payload_size: body.size(),
-//!     payload_hash: Some(body.hash()),
-//!     seq_num: 0,
-//!     backlink: None,
-//!     extensions: (),
-//! };
 //!
-//! // Sign the header with the author's private key. From now on it's ready to be sent!
-//! header.sign(&signing_key);
+//! let header = Header::builder()
+//!     .body(&body)
+//!     // Sign the header with the author's private key. From now on it's ready to be sent!
+//!     .build(&signing_key, ());
 //! ```
 pub mod cbor;
 pub mod cursor;

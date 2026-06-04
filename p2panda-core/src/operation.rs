@@ -28,23 +28,13 @@
 //! ### Construct and sign a header
 //!
 //! ```
-//! use p2panda_core::{Body, Header, SigningKey};
+//! use p2panda_core::{Header, SigningKey};
 //!
 //! let signing_key = SigningKey::generate();
 //!
-//! let body = Body::from_bytes("Hello, Sloth!".as_bytes());
-//! let mut header = Header {
-//!     version: 1,
-//!     verifying_key: signing_key.verifying_key(),
-//!     signature: None,
-//!     payload_size: body.size(),
-//!     payload_hash: Some(body.hash()),
-//!     seq_num: 0,
-//!     backlink: None,
-//!     extensions: (),
-//! };
-//!
-//! header.sign(&signing_key);
+//! let header = Header::builder()
+//!     .body(b"Hello, Icebear!")
+//!     .build(&signing_key, ());
 //! ```
 //!
 //! ### Custom extensions
@@ -71,23 +61,15 @@
 //! };
 //!
 //! let body = Body::from_bytes("Prune from here please!".as_bytes());
-//! let mut header = Header {
-//!     version: 1,
-//!     verifying_key: signing_key.verifying_key(),
-//!     signature: None,
-//!     payload_size: body.size(),
-//!     payload_hash: Some(body.hash()),
-//!     seq_num: 0,
-//!     backlink: None,
-//!     extensions,
-//! };
-//!
-//! header.sign(&signing_key);
+//! let header = Header::builder()
+//!     .body(&body)
+//!     .build(&signing_key, extensions);
 //!
 //! let prune_flag: PruneFlag = header.extension().unwrap();
 //! assert!(prune_flag.is_set())
 //! ```
 use std::borrow::Borrow;
+use std::marker::PhantomData;
 
 use cbor_core::Value;
 use thiserror::Error;
@@ -262,20 +244,34 @@ pub type Version = u16;
 
 pub type PayloadSize = u32;
 
-pub struct Builder {
+pub struct Builder<E> {
     payload_size: PayloadSize,
     payload_hash: Option<Hash>,
     seq_num: SeqNum,
     backlink: Option<Hash>,
+    _marker: PhantomData<E>,
 }
 
-impl Builder {
+impl<E> Default for Builder<E>
+where
+    E: Extensions,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<E> Builder<E>
+where
+    E: Extensions,
+{
     pub fn new() -> Self {
         Self {
             payload_size: 0,
             payload_hash: None,
             seq_num: 0,
             backlink: None,
+            _marker: PhantomData,
         }
     }
 
@@ -305,10 +301,7 @@ impl Builder {
         self
     }
 
-    pub fn build<E>(self, signing_key: &SigningKey, extensions: E) -> Header<E>
-    where
-        E: Extensions,
-    {
+    pub fn build(self, signing_key: &SigningKey, extensions: E) -> Header<E> {
         let version = 1;
 
         let verifying_key = signing_key.verifying_key();
@@ -366,24 +359,14 @@ impl Builder {
 /// ## Example
 ///
 /// ```
-/// use p2panda_core::{Body, Header, Operation, SigningKey};
+/// use p2panda_core::{Header, SigningKey};
 ///
 /// let signing_key = SigningKey::generate();
 ///
-/// let body = Body::from_bytes("Hello, Sloth!".as_bytes());
-/// let mut header = Header {
-///     version: 1,
-///     verifying_key: signing_key.verifying_key(),
-///     signature: None,
-///     payload_size: body.size(),
-///     payload_hash: Some(body.hash()),
-///     seq_num: 0,
-///     backlink: None,
-///     extensions: (),
-/// };
-///
-/// // Sign the header with the author's private key.
-/// header.sign(&signing_key);
+/// let header = Header::builder()
+///     .body(b"Hello, Icebear!")
+///      // Sign the header with the author's private key.
+///     .build(&signing_key, ());
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -428,27 +411,61 @@ pub struct Header<E = ()> {
     pub extensions: E,
 
     /// Size of header in encoded CBOR bytes.
-    size: u32,
+    pub(crate) size: u32,
 
     /// BLAKE3 hash digest of header.
-    digest: Hash,
+    pub(crate) digest: Hash,
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl<E> Default for Header<E>
+where
+    E: Default,
+{
+    // This is for hacky low-level access to this type, don't use this in production.
+    fn default() -> Self {
+        Self {
+            version: 1,
+            verifying_key: VerifyingKey::default(),
+            signature: Signature::from([0; SIGNATURE_LEN]),
+            payload_size: 0,
+            payload_hash: None,
+            seq_num: 0,
+            backlink: None,
+            extensions: E::default(),
+            size: 0,
+            digest: Hash::from([0; HASH_LEN]),
+        }
+    }
 }
 
 impl<E> Header<E>
 where
     E: Extensions,
 {
-    pub fn builder() -> Builder {
+    pub fn builder() -> Builder<E> {
         Builder::new()
     }
 
+    pub fn from_any(any_header: AnyHeader) -> Result<Self, AnyHeaderError> {
+        Self::try_from(any_header)
+    }
+
     pub fn encode(&self) -> Vec<u8> {
+        self.encode_inner(false)
+    }
+
+    fn encode_inner(&self, skip_signature: bool) -> Vec<u8> {
         let mut cbor = Value::array([
             Value::from(self.version),
             Value::from(self.verifying_key.as_bytes()),
-            Value::from(self.signature.to_bytes()),
-            Value::from(self.payload_size),
         ]);
+
+        if !skip_signature {
+            cbor.append(Value::from(self.signature.to_bytes()));
+        }
+
+        cbor.append(Value::from(self.payload_size));
 
         if let Some(payload_hash) = &self.payload_hash {
             cbor.append(payload_hash.as_bytes());
@@ -461,7 +478,10 @@ where
         }
 
         if Header::<E>::has_non_zero_sized_extensions() {
-            cbor.append(cbor_core::Value::serialized(&self.extensions).unwrap());
+            cbor.append(
+                cbor_core::Value::serialized(&self.extensions)
+                    .expect("serde and cbor_core to encode extensions"),
+            );
         }
 
         cbor.encode()
@@ -472,28 +492,53 @@ where
         let any_header = AnyHeader::decode(bytes)?;
 
         // Decode extensions.
-        let header: Self = Self::try_from(any_header)?;
-
-        Ok(header)
+        Self::from_any(any_header)
     }
 
     /// BLAKE3 hash of the header bytes.
     ///
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
+        // Re-calculate hash and size in test environments.
+        //
+        // NOTE: This will lead to a different hash if trying to decode an unknown extensions format
+        // since this re-encodes the extensions as well. Use `AnyHeader` for safe re-encoding in
+        // test environments.
+        if cfg!(any(test, feature = "test_utils")) {
+            return Hash::digest(self.encode());
+        }
+
         self.digest
     }
 
     /// Size of header when encoded as CBOR bytes.
     pub fn size(&self) -> u32 {
+        // Re-calculate hash and size in test environments.
+        if cfg!(any(test, feature = "test_utils")) {
+            return self.encode().len() as u32;
+        }
+
         self.size
     }
 
     #[cfg(any(test, feature = "test_utils"))]
     pub fn to_hex(&self) -> String {
-        use crate::cbor::encode_cbor;
+        hex::encode(self.encode())
+    }
 
-        hex::encode(encode_cbor(&self).unwrap())
+    #[cfg(any(test, feature = "test_utils"))]
+    pub fn sign(&mut self, signing_key: &SigningKey) {
+        let signing_bytes = self.encode_inner(true);
+        self.signature = signing_key.sign(&signing_bytes);
+    }
+
+    #[cfg(any(test, feature = "test_utils"))]
+    pub fn verify(&self) -> bool {
+        // NOTE: This will lead to an invalid signature if trying to decode an unknown extensions
+        // format since this re-encodes the extensions as well. Use `AnyHeader` for safe re-encoding
+        // in test environments.
+        let signing_bytes = self.encode_inner(true);
+        self.verifying_key.verify(&signing_bytes, &self.signature)
     }
 
     /// Extract an extension value from the header.
@@ -553,7 +598,7 @@ where
         let extensions = if Header::<E>::has_non_zero_sized_extensions() {
             Some(
                 cbor_core::Value::serialized(&value.extensions)
-                    .map_err(|err| AnyHeaderError::EncodingExtensions(err))?,
+                    .map_err(AnyHeaderError::EncodingExtensions)?,
             )
         } else {
             None
@@ -592,6 +637,12 @@ where
     }
 
     fn verify(&self) -> bool {
+        // Check signature in test environments as low-level access might have allowed users to
+        // tamper with the integrity.
+        if cfg!(any(test, feature = "test_utils")) {
+            return self.verify();
+        }
+
         // Header was always created by us and has a valid signature.
         true
     }
@@ -1226,14 +1277,53 @@ where
 mod tests {
     use serde::{Deserialize, Serialize};
 
-    use crate::SigningKey;
+    use crate::cbor::encode_cbor;
+    use crate::identity::SigningKey;
 
     use super::*;
 
     #[test]
-    fn zst_extension_type_parameter() {
+    fn paths_leading_to_same_encoding() {
         let signing_key = SigningKey::generate();
-        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
+
+        let header = Header::builder()
+            .body(b"test")
+            .chain(2, Hash::from([2; 32]))
+            .build(&signing_key, ());
+
+        let hacky_header = {
+            let body = Body::from_bytes(b"test");
+            let mut hacky_header = Header::<()> {
+                verifying_key: signing_key.verifying_key(),
+                payload_size: body.size(),
+                payload_hash: Some(body.hash()),
+                seq_num: 2,
+                backlink: Some(Hash::from([2; 32])),
+                ..Default::default()
+            };
+            hacky_header.sign(&signing_key);
+            hacky_header
+        };
+
+        assert_eq!(header.encode(), hacky_header.encode());
+        assert_eq!(header.verify(), hacky_header.verify());
+        assert!(header.verify());
+        assert_eq!(header.hash(), hacky_header.hash());
+        assert_eq!(header.size(), hacky_header.size());
+
+        let any_header = AnyHeader::decode(&header.encode()).unwrap();
+
+        assert_eq!(header.encode(), any_header.encode());
+        assert_eq!(header.verify(), any_header.verify());
+        assert!(any_header.verify());
+        assert_eq!(header.hash(), any_header.hash());
+        assert_eq!(header.size(), any_header.size());
+
+        let header_again = Header::<()>::from_any(any_header.clone()).unwrap();
+        assert_eq!(header, header_again);
+
+        let serde_bytes = encode_cbor(&header).unwrap();
+        assert_eq!(serde_bytes, header.encode());
     }
 
     #[test]
@@ -1243,9 +1333,9 @@ mod tests {
 
         type CustomExtensions = (u32, String);
 
-        let header = Header::builder()
-            .body(body)
-            .build::<CustomExtensions>(&signing_key, (42, "penguin".to_string()));
+        let header = Header::<CustomExtensions>::builder()
+            .body(&body)
+            .build(&signing_key, (42, "penguin".to_string()));
         assert!(header.verify());
 
         let operation = Operation {
@@ -1264,7 +1354,7 @@ mod tests {
         assert!(validate_header(&header_0).is_ok());
 
         let header_1 = Header::builder()
-            .chain(1, header_1.hash())
+            .chain(1, header_0.hash())
             .build(&signing_key, ());
         assert!(validate_header(&header_1).is_ok());
 
@@ -1275,6 +1365,13 @@ mod tests {
     fn invalid_operations() {
         let signing_key = SigningKey::generate();
         let body: Body = Body::from_bytes("Hello, Sloth!".as_bytes());
+
+        let header_base = Header::<()> {
+            verifying_key: signing_key.verifying_key(),
+            payload_size: body.size(),
+            payload_hash: Some(body.hash()),
+            ..Default::default()
+        };
 
         // Signature doesn't match public key
         let mut header = header_base.clone();
@@ -1373,68 +1470,170 @@ mod tests {
         assert_eq!(header, header_again);
     }
 
-    // TODO
-    // #[test]
-    // fn any_header_errors() {
-    //     let signing_key = SigningKey::generate();
-    //
-    //     // payload size given without payload hash
-    //     let mut header = Header::builder().build(&signing_key, ());
-    //     header.payload_size = 2829099;
-    //
-    //     let result = AnyHeader::decode(&header.encode());
-    //     assert!(result.is_err());
-    //
-    //     // payload hash given without payload size
-    //     let mut header = Header::<()> {
-    //         version: 1,
-    //         verifying_key: signing_key.verifying_key(),
-    //         signature: None,
-    //         payload_size: 0,
-    //         payload_hash: Some(Hash::digest([0, 1, 2])),
-    //         seq_num: 0,
-    //         backlink: None,
-    //         extensions: (),
-    //     };
-    //     header.sign(&signing_key);
-    //
-    //     let result = AnyHeader::decode(&header.encode());
-    //     assert!(result.is_err());
-    //
-    //     // backlink given with seq number 0
-    //     let mut header = Header::<()> {
-    //         version: 1,
-    //         verifying_key: signing_key.verifying_key(),
-    //         signature: None,
-    //         payload_size: 0,
-    //         payload_hash: None,
-    //         seq_num: 0,
-    //         backlink: Some(Hash::digest([0, 1, 2])),
-    //         extensions: (),
-    //     };
-    //     header.sign(&signing_key);
-    //
-    //     // At this point we don't know that the backlink is _not_ an extension:
-    //     let result = AnyHeader::decode(&header.encode()).expect("this is fine ..");
-    //
-    //     // .. but latest here we'll find out!
-    //     let result = Header::<()>::try_from(result);
-    //     assert!(result.is_err());
-    //
-    //     // backlink not given with seq number > 0
-    //     let mut header = Header::<()> {
-    //         version: 1,
-    //         verifying_key: signing_key.verifying_key(),
-    //         signature: None,
-    //         payload_size: 0,
-    //         payload_hash: None,
-    //         seq_num: 10,
-    //         backlink: None,
-    //         extensions: (),
-    //     };
-    //     header.sign(&signing_key);
-    //
-    //     let result = AnyHeader::decode(&header.encode());
-    //     assert!(result.is_err());
-    // }
+    #[test]
+    fn any_header_errors() {
+        let signing_key = SigningKey::generate();
+
+        // First check that this header is valid. The body is b"test".
+        let correct_header_bytes = r#"[
+            1,
+            h'6dec6975e5c280e9eadde785cf01df20690d02c8ab7a57efcd58150ab53a867f',
+            h'a4331f8d5742d3c40b7e8cfb93e487f4b3b8878e64f7ec9985169d6ed3a3fa3b7e9c9d4b69d6c62e6079dba734705a4b8fc2210f2793bf1ee8b2af5963ce9e0b',
+            4,
+            h'4878ca0425c739fa427f7eda20fe845f6b2e46ba5fe2a14df5b1e32f50603215',
+            0
+        ]"#
+        .parse::<cbor_core::Value>()
+        .unwrap()
+        .encode();
+        assert!(AnyHeader::decode(&correct_header_bytes).is_ok());
+
+        // Insufficient bytes for payload_hash.
+        let invalid_header_bytes = r#"[
+            1,
+            h'6dec6975e5c280e9eadde785cf01df20690d02c8ab7a57efcd58150ab53a867f',
+            h'a4331f8d5742d3c40b7e8cfb93e487f4b3b8878e64f7ec9985169d6ed3a3fa3b7e9c9d4b69d6c62e6079dba734705a4b8fc2210f2793bf1ee8b2af5963ce9e0b',
+            4,
+            h'4878',
+            0
+        ]"#
+        .parse::<cbor_core::Value>()
+        .unwrap()
+        .encode();
+
+        std::assert_matches!(
+            AnyHeader::decode(&invalid_header_bytes),
+            Err(AnyHeaderError::InvalidBytesLen("payload_hash", 32, 2))
+        );
+
+        // Invalid signature.
+        let mut header = Header::builder().build(&signing_key, ());
+        header.verifying_key = SigningKey::generate().verifying_key();
+
+        let result = AnyHeader::decode(&header.encode());
+        std::assert_matches!(result, Err(AnyHeaderError::InvalidSignature));
+
+        // payload_size given without payload_hash.
+        let mut header = Header::builder().build(&signing_key, ());
+        header.payload_size = 2829099;
+        header.sign(&signing_key);
+
+        let result = AnyHeader::decode(&header.encode());
+        std::assert_matches!(
+            result,
+            Err(AnyHeaderError::UnexpectedFieldType(
+                cbor_core::Error::IncompatibleType(cbor_core::DataType::Int),
+                "payload_hash"
+            ))
+        );
+
+        // payload_hash given without payload_size.
+        let mut header = Header::<()> {
+            verifying_key: signing_key.verifying_key(),
+            payload_size: 0,
+            payload_hash: Some(Hash::digest([0, 1, 2])),
+            extensions: (),
+            ..Default::default()
+        };
+        header.sign(&signing_key);
+
+        let result = AnyHeader::decode(&header.encode());
+        std::assert_matches!(
+            result,
+            Err(AnyHeaderError::UnexpectedFieldType(
+                cbor_core::Error::IncompatibleType(cbor_core::DataType::Bytes),
+                "seq_num"
+            ))
+        );
+
+        // backlink given with seq_num 0.
+        let mut header = Header::<()> {
+            verifying_key: signing_key.verifying_key(),
+            seq_num: 0,
+            backlink: Some(Hash::digest([0, 1, 2])),
+            ..Default::default()
+        };
+        header.sign(&signing_key);
+
+        // At this point we don't know that the backlink is _not_ an extension:
+        let result = AnyHeader::decode(&header.encode()).expect("this is fine ..");
+
+        // .. but latest here we'll find out!
+        let result = Header::<()>::try_from(result);
+        let result_2 = Header::<()>::decode(&header.encode());
+        assert!(result.is_err());
+        assert!(result_2.is_err());
+        std::assert_matches!(result, Err(AnyHeaderError::UnexpectedExtensions));
+
+        // backlink not given with seq_num > 0.
+        let mut header = Header::<()> {
+            verifying_key: signing_key.verifying_key(),
+            seq_num: 10,
+            backlink: None,
+            ..Default::default()
+        };
+        header.sign(&signing_key);
+
+        let result = AnyHeader::decode(&header.encode());
+        std::assert_matches!(result, Err(AnyHeaderError::MissingField("backlink")));
+    }
+
+    #[test]
+    fn forwards_compatible_checks() {
+        use crate::{PruneFlag, Timestamp};
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct LegacyExtensionsFormat {
+            timestamp: Timestamp,
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct FutureExtensionsFormat {
+            timestamp: Timestamp,
+            #[serde(default = "PruneFlag::default")]
+            prune_flag: PruneFlag,
+        }
+
+        let signing_key = SigningKey::generate();
+
+        let old_header = Header::builder().body(b"once upon a time").build(
+            &signing_key,
+            LegacyExtensionsFormat {
+                timestamp: 1780572316919.into(),
+            },
+        );
+        let old_header_bytes = old_header.encode();
+
+        let new_header = Header::builder()
+            .body(b"fitter, happier, more productive")
+            .build(
+                &signing_key,
+                FutureExtensionsFormat {
+                    timestamp: 1780572316919.into(),
+                    prune_flag: true.into(),
+                },
+            );
+        let new_header_bytes = new_header.encode();
+        let new_header_hash = new_header.hash();
+
+        // The old system can still parse headers with the new extensions format:
+        let any_header = AnyHeader::decode(&new_header_bytes).unwrap();
+
+        // The signature was checked during decoding already.
+        assert!(any_header.verify());
+
+        // .. and the hash digest matches with the original even though we don't know the new
+        // extension format:
+        assert_eq!(new_header_hash, any_header.hash());
+
+        // It can even parse the extensions, will omit the unknown prune_flag field.
+        let header = Header::<LegacyExtensionsFormat>::from_any(any_header).unwrap();
+        assert_eq!(header.extensions.timestamp, 1780572316919.into());
+
+        // The old system can still parse headers with the new extensions format, not too important
+        // for this test, but nice to show:
+        let header = Header::<FutureExtensionsFormat>::decode(&old_header_bytes).unwrap();
+        assert_eq!(header.extensions.timestamp, 1780572316919.into());
+        assert_eq!(header.extensions.prune_flag, false.into()); // set to default when not given
+    }
 }

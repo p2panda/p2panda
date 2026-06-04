@@ -372,11 +372,11 @@ where
 mod tests {
     use serde::{Deserialize, Serialize};
 
+    use crate::Extensions;
     use crate::cbor::{decode_cbor, encode_cbor};
     use crate::hash::Hash;
     use crate::identity::{SigningKey, VerifyingKey};
     use crate::operation::{AnyHeader, Header};
-    use crate::{Body, Extensions};
 
     use super::{deserialize_hex, serialize_hex};
 
@@ -467,7 +467,7 @@ mod tests {
         );
     }
 
-    fn assert_serde_roundtrip<E>(mut header: Header<E>)
+    fn assert_serde_roundtrip<E>(header: Header<E>)
     where
         E: Extensions + PartialEq,
     {

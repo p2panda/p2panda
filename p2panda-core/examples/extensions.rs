@@ -5,7 +5,7 @@
 //! `Extension` trait to define the means of extracting each value from a p2panda header.
 use serde::{Deserialize, Serialize};
 
-use p2panda_core::{Body, Extension, Hash, Header, SigningKey};
+use p2panda_core::{Extension, Hash, Header, SigningKey};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct LogId(Hash);
@@ -42,20 +42,10 @@ fn main() {
     };
 
     let signing_key = SigningKey::generate();
-    let body: Body = Body::from_bytes("Hello, Sloth!".as_bytes());
 
-    let mut header = Header {
-        version: 1,
-        verifying_key: signing_key.verifying_key(),
-        signature: None,
-        payload_size: body.size(),
-        payload_hash: Some(body.hash()),
-        seq_num: 0,
-        backlink: None,
-        extensions: extensions.clone(),
-    };
-
-    header.sign(&signing_key);
+    let header = Header::builder()
+        .body("Hello, Sloth".as_bytes())
+        .build(&signing_key, extensions.clone());
 
     let log_id: LogId = header.extension().unwrap();
     let expiry: Expiry = header.extension().unwrap();
