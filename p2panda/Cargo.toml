@@ -29,9 +29,11 @@ test_utils = [
 
 [dependencies]
 futures-util = { workspace = true }
+p2panda-auth = { workspace = true, default-features = true }
 p2panda-core = { workspace = true, default-features = true }
 p2panda-encryption = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-net = { workspace = true, default-features = true }
+p2panda-spaces = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-store = { workspace = true, default-features = true }
 p2panda-stream = { workspace = true, default-features = true, features = ["ingest", "log_prune"] }
 p2panda-sync = { workspace = true, default-features = true }
