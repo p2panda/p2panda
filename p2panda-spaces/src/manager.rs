@@ -464,7 +464,7 @@ where
     /// been processed. Alternatively some scheduling or throttling logic could be employed.
     pub async fn repair_spaces(
         &self,
-        space_ids: &Vec<ID>,
+        space_ids: &[ID],
     ) -> Result<Vec<F::Message>, ManagerError<ID, S, K, F, C, RS>> {
         let mut messages = vec![];
 
@@ -536,7 +536,7 @@ where
     ///
     /// Only exposed for testing purposes as in normal use we expect all messages to be already
     /// persisted in the store.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test_utils"))]
     pub async fn persist_message(
         &self,
         message: &F::Message,
