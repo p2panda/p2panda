@@ -77,3 +77,12 @@ impl Signer for Credentials {
         self.0.signing_key.sign(bytes)
     }
 }
+
+impl From<&Credentials> for p2panda_spaces::Credentials {
+    fn from(credentials: &Credentials) -> Self {
+        Self::from_keys(
+            credentials.0.signing_key.clone(),
+            credentials.0.identity_secret_key.clone(),
+        )
+    }
+}
