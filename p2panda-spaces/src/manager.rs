@@ -177,15 +177,12 @@ where
         &self,
         id: ID,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<
-        (Space<ID, S, K, F, M, C, RS>, Vec<M>, Vec<Event<ID, C>>),
-        ManagerError<ID, S, K, F, M, C, RS>,
-    > {
-        let (space, messages, events) = Space::create(self.clone(), id, initial_members.to_owned())
+    ) -> Result<(Space<ID, S, K, F, M, C, RS>, Vec<M>), ManagerError<ID, S, K, F, M, C, RS>> {
+        let (space, messages) = Space::create(self.clone(), id, initial_members.to_owned())
             .await
             .map_err(ManagerError::Space)?;
 
-        Ok((space, messages, events))
+        Ok((space, messages))
     }
 
     /// Create a new group containing initial members with associated access levels.
@@ -199,15 +196,12 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<
-        (Group<ID, S, K, F, M, C, RS>, Vec<M>, Event<ID, C>),
-        ManagerError<ID, S, K, F, M, C, RS>,
-    > {
-        let (group, messages, event) = Group::create(self.clone(), initial_members.to_owned())
+    ) -> Result<(Group<ID, S, K, F, M, C, RS>, Vec<M>), ManagerError<ID, S, K, F, M, C, RS>> {
+        let (group, messages) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
-        Ok((group, messages, event))
+        Ok((group, messages))
     }
 
     /// Process a spaces message.
@@ -394,7 +388,7 @@ where
     pub async fn repair_spaces(
         &self,
         space_ids: &Vec<ID>,
-    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Vec<M>, ManagerError<ID, S, K, F, M, C, RS>> {
         let auth_y = {
             let manager = self.inner.read().await;
             manager
@@ -407,7 +401,6 @@ where
             toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
 
         let mut messages = vec![];
-        let mut events = vec![];
         // @TODO: we can optimize here by calculating the diff between the current space auth
         // graph tips and the global auth graph tips. Then we could apply only the missing
         // operations rather than applying all operations as we do here.
@@ -422,17 +415,14 @@ where
                     .expect("message present in store")
             };
             for id in space_ids {
-                let (message, event) = self.apply_group_change_to_space(&message, *id).await?;
+                let message = self.apply_group_change_to_space(&message, *id).await?;
                 if let Some(message) = message {
                     messages.push(message);
-                }
-                if let Some(event) = event {
-                    events.push(event)
                 }
             }
         }
 
-        Ok((messages, events))
+        Ok(messages)
     }
 
     /// Apply an auth message from the shared auth state to each space we know about locally.
@@ -443,7 +433,7 @@ where
     pub(crate) async fn apply_group_change_to_spaces(
         &self,
         auth_message: &M,
-    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Vec<M>, ManagerError<ID, S, K, F, M, C, RS>> {
         let space_ids = {
             let manager = self.inner.read().await;
             manager
@@ -454,18 +444,14 @@ where
         };
 
         let mut messages = vec![];
-        let mut events = vec![];
         for id in space_ids {
-            let (message, event) = self.apply_group_change_to_space(auth_message, id).await?;
+            let message = self.apply_group_change_to_space(auth_message, id).await?;
             if let Some(message) = message {
                 messages.push(message);
             }
-            if let Some(event) = event {
-                events.push(event)
-            }
         }
 
-        Ok((messages, events))
+        Ok(messages)
     }
 
     /// Apply a message from the shared auth state to a single space.
@@ -473,7 +459,7 @@ where
         &self,
         auth_message: &M,
         space_id: ID,
-    ) -> Result<(Option<M>, Option<Event<ID, C>>), ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Option<M>, ManagerError<ID, S, K, F, M, C, RS>> {
         let Some(space) = self.space(space_id).await? else {
             panic!("expect space to exist");
         };
