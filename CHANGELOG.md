@@ -21,6 +21,8 @@ Highlights are marked with a pancake 🥞
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Don't sync all spaces when group membership changes
+  [#1216](https://github.com/p2panda/p2panda/pull/1216)
 
 ## [0.6.1] - 22/05/2026
 
