@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub use crate::builder::NodeBuilder;
+use crate::credentials::Credentials;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
@@ -26,6 +27,7 @@ pub struct Node {
     config: Config,
     store: SqliteStore,
     forge: OperationForge,
+    credentials: Credentials,
     // NOTE: One single pipeline is currently used to handle _all_ incoming operations, independent
     // of number of streams. While this is sufficient for most applications for now we might want to
     // make the number of processors configurable to avoid head-of-line blocking.
@@ -47,8 +49,8 @@ impl Node {
         // Initialises an in-memory SQLite database.
         let store = SqliteStoreBuilder::default().build().await?;
 
-        // Create a forge with a new internally-generated private key.
-        let forge = OperationForge::new(store.clone());
+        // Generate random keys.
+        let credentials = Credentials::generate();
 
         // Use default config, this will _not_ include a bootstrap and relay and reduces the
         // functionality of p2panda to only work on local-area networks.
@@ -58,7 +60,7 @@ impl Node {
         let tasks = TaskTracker::new();
         let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
 
-        let node = Node::spawn_inner(config, store, forge, pipeline).await?;
+        let node = Node::spawn_inner(config, store, credentials, pipeline).await?;
 
         Ok(node)
     }
@@ -66,12 +68,14 @@ impl Node {
     pub(crate) async fn spawn_inner(
         config: Config,
         store: SqliteStore,
-        forge: OperationForge,
+        credentials: Credentials,
         pipeline: Pipeline<LogId, Extensions, Topic>,
     ) -> Result<Self, NetworkError> {
+        let forge = OperationForge::new(credentials.clone(), store.clone());
+
         let network = Network::spawn(
             config.network.clone(),
-            forge.signing_key().clone(),
+            credentials.node_signing_key(),
             store.clone(),
         )
         .await?;
@@ -80,6 +84,7 @@ impl Node {
             config,
             store,
             forge,
+            credentials,
             pipeline,
             network,
         })
@@ -329,7 +334,7 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        Ok(ephemeral_stream(topic, self.forge.clone(), handle))
+        Ok(ephemeral_stream(topic, self.credentials.clone(), handle))
     }
 
     /// Returns a stream of system events.
