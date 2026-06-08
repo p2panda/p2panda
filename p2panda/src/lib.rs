@@ -252,6 +252,7 @@
 //! [local-first]: https://www.inkandswitch.com/local-first-software/
 //! [p2panda]: https://p2panda.org
 mod builder;
+pub mod credentials;
 mod forge;
 pub mod network;
 pub mod node;
@@ -270,6 +271,7 @@ pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 pub use p2panda_net::{NetworkId, NodeId};
 
 pub use builder::NodeBuilder;
+pub use credentials::Credentials;
 #[doc(inline)]
 pub use node::Node;
 

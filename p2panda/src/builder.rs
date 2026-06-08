@@ -2,7 +2,6 @@
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use p2panda_core::SigningKey;
 use p2panda_net::addrs::TrustedTransportInfo;
 use p2panda_net::discovery::DiscoveryConfig;
 use p2panda_net::gossip::GossipConfig;
@@ -12,18 +11,17 @@ use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::SqliteStore;
 use p2panda_store::sqlite::{SqlitePool, SqliteStoreBuilder};
 
-use crate::Node;
-use crate::forge::OperationForge;
 use crate::network::MdnsDiscoveryMode;
 use crate::node::{AckPolicy, Config, SpawnError};
 use crate::processor::{Pipeline, TaskTracker};
+use crate::{Credentials, Node};
 
 /// Builder for `Node`.
 ///
 /// To create the `Node` call `NodeBuilder::spawn()`.
 #[derive(Default)]
 pub struct NodeBuilder {
-    signing_key: Option<SigningKey>,
+    credentials: Option<Credentials>,
     config: Config,
     store_options: StoreBuilderOptions,
 }
@@ -32,12 +30,13 @@ impl NodeBuilder {
     /// Creates a new `NodeBuilder` using default configuration values.
     pub fn new() -> Self {
         NodeBuilder {
-            signing_key: None,
+            credentials: None,
             config: Config::default(),
             store_options: StoreBuilderOptions::default(),
         }
     }
 
+    // TODO: Update documentation.
     /// Sets the signing key.
     ///
     /// The public key derived from the given private key is used to identify the node in the
@@ -46,8 +45,8 @@ impl NodeBuilder {
     /// 1.3) and is also used to sign operations to ensure data integrity and authenticity.
     ///
     /// If left unset, a new key will be randomly generated.
-    pub fn signing_key(mut self, signing_key: SigningKey) -> Self {
-        self.signing_key = Some(signing_key);
+    pub fn credentials(mut self, credentials: Credentials) -> Self {
+        self.credentials = Some(credentials);
         self
     }
 
@@ -216,7 +215,7 @@ impl NodeBuilder {
 
     /// Spawns the `Node`.
     pub async fn spawn(self) -> Result<Node, SpawnError> {
-        let signing_key = self.signing_key.unwrap_or_default();
+        let credentials = self.credentials.unwrap_or_default();
         let store = match self.store_options {
             StoreBuilderOptions::Memory => SqliteStoreBuilder::new().build().await?,
             StoreBuilderOptions::Url(url) => {
@@ -224,12 +223,11 @@ impl NodeBuilder {
             }
             StoreBuilderOptions::Pool(pool) => SqliteStore::from_pool(pool),
         };
-        let forge = OperationForge::from_signing_key(signing_key, store.clone());
 
         let tasks = TaskTracker::new();
         let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
 
-        let node = Node::spawn_inner(self.config, store, forge, pipeline).await?;
+        let node = Node::spawn_inner(self.config, store, credentials, pipeline).await?;
 
         Ok(node)
     }

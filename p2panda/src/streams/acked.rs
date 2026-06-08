@@ -195,6 +195,7 @@ mod tests {
     use p2panda_core::Topic;
     use p2panda_store::SqliteStore;
 
+    use crate::Credentials;
     use crate::forge::{Forge, OperationForge};
     use crate::operation::{Extensions, LogId};
     use crate::streams::StreamFrom;
@@ -205,7 +206,8 @@ mod tests {
     async fn nacked_log_ranges() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         let acked = Acked::new(store.clone(), topic);
@@ -259,7 +261,8 @@ mod tests {
     async fn custom_name() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         // We keep track of the same topic but with two independent "acked" cursors.
@@ -307,7 +310,8 @@ mod tests {
     async fn replaying_mutates_cursor_state() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         let acked = Acked::new(store.clone(), topic);
