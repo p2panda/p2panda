@@ -82,6 +82,16 @@ impl LogId {
     pub fn as_bytes(&self) -> &[u8; HASH_LEN] {
         self.0.as_bytes()
     }
+
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+}
+
+impl std::fmt::Display for LogId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
 }
 
 #[cfg(test)]
