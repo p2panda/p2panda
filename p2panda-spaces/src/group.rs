@@ -76,12 +76,11 @@ where
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible by the local actor.
     ///
-    /// Returns messages for replication to other instances and events which inform users of any
-    /// state changes which occurred.
+    /// Returns message for replication to other instances.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, Vec<M>), GroupError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<(Self, M), GroupError<ID, S, K, F, M, C, RS>> {
         // Generate random group id.
         let group_id: ActorId = {
             let manager = manager_ref.inner.read().await;
@@ -103,7 +102,7 @@ where
             initial_members: initial_members.clone(),
         };
 
-        let messages =
+        let message =
             Self::process_local_control(manager_ref.clone(), group_id, auth_dependencies, action)
                 .await?;
 
@@ -112,7 +111,7 @@ where
                 id: group_id,
                 manager: manager_ref,
             },
-            messages,
+            message,
         ))
     }
 
@@ -124,7 +123,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<Vec<M>, GroupError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
         let (group_id, auth_dependencies, action) = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -136,11 +135,7 @@ where
             )
         };
 
-        let messages =
-            Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action)
-                .await?;
-
-        Ok(messages)
+        Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action).await
     }
 
     /// Remove member from group.
@@ -150,7 +145,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<Vec<M>, GroupError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
         let (group_id, auth_dependencies, action) = {
             let manager = self.manager.inner.read().await;
             let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
@@ -162,11 +157,7 @@ where
             )
         };
 
-        let messages =
-            Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action)
-                .await?;
-
-        Ok(messages)
+        Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action).await
     }
 
     /// Process a remote message.
@@ -205,7 +196,7 @@ where
         group_id: ActorId,
         auth_dependencies: Vec<OperationId>,
         group_action: GroupAction<ActorId, C>,
-    ) -> Result<Vec<M>, GroupError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
         let mut auth_y = {
             let manager = manager_ref.inner.read().await;
             manager.store.auth().await.map_err(GroupError::AuthStore)?
@@ -233,15 +224,7 @@ where
                 .map_err(GroupError::AuthStore)?;
         }
 
-        let space_messages = manager_ref
-            .apply_group_change_to_spaces(&message)
-            .await
-            .map_err(|err| GroupError::SyncSpaces(auth_message.id(), format!("{err:?}")))?;
-
-        let mut messages = vec![message];
-        messages.extend(space_messages);
-
-        Ok(messages)
+        Ok(message)
     }
 
     /// Get the global auth state.

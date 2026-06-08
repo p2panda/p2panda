@@ -8,7 +8,6 @@ use std::sync::Arc;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::Rng;
-use petgraph::algo::toposort;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -191,17 +190,16 @@ where
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible.
     ///
-    /// Returns messages for replication to other instances and events which inform users of any
-    /// state changes which occurred.
+    /// Returns message for replication to other instances.
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<ID, S, K, F, M, C, RS>, Vec<M>), ManagerError<ID, S, K, F, M, C, RS>> {
-        let (group, messages) = Group::create(self.clone(), initial_members.to_owned())
+    ) -> Result<(Group<ID, S, K, F, M, C, RS>, M), ManagerError<ID, S, K, F, M, C, RS>> {
+        let (group, message) = Group::create(self.clone(), initial_members.to_owned())
             .await
             .map_err(ManagerError::Group)?;
 
-        Ok((group, messages))
+        Ok((group, message))
     }
 
     /// Process a spaces message.
@@ -389,84 +387,18 @@ where
         &self,
         space_ids: &Vec<ID>,
     ) -> Result<Vec<M>, ManagerError<ID, S, K, F, M, C, RS>> {
-        let auth_y = {
-            let manager = self.inner.read().await;
-            manager
-                .store
-                .auth()
-                .await
-                .map_err(ManagerError::AuthStore)?
-        };
-        let operation_ids =
-            toposort(&auth_y.inner.graph, None).expect("auth graph does not contain cycles");
-
         let mut messages = vec![];
-        // @TODO: we can optimize here by calculating the diff between the current space auth
-        // graph tips and the global auth graph tips. Then we could apply only the missing
-        // operations rather than applying all operations as we do here.
-        for id in operation_ids {
-            let message = {
-                let manager = self.inner.read().await;
-                manager
-                    .store
-                    .message(&id)
-                    .await
-                    .map_err(ManagerError::MessageStore)?
-                    .expect("message present in store")
-            };
-            for id in space_ids {
-                let message = self.apply_group_change_to_space(&message, *id).await?;
-                if let Some(message) = message {
-                    messages.push(message);
-                }
-            }
-        }
 
-        Ok(messages)
-    }
-
-    /// Apply an auth message from the shared auth state to each space we know about locally.
-    ///
-    /// This is required so that all spaces stay "in sync" with the shared auth state and produce
-    /// any required encryption direct messages in order to correctly update a spaces' encryption
-    /// state.
-    pub(crate) async fn apply_group_change_to_spaces(
-        &self,
-        auth_message: &M,
-    ) -> Result<Vec<M>, ManagerError<ID, S, K, F, M, C, RS>> {
-        let space_ids = {
-            let manager = self.inner.read().await;
-            manager
-                .store
-                .spaces_ids()
-                .await
-                .map_err(ManagerError::SpacesStore)?
-        };
-
-        let mut messages = vec![];
         for id in space_ids {
-            let message = self.apply_group_change_to_space(auth_message, id).await?;
-            if let Some(message) = message {
-                messages.push(message);
-            }
+            let Some(space) = self.space(*id).await? else {
+                continue;
+            };
+
+            let msgs = space.repair().await.map_err(ManagerError::Space)?;
+            messages.extend(msgs);
         }
 
         Ok(messages)
-    }
-
-    /// Apply a message from the shared auth state to a single space.
-    pub(crate) async fn apply_group_change_to_space(
-        &self,
-        auth_message: &M,
-        space_id: ID,
-    ) -> Result<Option<M>, ManagerError<ID, S, K, F, M, C, RS>> {
-        let Some(space) = self.space(space_id).await? else {
-            panic!("expect space to exist");
-        };
-        space
-            .handle_auth_group_change(auth_message)
-            .await
-            .map_err(ManagerError::Space)
     }
 
     async fn handle_space_membership_message(
