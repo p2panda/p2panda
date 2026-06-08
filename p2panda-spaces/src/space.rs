@@ -87,7 +87,7 @@ where
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
         space_id: ID,
         mut initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<(Self, Vec<M>), SpaceError<ID, S, K, F, M, C, RS>> {
         let my_id = manager_ref.id();
 
         // Get the global auth state. We use this state in a following step to initialise the
@@ -103,7 +103,7 @@ where
         }
 
         // Create new group for the space.
-        let (group, mut messages, auth_event) = Group::create(manager_ref.clone(), initial_members)
+        let (group, mut messages) = Group::create(manager_ref.clone(), initial_members)
             .await
             .map_err(SpaceError::Group)?;
 
@@ -120,11 +120,10 @@ where
         // Apply the "create" auth message to the space state.
         //
         // We know the first message is the auth message.
-        let (space_message, space_event) =
+        let space_message =
             Self::process_auth_message(manager_ref.clone(), y, &messages[0]).await?;
 
         messages.push(space_message.expect("creating space results in message"));
-        let space_event = space_event.expect("creating space results in event");
 
         Ok((
             Self {
@@ -132,7 +131,6 @@ where
                 manager: manager_ref,
             },
             messages,
-            vec![auth_event, space_event],
         ))
     }
 
@@ -144,7 +142,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Vec<M>, SpaceError<ID, S, K, F, M, C, RS>> {
         let y = self.state().await?;
 
         // If the space exists we can assume the associated group exists.
@@ -159,7 +157,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<(Vec<M>, Vec<Event<ID, C>>), SpaceError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Vec<M>, SpaceError<ID, S, K, F, M, C, RS>> {
         let y = self.state().await?;
         // If the space exists we can assume the associated group exists.
         let group = Group::new(self.manager.clone(), y.group_id);
@@ -173,9 +171,9 @@ where
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
         mut y: SpaceState<ID, M, C>,
         auth_message: &M,
-    ) -> Result<(Option<M>, Option<Event<ID, C>>), SpaceError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Option<M>, SpaceError<ID, S, K, F, M, C, RS>> {
         if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
-            return Ok((None, None));
+            return Ok(None);
         }
 
         // Get current space members.
@@ -234,23 +232,7 @@ where
                 .map_err(SpaceError::SpacesStore)?;
         }
 
-        // If current and next member sets are equal it indicates that the space is not affected
-        // by this auth change. This can be because the space wasn't created yet, or the auth
-        // change simply does not effect the members of this space. In either case we don't want
-        // to emit any membership change event.
-        if current_members == next_members {
-            return Ok((Some(space_message), None));
-        };
-
-        // Construct space membership event.
-        let space_event = space_message_to_space_event(
-            &space_message,
-            &auth_message,
-            current_members,
-            next_members,
-        );
-
-        Ok((Some(space_message), Some(space_event)))
+        Ok(Some(space_message))
     }
 
     /// Process a space message along with it's relevant auth message (if required).
@@ -551,11 +533,11 @@ where
     pub(crate) async fn handle_auth_group_change(
         &self,
         auth_message: &M,
-    ) -> Result<(Option<M>, Option<Event<ID, C>>), SpaceError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Option<M>, SpaceError<ID, S, K, F, M, C, RS>> {
         // If this space already processed this auth message then skip it.
         let y = self.state().await?;
         if y.auth_y.inner.operations.contains_key(&auth_message.id()) {
-            return Ok((None, None));
+            return Ok(None);
         }
 
         let my_id = self.manager.id();
@@ -569,7 +551,7 @@ where
             return Space::process_auth_message(self.manager.clone(), y, auth_message).await;
         }
 
-        Ok((None, None))
+        Ok(None)
     }
 
     /// Get the space state.
