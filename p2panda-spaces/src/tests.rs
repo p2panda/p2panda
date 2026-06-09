@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use assert_matches::assert_matches;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_encryption::Rng;
@@ -264,7 +263,7 @@ async fn add_member_to_space() {
     // There is one direct message and it's for bob.
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
-    assert!(matches!(
+    assert_matches!(
         message,
         DirectMessage {
             recipient,
@@ -515,7 +514,7 @@ async fn receive_control_messages() {
 
     // Bob cannot publish to space as he is not welcomed yet.
     let error = space.publish(&[0, 1, 2]).await.unwrap_err();
-    assert!(matches!(error, TestSpaceError::NotWelcomed(_)));
+    assert_matches!(error, TestSpaceError::NotWelcomed(_)));
 
     // Orderer state has been updated.
     let manager_ref = bob_manager.inner.read().await;
@@ -552,7 +551,7 @@ async fn receive_control_messages() {
     let events = bob.manager.process(&message_05).await.unwrap();
     // The application message arrives only after bob is welcomed.
     assert_eq!(events.len(), 2);
-    assert!(matches!(events[1], Event::Application { .. }));
+    assert_matches!(events[1], Event::Application { .. }));
 
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
     // Alice and bob are both members.
@@ -664,7 +663,7 @@ async fn remove_member() {
     bob_manager.persist_message(&message_04).await.unwrap();
     let events = bob_manager.process(&message_04).await.unwrap();
     assert_eq!(events.len(), 2);
-    assert!(matches!(
+    assert_matches!(
         events[1],
         Event::Space(SpaceEvent::Ejected { .. })
     ));
@@ -781,7 +780,7 @@ async fn concurrent_removal_conflict() {
     // There is one direct message and it's for dave.
     assert_eq!(direct_messages.len(), 1);
     let message = direct_messages.to_owned().pop().unwrap();
-    assert!(matches!(
+    assert_matches!(
         message,
         DirectMessage {
             recipient,
