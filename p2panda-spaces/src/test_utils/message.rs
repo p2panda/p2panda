@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+
 use p2panda_core::{Hash, VerifyingKey};
 
 use crate::message::SpacesArgs;
 use crate::test_utils::{TestConditions, TestSpaceId};
-use crate::traits::{AuthoredMessage, SpacesMessage};
+use crate::traits::AuthoredMessage;
 use crate::{ActorId, OperationId};
 
 pub type SeqNum = u64;
@@ -28,8 +30,8 @@ impl AuthoredMessage for TestMessage {
     }
 }
 
-impl SpacesMessage<TestSpaceId, TestConditions> for TestMessage {
-    fn args(&self) -> &SpacesArgs<TestSpaceId, TestConditions> {
+impl Borrow<SpacesArgs<TestSpaceId, TestConditions>> for TestMessage {
+    fn borrow(&self) -> &SpacesArgs<TestSpaceId, TestConditions> {
         &self.spaces_args
     }
 }

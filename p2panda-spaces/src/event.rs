@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::Access;
@@ -10,7 +12,7 @@ use p2panda_encryption::data_scheme::GroupOutput;
 use crate::ActorId;
 use crate::auth::message::AuthMessage;
 use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
+use crate::traits::{AuthoredMessage, SpaceId};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{added_members, removed_members, sort_members};
 
@@ -264,9 +266,9 @@ pub(crate) fn space_message_to_space_event<ID, C, M>(
 where
     ID: SpaceId,
     C: Conditions,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
 {
-    let SpacesArgs::SpaceMembership { space_id, .. } = space_message.args() else {
+    let SpacesArgs::SpaceMembership { space_id, .. } = space_message.borrow() else {
         panic!("unexpected message type");
     };
     let space_id = *space_id;

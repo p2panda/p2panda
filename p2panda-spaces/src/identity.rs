@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! API for managing members and their key bundles.
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -16,7 +17,7 @@ use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::{AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, SpacesMessage};
+use crate::traits::{AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore};
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
@@ -45,7 +46,7 @@ where
     ID: SpaceId,
     K: KeySecretStore + KeyRegistryStore + Debug,
     F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C>,
+    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
 {
     pub async fn new(
@@ -255,6 +256,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Borrow;
     use std::time::Duration;
 
     use p2panda_encryption::Rng;
@@ -264,7 +266,7 @@ mod tests {
 
     use crate::message::SpacesArgs;
     use crate::test_utils::{TestForge, TestKeyStore, TestStore};
-    use crate::traits::{AuthoredMessage, SpacesMessage};
+    use crate::traits::AuthoredMessage;
     use crate::{ActorId, Config, Credentials};
 
     use super::IdentityManager;
@@ -313,7 +315,7 @@ mod tests {
 
         let actor_id: ActorId = credentials.signing_key().verifying_key().into();
         assert_eq!(msg.author(), actor_id);
-        match msg.args() {
+        match msg.borrow() {
             SpacesArgs::KeyBundle { key_bundle } => {
                 assert!(key_bundle.verify().is_ok());
             }

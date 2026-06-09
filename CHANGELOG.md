@@ -24,6 +24,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Don't sync all spaces when group membership changes
   [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
 
 ## [0.6.1] - 22/05/2026
 

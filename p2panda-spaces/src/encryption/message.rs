@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
@@ -8,7 +10,7 @@ use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessa
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
+use crate::traits::{AuthoredMessage, SpaceId};
 use crate::types::{
     ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
@@ -47,7 +49,7 @@ impl EncryptionMessage {
     pub(crate) fn from_application<ID, M, C>(space_message: &M) -> Self
     where
         ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
+        M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
         C: Conditions,
     {
         let SpacesArgs::Application {
@@ -56,7 +58,7 @@ impl EncryptionMessage {
             nonce,
             ciphertext,
             ..
-        } = space_message.args()
+        } = space_message.borrow()
         else {
             panic!("unexpected message type")
         };
@@ -94,7 +96,7 @@ impl EncryptionMessage {
     ) -> Self
     where
         ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
+        M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
         C: Conditions,
     {
         let SpacesArgs::SpaceMembership {
@@ -102,7 +104,7 @@ impl EncryptionMessage {
             auth_message_id,
             direct_messages,
             ..
-        } = space_message.args()
+        } = space_message.borrow()
         else {
             panic!("unexpected message type");
         };
