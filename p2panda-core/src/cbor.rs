@@ -126,6 +126,6 @@ mod tests {
 
         // We're expecting an "Unexpected EOF" error here. The underlying decoder should be able to
         // detect that there's bytes missing.
-        assert!(matches!(err, Err(DecodeError::Io(_))));
+        assert_matches!(err, Err(DecodeError::Io(_))));
     }
 }
