@@ -75,15 +75,12 @@ async fn joined_and_left_events_are_received() {
     let _bat_handle = bat_gossip.stream(topic).await.unwrap();
 
     // Gossip joined event is received by ant.
-    assert!(matches!(
-        events.recv().await,
-        Ok(GossipEvent::Joined { .. })
-    ));
+    std::assert_matches!(events.recv().await, Ok(GossipEvent::Joined { .. }));
 
     drop(ant_handle);
 
     // Gossip left event is received by ant.
-    assert!(matches!(events.recv().await, Ok(GossipEvent::Left { .. })));
+    std::assert_matches!(events.recv().await, Ok(GossipEvent::Left { .. }));
 }
 
 #[tokio::test]
@@ -683,10 +680,7 @@ async fn leave_overlay_on_drop() {
     let ant_handle_2 = ant_gossip.stream(topic).await.unwrap();
     let ant_handle_3 = ant_gossip.stream(topic).await.unwrap();
 
-    assert!(matches!(
-        events.recv().await,
-        Ok(GossipEvent::Joined { .. })
-    ));
+    std::assert_matches!(events.recv().await, Ok(GossipEvent::Joined { .. }));
 
     let ant_rx_1 = ant_handle_1.subscribe();
     let ant_rx_2 = ant_handle_2.subscribe();
@@ -716,7 +710,7 @@ async fn leave_overlay_on_drop() {
     drop(ant_rx_4);
 
     // We expect to leave the overlay now for good.
-    assert!(matches!(events.recv().await, Ok(GossipEvent::Left { .. })));
+    std::assert_matches!(events.recv().await, Ok(GossipEvent::Left { .. }));
 
     // 3. Re-joining the same topic should not break anything after leaving.
     // =====================================================================
