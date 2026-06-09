@@ -1625,24 +1625,24 @@ pub(crate) mod tests {
 
         // Case 1: Apply Bob's operation first - should fail
         let result = TestGroup::process(y1.clone(), &op3);
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(GroupCrdtError::StateChangeError(
                 _,
                 GroupMembershipError::UnrecognisedActor(_)
             ))
-        ));
+        );
 
         // Case 2: Apply Alice’s op first, then Bob's - still must fail
         let y1_alt = TestGroup::process(y1, &op2).unwrap();
         let result = TestGroup::process(y1_alt.clone(), &op3);
-        assert!(matches!(
+        std::assert_matches!(
             result,
             Err(GroupCrdtError::StateChangeError(
                 _,
                 GroupMembershipError::UnrecognisedActor(_)
             ))
-        ));
+        );
 
         // Confirm final state: Bob is a member, Eve is not
         let mut members = y1_alt.members(G1);
