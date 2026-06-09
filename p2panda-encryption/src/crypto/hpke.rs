@@ -144,14 +144,14 @@ mod tests {
         // Invalid secret key.
         let invalid_secret_key = SecretKey::from_bytes(rng.random_array().unwrap());
         let result = hpke_open(&ciphertext, &invalid_secret_key, Some(info), Some(aad));
-        assert!(matches!(result, Err(HpkeError::Decryption(_))));
+        assert_matches!(result, Err(HpkeError::Decryption(_))));
 
         // Invalid info tag.
         let result = hpke_open(&ciphertext, &valid_secret_key, None, Some(aad));
-        assert!(matches!(result, Err(HpkeError::Decryption(_))));
+        assert_matches!(result, Err(HpkeError::Decryption(_))));
 
         // Invalid aad.
         let result = hpke_open(&ciphertext, &valid_secret_key, Some(info), None);
-        assert!(matches!(result, Err(HpkeError::Decryption(_))));
+        assert_matches!(result, Err(HpkeError::Decryption(_))));
     }
 }

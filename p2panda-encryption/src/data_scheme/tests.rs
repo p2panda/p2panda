@@ -383,7 +383,7 @@ fn group_operations() {
     // Alice tries to process Charlie's "remove" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    assert!(matches!(
+    assert_matches!(
         Dcgka::process(
             alice_dcgka,
             ProcessInput {
