@@ -8,7 +8,6 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::SigningKey;
 use p2panda_encryption::RngError;
 use thiserror::Error;
 
@@ -76,88 +75,98 @@ where
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible by the local actor.
     ///
-    /// Returns message for replication to other instances.
+    /// Returns resulting state and message for processing.
     pub(crate) async fn create(
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
+        y: AuthGroupState<C>,
+        group_id: ActorId,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(Self, M), GroupError<ID, S, K, F, M, C, RS>> {
-        // Generate random group id.
-        let group_id: ActorId = {
-            let manager = manager_ref.inner.read().await;
-            let signing_key = SigningKey::from_bytes(&manager.rng.random_array()?);
-            signing_key.verifying_key().into()
-        };
+    ) -> Result<(AuthGroupState<C>, M), GroupError<ID, S, K, F, M, C, RS>> {
+        let initial_members = typed_members(&y, initial_members);
 
-        let initial_members = typed_members(manager_ref.clone(), initial_members)
-            .await
-            .map_err(GroupError::AuthStore)?;
-
-        let auth_dependencies = {
-            let manager = manager_ref.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-            auth_y.inner.heads().into_iter().collect()
-        };
-
+        let auth_dependencies = y.inner.heads().into_iter().collect();
         let action = AuthGroupAction::Create {
             initial_members: initial_members.clone(),
         };
 
-        let message =
-            Self::process_local_control(manager_ref.clone(), group_id, auth_dependencies, action)
-                .await?;
+        let (y, message) = Self::process_local_control(
+            manager_ref.clone(),
+            y,
+            group_id,
+            auth_dependencies,
+            action,
+        )
+        .await?;
 
-        Ok((
-            Self {
-                id: group_id,
-                manager: manager_ref,
-            },
-            message,
-        ))
+        Ok((y, message))
     }
 
     /// Add member to group with specified access level.
     ///
-    /// Returns messages for replication to other instances and events which inform users of any
-    /// state changes which occurred.
-    pub async fn add(
+    /// Persists resulting state and returns forged message.
+    #[cfg(any(test, feature = "test_utils"))]
+    pub async fn add_persisted(
         &self,
         member: ActorId,
         access: Access<C>,
     ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
-        let (group_id, auth_dependencies, action) = {
-            let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-            let member = typed_member(&auth_y, member);
-            (
-                self.id,
-                auth_y.inner.heads().into_iter().collect(),
-                AuthGroupAction::Add { member, access },
-            )
-        };
+        let (y, message) = self.add(member, access).await?;
+        self.manager
+            .set_auth(&y)
+            .await
+            .map_err(GroupError::AuthStore)?;
 
-        Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action).await
+        Ok(message)
+    }
+
+    /// Add member to group with specified access level.
+    ///
+    /// Returns resulting state and message for processing.
+    pub async fn add(
+        &self,
+        member: ActorId,
+        access: Access<C>,
+    ) -> Result<(AuthGroupState<C>, M), GroupError<ID, S, K, F, M, C, RS>> {
+        let y = self.manager.auth().await.map_err(GroupError::AuthStore)?;
+
+        let member = typed_member(&y, member);
+        let dependencies = y.inner.heads().into_iter().collect();
+        let action = AuthGroupAction::Add { member, access };
+
+        Self::process_local_control(self.manager.clone(), y, self.id, dependencies, action).await
     }
 
     /// Remove member from group.
     ///
-    /// Returns messages for replication to other instances and events which inform users of any
-    /// state changes which occurred.
-    pub async fn remove(
+    /// Persists resulting state and returns forged message.
+    #[cfg(any(test, feature = "test_utils"))]
+    pub async fn remove_persisted(
         &self,
         member: ActorId,
     ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
-        let (group_id, auth_dependencies, action) = {
-            let manager = self.manager.inner.read().await;
-            let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-            let member = typed_member(&auth_y, member);
-            (
-                self.id,
-                auth_y.inner.heads().into_iter().collect(),
-                AuthGroupAction::Remove { member },
-            )
-        };
+        let (y, message) = self.remove(member).await?;
+        self.manager
+            .set_auth(&y)
+            .await
+            .map_err(GroupError::AuthStore)?;
 
-        Self::process_local_control(self.manager.clone(), group_id, auth_dependencies, action).await
+        Ok(message)
+    }
+
+    /// Remove member from group.
+    ///
+    /// Returns resulting state and message for processing.
+    pub async fn remove(
+        &self,
+        member: ActorId,
+    ) -> Result<(AuthGroupState<C>, M), GroupError<ID, S, K, F, M, C, RS>> {
+        let y = self.manager.auth().await.map_err(GroupError::AuthStore)?;
+
+        let member = typed_member(&y, member);
+        let dependencies = y.inner.heads().into_iter().collect();
+        let action = AuthGroupAction::Remove { member };
+
+        Self::process_local_control(self.manager.clone(), y, self.id, dependencies, action).await
     }
 
     /// Process a remote message.
@@ -191,17 +200,13 @@ where
     }
 
     /// Process a local control message.
-    async fn process_local_control(
+    pub async fn process_local_control(
         manager_ref: Manager<ID, S, K, F, M, C, RS>,
+        y: AuthGroupState<C>,
         group_id: ActorId,
         auth_dependencies: Vec<OperationId>,
         group_action: GroupAction<ActorId, C>,
-    ) -> Result<M, GroupError<ID, S, K, F, M, C, RS>> {
-        let mut auth_y = {
-            let manager = manager_ref.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
-        };
-
+    ) -> Result<(AuthGroupState<C>, M), GroupError<ID, S, K, F, M, C, RS>> {
         let args = SpacesArgs::Auth {
             group_id,
             auth_dependencies,
@@ -212,26 +217,11 @@ where
             let mut manager = manager_ref.inner.write().await;
             manager.identity.forge(args).await?
         };
+
         let auth_message = AuthMessage::from_forged(&message);
+        let y = AuthGroup::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
-        {
-            let manager = manager_ref.inner.write().await;
-            auth_y = AuthGroup::process(auth_y, &auth_message).map_err(GroupError::AuthGroup)?;
-            manager
-                .store
-                .set_auth(&auth_y)
-                .await
-                .map_err(GroupError::AuthStore)?;
-        }
-
-        Ok(message)
-    }
-
-    /// Get the global auth state.
-    async fn state(&self) -> Result<AuthGroupState<C>, GroupError<ID, S, K, F, M, C, RS>> {
-        let manager = self.manager.inner.read().await;
-        let auth_y = manager.store.auth().await.map_err(GroupError::AuthStore)?;
-        Ok(auth_y)
+        Ok((y, message))
     }
 
     /// Id of this group.
@@ -243,7 +233,7 @@ where
     pub async fn members(
         &self,
     ) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, S, K, F, M, C, RS>> {
-        let y = self.state().await?;
+        let y = self.manager.auth().await.map_err(GroupError::AuthStore)?;
         let mut group_members = y.members(self.id);
         sort_members(&mut group_members);
         Ok(group_members)
