@@ -695,63 +695,63 @@ mod tests {
         let mut header = header_base.clone();
         header.version = 0;
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_header(&header),
             Err(OperationError::UnsupportedVersion(0, 1))
-        ));
+        );
 
         // Signature doesn't match public key
         let mut header = header_base.clone();
         header.verifying_key = SigningKey::generate().verifying_key();
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_header(&header),
             Err(OperationError::SignatureMismatch)
-        ));
+        );
 
         // Backlink missing
         let mut header = header_base.clone();
         header.seq_num = 1;
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_header(&header),
             Err(OperationError::BacklinkMissing)
-        ));
+        );
 
         // Backlink given but sequence number indicates none
         let mut header = header_base.clone();
         header.backlink = Some(Hash::digest(vec![4, 5, 6]));
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_header(&header),
             Err(OperationError::SeqNumMismatch)
-        ));
+        );
 
         // Payload size does not match
         let mut header = header_base.clone();
         header.payload_size = 11;
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
                 header,
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
-        ));
+        );
 
         // Payload hash does not match
         let mut header = header_base.clone();
         header.payload_hash = Some(Hash::digest(vec![4, 5, 6]));
         header.sign(&signing_key);
-        assert!(matches!(
+        std::assert_matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
                 header,
                 body: Some(body.clone()),
             }),
             Err(OperationError::PayloadMismatch)
-        ));
+        );
     }
 
     #[test]
