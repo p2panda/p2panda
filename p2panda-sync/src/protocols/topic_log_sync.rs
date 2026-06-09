@@ -606,7 +606,6 @@ where
 pub mod tests {
     use std::collections::BTreeMap;
 
-    use assert_matches::assert_matches;
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
@@ -637,15 +636,15 @@ pub mod tests {
         .await
         .unwrap();
 
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
@@ -695,15 +694,15 @@ pub mod tests {
         .await
         .unwrap();
 
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
@@ -736,26 +735,35 @@ pub mod tests {
                     )
                 }
                 2 => {
-                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                         header,
-                        Some(body),
-                    )) => (header, body));
+                        Some(body_inner),
+                    )) = message
+                    else {
+                        panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
+                    };
                     assert_eq!(header, header_bytes_0);
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 3 => {
-                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                         header,
-                        Some(body),
-                    )) => (header, body));
+                        Some(body_inner),
+                    )) = message
+                    else {
+                        panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
+                    };
                     assert_eq!(header, header_bytes_1);
                     assert_eq!(Body::new(&body_inner), body)
                 }
                 4 => {
-                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
                         header,
-                        Some(body),
-                    )) => (header, body));
+                        Some(body_inner),
+                    )) = message
+                    else {
+                        panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
+                    };
                     assert_eq!(header, header_bytes_2);
                     assert_eq!(Body::new(&body_inner), body)
                 }
@@ -794,56 +802,62 @@ pub mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert peer a events.
-        assert_matches!(
+        std::assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             peer_a_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
 
         // Assert peer b events.
-        assert_matches!(
+        std::assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        let (header, body_inner) = assert_matches!(
-            peer_b_events_rx.recv().await.unwrap(),
-            TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_b_events_rx.recv().await.unwrap();
+        let TopicLogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a TopicLogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_0);
         assert_eq!(body_inner.unwrap(), body);
-        let (header, body_inner) = assert_matches!(
-            peer_b_events_rx.recv().await.unwrap(),
-            TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_b_events_rx.recv().await.unwrap();
+        let TopicLogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a TopicLogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_1);
         assert_eq!(body_inner.unwrap(), body);
-        let (header, body_inner) = assert_matches!(
-            peer_b_events_rx.recv().await.unwrap(),
-            TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_b_events_rx.recv().await.unwrap();
+        let TopicLogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a TopicLogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_2);
         assert_eq!(body_inner.unwrap(), body);
-        assert_matches!(
+        std::assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
@@ -907,31 +921,31 @@ pub mod tests {
         .await
         .unwrap();
 
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::OperationReceived { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::LiveModeStarted
         );
-        let metrics = assert_matches!(
-            events_rx.recv().await.unwrap(),
-            TopicLogSyncEvent::OperationReceived { metrics, .. } => metrics
-        );
+        let TopicLogSyncEvent::OperationReceived { metrics, .. } = events_rx.recv().await.unwrap()
+        else {
+            panic!("Not a TopicLogSyncEvent::OperationReceived");
+        };
         assert_eq!(metrics.received_operations(), 2);
         assert_eq!(metrics.sent_operations(), 1);
         assert_eq!(metrics.received_bytes(), expected_bytes_received);
         assert_eq!(metrics.sent_bytes(), expected_bytes_sent);
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
@@ -940,20 +954,22 @@ pub mod tests {
         assert_eq!(messages.len(), 4);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
-                0 => assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Have(_))),
+                0 => std::assert_matches!(
+                    message,
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(_))
+                ),
                 1 => {
-                    assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
+                    std::assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
                 }
                 2 => {
-                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Live(
-                        header,
-                        Some(body)
-                    ) => (header, body));
+                    let TestTopicSyncMessage::Live(header, Some(body_inner)) = message else {
+                        panic!("Not a TestTopicSyncMessage::Live");
+                    };
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
                 }
                 3 => {
-                    assert_matches!(message, TestTopicSyncMessage::Close)
+                    std::assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
@@ -1033,31 +1049,31 @@ pub mod tests {
         .await
         .unwrap();
 
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncStarted { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::OperationReceived { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SyncFinished { .. }
         );
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::LiveModeStarted
         );
-        let metrics = assert_matches!(
-            events_rx.recv().await.unwrap(),
-            TopicLogSyncEvent::OperationReceived { metrics, .. } => metrics
-        );
+        let TopicLogSyncEvent::OperationReceived { metrics, .. } = events_rx.recv().await.unwrap()
+        else {
+            panic!("Not a TopicLogSyncEvent::OperationReceived");
+        };
         assert_eq!(metrics.received_operations(), 2);
         assert_eq!(metrics.sent_operations(), 1);
         assert_eq!(metrics.received_bytes(), expected_bytes_received);
         assert_eq!(metrics.sent_bytes(), expected_bytes_sent);
-        assert_matches!(
+        std::assert_matches!(
             events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::SessionFinished { .. }
         );
@@ -1066,17 +1082,23 @@ pub mod tests {
         assert_eq!(messages.len(), 4);
         for (index, message) in messages.into_iter().enumerate() {
             match index {
-                0 => assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Have(_))),
+                0 => std::assert_matches!(
+                    message,
+                    TestTopicSyncMessage::Sync(LogSyncMessage::Have(_))
+                ),
                 1 => {
-                    assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
+                    std::assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
                 }
                 2 => {
-                    let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Live(header, Some(body)) => (header, body));
+                    std::assert_matches!(message, TestTopicSyncMessage::Live(_, Some(_)));
+                    let TestTopicSyncMessage::Live(header, Some(body_inner)) = message else {
+                        unreachable!();
+                    };
                     assert_eq!(header, header_2);
                     assert_eq!(body_inner, body);
                 }
                 3 => {
-                    assert_matches!(message, TestTopicSyncMessage::Close)
+                    std::assert_matches!(message, TestTopicSyncMessage::Close)
                 }
                 _ => panic!(),
             };
@@ -1113,7 +1135,7 @@ pub mod tests {
         drop(remote_message_tx);
 
         let err = handle.await.unwrap();
-        assert_matches!(
+        std::assert_matches!(
             err,
             TopicLogSyncError::Sync(LogSyncError::UnexpectedStreamClosure)
         );
@@ -1160,7 +1182,7 @@ pub mod tests {
         drop(remote_message_tx);
 
         let err = handle.await.unwrap();
-        assert_matches!(err, TopicLogSyncError::UnexpectedStreamClosure);
+        std::assert_matches!(err, TopicLogSyncError::UnexpectedStreamClosure);
 
         while let Ok(event) = events_rx.recv().await {
             if let TopicLogSyncEvent::Failed { error } = event {
