@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -17,7 +18,7 @@ use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::Space;
 use crate::test_utils::{TestPeer, TestSpaceError};
-use crate::traits::{AuthStore, AuthoredMessage, SpacesMessage, SpacesStore};
+use crate::traits::{AuthStore, AuthoredMessage, SpacesStore};
 use crate::types::AuthGroupAction;
 
 #[tokio::test]
@@ -53,7 +54,7 @@ async fn create_space() {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
-    } = message_01.args()
+    } = message_01.borrow()
     else {
         panic!("expected auth message");
     };
@@ -64,7 +65,7 @@ async fn create_space() {
         space_dependencies,
         auth_message_id,
         direct_messages,
-    } = message_02.args()
+    } = message_02.borrow()
     else {
         panic!("expected system message");
     };
@@ -212,7 +213,7 @@ async fn add_member_to_space() {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
-    } = message_03.args()
+    } = message_03.borrow()
     else {
         panic!("expected auth message");
     };
@@ -223,7 +224,7 @@ async fn add_member_to_space() {
         space_dependencies,
         direct_messages,
         ..
-    } = message_04.args()
+    } = message_04.borrow()
     else {
         panic!("expected system message");
     };
@@ -392,7 +393,7 @@ async fn add_pull_member_to_space() {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
-    } = message_03.args()
+    } = message_03.borrow()
     else {
         panic!("expected auth message");
     };
@@ -403,7 +404,7 @@ async fn add_pull_member_to_space() {
         space_dependencies,
         auth_message_id,
         direct_messages,
-    } = message_04.args()
+    } = message_04.borrow()
     else {
         panic!("expected system message");
     };
@@ -621,13 +622,13 @@ async fn remove_member() {
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let (message_03, message_04) = space.remove_persisted(bob_id).await.unwrap();
 
-    let SpacesArgs::Auth { group_action, .. } = message_03.args() else {
+    let SpacesArgs::Auth { group_action, .. } = message_03.borrow() else {
         panic!("expected auth message");
     };
 
     let SpacesArgs::SpaceMembership {
         direct_messages, ..
-    } = message_04.args()
+    } = message_04.borrow()
     else {
         panic!("expected system message");
     };
@@ -740,13 +741,13 @@ async fn concurrent_removal_conflict() {
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let (message_05, message_06) = space.add_persisted(dave_id, Access::read()).await.unwrap();
 
-    let SpacesArgs::Auth { group_action, .. } = message_05.args() else {
+    let SpacesArgs::Auth { group_action, .. } = message_05.borrow() else {
         panic!("expected auth message");
     };
 
     let SpacesArgs::SpaceMembership {
         direct_messages, ..
-    } = message_06.args()
+    } = message_06.borrow()
     else {
         panic!("expected system message");
     };
@@ -825,7 +826,7 @@ async fn space_from_existing_auth_state() {
     let message_03 = messages[1].clone();
     let message_04 = messages[2].clone();
 
-    let SpacesArgs::Auth { group_action, .. } = message_02.args() else {
+    let SpacesArgs::Auth { group_action, .. } = message_02.borrow() else {
         panic!("expected auth message");
     };
 
@@ -844,7 +845,7 @@ async fn space_from_existing_auth_state() {
         direct_messages,
         auth_message_id,
         ..
-    } = message_03.args()
+    } = message_03.borrow()
     else {
         panic!("expected system message");
     };
@@ -859,7 +860,7 @@ async fn space_from_existing_auth_state() {
         direct_messages,
         auth_message_id,
         ..
-    } = message_04.args()
+    } = message_04.borrow()
     else {
         panic!("expected system message");
     };
@@ -922,7 +923,7 @@ async fn create_group() {
         group_id,
         group_action,
         ..
-    } = message_01.args()
+    } = message_01.borrow()
     else {
         panic!("expected auth message");
     };
@@ -984,7 +985,7 @@ async fn add_member_to_group() {
         group_id,
         group_action,
         auth_dependencies,
-    } = message_02.args()
+    } = message_02.borrow()
     else {
         panic!("expected auth message");
     };
@@ -1036,7 +1037,7 @@ async fn remove_member_from_group() {
         group_id,
         group_action,
         auth_dependencies,
-    } = message_02.args()
+    } = message_02.borrow()
     else {
         panic!("expected auth message");
     };

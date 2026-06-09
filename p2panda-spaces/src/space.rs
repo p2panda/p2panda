@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! API for managing members of a space and sending/receiving messages.
+use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::fmt::Debug;
@@ -24,7 +25,7 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesMessage, SpacesStore,
+    SpacesStore,
 };
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
@@ -66,7 +67,7 @@ where
     S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
+    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>> + Debug,
     C: Conditions,
     RS: Debug + AuthResolver<C>,
 {
@@ -266,7 +267,7 @@ where
         space_message: &M,
         auth_message: Option<&AuthMessage<C>>,
     ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, K, F, M, C, RS>> {
-        let events = match space_message.args() {
+        let events = match space_message.borrow() {
             SpacesArgs::SpaceMembership { space_id, .. } => {
                 assert_eq!(space_id, &self.id); // Sanity check.
                 let auth_message =
@@ -345,7 +346,7 @@ where
             group_id,
             space_dependencies,
             ..
-        } = space_message.args()
+        } = space_message.borrow()
         else {
             panic!("unexpected message type");
         };
@@ -520,7 +521,7 @@ where
     ) -> Result<Vec<Event<ID, C>>, SpaceError<ID, S, K, F, M, C, RS>> {
         let SpacesArgs::Application {
             space_dependencies, ..
-        } = message.args()
+        } = message.borrow()
         else {
             panic!("unexpected message type")
         };

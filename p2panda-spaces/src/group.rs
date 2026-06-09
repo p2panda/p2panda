@@ -3,6 +3,7 @@
 //! API for managing members of a group in the shared auth context.
 //!
 //! Group membership changes also effect all spaces and groups for which the altered group is itself a member.
+use std::borrow::Borrow;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -19,8 +20,7 @@ use crate::manager::Manager;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
 use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore,
-    SpacesMessage, SpacesStore,
+    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore,
 };
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
@@ -58,7 +58,7 @@ where
     S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
+    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
 {

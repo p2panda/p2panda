@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! High-level API for managing spaces, groups and member keys.
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -21,7 +22,7 @@ use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError, SpaceState};
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesMessage, SpacesStore,
+    SpacesStore,
 };
 use crate::types::{ActorId, AuthGroupState, AuthResolver, OperationId};
 use crate::{Config, Credentials};
@@ -73,7 +74,7 @@ where
     S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, M, C> + Debug,
-    M: AuthoredMessage + SpacesMessage<ID, C> + Debug,
+    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
 {
@@ -271,7 +272,7 @@ where
         message: &M,
     ) -> Result<Vec<Event<ID, C>>, ManagerError<ID, S, K, F, M, C, RS>> {
         // Route message to the regarding member-, group- or space processor.
-        let events = match message.args() {
+        let events = match message.borrow() {
             // Received key bundle from a member.
             SpacesArgs::KeyBundle { key_bundle } => {
                 let mut manager = self.inner.write().await;
@@ -480,7 +481,7 @@ where
             space_id,
             auth_message_id,
             ..
-        } = message.args()
+        } = message.borrow()
         else {
             panic!("unexpected message type");
         };
@@ -500,7 +501,7 @@ where
                 ));
             };
 
-            match message.args() {
+            match message.borrow() {
                 SpacesArgs::Auth { .. } => AuthMessage::from_forged(&message),
                 _ => {
                     return Err(ManagerError::IncorrectMessageVariant(*auth_message_id));

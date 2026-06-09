@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
 use std::fmt::Debug;
 
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
+use crate::traits::{AuthoredMessage, SpaceId};
 use crate::types::{ActorId, OperationId};
 
 #[derive(Clone, Debug)]
@@ -25,13 +26,13 @@ where
     pub(crate) fn from_forged<ID, M>(message: &M) -> Self
     where
         ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
+        M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     {
         let SpacesArgs::Auth {
             group_id,
             group_action,
             auth_dependencies,
-        } = message.args()
+        } = message.borrow()
         else {
             panic!("unexpected message type")
         };

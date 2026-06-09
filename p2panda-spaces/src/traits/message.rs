@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Trait interfaces expressing signed space messages.
-use crate::message::SpacesArgs;
 use crate::{ActorId, OperationId};
 
 // @TODO: Use traits from p2panda-core when ready:
@@ -12,9 +11,4 @@ pub trait AuthoredMessage {
     fn id(&self) -> OperationId;
 
     fn author(&self) -> ActorId;
-}
-
-/// Interface to be implemented on messages containing spaces args.
-pub trait SpacesMessage<ID, C> {
-    fn args(&self) -> &SpacesArgs<ID, C>;
 }
