@@ -202,7 +202,7 @@ where
     Ok((result, remote_message_rx))
 }
 
-pub async fn drain_stream<S>(mut stream: S) -> Vec<S::Item>
+pub fn drain_stream<S>(mut stream: S) -> Vec<S::Item>
 where
     S: Stream + Unpin,
 {

@@ -16,6 +16,11 @@ members = [
 ]
 
 [workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unused_async = "warn"
+needless_pass_by_ref_mut = "warn"
 
 [workspace.dependencies]
 ciborium = { version = "0.2.2" }
