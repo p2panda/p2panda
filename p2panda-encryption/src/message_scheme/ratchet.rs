@@ -254,7 +254,7 @@ mod tests {
         assert!(!ratchet.past_secrets.iter().any(|secret| secret.is_some()));
 
         // Re-trying to retreive the secret for the same generation should fail.
-        assert!(matches!(
+        std::assert_matches!(
             DecryptionRatchet::secret_for_decryption(
                 ratchet.clone(),
                 0,
@@ -262,7 +262,7 @@ mod tests {
                 ooo_tolerance
             ),
             Err(RatchetError::SecretReuse),
-        ));
+        );
 
         // Move the ratchet forwards a few generations.
         let jump = 10;
@@ -281,7 +281,7 @@ mod tests {
             )
             .unwrap();
 
-            assert!(matches!(
+            std::assert_matches!(
                 DecryptionRatchet::secret_for_decryption(
                     ratchet_i.clone(),
                     generation,
@@ -289,7 +289,7 @@ mod tests {
                     ooo_tolerance
                 ),
                 Err(RatchetError::SecretReuse),
-            ));
+            );
 
             ratchet = ratchet_i;
         }
@@ -336,14 +336,14 @@ mod tests {
 
         // Alice's message from generation 1 arrives, but it's already outside of the tolerance
         // window, we expect an error here.
-        assert!(matches!(
+        std::assert_matches!(
             DecryptionRatchet::secret_for_decryption(bob.clone(), 1, max_forward, ooo_tolerance),
             Err(RatchetError::TooDistantInThePast)
-        ));
+        );
 
         // Bob receives a message very far into the future from Alice, but this is also outside the
         // tolerated window, we expect an error here.
-        assert!(matches!(
+        std::assert_matches!(
             DecryptionRatchet::secret_for_decryption(
                 bob.clone(),
                 bob.ratchet_head.generation + max_forward + 1,
@@ -351,6 +351,6 @@ mod tests {
                 ooo_tolerance
             ),
             Err(RatchetError::TooDistantInTheFuture)
-        ));
+        );
     }
 }

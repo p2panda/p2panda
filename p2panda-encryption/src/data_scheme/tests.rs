@@ -383,7 +383,7 @@ fn group_operations() {
     // Alice tries to process Charlie's "remove" message
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    assert!(matches!(
+    std::assert_matches!(
         Dcgka::process(
             alice_dcgka,
             ProcessInput {
@@ -397,7 +397,7 @@ fn group_operations() {
             },
         ),
         Err(DcgkaError::NotOurDirectMessage(_, _))
-    ));
+    );
 
     // Bob and Charlie share the same secrets.
     assert_eq!(charlie_bundle, bob_bundle);
