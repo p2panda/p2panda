@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use assert_matches::assert_matches;
 use iroh::Endpoint;
 use iroh::endpoint::{Connection, presets};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
@@ -52,7 +51,7 @@ async fn e2e_log_sync() {
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
@@ -61,7 +60,7 @@ async fn e2e_log_sync() {
         }) if remote == bob_id
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -69,7 +68,7 @@ async fn e2e_log_sync() {
         })
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SyncFinished { .. },
@@ -77,7 +76,7 @@ async fn e2e_log_sync() {
         })
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::LiveModeStarted,
@@ -88,7 +87,7 @@ async fn e2e_log_sync() {
     // Assert Bob receives the expected events.
     let alice_id = alice.node_id();
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
@@ -97,7 +96,7 @@ async fn e2e_log_sync() {
         }) if remote == alice_id
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -105,7 +104,7 @@ async fn e2e_log_sync() {
         })
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SyncFinished { .. },
@@ -113,7 +112,7 @@ async fn e2e_log_sync() {
         })
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::LiveModeStarted,
@@ -136,7 +135,7 @@ async fn e2e_log_sync() {
 
     // Bob receives Alice's live message.
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -149,7 +148,7 @@ async fn e2e_log_sync() {
 
     // Both peers observe a clean session close.
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SessionFinished { .. },
@@ -157,7 +156,7 @@ async fn e2e_log_sync() {
         })
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SessionFinished { .. },
@@ -211,7 +210,7 @@ async fn e2e_three_party_sync() {
     // Assert Alice receives the expected events.
     let bob_id = bob.node_id();
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
@@ -220,7 +219,7 @@ async fn e2e_three_party_sync() {
         }) if remote == bob_id
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -228,7 +227,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SyncFinished { .. },
@@ -236,7 +235,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = alice_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::LiveModeStarted,
@@ -247,7 +246,7 @@ async fn e2e_three_party_sync() {
     // Assert Bob receives the expected events.
     let alice_id = alice.node_id();
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
@@ -256,7 +255,7 @@ async fn e2e_three_party_sync() {
         }) if remote == alice_id
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -264,7 +263,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SyncFinished { .. },
@@ -272,7 +271,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::LiveModeStarted,
@@ -295,7 +294,7 @@ async fn e2e_three_party_sync() {
 
     // Bob receives Alice's live message.
     let event = bob_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -310,7 +309,7 @@ async fn e2e_three_party_sync() {
     carol_handle.initiate_session(alice.node_id());
 
     let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
@@ -319,7 +318,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -327,7 +326,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::OperationReceived { .. },
@@ -335,7 +334,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::SyncFinished { .. },
@@ -343,7 +342,7 @@ async fn e2e_three_party_sync() {
         })
     );
     let event = carol_subscription.next().await.unwrap();
-    assert_matches!(
+    std::assert_matches!(
         event,
         Ok(FromSync {
             event: Event::LiveModeStarted,
