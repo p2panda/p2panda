@@ -478,8 +478,6 @@ pub enum DecodeError {
 
 #[cfg(test)]
 mod tests {
-    use std::task::Poll;
-
     use futures_test::task::noop_context;
     use sqlx::{Executor, query, query_as, query_scalar};
     use tokio::pin;
@@ -492,24 +490,21 @@ mod tests {
         let pool = SqliteStore::temporary().await;
 
         // Executing with an in-existant transaction should throw error.
-        assert!(matches!(
+        std::assert_matches!(
             pool.tx(async |_| Ok(())).await,
             Err(SqliteError::TransactionMissing)
-        ));
+        );
 
         // Starting a new transaction should work.
         let permit = pool.begin().await.expect("no error");
 
         // .. attempting to start a second one should make us wait.
-        assert!(matches!(
-            {
-                let fut = pool.begin();
-                let mut cx = noop_context();
-                pin!(fut);
-                fut.poll(&mut cx)
-            },
-            Poll::Pending
-        ));
+        {
+            let fut = pool.begin();
+            let mut cx = noop_context();
+            pin!(fut);
+            assert!(fut.poll(&mut cx).is_pending());
+        }
 
         // Using the transaction should work without failure.
         assert!(pool.tx(async |_| Ok(())).await.is_ok());
@@ -518,10 +513,10 @@ mod tests {
         assert!(pool.commit(permit).await.is_ok());
 
         // .. and now running a transaction should fail.
-        assert!(matches!(
+        std::assert_matches!(
             pool.tx(async |_| Ok(())).await,
             Err(SqliteError::TransactionMissing)
-        ));
+        );
     }
 
     #[tokio::test]
