@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Don't sync all spaces when group membership changes
   [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
 
 ## [0.6.1] - 22/05/2026
 

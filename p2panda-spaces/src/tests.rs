@@ -15,6 +15,7 @@ use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 use crate::member::Member;
 use crate::message::SpacesArgs;
+use crate::space::Space;
 use crate::test_utils::{TestPeer, TestSpaceError};
 use crate::traits::{AuthStore, AuthoredMessage, SpacesMessage, SpacesStore};
 use crate::types::AuthGroupAction;
@@ -35,7 +36,7 @@ async fn create_space() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
+    let (space, messages) = manager.create_space_persisted(space_id, &[]).await.unwrap();
 
     // We've added ourselves automatically with manage access.
     assert_eq!(
@@ -119,7 +120,7 @@ async fn send_and_receive() {
     let space_id = 0;
     let (alice_space, alice_messages) = alice
         .manager
-        .create_space(space_id, &[(bob.manager.id(), Access::write())])
+        .create_space_persisted(space_id, &[(bob.manager.id(), Access::write())])
         .await
         .unwrap();
 
@@ -187,7 +188,7 @@ async fn add_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
+    let (space, messages) = manager.create_space_persisted(space_id, &[]).await.unwrap();
 
     // There are two messages (one auth, and one space)
     assert_eq!(messages.len(), 2);
@@ -200,7 +201,10 @@ async fn add_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let (message_03 , message_04) = space.add(bob.manager.id(), Access::read()).await.unwrap();
+    let (message_03, message_04) = space
+        .add_persisted(bob.manager.id(), Access::read())
+        .await
+        .unwrap();
     let members = space.members().await.unwrap();
     drop(space);
 
@@ -275,7 +279,7 @@ async fn register_key_bundles_after_space_creation() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (space, _) = manager.create_space(space_id, &[]).await.unwrap();
+    let (space, _) = manager.create_space_persisted(space_id, &[]).await.unwrap();
     drop(space);
 
     // Register key bundles _after_ the space was already created
@@ -290,7 +294,7 @@ async fn register_key_bundles_after_space_creation() {
     // Add new member to Space
     // ~~~~~~~~~~~~
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let result = space.add(bob.manager.id(), Access::read()).await;
+    let result = space.add_persisted(bob.manager.id(), Access::read()).await;
 
     assert!(result.is_ok());
 }
@@ -318,10 +322,17 @@ async fn send_and_receive_after_add() {
     // Alice creates a space, adds Bob in a following step and then sends a message.
 
     let space_id = 0;
-    let (alice_space, messages) = alice.manager.create_space(space_id, &[]).await.unwrap();
+    let (alice_space, messages) = alice
+        .manager
+        .create_space_persisted(space_id, &[])
+        .await
+        .unwrap();
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
-    let (message_03, message_04) = alice_space.add(bob_id, Access::read()).await.unwrap();
+    let (message_03, message_04) = alice_space
+        .add_persisted(bob_id, Access::read())
+        .await
+        .unwrap();
     let message_05 = alice_space.publish(b"Hello bob").await.unwrap();
 
     // Bob processes all of Alice's messages.
@@ -361,7 +372,7 @@ async fn add_pull_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (space, messages) = manager.create_space(space_id, &[]).await.unwrap();
+    let (space, messages) = manager.create_space_persisted(space_id, &[]).await.unwrap();
     assert_eq!(messages.len(), 2);
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
@@ -371,7 +382,10 @@ async fn add_pull_member_to_space() {
     // ~~~~~~~~~~~~
 
     let space = manager.space(space_id).await.unwrap().unwrap();
-    let (message_03, message_04) = space.add(bob.manager.id(), Access::pull()).await.unwrap();
+    let (message_03, message_04) = space
+        .add_persisted(bob.manager.id(), Access::pull())
+        .await
+        .unwrap();
     let members = space.members().await.unwrap();
 
     let SpacesArgs::Auth {
@@ -459,7 +473,10 @@ async fn receive_control_messages() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (space, messages) = alice_manager.create_space(space_id, &[]).await.unwrap();
+    let (space, messages) = alice_manager
+        .create_space_persisted(space_id, &[])
+        .await
+        .unwrap();
     let group_id = space.group_id().await.unwrap();
     drop(space);
 
@@ -509,7 +526,10 @@ async fn receive_control_messages() {
     // Alice: Add new member to Space
     // ~~~~~~~~~~~~
 
-    let (message_04, message_05) = space.add(bob.manager.id(), Access::read()).await.unwrap();
+    let (message_04, message_05) = space
+        .add_persisted(bob.manager.id(), Access::read())
+        .await
+        .unwrap();
     drop(space);
 
     // Bob: Receive Message 03, 04 and 05
@@ -575,7 +595,7 @@ async fn remove_member() {
 
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(bob_id, Access::read())])
+        .create_space_persisted(space_id, &[(bob_id, Access::read())])
         .await
         .unwrap();
     drop(space);
@@ -599,7 +619,7 @@ async fn remove_member() {
     // ~~~~~~~~~~~~
 
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
-    let (message_03, message_04) = space.remove(bob_id).await.unwrap();
+    let (message_03, message_04) = space.remove_persisted(bob_id).await.unwrap();
 
     let SpacesArgs::Auth { group_action, .. } = message_03.args() else {
         panic!("expected auth message");
@@ -671,7 +691,7 @@ async fn concurrent_removal_conflict() {
 
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(bob_id, Access::manage())])
+        .create_space_persisted(space_id, &[(bob_id, Access::manage())])
         .await
         .unwrap();
     drop(space);
@@ -693,14 +713,17 @@ async fn concurrent_removal_conflict() {
     // ~~~~~~~~~~~~
 
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
-    let _ = space.remove(bob_id).await.unwrap();
+    let _ = space.remove_persisted(bob_id).await.unwrap();
     drop(space);
 
     // Bob: Adds claire (concurrently)
     // ~~~~~~~~~~~~
 
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
-    let (message_03, message_04) = space.add(claire_id, Access::read()).await.unwrap();
+    let (message_03, message_04) = space
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
     drop(space);
 
     // Alice: process bobs' message
@@ -715,7 +738,7 @@ async fn concurrent_removal_conflict() {
     // ~~~~~~~~~~~~
 
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
-    let (message_05, message_06) = space.add(dave_id, Access::read()).await.unwrap();
+    let (message_05, message_06) = space.add_persisted(dave_id, Access::read()).await.unwrap();
 
     let SpacesArgs::Auth { group_action, .. } = message_05.args() else {
         panic!("expected auth message");
@@ -779,7 +802,7 @@ async fn space_from_existing_auth_state() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = alice_manager
-        .create_group(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
+        .create_group_persisted(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
         .await
         .unwrap();
     let member_group_id = group.id();
@@ -789,7 +812,7 @@ async fn space_from_existing_auth_state() {
 
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(member_group_id, Access::read())])
+        .create_space_persisted(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
 
@@ -884,7 +907,7 @@ async fn create_group() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = manager
-        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .create_group_persisted(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
 
@@ -937,11 +960,14 @@ async fn add_member_to_group() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = manager
-        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .create_group_persisted(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
 
-    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+    let message_02 = group
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
 
     let members = group.members().await.unwrap();
     assert_eq!(
@@ -993,14 +1019,14 @@ async fn remove_member_from_group() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = manager
-        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .create_group_persisted(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
 
     // Remove bob from group
     // ~~~~~~~~~~~~
 
-    let message_02 = group.remove(bob_id).await.unwrap();
+    let message_02 = group.remove_persisted(bob_id).await.unwrap();
 
     let members = group.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
@@ -1048,7 +1074,7 @@ async fn receive_auth_messages() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = alice_manager
-        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
+        .create_group_persisted(&[(alice_id, Access::manage()), (bob_id, Access::manage())])
         .await
         .unwrap();
     let group_id = group.id();
@@ -1056,7 +1082,10 @@ async fn receive_auth_messages() {
     // Add claire
     // ~~~~~~~~~~~~
 
-    let message_02 = group.add(claire_id, Access::read()).await.unwrap();
+    let message_02 = group
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
     drop(group);
 
     // Bob receives message 01 & 02
@@ -1114,7 +1143,7 @@ async fn shared_auth_state() {
 
     let space_id = 0;
     let (space_0, messages) = manager
-        .create_space(space_id, &[(alice_id, Access::manage())])
+        .create_space_persisted(space_id, &[(alice_id, Access::manage())])
         .await
         .unwrap();
 
@@ -1126,7 +1155,7 @@ async fn shared_auth_state() {
 
     let space_id = 1;
     let (space_1, messages) = manager
-        .create_space(space_id, &[(alice_id, Access::manage())])
+        .create_space_persisted(space_id, &[(alice_id, Access::manage())])
         .await
         .unwrap();
 
@@ -1141,7 +1170,7 @@ async fn shared_auth_state() {
     // ~~~~~~~~~~~~
 
     let (group, _) = manager
-        .create_group(&[(alice_id, Access::manage()), (bob_id, Access::read())])
+        .create_group_persisted(&[(alice_id, Access::manage()), (bob_id, Access::read())])
         .await
         .unwrap();
 
@@ -1154,7 +1183,10 @@ async fn shared_auth_state() {
     // Add group A to space 0
     // ~~~~~~~~~~~~
 
-    let _ = space_0.add(group.id(), Access::read()).await.unwrap();
+    let _ = space_0
+        .add_persisted(group.id(), Access::read())
+        .await
+        .unwrap();
 
     // Make Space 1 aware of this change.
     let messages = space_1.repair().await.unwrap();
@@ -1163,7 +1195,10 @@ async fn shared_auth_state() {
     // Add group A to space 1
     // ~~~~~~~~~~~~
 
-    let _ = space_1.add(group.id(), Access::read()).await.unwrap();
+    let _ = space_1
+        .add_persisted(group.id(), Access::read())
+        .await
+        .unwrap();
 
     // Make Space 0 aware of this change.
     let messages = space_0.repair().await.unwrap();
@@ -1172,7 +1207,10 @@ async fn shared_auth_state() {
     // Add claire to the group
     // ~~~~~~~~~~~~
 
-    let _ = group.add(claire_id, Access::read()).await.unwrap();
+    let _ = group
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
 
     // Both Space 0 and Space 1 need to be made aware of this change.
     let messages = space_0.repair().await.unwrap();
@@ -1227,7 +1265,7 @@ async fn events() {
 
     // Create Group with bob and claire as managers.
     let (group, auth_message) = alice_manager
-        .create_group(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
+        .create_group_persisted(&[(bob_id, Access::manage()), (claire_id, Access::manage())])
         .await
         .unwrap();
     let member_group_id = group.id();
@@ -1236,7 +1274,7 @@ async fn events() {
     // Create Space with group as member
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(member_group_id, Access::read())])
+        .create_space_persisted(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
     let space_group_id = space.group_id().await.unwrap();
@@ -1244,19 +1282,19 @@ async fn events() {
     alice_messages.extend(messages);
 
     // Add dave to space with read access
-    let (auth_message, space_message) = space.add(dave_id, Access::read()).await.unwrap();
+    let (auth_message, space_message) = space.add_persisted(dave_id, Access::read()).await.unwrap();
     alice_messages.extend([auth_message, space_message]);
 
     // Remove dave from space
-    let (auth_message, space_message) = space.remove(dave_id).await.unwrap();
+    let (auth_message, space_message) = space.remove_persisted(dave_id).await.unwrap();
     alice_messages.extend([auth_message, space_message]);
 
     // Add dave back into space with pull access
-    let (auth_message, space_message) = space.add(dave_id, Access::pull()).await.unwrap();
+    let (auth_message, space_message) = space.add_persisted(dave_id, Access::pull()).await.unwrap();
     alice_messages.extend([auth_message, space_message]);
 
     // Remove member group from space
-    let (auth_message, space_message) = space.remove(group.id()).await.unwrap();
+    let (auth_message, space_message) = space.remove_persisted(group.id()).await.unwrap();
     alice_messages.extend([auth_message, space_message]);
 
     // Test basic expected event types.
@@ -1367,7 +1405,10 @@ async fn idempotent_api() {
     // ~~~~~~~~~~~~
 
     let space_id = 0;
-    let (_, messages) = alice_manager.create_space(space_id, &[]).await.unwrap();
+    let (_, messages) = alice_manager
+        .create_space_persisted(space_id, &[])
+        .await
+        .unwrap();
 
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
@@ -1443,7 +1484,7 @@ async fn repair_space() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = alice_manager
-        .create_group(&[(bob_id, Access::manage())])
+        .create_group_persisted(&[(bob_id, Access::manage())])
         .await
         .unwrap();
     let member_group_id = group.id();
@@ -1453,7 +1494,7 @@ async fn repair_space() {
 
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(member_group_id, Access::read())])
+        .create_space_persisted(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
     drop(space);
@@ -1468,7 +1509,10 @@ async fn repair_space() {
     bob_manager.persist_message(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
     let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
-    let bob_message_01 = group.add(claire_id, Access::read()).await.unwrap();
+    let bob_message_01 = group
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
     drop(group);
 
     // Alice: Process Bob's message (published concurrently to the space creation).
@@ -1559,7 +1603,7 @@ async fn duplicate_auth_state_references() {
     // ~~~~~~~~~~~~
 
     let (group, message_01) = alice_manager
-        .create_group(&[(bob_id, Access::manage())])
+        .create_group_persisted(&[(bob_id, Access::manage())])
         .await
         .unwrap();
     let member_group_id = group.id();
@@ -1569,7 +1613,7 @@ async fn duplicate_auth_state_references() {
 
     let space_id = 0;
     let (space, messages) = alice_manager
-        .create_space(space_id, &[(member_group_id, Access::read())])
+        .create_space_persisted(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
     drop(space);
@@ -1584,7 +1628,10 @@ async fn duplicate_auth_state_references() {
     bob_manager.persist_message(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
     let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
-    let bob_message_01 = group.add(claire_id, Access::read()).await.unwrap();
+    let bob_message_01 = group
+        .add_persisted(claire_id, Access::read())
+        .await
+        .unwrap();
     drop(group);
 
     // Alice: Process Bob's message (published concurrently to the space creation).
@@ -1703,7 +1750,7 @@ async fn add_expired_member_to_group() {
     assert!(
         alice
             .manager
-            .create_space(0, &[(expired_bob.id(), Access::write())])
+            .create_space_persisted(0, &[(expired_bob.id(), Access::write())])
             .await
             .is_err()
     );
@@ -1752,7 +1799,7 @@ async fn process_operation_from_expired_member() {
     // Alice creates a space with Bob.
     let (_space, messages) = alice
         .manager
-        .create_space(0, &[(expired_bob.id(), Access::write())])
+        .create_space_persisted(0, &[(expired_bob.id(), Access::write())])
         .await
         .unwrap();
 
@@ -1764,4 +1811,49 @@ async fn process_operation_from_expired_member() {
     // Bob processes Alice's "create space", but unfortunately Bob's key bundle expired and they
     // can't decrypt the initial key agreement (X3DH) in the direct message anymore.
     assert!(bob.manager.process(&messages[1]).await.is_err());
+}
+
+#[tokio::test]
+async fn publish_process_separation() {
+    let alice = <TestPeer>::new(0).await;
+    let manager = alice.manager.clone();
+    let alice_id = manager.id();
+
+    let space_id = 0;
+
+    // Node API: create a space, forging required operations, but not persisting any other state.
+    // ~~~~~~~~~~~~
+
+    // We drop the returned states as we are only interested in the forged operations.
+    let (_auth_y, space_y, messages) = Space::create(manager.clone(), space_id, vec![])
+        .await
+        .unwrap();
+    let group_id = space_y.group_id;
+
+    assert_eq!(messages.len(), 2);
+    let auth_message = &messages[0];
+    let space_message = &messages[1];
+
+    // Both global auth state and spaces state have NOT been mutated in the store.
+    let auth = manager.auth().await.unwrap();
+    let members = auth.members(group_id);
+    assert_eq!(members, vec![]);
+
+    assert!(manager.space(space_id).await.unwrap().is_none());
+
+    // Spaces Processor: process the create group and create space operations.
+    // ~~~~~~~~~~~~
+
+    let _ = manager.process(auth_message).await.unwrap();
+    let _ = manager.process(space_message).await.unwrap();
+
+    // Both global auth state and spaces state have now been updated and persisted properly.
+    let auth = manager.auth().await.unwrap();
+    let space = manager.space(space_id).await.unwrap().unwrap();
+
+    let members = auth.members(space.group_id().await.unwrap());
+    assert_eq!(members, vec![(alice_id, Access::manage())]);
+
+    let members = space.members().await.unwrap();
+    assert_eq!(members, vec![(alice_id, Access::manage())]);
 }

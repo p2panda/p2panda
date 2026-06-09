@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_encryption::Rng;
+use p2panda_core::SigningKey;
+use p2panda_encryption::{Rng, RngError};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -17,12 +18,12 @@ use crate::group::{Group, GroupError};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
 use crate::message::SpacesArgs;
-use crate::space::{Space, SpaceError};
+use crate::space::{Space, SpaceError, SpaceState};
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
     SpacesMessage, SpacesStore,
 };
-use crate::types::{ActorId, AuthResolver, OperationId};
+use crate::types::{ActorId, AuthGroupState, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
 /// API for creating and managing groups and spaces.
@@ -170,18 +171,66 @@ where
     /// If not already included, then the local actor (creator of this space) will be added to the
     /// initial members and given manage access level.
     ///
-    /// Returns messages for replication to other instances and events which inform users of any
-    /// state changes which occurred.
-    pub async fn create_space(
+    /// Persists resulting state, returns space instance and forged message.
+    #[cfg(any(test, feature = "test_utils"))]
+    pub async fn create_space_persisted(
         &self,
         id: ID,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Space<ID, S, K, F, M, C, RS>, Vec<M>), ManagerError<ID, S, K, F, M, C, RS>> {
-        let (space, messages) = Space::create(self.clone(), id, initial_members.to_owned())
-            .await
-            .map_err(ManagerError::Space)?;
+        let (auth_y, space_y, messages) = self.create_space(id, initial_members).await?;
+        let space_id = space_y.space_id;
 
+        self.set_auth(&auth_y)
+            .await
+            .map_err(ManagerError::AuthStore)?;
+        let manager = self.inner.write().await;
+        manager
+            .store
+            .set_space(&space_id, space_y)
+            .await
+            .map_err(SpaceError::SpacesStore)?;
+
+        let space = Space::new(self.clone(), space_id);
         Ok((space, messages))
+    }
+
+    /// Create a new space containing initial members and access levels.
+    ///
+    /// If not already included, then the local actor (creator of this space) will be added to the
+    /// initial members and given manage access level.
+    ///
+    /// Returns resulting auth and space state and messages for processing.
+    pub async fn create_space(
+        &self,
+        id: ID,
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<
+        (AuthGroupState<C>, SpaceState<ID, M, C>, Vec<M>),
+        ManagerError<ID, S, K, F, M, C, RS>,
+    > {
+        let (auth_y, space_y, messages) =
+            Space::create(self.clone(), id, initial_members.to_owned())
+                .await
+                .map_err(ManagerError::Space)?;
+
+        Ok((auth_y, space_y, messages))
+    }
+
+    /// Create a new group containing initial members with associated access levels.
+    ///
+    /// Persists resulting state, returns group instance and forged message.
+    #[cfg(any(test, feature = "test_utils"))]
+    pub async fn create_group_persisted(
+        &self,
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<(Group<ID, S, K, F, M, C, RS>, M), ManagerError<ID, S, K, F, M, C, RS>> {
+        let (auth_y, group_id, message) = self.create_group(initial_members).await?;
+        self.set_auth(&auth_y)
+            .await
+            .map_err(ManagerError::AuthStore)?;
+        let group = Group::new(self.clone(), group_id);
+        Ok((group, message))
     }
 
     /// Create a new group containing initial members with associated access levels.
@@ -190,16 +239,26 @@ where
     /// without manager rights. If this is done then after creation no further change of the group
     /// membership would be possible.
     ///
-    /// Returns message for replication to other instances.
+    /// Returns resulting auth state, group id and message for processing.
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<ID, S, K, F, M, C, RS>, M), ManagerError<ID, S, K, F, M, C, RS>> {
-        let (group, message) = Group::create(self.clone(), initial_members.to_owned())
-            .await
-            .map_err(ManagerError::Group)?;
+    ) -> Result<(AuthGroupState<C>, ActorId, M), ManagerError<ID, S, K, F, M, C, RS>> {
+        let auth_y = self.auth().await.map_err(ManagerError::AuthStore)?;
 
-        Ok((group, message))
+        // Generate random group id.
+        let group_id: ActorId = {
+            let manager = self.inner.read().await;
+            let signing_key = SigningKey::from_bytes(&manager.rng.random_array()?);
+            signing_key.verifying_key().into()
+        };
+
+        let (auth_y, message) =
+            Group::create(self.clone(), auth_y, group_id, initial_members.to_owned())
+                .await
+                .map_err(ManagerError::Group)?;
+
+        Ok((auth_y, group_id, message))
     }
 
     /// Process a spaces message.
@@ -306,6 +365,18 @@ where
             .key_bundle_message()
             .await
             .map_err(ManagerError::IdentityManager)
+    }
+
+    /// Get the global auth state.
+    pub async fn auth(&self) -> Result<AuthGroupState<C>, <S as AuthStore<C>>::Error> {
+        let manager = self.inner.read().await;
+        manager.store.auth().await
+    }
+
+    /// Set the global auth state.
+    pub async fn set_auth(&self, y: &AuthGroupState<C>) -> Result<(), <S as AuthStore<C>>::Error> {
+        let manager = self.inner.write().await;
+        manager.store.set_auth(y).await
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
@@ -529,4 +600,7 @@ where
 
     #[error("unexpected message variant, expected auth {0}")]
     IncorrectMessageVariant(OperationId),
+
+    #[error(transparent)]
+    Rng(#[from] RngError),
 }
