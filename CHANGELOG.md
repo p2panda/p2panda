@@ -20,6 +20,7 @@ Highlights are marked with a pancake 🥞
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
+- Set MSRV to `1.96` [#1205](https://github.com/p2panda/p2panda/pull/1205)
 
 ## [0.6.1] - 22/05/2026
 
