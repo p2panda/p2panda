@@ -513,7 +513,6 @@ impl ShortFormat for Hash {
 mod tests {
     use std::collections::BTreeMap;
 
-    use assert_matches::assert_matches;
     use futures::StreamExt;
     use futures::channel::mpsc;
     use p2panda_core::test_utils::setup_logging;
@@ -770,7 +769,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
@@ -801,7 +800,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
@@ -814,7 +813,7 @@ mod tests {
         let messages = vec![TestLogSyncMessage::Done];
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]
@@ -845,7 +844,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
     }
 
     #[tokio::test]

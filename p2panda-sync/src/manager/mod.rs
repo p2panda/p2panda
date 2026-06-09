@@ -240,7 +240,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
-    use assert_matches::assert_matches;
     use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
