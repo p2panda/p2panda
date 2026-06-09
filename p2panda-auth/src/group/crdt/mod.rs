@@ -1550,7 +1550,7 @@ pub(crate) mod tests {
 
         // Case 1: Apply Bob's operation first - should fail
         let result = TestGroup::process(y1.clone(), &op3);
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupCrdtError::StateChangeError(
                 _,
@@ -1561,7 +1561,7 @@ pub(crate) mod tests {
         // Case 2: Apply Alice’s op first, then Bob's - still must fail
         let y1_alt = TestGroup::process(y1, &op2).unwrap();
         let result = TestGroup::process(y1_alt.clone(), &op3);
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupCrdtError::StateChangeError(
                 _,
