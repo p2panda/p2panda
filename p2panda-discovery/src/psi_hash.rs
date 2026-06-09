@@ -506,7 +506,7 @@ mod tests {
         let mut bob_rx = bob_rx.map(|message| Ok::<_, ()>(message));
         let alice_result = alice_protocol.alice(&mut alice_tx, &mut bob_rx).await;
         let _bob_result = bob_handle.await;
-        assert!(matches!(alice_result, Err(PsiHashError::UnexpectedMessage)));
+        assert_matches!(alice_result, Err(PsiHashError::UnexpectedMessage)));
     }
 
     #[tokio::test]
@@ -539,7 +539,7 @@ mod tests {
 
         let mut alice_rx = alice_rx.map(|message| Ok::<_, ()>(message));
         let bob_result = bob_protocol.bob(&mut bob_tx, &mut alice_rx).await;
-        assert!(matches!(bob_result, Err(PsiHashError::UnexpectedMessage)));
+        assert_matches!(bob_result, Err(PsiHashError::UnexpectedMessage)));
     }
 
     #[tokio::test]
