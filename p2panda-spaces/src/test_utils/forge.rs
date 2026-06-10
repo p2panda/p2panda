@@ -20,7 +20,7 @@ pub struct TestForge<S> {
 
 impl<S> TestForge<S>
 where
-    S: MessageStore<TestSpaceId, TestConditions>,
+    S: MessageStore<SpacesMessage<TestSpaceId, TestConditions>>,
 {
     pub fn new(store: S, signing_key: SigningKey) -> Self {
         Self {
@@ -44,7 +44,7 @@ pub struct TestForgeInner {
 
 impl<S> Forge<TestSpaceId, TestConditions> for TestForge<S>
 where
-    S: MessageStore<TestSpaceId, TestConditions>,
+    S: MessageStore<SpacesMessage<TestSpaceId, TestConditions>>,
 {
     type Message = SpacesMessage<TestSpaceId, TestConditions>;
     type Error = Infallible;

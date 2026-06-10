@@ -16,7 +16,7 @@ use crate::types::StrongRemoveResolver;
 
 pub use forge::TestForge;
 pub use message::TestMessage;
-pub use store::{TestKeyStore, TestStore};
+pub use store::{MemoryStore, TestKeyStore, TestStore};
 
 pub type TestSpaceId = usize;
 

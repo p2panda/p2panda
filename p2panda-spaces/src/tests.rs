@@ -2,24 +2,28 @@
 
 use std::borrow::Borrow;
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use assert_matches::assert_matches;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
+use p2panda_core::Topic;
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::data_scheme::DirectMessage;
 use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
+use crate::manager::Manager;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::Space;
-use crate::test_utils::{TestPeer, TestSpaceError};
-use crate::traits::{AuthStore, AuthoredMessage, SpacesStore};
-use crate::types::AuthGroupAction;
+use crate::test_utils::{MemoryStore, TestKeyStore, TestPeer, TestSpaceError};
+use crate::traits::{AuthStore, AuthoredMessage, Forge, SpaceId, SpacesStore};
+use crate::types::{AuthGroupAction, StrongRemoveResolver};
+use crate::{ActorId, Credentials, OperationId};
 
 #[tokio::test]
 async fn create_space() {
@@ -1857,4 +1861,68 @@ async fn publish_process_separation() {
 
     let members = space.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage())]);
+}
+
+#[tokio::test]
+async fn test_utils_generics() {
+    type MySpaceId = Topic;
+    impl SpaceId for MySpaceId {}
+
+    type MyConditions = ();
+
+    #[derive(Debug, Clone)]
+    struct MyOutMessage;
+
+    impl<ID, C> Borrow<SpacesArgs<ID, C>> for MyOutMessage {
+        fn borrow(&self) -> &SpacesArgs<ID, C> {
+            todo!()
+        }
+    }
+
+    impl AuthoredMessage for MyOutMessage {
+        fn id(&self) -> OperationId {
+            todo!()
+        }
+
+        fn author(&self) -> ActorId {
+            todo!()
+        }
+    }
+
+    #[derive(Debug)]
+    struct MyForge;
+
+    impl Forge<MySpaceId, MyConditions> for MyForge {
+        type Message = MyOutMessage;
+        type Error = Infallible;
+
+        fn verifying_key(&self) -> p2panda_core::VerifyingKey {
+            todo!()
+        }
+
+        async fn forge(
+            &self,
+            _args: SpacesArgs<MySpaceId, MyConditions>,
+        ) -> Result<Self::Message, Self::Error> {
+            todo!()
+        }
+    }
+
+    type MyMemoryStore = MemoryStore<MySpaceId, MyOutMessage, MyConditions>;
+    type MyKeyStore = TestKeyStore;
+    type MyResolver = StrongRemoveResolver<MyConditions>;
+    type MyManager =
+        Manager<MySpaceId, MyMemoryStore, MyKeyStore, MyForge, MyConditions, MyResolver>;
+
+    let rng = Rng::default();
+    let credentials = Credentials::from_rng(&rng).unwrap();
+    let _manager = MyManager::new(
+        MyMemoryStore::new(),
+        MyKeyStore::new(),
+        MyForge,
+        credentials,
+        rng,
+    )
+    .await
+    .unwrap();
 }

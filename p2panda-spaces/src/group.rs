@@ -55,7 +55,7 @@ pub struct Group<ID, S, K, F, C, RS> {
 impl<ID, S, K, F, C, RS> Group<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C> + Debug,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
@@ -243,7 +243,7 @@ where
 pub enum GroupError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C>,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
     K: KeyRegistryStore + KeySecretStore,
     F: Forge<ID, C>,
     C: Conditions,
@@ -265,7 +265,7 @@ where
     AuthStore(<S as AuthStore<C>>::Error),
 
     #[error("{0}")]
-    MessageStore(<S as MessageStore<ID, C>>::Error),
+    MessageStore(<S as MessageStore<F::Message>>::Error),
 
     // @TODO: We lose the concrete error type which caused sync of spaces to fail, ideal we would
     // retain this type information.
