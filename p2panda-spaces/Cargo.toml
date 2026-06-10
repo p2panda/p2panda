@@ -38,6 +38,5 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
-assert_matches = "1.5.0"
 p2panda-spaces = { path = ".", features = ["test_utils"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
