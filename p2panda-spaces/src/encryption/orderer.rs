@@ -2,7 +2,6 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
-use std::marker::PhantomData;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
@@ -19,21 +18,17 @@ use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, O
 /// care of ordering of control and application messages; p2panda-spaces expects messages to be
 /// orderer before being processed.
 #[derive(Clone, Debug)]
-pub struct EncryptionOrderer<M> {
-    _marker: PhantomData<M>,
-}
+pub struct EncryptionOrderer {}
 
-impl<M> Default for EncryptionOrderer<M> {
+impl Default for EncryptionOrderer {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<M> EncryptionOrderer<M> {
+impl EncryptionOrderer {
     pub fn new() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self {}
     }
 }
 
@@ -116,8 +111,8 @@ impl EncryptionOrdererState {
     }
 }
 
-impl<M> p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
-    for EncryptionOrderer<M>
+impl p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
+    for EncryptionOrderer
 {
     type State = EncryptionOrdererState;
 

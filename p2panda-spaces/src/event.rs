@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::borrow::Borrow;
-
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::Access;
@@ -11,8 +9,8 @@ use p2panda_encryption::data_scheme::GroupOutput;
 
 use crate::ActorId;
 use crate::auth::message::AuthMessage;
-use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId};
+use crate::message::SpaceMembershipMessage;
+use crate::traits::SpaceId;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{added_members, removed_members, sort_members};
 
@@ -182,9 +180,9 @@ pub enum SpaceEvent<ID> {
     },
 }
 
-pub(crate) fn encryption_output_to_space_events<ID, M, C>(
+pub(crate) fn encryption_output_to_space_events<ID, C>(
     space_id: &ID,
-    encryption_output: Vec<EncryptionGroupOutput<M>>,
+    encryption_output: Vec<EncryptionGroupOutput>,
 ) -> Vec<Event<ID, C>>
 where
     ID: SpaceId,
@@ -257,8 +255,9 @@ where
     Event::Group(group_event)
 }
 
-pub(crate) fn space_message_to_space_event<ID, C, M>(
-    space_message: &M,
+pub(crate) fn space_message_to_space_event<ID, C>(
+    space_id: ID,
+    space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
     current_members: Vec<ActorId>,
     next_members: Vec<ActorId>,
@@ -266,17 +265,12 @@ pub(crate) fn space_message_to_space_event<ID, C, M>(
 where
     ID: SpaceId,
     C: Conditions,
-    M: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
 {
-    let SpacesArgs::SpaceMembership { space_id, .. } = space_message.borrow() else {
-        panic!("unexpected message type");
-    };
-    let space_id = *space_id;
     let group_id = auth_message.group_id();
 
     let context = SpaceContext {
         auth_author: auth_message.author(),
-        spaces_author: space_message.author(),
+        spaces_author: space_message.author,
         group_id,
         members: next_members.clone(),
     };

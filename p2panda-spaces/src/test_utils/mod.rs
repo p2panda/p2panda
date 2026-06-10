@@ -34,7 +34,6 @@ pub type TestManager = Manager<
     TestStore,
     TestKeyStore,
     TestForge<TestStore>,
-    TestMessage,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
@@ -44,7 +43,6 @@ pub type TestSpaceError = SpaceError<
     TestStore,
     TestKeyStore,
     TestForge<TestStore>,
-    TestMessage,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
