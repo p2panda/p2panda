@@ -10,7 +10,6 @@ use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use tokio::sync::RwLock;
 
 use crate::OperationId;
-use crate::message::SpacesMessage;
 use crate::space::SpaceState;
 use crate::test_utils::{TestConditions, TestMessage, TestSpaceId};
 use crate::traits::{
@@ -18,27 +17,27 @@ use crate::traits::{
 };
 use crate::types::{ActorId, AuthGroupState};
 
-pub type TestStore = MemoryStore<TestMessage, TestConditions>;
+pub type TestStore = MemoryStore<TestSpaceId, TestMessage, TestConditions>;
 
 #[derive(Debug)]
-pub struct MemoryStoreInner<M, C>
+pub struct MemoryStoreInner<ID, M, C>
 where
     C: Conditions,
 {
     auth: AuthGroupState<C>,
-    spaces: HashMap<TestSpaceId, SpaceState<TestSpaceId, C>>,
+    spaces: HashMap<ID, SpaceState<ID, C>>,
     messages: HashMap<OperationId, M>,
 }
 
 #[derive(Debug, Clone)]
-pub struct MemoryStore<M, C>
+pub struct MemoryStore<ID, M, C>
 where
     C: Conditions,
 {
-    pub(crate) inner: Arc<RwLock<MemoryStoreInner<M, C>>>,
+    pub(crate) inner: Arc<RwLock<MemoryStoreInner<ID, M, C>>>,
 }
 
-impl<M, C> MemoryStore<M, C>
+impl<ID, M, C> MemoryStore<ID, M, C>
 where
     C: Conditions,
 {
@@ -56,42 +55,36 @@ where
     }
 }
 
-impl<M, C> SpacesStore<TestSpaceId, C> for MemoryStore<M, C>
+impl<ID, M, C> SpacesStore<ID, C> for MemoryStore<ID, M, C>
 where
+    ID: SpaceId,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn space(
-        &self,
-        id: &TestSpaceId,
-    ) -> Result<Option<SpaceState<TestSpaceId, C>>, Self::Error> {
+    async fn space(&self, id: &ID) -> Result<Option<SpaceState<ID, C>>, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.spaces.get(id).cloned())
     }
 
-    async fn has_space(&self, id: &TestSpaceId) -> Result<bool, Self::Error> {
+    async fn has_space(&self, id: &ID) -> Result<bool, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.spaces.contains_key(id))
     }
 
-    async fn spaces_ids(&self) -> Result<Vec<TestSpaceId>, Self::Error> {
+    async fn spaces_ids(&self) -> Result<Vec<ID>, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.spaces.keys().cloned().collect())
     }
 
-    async fn set_space(
-        &self,
-        id: &TestSpaceId,
-        y: SpaceState<TestSpaceId, C>,
-    ) -> Result<(), Self::Error> {
+    async fn set_space(&self, id: &ID, y: SpaceState<ID, C>) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().await;
         inner.spaces.insert(*id, y);
         Ok(())
     }
 }
 
-impl<M, C> AuthStore<C> for MemoryStore<M, C>
+impl<ID, M, C> AuthStore<C> for MemoryStore<ID, M, C>
 where
     C: Conditions,
 {
@@ -109,26 +102,20 @@ where
     }
 }
 
-impl<SID, C> MessageStore<SID, C> for MemoryStore<SpacesMessage<SID, C>, C>
+impl<ID, M, C> MessageStore<M> for MemoryStore<ID, M, C>
 where
-    SID: SpaceId,
+    ID: SpaceId,
+    M: Clone,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn message(
-        &self,
-        id: &OperationId,
-    ) -> Result<Option<SpacesMessage<SID, C>>, Self::Error> {
+    async fn message(&self, id: &OperationId) -> Result<Option<M>, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.messages.get(id).cloned())
     }
 
-    async fn set_message(
-        &self,
-        id: &OperationId,
-        message: &SpacesMessage<SID, C>,
-    ) -> Result<(), Self::Error> {
+    async fn set_message(&self, id: &OperationId, message: &M) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().await;
         inner.messages.insert(*id, message.clone());
         Ok(())

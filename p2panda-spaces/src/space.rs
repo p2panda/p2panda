@@ -64,7 +64,7 @@ pub struct Space<ID, S, K, F, C, RS> {
 impl<ID, S, K, F, C, RS> Space<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C> + Debug,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
@@ -794,7 +794,7 @@ where
 pub enum SpaceError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C>,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
@@ -819,7 +819,7 @@ where
     AuthStore(<S as AuthStore<C>>::Error),
 
     #[error("{0}")]
-    MessageStore(<S as MessageStore<ID, C>>::Error),
+    MessageStore(<S as MessageStore<F::Message>>::Error),
 
     #[error("{0}")]
     SpacesStore(<S as SpacesStore<ID, C>>::Error),

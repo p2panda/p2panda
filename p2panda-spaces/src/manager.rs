@@ -70,7 +70,7 @@ where
     // @TODO: the Debug bound is required as we are string formatting the manager error in
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C> + Debug,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
@@ -539,7 +539,7 @@ where
     #[cfg(test)]
     pub async fn persist_message(
         &self,
-        message: &SpacesMessage<ID, C>,
+        message: &F::Message,
     ) -> Result<(), ManagerError<ID, S, K, F, C, RS>> {
         let manager = self.inner.write().await;
         manager
@@ -567,7 +567,7 @@ impl<ID, S, K, F, C, RS> Clone for Manager<ID, S, K, F, C, RS> {
 pub enum ManagerError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<ID, C>,
+    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
     K: KeyRegistryStore + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
@@ -589,7 +589,7 @@ where
     AuthStore(<S as AuthStore<C>>::Error),
 
     #[error("{0}")]
-    MessageStore(<S as MessageStore<ID, C>>::Error),
+    MessageStore(<S as MessageStore<F::Message>>::Error),
 
     #[error("received unexpected message with id {0}, maybe it arrived out-of-order")]
     UnexpectedMessage(OperationId),

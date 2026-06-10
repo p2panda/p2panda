@@ -15,4 +15,7 @@ pub use message::AuthoredMessage;
 pub use store::{AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore};
 
 /// Trait representing the identifier of a space.
-pub trait SpaceId: Debug + Copy + Eq + PartialEq + DeserializeOwned + Serialize {}
+pub trait SpaceId:
+    Debug + Copy + Eq + PartialEq + std::hash::Hash + DeserializeOwned + Serialize
+{
+}

@@ -8,7 +8,6 @@ use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
-use crate::message::SpacesMessage;
 use crate::space::SpaceState;
 use crate::traits::SpaceId;
 use crate::types::AuthGroupState;
@@ -77,17 +76,14 @@ pub trait KeySecretStore {
 // @TODO: This will be replaced with `OperationStore` in `p2panda-store` as soon as it's ready
 // (currently in `stream-next` branch).
 /// Interface for inserting and getting operations.
-pub trait MessageStore<SID, C> {
+pub trait MessageStore<M> {
     type Error: Debug;
 
-    fn message(
-        &self,
-        id: &OperationId,
-    ) -> impl Future<Output = Result<Option<SpacesMessage<SID, C>>, Self::Error>>;
+    fn message(&self, id: &OperationId) -> impl Future<Output = Result<Option<M>, Self::Error>>;
 
     fn set_message(
         &self,
         id: &OperationId,
-        message: &SpacesMessage<SID, C>,
+        message: &M,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
