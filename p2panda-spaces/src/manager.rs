@@ -6,8 +6,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_auth::Access;
 use p2panda_core::SigningKey;
 use p2panda_encryption::{Rng, RngError};
 use thiserror::Error;
@@ -86,7 +86,7 @@ where
         forge: F,
         credentials: Credentials,
         rng: Rng,
-    ) -> Result<Self, ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Self, IdentityError<ID, K, F, M, C>> {
         Self::new_with_config(
             store,
             key_store,
@@ -107,7 +107,7 @@ where
         credentials: Credentials,
         config: &Config,
         rng: Rng,
-    ) -> Result<Self, ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Self, IdentityError<ID, K, F, M, C>> {
         let actor_id: ActorId = credentials.verifying_key().into();
         let identity = IdentityManager::new(key_store, forge, credentials, config, &rng).await?;
         let inner = ManagerInner {
@@ -129,14 +129,14 @@ where
     pub async fn space(
         &self,
         id: ID,
-    ) -> Result<Option<Space<ID, S, K, F, M, C, RS>>, ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Option<Space<ID, S, K, F, M, C, RS>>, StoreError<ID, S, M, C>> {
         let has_space = {
             let inner = self.inner.read().await;
             inner
                 .store
                 .has_space(&id)
                 .await
-                .map_err(ManagerError::SpacesStore)?
+                .map_err(StoreError::Spaces)?
         };
 
         if has_space {
@@ -153,10 +153,10 @@ where
     pub async fn group(
         &self,
         id: ActorId,
-    ) -> Result<Option<Group<ID, S, K, F, M, C, RS>>, ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<Option<Group<ID, S, K, F, M, C, RS>>, StoreError<ID, S, M, C>> {
         let auth_y = {
             let manager = self.inner.read().await;
-            manager.store.auth().await.map_err(GroupError::AuthStore)?
+            manager.store.auth().await.map_err(StoreError::Auth)?
         };
 
         // Check if this group exists in the auth state.
@@ -279,15 +279,12 @@ where
                 let event = manager
                     .identity
                     .process_key_bundle(message.author(), key_bundle)
-                    .await
-                    .map_err(ManagerError::IdentityManager)?;
+                    .await?;
 
                 vec![event]
             }
             SpacesArgs::Auth { .. } => {
-                let event = Group::process(self.clone(), message)
-                    .await
-                    .map_err(ManagerError::Group)?;
+                let event = Group::process(self.clone(), message).await?;
 
                 if let Some(event) = event {
                     vec![event]
@@ -306,10 +303,7 @@ where
                     return Err(ManagerError::UnexpectedMessage(message.id()));
                 };
 
-                space
-                    .process(message, None)
-                    .await
-                    .map_err(ManagerError::Space)?
+                space.process(message, None).await?
             }
         };
 
@@ -324,13 +318,9 @@ where
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn me(&self) -> Result<Member, ManagerError<ID, S, K, F, M, C, RS>> {
+    pub async fn me(&self) -> Result<Member, IdentityError<ID, K, F, M, C>> {
         let mut manager = self.inner.write().await;
-        manager
-            .identity
-            .me()
-            .await
-            .map_err(ManagerError::IdentityManager)
+        manager.identity.me().await
     }
 
     /// Register a member with long-term key bundle material which was provided through another
@@ -338,34 +328,26 @@ where
     pub async fn register_member(
         &self,
         member: &Member,
-    ) -> Result<(), ManagerError<ID, S, K, F, M, C, RS>> {
+    ) -> Result<(), IdentityError<ID, K, F, M, C>> {
         let mut manager = self.inner.write().await;
-        manager
-            .identity
-            .register_member(member)
-            .await
-            .map_err(ManagerError::IdentityManager)
+        manager.identity.register_member(member).await
     }
 
     /// Check if my latest key bundle has expired.
     ///
     /// If `true` then users should rotate their pre-key and generate a new bundle message (which
     /// should then be published) by calling `key_bundle_message`.
-    pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<ID, S, K, F, M, C, RS>> {
+    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<ID, K, F, M, C>> {
         let manager = self.inner.read().await;
-        Ok(manager.identity.key_bundle_expired().await?)
+        manager.identity.key_bundle_expired().await
     }
 
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&self) -> Result<M, ManagerError<ID, S, K, F, M, C, RS>> {
+    pub async fn key_bundle_message(&self) -> Result<M, IdentityError<ID, K, F, M, C>> {
         let mut manager = self.inner.write().await;
-        manager
-            .identity
-            .key_bundle_message()
-            .await
-            .map_err(ManagerError::IdentityManager)
+        manager.identity.key_bundle_message().await
     }
 
     /// Get the global auth state.
@@ -381,22 +363,16 @@ where
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
-    pub async fn spaces_repair_required(
-        &self,
-    ) -> Result<Vec<ID>, ManagerError<ID, S, K, F, M, C, RS>> {
+    pub async fn spaces_repair_required(&self) -> Result<Vec<ID>, StoreError<ID, S, M, C>> {
         let manager = self.inner.read().await;
 
-        let auth_y = manager
-            .store
-            .auth()
-            .await
-            .map_err(ManagerError::AuthStore)?;
+        let auth_y = manager.store.auth().await.map_err(StoreError::Auth)?;
 
         let space_ids = manager
             .store
             .spaces_ids()
             .await
-            .map_err(ManagerError::SpacesStore)?;
+            .map_err(StoreError::Spaces)?;
 
         let mut in_need_of_repair = vec![];
         for id in space_ids {
@@ -404,7 +380,7 @@ where
                 .store
                 .space(&id)
                 .await
-                .map_err(ManagerError::SpacesStore)?
+                .map_err(StoreError::Spaces)?
                 .expect("space present in store");
             if space_y.auth_y.inner.heads() != auth_y.inner.heads() {
                 in_need_of_repair.push(id);
@@ -493,7 +469,7 @@ where
                 .store
                 .message(auth_message_id)
                 .await
-                .map_err(ManagerError::MessageStore)?
+                .map_err(StoreError::Message)?
             else {
                 return Err(ManagerError::MissingAuthMessage(
                     message.id(),
@@ -537,16 +513,13 @@ where
     /// Only exposed for testing purposes as in normal use we expect all messages to be already
     /// persisted in the store.
     #[cfg(test)]
-    pub async fn persist_message(
-        &self,
-        message: &M,
-    ) -> Result<(), ManagerError<ID, S, K, F, M, C, RS>> {
+    pub async fn persist_message(&self, message: &M) -> Result<(), StoreError<ID, S, M, C>> {
         let manager = self.inner.write().await;
         manager
             .store
             .set_message(&message.id(), message)
             .await
-            .map_err(ManagerError::MessageStore)?;
+            .map_err(StoreError::Message)?;
         Ok(())
     }
 }
@@ -560,6 +533,23 @@ impl<ID, S, K, F, M, C, RS> Clone for Manager<ID, S, K, F, M, C, RS> {
             inner: self.inner.clone(),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum StoreError<ID, S, M, C>
+where
+    ID: SpaceId,
+    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
+    C: Conditions,
+{
+    #[error("{0}")]
+    Spaces(<S as SpacesStore<ID, M, C>>::Error),
+
+    #[error("{0}")]
+    Auth(<S as AuthStore<C>>::Error),
+
+    #[error("{0}")]
+    Message(<S as MessageStore<M>>::Error),
 }
 
 #[derive(Debug, Error)]
@@ -582,14 +572,8 @@ where
     #[error(transparent)]
     IdentityManager(#[from] IdentityError<ID, K, F, M, C>),
 
-    #[error("{0}")]
-    SpacesStore(<S as SpacesStore<ID, M, C>>::Error),
-
-    #[error("{0}")]
-    AuthStore(<S as AuthStore<C>>::Error),
-
-    #[error("{0}")]
-    MessageStore(<S as MessageStore<M>>::Error),
+    #[error(transparent)]
+    Store(#[from] StoreError<ID, S, M, C>),
 
     #[error("received unexpected message with id {0}, maybe it arrived out-of-order")]
     UnexpectedMessage(OperationId),
