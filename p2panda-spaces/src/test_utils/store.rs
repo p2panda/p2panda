@@ -10,9 +10,12 @@ use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use tokio::sync::RwLock;
 
 use crate::OperationId;
+use crate::message::SpacesMessage;
 use crate::space::SpaceState;
 use crate::test_utils::{TestConditions, TestMessage, TestSpaceId};
-use crate::traits::{AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore};
+use crate::traits::{
+    AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId, SpacesStore,
+};
 use crate::types::{ActorId, AuthGroupState};
 
 pub type TestStore = MemoryStore<TestMessage, TestConditions>;
@@ -23,7 +26,7 @@ where
     C: Conditions,
 {
     auth: AuthGroupState<C>,
-    spaces: HashMap<TestSpaceId, SpaceState<TestSpaceId, M, C>>,
+    spaces: HashMap<TestSpaceId, SpaceState<TestSpaceId, C>>,
     messages: HashMap<OperationId, M>,
 }
 
@@ -53,9 +56,8 @@ where
     }
 }
 
-impl<M, C> SpacesStore<TestSpaceId, M, C> for MemoryStore<M, C>
+impl<M, C> SpacesStore<TestSpaceId, C> for MemoryStore<M, C>
 where
-    M: Clone,
     C: Conditions,
 {
     type Error = Infallible;
@@ -63,7 +65,7 @@ where
     async fn space(
         &self,
         id: &TestSpaceId,
-    ) -> Result<Option<SpaceState<TestSpaceId, M, C>>, Self::Error> {
+    ) -> Result<Option<SpaceState<TestSpaceId, C>>, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.spaces.get(id).cloned())
     }
@@ -81,7 +83,7 @@ where
     async fn set_space(
         &self,
         id: &TestSpaceId,
-        y: SpaceState<TestSpaceId, M, C>,
+        y: SpaceState<TestSpaceId, C>,
     ) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().await;
         inner.spaces.insert(*id, y);
@@ -107,19 +109,26 @@ where
     }
 }
 
-impl<M, C> MessageStore<M> for MemoryStore<M, C>
+impl<SID, C> MessageStore<SID, C> for MemoryStore<SpacesMessage<SID, C>, C>
 where
-    M: Clone,
+    SID: SpaceId,
     C: Conditions,
 {
     type Error = Infallible;
 
-    async fn message(&self, id: &OperationId) -> Result<Option<M>, Self::Error> {
+    async fn message(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<SpacesMessage<SID, C>>, Self::Error> {
         let inner = self.inner.read().await;
         Ok(inner.messages.get(id).cloned())
     }
 
-    async fn set_message(&self, id: &OperationId, message: &M) -> Result<(), Self::Error> {
+    async fn set_message(
+        &self,
+        id: &OperationId,
+        message: &SpacesMessage<SID, C>,
+    ) -> Result<(), Self::Error> {
         let mut inner = self.inner.write().await;
         inner.messages.insert(*id, message.clone());
         Ok(())

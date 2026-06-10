@@ -8,13 +8,14 @@ use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 
+use crate::message::SpacesMessage;
 use crate::space::SpaceState;
 use crate::traits::SpaceId;
 use crate::types::AuthGroupState;
 use crate::{ActorId, OperationId};
 
 /// Interface for setting and getting space state.
-pub trait SpacesStore<ID, M, C>
+pub trait SpacesStore<ID, C>
 where
     ID: SpaceId,
     C: Conditions,
@@ -24,7 +25,7 @@ where
     fn space(
         &self,
         id: &ID,
-    ) -> impl Future<Output = Result<Option<SpaceState<ID, M, C>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<SpaceState<ID, C>>, Self::Error>>;
 
     fn has_space(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
@@ -33,7 +34,7 @@ where
     fn set_space(
         &self,
         id: &ID,
-        y: SpaceState<ID, M, C>,
+        y: SpaceState<ID, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
@@ -76,14 +77,17 @@ pub trait KeySecretStore {
 // @TODO: This will be replaced with `OperationStore` in `p2panda-store` as soon as it's ready
 // (currently in `stream-next` branch).
 /// Interface for inserting and getting operations.
-pub trait MessageStore<M> {
+pub trait MessageStore<SID, C> {
     type Error: Debug;
 
-    fn message(&self, id: &OperationId) -> impl Future<Output = Result<Option<M>, Self::Error>>;
+    fn message(
+        &self,
+        id: &OperationId,
+    ) -> impl Future<Output = Result<Option<SpacesMessage<SID, C>>, Self::Error>>;
 
     fn set_message(
         &self,
         id: &OperationId,
-        message: &M,
+        message: &SpacesMessage<SID, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }

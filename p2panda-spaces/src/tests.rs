@@ -1302,7 +1302,7 @@ async fn events() {
     let mut all_bob_events = vec![];
     for (idx, message) in alice_messages.iter().enumerate() {
         bob_manager.persist_message(&message).await.unwrap();
-        let bob_events = bob_manager.process(&message).await.unwrap();
+        let bob_events = bob_manager.process(message).await.unwrap();
         all_bob_events.extend(bob_events.clone());
         match idx {
             // Member auth group created.
