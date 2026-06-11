@@ -25,6 +25,10 @@ pub(crate) use space::spaces_stream;
 pub use space::{Space, SpaceError, SpaceFuture, SpaceSubscription};
 pub use types::SpacesManagerError;
 
+use crate::Credentials;
+use crate::forge::OperationForge;
+use crate::spaces::types::{AuthCapabilities, SpacesManager};
+
 pub const SPACE_ID_LENGTH: usize = 32;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -66,4 +70,43 @@ impl Display for SpaceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_hex())
     }
+}
+
+// TODO: Put this behind a flag as soon as we don't use the in-memory stores.
+// #[cfg(any(test, feature = "test_utils"))]
+pub async fn test_spaces_manager(
+    forge: OperationForge,
+    credentials: Credentials,
+) -> Result<SpacesManager, SpacesManagerError> {
+    use p2panda_encryption::Rng;
+    use p2panda_spaces::test_utils::TestKeyStore;
+
+    use crate::spaces::types::{SpacesManager, TestSpacesStore};
+
+    let rng = Rng::default();
+    let store = TestSpacesStore::new();
+    let key_store = TestKeyStore::new();
+
+    SpacesManager::new(store, key_store, forge.clone(), (&credentials).into(), rng).await
+}
+
+pub(crate) fn actor_to_topic(actor_id: impl Into<ActorId>) -> Topic {
+    actor_id.into().as_bytes().to_owned().into()
+}
+
+pub(crate) fn to_initial_members(
+    initial_members: &[(ActorId, AccessLevel)],
+) -> Vec<(ActorId, Access<AuthCapabilities>)> {
+    initial_members
+        .iter()
+        .map(|(actor, level)| {
+            (
+                *actor,
+                Access {
+                    conditions: None,
+                    level: level.clone(),
+                },
+            )
+        })
+        .collect()
 }
