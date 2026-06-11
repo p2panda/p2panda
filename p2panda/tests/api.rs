@@ -10,10 +10,9 @@ use p2panda::operation::{Extensions, LogId, Operation};
 use p2panda::streams::{
     EphemeralMessage, ProcessedOperation, StreamEvent, StreamFrom, SystemEvent,
 };
-use p2panda::test_utils::setup_logging;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::logs::LogHeights;
-use p2panda_core::test_utils::TestLog;
+use p2panda_core::test_utils::{TestLog, setup_logging};
 use p2panda_core::{Cursor, Hash, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
