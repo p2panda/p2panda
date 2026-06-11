@@ -259,8 +259,6 @@ pub mod node;
 pub mod operation;
 pub mod processor;
 pub mod streams;
-#[cfg(any(test, feature = "test_utils"))]
-pub mod test_utils;
 
 // Useful external types we want to re-export for convenience.
 #[doc(no_inline)]
