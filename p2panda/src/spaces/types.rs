@@ -18,6 +18,15 @@ pub type TestSpacesStore = MemoryStore<SpaceId, SpacesMessage, AuthCapabilities>
 
 pub type SpacesArgs = p2panda_spaces::SpacesArgs<SpaceId, AuthCapabilities>;
 
+pub type SpacesProcessor<T> = p2panda_stream::spaces::Spaces<
+    T,
+    SpaceId,
+    TestSpacesStore,
+    TestKeyStore,
+    OperationForge,
+    AuthCapabilities,
+>;
+
 pub type SpacesManagerError = p2panda_spaces::manager::ManagerError<
     SpaceId,
     TestSpacesStore,

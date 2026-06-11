@@ -342,11 +342,18 @@ where
     let log_id = LogId::from_topic(topic);
 
     let prune_flag = operation.header.extensions.prune_flag();
+    let spaces_args = operation.header.extensions.spaces_args();
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
     let event = pipeline
-        .process(Event::new(operation, log_id, topic, prune_flag))
+        .process(Event::new(
+            operation,
+            log_id,
+            topic,
+            prune_flag,
+            spaces_args,
+        ))
         .await;
 
     if event.is_failed() {
@@ -432,11 +439,18 @@ pub(crate) async fn process_published_operation(
 ) -> Event<LogId, Extensions, Topic> {
     let log_id = LogId::from_topic(topic);
     let prune_flag = operation.header.extensions.prune_flag();
+    let spaces_args = operation.header.extensions.spaces_args();
 
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
     let event = pipeline
-        .process(Event::new(operation, log_id, topic, prune_flag))
+        .process(Event::new(
+            operation,
+            log_id,
+            topic,
+            prune_flag,
+            spaces_args,
+        ))
         .await;
 
     if event.is_failed() {
