@@ -121,6 +121,8 @@
 pub mod address_book;
 pub mod cursors;
 pub mod groups;
+pub mod key_registry;
+pub mod key_secrets;
 pub mod logs;
 #[cfg(feature = "macros")]
 mod macros;

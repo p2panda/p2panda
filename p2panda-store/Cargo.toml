@@ -41,6 +41,8 @@ test_utils = [
 
 [dependencies]
 p2panda-core = { workspace = true }
+p2panda-encryption = { workspace = true, default-features = true }
+p2panda-spaces = { workspace = true, default-features = true }
 rand = { workspace = true, optional = true }
 rand_chacha = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
@@ -51,5 +53,6 @@ tokio = { workspace = true, default-features = true, features = ["sync"], option
 [dev-dependencies]
 futures-test = { workspace = true }
 p2panda-core = { workspace = true, features = ["test_utils"] }
+p2panda-encryption = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-store = { path = ".", features = ["test_utils"] }
 tokio = { workspace = true, default-features = true, features = ["rt", "macros"] }

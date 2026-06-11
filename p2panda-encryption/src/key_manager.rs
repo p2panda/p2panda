@@ -47,7 +47,7 @@ impl KeyManagerState {
 /// pre-keys.
 ///
 /// This can be serialized and independently stored from the identity secrets.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreKeyBundlesState(HashMap<PreKeyId, PreKeyBundle>);
 
 impl PreKeyBundlesState {
@@ -101,7 +101,7 @@ impl PreKeyBundlesState {
 
 /// Extended pre-key struct holding the public and secret parts and signature, authenticating the
 /// pre-key with an identity.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreKeyBundle {
     prekey: PreKey,
     signature: XSignature,
