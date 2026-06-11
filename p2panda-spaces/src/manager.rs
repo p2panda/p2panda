@@ -6,8 +6,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_auth::Access;
+use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::SigningKey;
 use p2panda_encryption::{Rng, RngError};
 use thiserror::Error;
@@ -20,6 +20,7 @@ use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError, SpaceState};
+use crate::store::StoreError;
 use crate::traits::{
     AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
     SpacesStore,
@@ -184,7 +185,7 @@ where
 
         self.set_auth(&auth_y)
             .await
-            .map_err(ManagerError::AuthStore)?;
+            .map_err(|err| ManagerError::Store(StoreError::Auth(err)))?;
         let manager = self.inner.write().await;
         manager
             .store
@@ -229,7 +230,7 @@ where
         let (auth_y, group_id, message) = self.create_group(initial_members).await?;
         self.set_auth(&auth_y)
             .await
-            .map_err(ManagerError::AuthStore)?;
+            .map_err(|err| ManagerError::Store(StoreError::Auth(err)))?;
         let group = Group::new(self.clone(), group_id);
         Ok((group, message))
     }
@@ -245,7 +246,10 @@ where
         &self,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(AuthGroupState<C>, ActorId, M), ManagerError<ID, S, K, F, M, C, RS>> {
-        let auth_y = self.auth().await.map_err(ManagerError::AuthStore)?;
+        let auth_y = self
+            .auth()
+            .await
+            .map_err(|err| ManagerError::Store(StoreError::Auth(err)))?;
 
         // Generate random group id.
         let group_id: ActorId = {
@@ -533,23 +537,6 @@ impl<ID, S, K, F, M, C, RS> Clone for Manager<ID, S, K, F, M, C, RS> {
             inner: self.inner.clone(),
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum StoreError<ID, S, M, C>
-where
-    ID: SpaceId,
-    S: SpacesStore<ID, M, C> + AuthStore<C> + MessageStore<M>,
-    C: Conditions,
-{
-    #[error("{0}")]
-    Spaces(<S as SpacesStore<ID, M, C>>::Error),
-
-    #[error("{0}")]
-    Auth(<S as AuthStore<C>>::Error),
-
-    #[error("{0}")]
-    Message(<S as MessageStore<M>>::Error),
 }
 
 #[derive(Debug, Error)]
