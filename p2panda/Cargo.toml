@@ -35,7 +35,7 @@ p2panda-encryption = { workspace = true, default-features = true, features = ["t
 p2panda-net = { workspace = true, default-features = true }
 p2panda-spaces = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-store = { workspace = true, default-features = true }
-p2panda-stream = { workspace = true, default-features = true, features = ["ingest", "log_prune"] }
+p2panda-stream = { workspace = true, default-features = true, features = ["ingest", "log_prune", "orderer", "spaces"] }
 p2panda-sync = { workspace = true, default-features = true }
 pin-project = { workspace = true }
 rand = { workspace = true }
