@@ -436,7 +436,7 @@ pub(crate) async fn process_published_operation(
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
     let event = pipeline
-        .process(Event::new(operation, log_id, topic, prune_flag))
+        .process(Event::new(operation, log_id, topic, prune_flag, None))
         .await;
 
     if event.is_failed() {
@@ -643,7 +643,9 @@ where
         prune_flag: bool,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions::from_topic(self.topic()).set_prune_flag(prune_flag);
+        let extensions = Extensions::builder(LogId::from_topic(self.topic()))
+            .prune_flag(prune_flag)
+            .build();
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),
@@ -728,6 +730,7 @@ impl Future for PublishFuture {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct StreamSubscription<M> {
     topic: Topic,
     store: SqliteStore,
