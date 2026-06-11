@@ -258,6 +258,7 @@ pub mod network;
 pub mod node;
 pub mod operation;
 pub mod processor;
+pub mod spaces;
 pub mod streams;
 
 // Useful external types we want to re-export for convenience.
