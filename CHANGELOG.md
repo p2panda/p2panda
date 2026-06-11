@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - auth: More methods (`traverse_members`, `groups`) to traverse and filter graph [#1242](https://github.com/p2panda/p2panda/pull/1242)
 - auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
+- Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
 
 ### Changed
 
@@ -27,8 +28,7 @@ Highlights are marked with a pancake 🥞
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
-- spaces: Don't sync all spaces when group membership changes
-  [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Don't sync all spaces when group membership changes [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
