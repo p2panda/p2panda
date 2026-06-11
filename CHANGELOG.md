@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Encrypted spaces and groups management integration into high-level Node API [#1202](https://github.com/p2panda/p2panda/pull/1202)
+
 ### Changed
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
