@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
+use std::sync::Arc;
 
 use p2panda_core::traits::Digest;
 use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
+use p2panda_stream::spaces::{SpacesProcessorArgs, SpacesResult};
 use thiserror::Error;
+
+use crate::spaces::SpacesManagerError;
+use crate::spaces::types::AuthCapabilities;
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +44,12 @@ pub struct Event<L, E, TP> {
 
     /// Status of the "log prune" processor.
     pub(crate) log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
+
+    /// Input arguments for the "spaces" processor.
+    spaces_args: SpacesProcessorArgs<AuthCapabilities>,
+
+    /// Status of the "spaces" processor.
+    pub(crate) spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, Arc<SpacesManagerError>>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -51,6 +62,7 @@ where
         log_id: L,
         topic: TP,
         prune_flag: PruneFlag,
+        spaces_args: Option<crate::spaces::types::SpacesArgs>,
     ) -> Self {
         Self {
             ingest_args: IngestArgs {
@@ -59,7 +71,8 @@ where
                 prune_flag: prune_flag.is_set(),
             },
             ingest: ProcessorStatus::Pending,
-            log_prune_args: if prune_flag.is_set() {
+            // Do not allow pruning when spaces args are set.
+            log_prune_args: if prune_flag.is_set() && spaces_args.is_none() {
                 LogPruneArgs::PruneEntriesUntil {
                     author: operation.header.verifying_key,
                     log_id,
@@ -69,7 +82,18 @@ where
                 LogPruneArgs::Ignore
             },
             log_prune: ProcessorStatus::Pending,
+            spaces_args: match spaces_args {
+                Some(args) => SpacesProcessorArgs::Process {
+                    msg: p2panda_spaces::SpacesMessage {
+                        id: operation.hash,
+                        author: operation.header.verifying_key,
+                        args,
+                    },
+                },
+                None => SpacesProcessorArgs::Ignore,
+            },
             operation,
+            spaces: ProcessorStatus::Pending,
         }
     }
 
@@ -87,12 +111,14 @@ where
     pub fn is_completed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Completed(_))
             && matches!(self.log_prune, ProcessorStatus::Completed(_))
+            && matches!(self.spaces, ProcessorStatus::Completed(_))
     }
 
     /// Returns `true` if event failed somewhere during processing.
     pub fn is_failed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Failed(_))
             || matches!(self.log_prune, ProcessorStatus::Failed(_))
+            || matches!(self.spaces, ProcessorStatus::Failed(_))
     }
 
     /// Returns the error which occurred during a processing failure or `None`.
@@ -102,6 +128,10 @@ where
         }
 
         if let ProcessorStatus::Failed(err) = &self.log_prune {
+            return Some(err.to_owned().into());
+        }
+
+        if let ProcessorStatus::Failed(err) = &self.spaces {
             return Some(err.to_owned().into());
         }
 
@@ -120,6 +150,9 @@ pub enum ProcessorError {
 
     #[error("log_prune processor failed with: {0}")]
     LogPrune(#[from] LogPruneError),
+
+    #[error("spaces processor failed with: {0}")]
+    Spaces(#[from] Arc<SpacesManagerError>),
 }
 
 impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {
@@ -151,6 +184,16 @@ where
 {
     fn borrow(&self) -> &LogPruneArgs<VerifyingKey, L, SeqNum> {
         &self.log_prune_args
+    }
+}
+
+impl<L, E, TP> Borrow<SpacesProcessorArgs<AuthCapabilities>> for Event<L, E, TP>
+where
+    L: LogId,
+    TP: Clone,
+{
+    fn borrow(&self) -> &SpacesProcessorArgs<AuthCapabilities> {
+        &self.spaces_args
     }
 }
 

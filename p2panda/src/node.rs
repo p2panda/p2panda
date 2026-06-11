@@ -63,20 +63,13 @@ impl Node {
         // functionality of p2panda to only work on local-area networks.
         let config = Config::default();
 
-        // Prepare manager which orchestrates processing of incoming operations.
-        let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
-
-        let node = Node::spawn_inner(config, store, credentials, pipeline).await?;
-
-        Ok(node)
+        Node::spawn_inner(config, store, credentials).await
     }
 
     pub(crate) async fn spawn_inner(
         config: Config,
         store: SqliteStore,
         credentials: Credentials,
-        pipeline: Pipeline<LogId, Extensions, Topic>,
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
@@ -90,6 +83,10 @@ impl Node {
         // TODO: Expose -spaces configuration to public API.
         let spaces_manager =
             spaces_manager(forge.clone(), credentials.clone(), store.clone()).await?;
+
+        // Prepare manager which orchestrates processing of incoming operations.
+        let tasks = TaskTracker::new();
+        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks, spaces_manager.clone());
 
         Ok(Node {
             config,

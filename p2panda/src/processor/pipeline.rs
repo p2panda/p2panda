@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::thread;
 
 use futures_util::StreamExt;
@@ -21,6 +22,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
+use crate::spaces::types::{SpacesManager, SpacesProcessor};
 
 /// Number of items which can stay in the pipeline buffer before backpressure is applied. If the
 /// buffer runs full, then sending of new operations into the processor will wait one is received
@@ -80,7 +82,11 @@ where
     // processing required for p2panda-spaces, etc.).
     //
     // NOTE: For parallelizing pipelines some sort of "work stealing" approach will be required.
-    pub fn new<S>(store: S, tasks: TaskTracker<Event<L, E, TP>, Hash>) -> Self
+    pub fn new<S>(
+        store: S,
+        tasks: TaskTracker<Event<L, E, TP>, Hash>,
+        spaces_manager: SpacesManager,
+    ) -> Self
     where
         S: Clone
             + Transaction
@@ -107,6 +113,10 @@ where
                     // Prepare event processing pipeline.
                     let ingest = Ingest::<S, Event<L, E, TP>, L, E, TP>::new(store.clone());
                     let log_prune = LogPrune::<S, Event<L, E, TP>, L, E>::new(store);
+                    let spaces = SpacesProcessor::<Event<L, E, TP>>::new(spaces_manager);
+
+                    // TODO: Add orderer whenever it's ready (needs API adjustments). Who is
+                    // ordering for us currently? Is it still in the spaces processor?
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(pipeline_rx)
@@ -131,7 +141,22 @@ where
                                 event.log_prune = ProcessorStatus::Failed(err);
                                 event
                             }
+                        })
+                        .layer(spaces)
+                        .map(|result| match result {
+                            Ok((mut event, result)) => {
+                                event.spaces = ProcessorStatus::Completed(result);
+                                event
+                            }
+                            Err((mut event, err)) => {
+                                event.spaces = ProcessorStatus::Failed(Arc::new(err));
+                                event
+                            }
                         });
+
+                    // TODO: After processing we want to update our topic mapping (in TopicStore)
+                    // based on the things we've learned about the space. This will mostly inform
+                    // what group logs we should include in the mapping for this topic / space id.
 
                     pin!(pipeline);
 
@@ -183,8 +208,11 @@ mod tests {
     use p2panda_core::{PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
 
+    use crate::credentials::Credentials;
+    use crate::forge::OperationForge;
     use crate::operation::LogId;
     use crate::processor::TaskTracker;
+    use crate::spaces::spaces_manager;
 
     use super::{Event, Pipeline};
 
@@ -192,7 +220,13 @@ mod tests {
     async fn processing_operations() {
         let store = SqliteStore::temporary().await;
         let tasks = TaskTracker::new();
-        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks);
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials.clone(), store.clone());
+        let spaces_manager = spaces_manager(forge, credentials, store.clone())
+            .await
+            .unwrap();
+
+        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
 
         let log = TestLog::new();
         let topic = Topic::random();
@@ -206,6 +240,7 @@ mod tests {
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
+                None,
             ))
             .await;
 
@@ -222,6 +257,7 @@ mod tests {
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
+                None,
             ))
             .await;
 

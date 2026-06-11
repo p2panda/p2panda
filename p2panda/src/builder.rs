@@ -13,7 +13,6 @@ use p2panda_store::sqlite::{SqlitePool, SqliteStoreBuilder};
 
 use crate::network::MdnsDiscoveryMode;
 use crate::node::{AckPolicy, Config, SpawnError};
-use crate::processor::{Pipeline, TaskTracker};
 use crate::{Credentials, Node};
 
 /// Builder for `Node`.
@@ -224,12 +223,7 @@ impl NodeBuilder {
             StoreBuilderOptions::Pool(pool) => SqliteStore::from_pool(pool),
         };
 
-        let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks);
-
-        let node = Node::spawn_inner(self.config, store, credentials, pipeline).await?;
-
-        Ok(node)
+        Node::spawn_inner(self.config, store, credentials).await
     }
 }
 
