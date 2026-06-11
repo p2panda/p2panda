@@ -17,6 +17,7 @@ Highlights are marked with a pancake 🥞
 - SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
 - ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
 - core: Provenance trait to get author & verify [#1254](https://github.com/p2panda/p2panda/pull/1254)
+- node: Encrypted spaces and groups management integration into high-level API [#1202](https://github.com/p2panda/p2panda/pull/1202)
 
 ### Changed
 
