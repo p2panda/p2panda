@@ -643,7 +643,9 @@ where
         prune_flag: bool,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions::from_topic(self.topic()).set_prune_flag(prune_flag);
+        let extensions = Extensions::builder(LogId::from_topic(self.topic()))
+            .prune_flag(prune_flag)
+            .build();
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),
@@ -728,6 +730,7 @@ impl Future for PublishFuture {
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct StreamSubscription<M> {
     topic: Topic,
     store: SqliteStore,
