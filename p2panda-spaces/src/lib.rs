@@ -13,6 +13,7 @@ pub mod manager;
 mod member;
 mod message;
 pub mod space;
+pub mod store;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
