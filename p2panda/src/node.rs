@@ -16,9 +16,15 @@ use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
+use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
+use crate::spaces::{
+    AccessLevel, ActorId, Group, GroupError, Member, MemberError, Space, SpaceError,
+    SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream, to_initial_members,
+};
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, StreamFrom, StreamPublisher,
-    StreamSubscription, SystemEvent, ephemeral_stream, event_stream, processed_stream,
+    StreamSubscription, SystemEvent, ephemeral_stream, event_stream, process_published_operation,
+    processed_stream,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -33,6 +39,7 @@ pub struct Node {
     // make the number of processors configurable to avoid head-of-line blocking.
     pipeline: Pipeline<LogId, Extensions, Topic>,
     network: Network,
+    spaces_manager: SpacesManager,
 }
 
 impl Node {
@@ -70,7 +77,7 @@ impl Node {
         store: SqliteStore,
         credentials: Credentials,
         pipeline: Pipeline<LogId, Extensions, Topic>,
-    ) -> Result<Self, NetworkError> {
+    ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
         let network = Network::spawn(
@@ -80,6 +87,10 @@ impl Node {
         )
         .await?;
 
+        // TODO: Expose -spaces configuration to public API.
+        let spaces_manager =
+            spaces_manager(forge.clone(), credentials.clone(), store.clone()).await?;
+
         Ok(Node {
             config,
             store,
@@ -87,6 +98,7 @@ impl Node {
             credentials,
             pipeline,
             network,
+            spaces_manager,
         })
     }
 
@@ -358,6 +370,124 @@ impl Node {
         Ok(event_stream(discovery_events))
     }
 
+    pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
+        let member: p2panda_spaces::member::Member = member.into();
+        self.spaces_manager.register_member(&member).await?;
+
+        Ok(())
+    }
+
+    pub async fn group(&self, actor_id: impl Into<ActorId>) -> Result<Option<Group>, GroupError> {
+        match self.spaces_manager.group(actor_id.into()).await? {
+            Some(inner) => {
+                let topic = actor_to_topic(inner.id());
+                let (tx, rx) = self.stream::<NoBody>(topic).await?;
+
+                Ok(Some(Group::new(inner, tx, rx)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn create_group(
+        &self,
+        initial_members: &[(ActorId, AccessLevel)],
+    ) -> Result<Group, GroupError> {
+        let initial_members = to_initial_members(initial_members);
+        let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
+
+        // TODO: Could refactor this to process using the tx, similar like create_space. Like this
+        // we would already receive the CREATED_GROUP event on the rx which is nice.
+        let topic = actor_to_topic(group_id);
+        let event =
+            process_published_operation(message.into_operation(), topic, &self.pipeline).await;
+
+        if event.is_failed() {
+            Err(event
+                .failure_reason()
+                .expect("event has failed during processing"))?
+        } else {
+            let group = self.group(group_id).await?.expect("");
+            Ok(group)
+        }
+    }
+
+    pub async fn space<M>(
+        &self,
+        space_id: impl Into<Topic>,
+    ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
+        self.space_from(space_id, StreamFrom::Frontier).await
+    }
+
+    pub async fn space_from<M>(
+        &self,
+        space_id: impl Into<Topic>,
+        from: StreamFrom,
+    ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
+        let space_id = space_id.into();
+
+        match self.spaces_manager.space(space_id).await? {
+            Some(inner) => {
+                let topic = space_id;
+                let (tx, rx) = self.stream_from::<M>(topic, from).await?;
+
+                Ok(Some(spaces_stream::<M>(inner, tx, rx)))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn create_space<M>(
+        &self,
+        space_id: impl Into<Topic>,
+        initial_members: &[(ActorId, AccessLevel)],
+    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
+        let space_id = space_id.into();
+
+        // Issue the event to create a space.
+        let initial_members = to_initial_members(initial_members);
+        let (_, _, messages) = self
+            .spaces_manager
+            .create_space(space_id, &initial_members)
+            .await?;
+
+        // Establish a topic pub/sub stream using the space id as a topic.
+        let topic = space_id;
+        let (tx, rx) = self.stream::<M>(topic).await?;
+
+        // Process the -spaces events by importing them as an "external stream".
+        let processed = tx
+            .import(futures_util::stream::iter(
+                messages.into_iter().map(|message| message.into_operation()),
+            ))
+            .await?;
+
+        // Wait until processing the events has finished. This should result in a "materialised
+        // space" we can finally call and return to the user.
+
+        // TODO: Would be good to get an error / report here if processing the imported operations
+        // failed. This error so far only tells us that the channel broke down.
+        if processed.await.is_err() {
+            panic!();
+        }
+        let inner = self
+            .spaces_manager
+            .space(space_id)
+            .await?
+            .expect("materialised space after processing operations");
+
+        Ok(spaces_stream::<M>(inner, tx, rx))
+    }
+
     /// Returns the node identifier (public key).
     pub fn id(&self) -> NodeId {
         self.forge.verifying_key()
@@ -366,6 +496,12 @@ impl Node {
     /// Returns the network identifier being used by the node.
     pub fn network_id(&self) -> NetworkId {
         self.network.network_id()
+    }
+
+    pub async fn me(&self) -> Result<Member, MemberError> {
+        let inner = self.spaces_manager.me().await?;
+
+        Ok(Member { inner })
     }
 
     /// Inserts a bootstrap node into the local address book.
@@ -429,18 +565,22 @@ pub(crate) struct Config {
 
 /// Error occurred when spawning network or store processes.
 #[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpawnError {
     #[error(transparent)]
     Network(#[from] NetworkError),
 
     #[error(transparent)]
     Store(#[from] SqliteError),
+
+    #[error(transparent)]
+    SpacesManager(#[from] SpacesManagerError),
 }
 
 /// Broken / closed communication channel with the internal actor in `p2panda-net` prevented
 /// creation of stream. This can be due to the actor crashing.
 ///
 /// Users may re-attempt creating a new stream in case the actor restarted later.
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 #[error("error occurred in internal actor: {0}")]
 pub struct CreateStreamError(pub String);
