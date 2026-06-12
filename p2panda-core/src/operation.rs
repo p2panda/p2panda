@@ -669,7 +669,7 @@ mod tests {
         let mut header = header_base.clone();
         header.version = 0;
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_header(&header),
             Err(OperationError::UnsupportedVersion(0, 1))
         ));
@@ -678,7 +678,7 @@ mod tests {
         let mut header = header_base.clone();
         header.verifying_key = SigningKey::generate().verifying_key();
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_header(&header),
             Err(OperationError::SignatureMismatch)
         ));
@@ -687,7 +687,7 @@ mod tests {
         let mut header = header_base.clone();
         header.seq_num = 1;
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_header(&header),
             Err(OperationError::BacklinkMissing)
         ));
@@ -696,7 +696,7 @@ mod tests {
         let mut header = header_base.clone();
         header.backlink = Some(Hash::digest(vec![4, 5, 6]));
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_header(&header),
             Err(OperationError::SeqNumMismatch)
         ));
@@ -705,7 +705,7 @@ mod tests {
         let mut header = header_base.clone();
         header.payload_size = 11;
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
                 header,
@@ -718,7 +718,7 @@ mod tests {
         let mut header = header_base.clone();
         header.payload_hash = Some(Hash::digest(vec![4, 5, 6]));
         header.sign(&signing_key);
-        assert!(matches!(
+        assert_matches!(
             validate_operation(&Operation {
                 hash: header.hash(),
                 header,

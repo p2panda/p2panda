@@ -744,7 +744,7 @@ mod tests {
         ];
 
         let result: Result<Header<()>, _> = ciborium::de::from_reader(&incomplete[..]);
-        assert!(matches!(result, Err(ciborium::de::Error::Io(_))));
+        assert_matches!(result, Err(ciborium::de::Error::Io(_))));
     }
 
     #[test]

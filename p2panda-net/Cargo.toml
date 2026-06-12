@@ -12,7 +12,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "local-first", "sync", "gossip", "discovery"]
-rust-version = "1.94"
+rust-version = "1.96"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -94,7 +94,6 @@ tracing-subscriber = { workspace = true, features = ["env-filter"], optional = t
 
 [dev-dependencies]
 anyhow = "1.0.100"
-assert_matches = "1.5.0"
 clap = { version = "4.5.54", features = ["derive"] }
 futures-test = "0.3.31"
 mock_instant = "0.6.0"

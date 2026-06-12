@@ -91,19 +91,19 @@ mod tests {
         let invalid_nonce: XAeadNonce = rng.random_array().unwrap();
 
         // Invalid key.
-        assert!(matches!(
+        assert_matches!(
             x_aead_decrypt(&invalid_key, &ciphertext, nonce, None),
             Err(XAeadError::Decrypt(chacha20poly1305::Error))
         ));
 
         // Invalid nonce.
-        assert!(matches!(
+        assert_matches!(
             x_aead_decrypt(&key, &ciphertext, invalid_nonce, None),
             Err(XAeadError::Decrypt(chacha20poly1305::Error))
         ));
 
         // Invalid additional data.
-        assert!(matches!(
+        assert_matches!(
             x_aead_decrypt(&key, &ciphertext, nonce, Some(b"invalid aad")),
             Err(XAeadError::Decrypt(chacha20poly1305::Error))
         ));

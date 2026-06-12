@@ -222,7 +222,7 @@ mod tests {
 
         // Subscriber doesn't receive an item right at the beginning as they are only interested in
         // "updates".
-        assert!(matches!(
+        assert_matches!(
             updates_only_rx.try_recv(),
             Err(TryRecvError::Empty)
         ));
@@ -238,11 +238,11 @@ mod tests {
         watcher.update(HashSet::from_iter([1, 2, 3]));
 
         // Subscribers do not get notified.
-        assert!(matches!(
+        assert_matches!(
             updates_only_rx.try_recv(),
             Err(TryRecvError::Empty)
         ));
-        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+        assert_matches!(rx.try_recv(), Err(TryRecvError::Empty)));
 
         // Value gets updated, this time with a real change.
         watcher.update(HashSet::from_iter([1, 2, 3, 4]));

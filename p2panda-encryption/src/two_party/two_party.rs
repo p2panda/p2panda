@@ -748,7 +748,7 @@ mod tests {
         // Bob receives the same message again.
 
         let result = OneTimeTwoParty::receive(bob_2sm.clone(), bob_manager.clone(), message_1);
-        assert!(matches!(result, Err(TwoPartyError::PreKeyReuse)));
+        assert_matches!(result, Err(TwoPartyError::PreKeyReuse)));
 
         // Alice sends another message to Bob.
 
@@ -760,6 +760,6 @@ mod tests {
         // Bob receives the same message again.
 
         let result = OneTimeTwoParty::receive(bob_2sm, bob_manager, message_2);
-        assert!(matches!(result, Err(TwoPartyError::Hpke(_))));
+        assert_matches!(result, Err(TwoPartyError::Hpke(_))));
     }
 }

@@ -12,7 +12,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "local-first", "sync", "replication"]
-rust-version = "1.94"
+rust-version = "1.96"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -44,7 +44,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
-assert_matches = "1.5.0"
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
 rand = { workspace = true }

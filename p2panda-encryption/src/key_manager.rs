@@ -424,13 +424,13 @@ mod tests {
         .unwrap();
 
         // Current pre-key bundle is invalid.
-        assert!(matches!(
+        assert_matches!(
             KeyManager::prekey_bundle(&y),
             Err(KeyManagerError::NoPreKeysAvailable)
         ));
 
         // Can't generate one-time key bundle with expired pre keys.
-        assert!(matches!(
+        assert_matches!(
             KeyManager::generate_onetime_bundle(y.clone(), &rng),
             Err(KeyManagerError::NoPreKeysAvailable)
         ));

@@ -454,7 +454,7 @@ mod tests {
         let pool = SqliteStore::temporary().await;
 
         // Executing with an in-existant transaction should throw error.
-        assert!(matches!(
+        assert_matches!(
             pool.tx(async |_| Ok(())).await,
             Err(SqliteError::TransactionMissing)
         ));
@@ -463,7 +463,7 @@ mod tests {
         let permit = pool.begin().await.expect("no error");
 
         // .. attempting to start a second one should make us wait.
-        assert!(matches!(
+        assert_matches!(
             {
                 let fut = pool.begin();
                 let mut cx = noop_context();
@@ -480,7 +480,7 @@ mod tests {
         assert!(pool.commit(permit).await.is_ok());
 
         // .. and now running a transaction should fail.
-        assert!(matches!(
+        assert_matches!(
             pool.tx(async |_| Ok(())).await,
             Err(SqliteError::TransactionMissing)
         ));

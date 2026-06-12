@@ -510,7 +510,7 @@ mod tests {
         let result = add(group_y.clone(), charlie, daphne, Access::read());
 
         // ...but Charlie isn't known to the group (has never been a member).
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedActor(_bob))
         ));
@@ -519,7 +519,7 @@ mod tests {
         let result = add(group_y.clone(), bob, daphne, Access::read());
 
         // ...but Bob isn't a manager.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
@@ -528,7 +528,7 @@ mod tests {
         let result = add(group_y.clone(), alice, bob, Access::read());
 
         // ...but Bob is already an active member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::AlreadyAdded(_bob))
         ));
@@ -540,13 +540,13 @@ mod tests {
         let result = add(group_y, bob, daphne, Access::read());
 
         // ...but Bob isn't an active member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InactiveActor(_bob))
         ));
 
         // TODO.
-        // The `assert!(matches!())` tests don't test the value in the variant tuple.
+        // The `assert_matches!())` tests don't test the value in the variant tuple.
         // We should consider rather using `if let` to match fully.
         /*
         if let Err(GroupMembershipError::InactiveActor(actor)) = result {
@@ -579,7 +579,7 @@ mod tests {
         let result = remove(group_y.clone(), daphne, charlie);
 
         // ...but Daphne isn't known to the group (has never been a member).
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
@@ -588,7 +588,7 @@ mod tests {
         let result = remove(group_y.clone(), bob, charlie);
 
         // ...but Bob isn't a manager.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
@@ -597,7 +597,7 @@ mod tests {
         let result = remove(group_y.clone(), alice, daphne);
 
         // ...but Daphne isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
@@ -609,7 +609,7 @@ mod tests {
         let result = remove(group_y, alice, charlie);
 
         // ...but Charlie has already been removed.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::AlreadyRemoved(_charlie))
         ));
@@ -637,7 +637,7 @@ mod tests {
         let result = promote(group_y.clone(), daphne, charlie, Access::manage());
 
         // ...but Daphne isn't known to the group (has never been a member).
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
@@ -646,7 +646,7 @@ mod tests {
         let result = promote(group_y.clone(), bob, charlie, Access::write());
 
         // ...but Bob isn't a manager.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
@@ -655,7 +655,7 @@ mod tests {
         let result = promote(group_y.clone(), alice, daphne, Access::read());
 
         // ...but Daphne isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
@@ -667,7 +667,7 @@ mod tests {
         let result = promote(group_y.clone(), alice, charlie, Access::pull());
 
         // ...but Charlie isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InactiveMember(_charlie))
         ));
@@ -676,7 +676,7 @@ mod tests {
         let result = promote(group_y, charlie, bob, Access::manage());
 
         // ...but Charlie isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InactiveActor(_charlie))
         ));
@@ -704,7 +704,7 @@ mod tests {
         let result = demote(group_y.clone(), daphne, charlie, Access::pull());
 
         // ...but Daphne isn't known to the group (has never been a member).
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedActor(_daphne))
         ));
@@ -713,7 +713,7 @@ mod tests {
         let result = demote(group_y.clone(), bob, charlie, Access::pull());
 
         // ...but Bob isn't a manager.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InsufficientAccess(_bob))
         ));
@@ -722,7 +722,7 @@ mod tests {
         let result = demote(group_y.clone(), alice, daphne, Access::read());
 
         // ...but Daphne isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::UnrecognisedMember(_daphne))
         ));
@@ -734,7 +734,7 @@ mod tests {
         let result = demote(group_y.clone(), alice, charlie, Access::pull());
 
         // ...but Charlie isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InactiveMember(_charlie))
         ));
@@ -743,7 +743,7 @@ mod tests {
         let result = demote(group_y, charlie, bob, Access::pull());
 
         // ...but Charlie isn't a member.
-        assert!(matches!(
+        assert_matches!(
             result,
             Err(GroupMembershipError::InactiveActor(_charlie))
         ));

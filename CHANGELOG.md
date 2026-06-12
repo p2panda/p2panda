@@ -12,7 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
-- Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- Set MSRV to `1.96` [#1205](https://github.com/p2panda/p2panda/pull/1205)
 - Core header type changes & stabilisation
     - `payload_size` and `seq_num` from `u64` to `u32` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - `version` from `u64` to `u16` [#1194](https://github.com/p2panda/p2panda/pull/1194)
