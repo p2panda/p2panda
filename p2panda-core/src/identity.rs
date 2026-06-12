@@ -26,7 +26,7 @@ use std::str::FromStr;
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
-use ed25519_dalek::Signer;
+use ed25519_dalek::Signer as _;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -140,6 +140,12 @@ impl TryFrom<&[u8]> for SigningKey {
             .map_err(|_| IdentityError::InvalidLength(value_len, SIGNING_KEY_LEN))?;
 
         Ok(Self::from(checked_value))
+    }
+}
+
+impl Signer for SigningKey {
+    fn sign(&self, bytes: &[u8]) -> Signature {
+        self.sign(bytes)
     }
 }
 
@@ -384,6 +390,10 @@ pub enum IdentityError {
     /// * Failure of a signature to satisfy the verification equation.
     #[error("invalid signature: {0}")]
     InvalidSignature(#[from] ed25519_dalek::SignatureError),
+}
+
+pub trait Signer {
+    fn sign(&self, bytes: &[u8]) -> Signature;
 }
 
 #[cfg(test)]
