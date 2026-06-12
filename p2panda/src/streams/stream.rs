@@ -436,7 +436,7 @@ pub(crate) async fn process_published_operation(
     // Send operation to processor task and wait for result. This blocks any parent stream and
     // makes sure that all events are handled in same order.
     let event = pipeline
-        .process(Event::new(operation, log_id, topic, prune_flag, None))
+        .process(Event::new(operation, log_id, topic, prune_flag))
         .await;
 
     if event.is_failed() {
