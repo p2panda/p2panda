@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::warn;
+use tracing::{Instrument, warn};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
@@ -141,6 +141,7 @@ where
         let pipeline = pipeline.clone();
         let acked = acked.clone();
         let store = store.clone();
+        let span = tracing::error_span!("replay");
 
         tokio::spawn(async move {
             // =======================
@@ -297,14 +298,16 @@ where
                 // still might want to process locally published operations.
                 let _ = app_tx.send(event).await;
             }
-        });
+        }.instrument(span));
     }
 
     // Keep around the sync handle on both the publisher and subscriber ends to keep it running
     // even if one half got dropped.
     let sync_handle = Arc::new(sync_handle);
 
+    let stream_span = tracing::Span::current();
     let tx = StreamPublisher {
+        stream_span: stream_span.clone(),
         topic,
         sync_handle: sync_handle.clone(),
         forge,
@@ -314,6 +317,7 @@ where
     };
 
     let rx = StreamSubscription {
+        stream_span,
         topic,
         store,
         sync_handle,
@@ -564,6 +568,7 @@ pub(crate) async fn ack_published_operation<M>(
 /// other sync solutions.
 #[derive(Clone, Debug)]
 pub struct StreamPublisher<M> {
+    stream_span: tracing::Span,
     topic: Topic,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     forge: OperationForge,
@@ -594,6 +599,7 @@ where
     /// Locally created operations are processed by the same pipeline as remotely received
     /// operations. It is possible to await the processing result which can be useful for some
     /// applications if they want to block UI components etc.
+    #[tracing::instrument(parent = &self.stream_span, name = "publish", skip_all)]
     pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
         self.publish_inner(Some(message), false).await
     }
@@ -609,6 +615,7 @@ where
     /// Internally we're applying append-only log prefix deletion, meaning that the log's prefix
     /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
     /// "older" / before the point where the prune flag was set.
+    #[tracing::instrument(parent = &self.stream_span, name = "prune", skip_all)]
     pub async fn prune(&self, message: Option<M>) -> Result<PublishFuture, PublishError> {
         self.publish_inner(message, true).await
     }
@@ -618,6 +625,7 @@ where
     /// Please note: Operations do not contain any information by themselves about to which topic
     /// they belong. By importing operations into a topic stream, they will be assigned to this
     /// topic. Make sure you accordingly routed operations into the correct topic before.
+    #[tracing::instrument(parent = &self.stream_span, name = "import", skip_all)]
     pub async fn import(
         &self,
         stream: impl Stream<Item = Operation> + Send + 'static,
@@ -729,6 +737,7 @@ impl Future for PublishFuture {
 /// # }
 /// ```
 pub struct StreamSubscription<M> {
+    stream_span: tracing::Span,
     topic: Topic,
     store: SqliteStore,
     acked: Acked,
@@ -750,6 +759,7 @@ impl<M> StreamSubscription<M> {
     /// If the [`AckPolicy`] is set to "explicit", users want to call this method _after_
     /// applicaton-level processing has successfully finished. See high-level description in
     /// [`Node::stream`](crate::node::Node::stream) for more details.
+    #[tracing::instrument(parent = &self.stream_span, name = "ack", skip(self))]
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
         if let Some(operation) =
             OperationStore::<_, _, LogId>::get_operation(&self.store, &id).await?
