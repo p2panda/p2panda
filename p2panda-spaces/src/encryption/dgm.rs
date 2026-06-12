@@ -11,10 +11,10 @@ use crate::{MemberId, OperationId};
 /// Placeholder for DGM implementation which satisfies required trait interfaces in
 /// p2panda-encryption. Most methods perform no actual actions as group management is handled by
 /// p2panda-auth.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EncryptionGroupMembership;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
     pub(crate) members: HashSet<MemberId>,
 }

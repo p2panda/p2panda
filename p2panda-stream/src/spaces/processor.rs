@@ -23,7 +23,7 @@ pub type SpacesManager<S, F, C> = Manager<S, F, C, StrongRemoveResolver<C>>;
 
 pub type SpacesManagerError<F, C> = ManagerError<F, C, StrongRemoveResolver<C>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SpacesResult<C> {
     Processed { events: Vec<Event<C>> },
     Ignored,
