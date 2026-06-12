@@ -24,5 +24,5 @@ mod utils;
 pub use config::Config;
 pub use credentials::Credentials;
 pub use event::Event;
-pub use message::SpacesArgs;
-pub use types::{ActorId, OperationId};
+pub use message::{SpacesArgs, SpacesMessage};
+pub use types::{ActorId, OperationId, StrongRemoveResolver};

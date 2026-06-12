@@ -5,44 +5,15 @@ use std::fmt::Debug;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
-use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
 use crate::types::{ActorId, OperationId};
 
 #[derive(Clone, Debug)]
 pub struct AuthMessage<C> {
-    operation_id: OperationId,
-    author: ActorId,
-    dependencies: Vec<OperationId>,
-    group_id: ActorId,
-    action: GroupAction<ActorId, C>,
-}
-
-impl<C> AuthMessage<C>
-where
-    C: Conditions,
-{
-    pub(crate) fn from_forged<ID, M>(message: &M) -> Self
-    where
-        ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
-    {
-        let SpacesArgs::Auth {
-            group_id,
-            group_action,
-            auth_dependencies,
-        } = message.args()
-        else {
-            panic!("unexpected message type")
-        };
-        AuthMessage {
-            operation_id: message.id(),
-            author: message.author(),
-            dependencies: auth_dependencies.to_owned(),
-            group_id: *group_id,
-            action: group_action.to_owned(),
-        }
-    }
+    pub(crate) operation_id: OperationId,
+    pub(crate) author: ActorId,
+    pub(crate) dependencies: Vec<OperationId>,
+    pub(crate) group_id: ActorId,
+    pub(crate) action: GroupAction<ActorId, C>,
 }
 
 impl<C> AuthOperation<ActorId, OperationId, C> for AuthMessage<C>

@@ -14,7 +14,7 @@ use crate::types::AuthGroupState;
 use crate::{ActorId, OperationId};
 
 /// Interface for setting and getting space state.
-pub trait SpacesStore<ID, M, C>
+pub trait SpacesStore<ID, C>
 where
     ID: SpaceId,
     C: Conditions,
@@ -24,7 +24,7 @@ where
     fn space(
         &self,
         id: &ID,
-    ) -> impl Future<Output = Result<Option<SpaceState<ID, M, C>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<SpaceState<ID, C>>, Self::Error>>;
 
     fn has_space(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
@@ -33,7 +33,7 @@ where
     fn set_space(
         &self,
         id: &ID,
-        y: SpaceState<ID, M, C>,
+        y: SpaceState<ID, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 

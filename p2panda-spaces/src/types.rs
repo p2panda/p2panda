@@ -201,22 +201,22 @@ impl<C> AuthResolver<C> for StrongRemoveResolver<C> where C: Conditions {}
 
 // ~~~ Encryption ~~~
 
-pub type EncryptionGroup<M> = p2panda_encryption::data_scheme::EncryptionGroup<
+pub type EncryptionGroup = p2panda_encryption::data_scheme::EncryptionGroup<
     ActorId,
     OperationId,
     KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
-    EncryptionOrderer<M>,
+    EncryptionOrderer,
 >;
 
-pub type EncryptionGroupState<M> = p2panda_encryption::data_scheme::GroupState<
+pub type EncryptionGroupState = p2panda_encryption::data_scheme::GroupState<
     ActorId,
     OperationId,
     KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
-    EncryptionOrderer<M>,
+    EncryptionOrderer,
 >;
 
 pub type EncryptionDirectMessage =
@@ -224,20 +224,20 @@ pub type EncryptionDirectMessage =
 
 pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMessage<ActorId>;
 
-pub type EncryptionGroupError<M> = p2panda_encryption::data_scheme::GroupError<
+pub type EncryptionGroupError = p2panda_encryption::data_scheme::GroupError<
     ActorId,
     OperationId,
     KeyRegistry<ActorId>,
     EncryptionGroupMembership,
     KeyManager,
-    EncryptionOrderer<M>,
+    EncryptionOrderer,
 >;
 
-pub type EncryptionGroupOutput<M> = p2panda_encryption::data_scheme::GroupOutput<
+pub type EncryptionGroupOutput = p2panda_encryption::data_scheme::GroupOutput<
     ActorId,
     OperationId,
     EncryptionGroupMembership,
-    EncryptionOrderer<M>,
+    EncryptionOrderer,
 >;
 
 #[cfg(test)]

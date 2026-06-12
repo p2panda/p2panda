@@ -5,17 +5,15 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
 
 use crate::ActorId;
-use crate::manager::Manager;
-use crate::traits::AuthStore;
 use crate::types::AuthGroupState;
 
 /// Assign a GroupMember type to passed actor based on looking up if the actor is a group in the
 /// auth state.
 pub(crate) fn typed_member<C: Conditions>(
-    auth_y: &AuthGroupState<C>,
+    y: &AuthGroupState<C>,
     member: ActorId,
 ) -> GroupMember<ActorId> {
-    if auth_y.members(member).is_empty() {
+    if y.members(member).is_empty() {
         GroupMember::Individual(member)
     } else {
         GroupMember::Group(member)
@@ -24,20 +22,14 @@ pub(crate) fn typed_member<C: Conditions>(
 
 /// Assign GroupMember type to every actor based on looking up if the actor is a group in the auth
 /// state.
-pub(crate) async fn typed_members<ID, S, K, F, M, C, RS>(
-    manager_ref: Manager<ID, S, K, F, M, C, RS>,
+pub(crate) fn typed_members<C: Conditions>(
+    y: &AuthGroupState<C>,
     members: Vec<(ActorId, Access<C>)>,
-) -> Result<Vec<(GroupMember<ActorId>, Access<C>)>, <S as AuthStore<C>>::Error>
-where
-    S: AuthStore<C>,
-    C: Conditions,
-{
-    let manager = manager_ref.inner.read().await;
-    let auth_y = manager.store.auth().await?;
-    Ok(members
+) -> Vec<(GroupMember<ActorId>, Access<C>)> {
+    members
         .into_iter()
-        .map(|(member, access)| (typed_member(&auth_y, member), access))
-        .collect())
+        .map(|(member, access)| (typed_member(y, member), access))
+        .collect()
 }
 
 pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {

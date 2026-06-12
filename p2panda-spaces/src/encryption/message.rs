@@ -7,8 +7,7 @@ use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessa
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
-use crate::message::SpacesArgs;
-use crate::traits::{AuthoredMessage, SpaceId, SpacesMessage};
+use crate::message::{ApplicationMessage, SpaceMembershipMessage};
 use crate::types::{
     ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
 };
@@ -44,22 +43,16 @@ pub enum EncryptionMessage {
 
 impl EncryptionMessage {
     /// Construct an encryption message from a space application message.
-    pub(crate) fn from_application<ID, M, C>(space_message: &M) -> Self
-    where
-        ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
-        C: Conditions,
-    {
-        let SpacesArgs::Application {
+    pub(crate) fn from_application(space_message: &ApplicationMessage) -> Self {
+        let ApplicationMessage {
+            id,
+            author,
             space_dependencies,
             group_secret_id,
             nonce,
             ciphertext,
             ..
-        } = space_message.args()
-        else {
-            panic!("unexpected message type")
-        };
+        } = space_message;
 
         let encryption_args = EncryptionArgs::Application {
             dependencies: space_dependencies.clone(),
@@ -69,8 +62,8 @@ impl EncryptionMessage {
         };
 
         EncryptionMessage::Forged {
-            author: space_message.author(),
-            operation_id: space_message.id(),
+            author: *author,
+            operation_id: *id,
             args: encryption_args,
         }
     }
@@ -85,27 +78,24 @@ impl EncryptionMessage {
     /// manually replaced with the latest membership state provided by p2panda-auth. The only case
     /// where it does matter is if we ourselves were added or removed from the group; here we
     /// should make sure that the control message contains our own actor id.
-    pub(crate) fn from_membership<ID, M, C>(
-        space_message: &M,
+    pub(crate) fn from_membership<C>(
+        space_message: &SpaceMembershipMessage,
         my_id: ActorId,
         auth_message: &AuthMessage<C>,
         current_members: &Vec<ActorId>,
         next_members: &Vec<ActorId>,
     ) -> Self
     where
-        ID: SpaceId,
-        M: AuthoredMessage + SpacesMessage<ID, C>,
         C: Conditions,
     {
-        let SpacesArgs::SpaceMembership {
+        let SpaceMembershipMessage {
+            id,
+            author,
             space_dependencies,
             auth_message_id,
             direct_messages,
             ..
-        } = space_message.args()
-        else {
-            panic!("unexpected message type");
-        };
+        } = space_message;
 
         // Sanity check.
         assert_eq!(auth_message.id(), *auth_message_id);
@@ -167,8 +157,8 @@ impl EncryptionMessage {
         };
 
         EncryptionMessage::Forged {
-            author: space_message.author(),
-            operation_id: space_message.id(),
+            author: *author,
+            operation_id: *id,
             args: encryption_args,
         }
     }

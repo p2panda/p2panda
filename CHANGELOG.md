@@ -12,7 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
-- Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- Set MSRV to `1.96` [#1205](https://github.com/p2panda/p2panda/pull/1205)
 - Core header type changes & stabilisation
     - `payload_size` and `seq_num` from `u64` to `u32` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - `version` from `u64` to `u16` [#1194](https://github.com/p2panda/p2panda/pull/1194)
@@ -20,7 +20,14 @@ Highlights are marked with a pancake 🥞
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
-- Set MSRV to `1.96` [#1205](https://github.com/p2panda/p2panda/pull/1205)
+- spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Don't sync all spaces when group membership changes
+  [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
+- spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
+- spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
+- stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
 
 ## [0.6.1] - 22/05/2026
 
