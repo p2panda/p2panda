@@ -138,7 +138,7 @@ where
 }
 
 /// Enum representing all possible message types.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SpacesArgs<ID, C> {
     /// System message, contains key bundle of the given author.
     ///

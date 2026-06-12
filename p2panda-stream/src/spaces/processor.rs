@@ -21,7 +21,7 @@ use crate::spaces::SpacesArgs;
 pub type SpacesManager<ID, S, K, F, C> = Manager<ID, S, K, F, C, StrongRemoveResolver<C>>;
 pub type SpacesManagerError<ID, S, K, F, C> = ManagerError<ID, S, K, F, C, StrongRemoveResolver<C>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SpacesResult<ID, C> {
     Processed { events: Vec<Event<ID, C>> },
     Ignored,

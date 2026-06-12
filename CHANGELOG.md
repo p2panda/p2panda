@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- Encrypted spaces and groups management integration into high-level Node API [#1202](https://github.com/p2panda/p2panda/pull/1202)
+
 ### Changed
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
@@ -19,10 +23,10 @@ Highlights are marked with a pancake 🥞
     - Remove `timestamp` [#1195](https://github.com/p2panda/p2panda/pull/1195)
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
+- Use `Signer` trait instead of `SigningKey` in `p2panda-core` [#1202](https://github.com/p2panda/p2panda/pull/1202)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
-- spaces: Don't sync all spaces when group membership changes
-  [#1216](https://github.com/p2panda/p2panda/pull/1216)
+- spaces: Don't sync all spaces when group membership changes [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)

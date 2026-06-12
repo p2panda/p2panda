@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
-use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Body, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
 
+use crate::credentials::Credentials;
 use crate::operation::{Extensions, Header, LogId, Operation};
 
 /// Interface for obtaining a keypair and creating signed operations.
 pub trait Forge<TP, C, E> {
     type Error: StdError;
-
-    fn signing_key(&self) -> &SigningKey;
 
     fn verifying_key(&self) -> VerifyingKey;
 
@@ -31,38 +29,21 @@ pub trait Forge<TP, C, E> {
 
 #[derive(Clone, Debug)]
 pub struct OperationForge {
-    signing_key: Arc<SigningKey>,
+    credentials: Credentials,
     store: SqliteStore,
 }
 
 impl OperationForge {
-    /// Create a forge for inserting signed operations into the database and associating topics
-    /// with logs.
-    ///
-    /// The forge holds the private key used to sign operations. This method generates a new key
-    /// using CSPRNG from the system.
-    pub fn new(store: SqliteStore) -> Self {
-        Self::from_signing_key(SigningKey::generate(), store)
-    }
-
-    /// Create a forge using an existing private key.
-    pub fn from_signing_key(signing_key: SigningKey, store: SqliteStore) -> Self {
-        Self {
-            signing_key: Arc::new(signing_key),
-            store,
-        }
+    pub fn new(credentials: Credentials, store: SqliteStore) -> Self {
+        Self { credentials, store }
     }
 }
 
 impl Forge<Topic, LogId, Extensions> for OperationForge {
     type Error = ForgeError;
 
-    fn signing_key(&self) -> &SigningKey {
-        &self.signing_key
-    }
-
     fn verifying_key(&self) -> VerifyingKey {
-        self.signing_key.verifying_key()
+        self.credentials.verifying_key()
     }
 
     /// Create a signed operation and insert it into the store.
@@ -99,7 +80,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 SeqNum,
                 Hash,
             >>::get_latest_entry_tx(
-                &self.store, &self.signing_key.verifying_key(), &log_id
+                &self.store, &self.credentials.verifying_key(), &log_id
             )
             .await?
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
@@ -107,7 +88,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 
             let mut header = Header {
                 version: 1,
-                verifying_key: self.signing_key.verifying_key(),
+                verifying_key: self.credentials.verifying_key(),
                 signature: None,
                 payload_size,
                 payload_hash,
@@ -116,7 +97,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 extensions,
             };
 
-            header.sign(&self.signing_key);
+            header.sign(&self.credentials);
             let hash = header.hash();
 
             let operation = Operation {
@@ -128,7 +109,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
                 &self.store,
                 &topic,
-                &self.signing_key.verifying_key(),
+                &self.credentials.verifying_key(),
                 &log_id,
             )
             .await?;
@@ -158,6 +139,7 @@ mod tests {
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
 
+    use crate::credentials::Credentials;
     use crate::forge::Forge;
     use crate::operation::{Extensions, LogId};
 
@@ -166,7 +148,8 @@ mod tests {
     #[tokio::test]
     async fn operation_forge() {
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
 
         let topic = Topic::random();
         let log_id = LogId::from_topic(topic);

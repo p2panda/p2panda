@@ -564,7 +564,7 @@ where
 /// If direct messages are sent along with a control message, we assume that the direct message for
 /// the appropriate recipient is delivered in the same call to process. Our algorithm never sends a
 /// direct message without an associated broadcast control message.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirectMessage<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
@@ -604,7 +604,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DirectMessageContent<ID, OP, DGM>
 where
     DGM: GroupMembership<ID, OP>,
