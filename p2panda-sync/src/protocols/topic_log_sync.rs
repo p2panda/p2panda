@@ -10,7 +10,9 @@ use std::task::{Context, Poll};
 
 use futures::channel::mpsc;
 use futures::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{
+    AnyHeader, AnyHeaderError, AnyOperation, Body, Hash, LogId, SeqNum, VerifyingKey,
+};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
@@ -41,33 +43,32 @@ use crate::traits::Protocol;
 /// It is assumed that the T topic has been negotiated between parties prior to initiating this
 /// sync protocol.
 #[derive(Debug)]
-pub struct TopicLogSync<T, S, L, E> {
+pub struct TopicLogSync<T, S, L> {
     pub topic: T,
     pub store: S,
-    pub event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
-    pub live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
+    pub event_tx: broadcast::Sender<TopicLogSyncEvent>,
+    pub live_mode_rx: Option<mpsc::Receiver<ToSync<AnyOperation>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
 }
 
-impl<T, S, L, E> TopicLogSync<T, S, L, E>
+impl<T, S, L> TopicLogSync<T, S, L>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
     L: LogId,
-    E: Extensions,
 {
     /// Returns a new sync protocol instance, configured with a store and `TopicStore` implementation
     /// which associates the to-be-synced logs with a given topic.
     pub fn new(
         topic: T,
         store: S,
-        live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
+        live_mode_rx: Option<mpsc::Receiver<ToSync<AnyOperation>>>,
+        event_tx: broadcast::Sender<TopicLogSyncEvent>,
     ) -> Self {
         Self::new_with_capacity(
             topic,
@@ -82,8 +83,8 @@ where
     pub fn new_with_capacity(
         topic: T,
         store: S,
-        live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
+        live_mode_rx: Option<mpsc::Receiver<ToSync<AnyOperation>>>,
+        event_tx: broadcast::Sender<TopicLogSyncEvent>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
@@ -97,19 +98,18 @@ where
     }
 }
 
-impl<T, S, L, E> Protocol for TopicLogSync<T, S, L, E>
+impl<T, S, L> Protocol for TopicLogSync<T, S, L>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
         + 'static,
     L: LogId + Debug + Send + 'static,
-    E: Extensions + Send + 'static,
 {
     type Error = TopicLogSyncError;
-    type Message = TopicLogSyncMessage<L, E>;
+    type Message = TopicLogSyncMessage<L>;
     type Output = ();
 
     async fn run(
@@ -211,7 +211,7 @@ where
                                     }
 
                                     metrics.sent_live_bytes +=
-                                        operation.header.to_bytes().len() as u32 + operation.header.payload_size;
+                                        operation.header.encode().len() as u32 + operation.header.payload_size;
                                     metrics.sent_live_operations += 1;
 
                                     trace!(
@@ -224,8 +224,8 @@ where
 
                                     let result = sink
                                         .send(TopicLogSyncMessage::Live(
-                                            operation.header,
-                                            operation.body,
+                                            operation.header.encode(),
+                                            operation.body.map(|body| body.to_bytes()),
                                         ))
                                         .await
                                         .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
@@ -268,11 +268,14 @@ where
                                         break Ok(());
                                     };
 
-                                    let TopicLogSyncMessage::Live(header, body) = message else {
+                                    let TopicLogSyncMessage::Live(header_bytes, body_bytes) = message else {
                                         break Err(TopicLogSyncError::UnexpectedProtocolMessage(
                                             message.to_string(),
                                         ));
                                     };
+
+                                    let header = AnyHeader::decode(&header_bytes)?;
+                                    let body = body_bytes.map(|bytes| Body::from_bytes(bytes));
 
                                     // TODO: check that this message is a part of our topic T set.
 
@@ -280,11 +283,16 @@ where
                                     // previously present do not forward the operation to the application
                                     // layer.
                                     if !dedup.insert(header.hash()) {
-                                        trace!(phase = "live", operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
+                                        trace!(
+                                            phase = "live",
+                                            operation_id = ?header.hash().fmt_short(),
+                                            "ignore duplicate operation sent from remote"
+                                        );
+
                                         continue;
                                     }
 
-                                    metrics.received_live_bytes += header.to_bytes().len() as u32 + header.payload_size;
+                                    metrics.received_live_bytes += header.size() as u32 + header.payload_size;
                                     metrics.received_live_operations += 1;
 
                                     trace!(
@@ -296,11 +304,14 @@ where
                                     );
 
                                     self.event_tx
-                                        .send(TopicLogSyncEvent::OperationReceived{operation: Box::new(Operation {
-                                            hash: header.hash(),
-                                            header,
-                                            body,
-                                        }), metrics: metrics.clone()})
+                                        .send(TopicLogSyncEvent::OperationReceived{
+                                            operation: Box::new(AnyOperation {
+                                                hash: header.hash(),
+                                                header,
+                                                body,
+                                            }),
+                                            metrics: metrics.clone()
+                                        })
                                         .map_err(|_| TopicLogSyncChannelError::EventSend)?;
                                 }
                                 Err(err) => {
@@ -349,16 +360,15 @@ where
 
 /// Map raw message sink and stream into log sync protocol specific channels.
 #[allow(clippy::complexity)]
-fn sync_channels<'a, L, E>(
-    sink: &mut (impl Sink<TopicLogSyncMessage<L, E>, Error = impl Debug> + Unpin),
-    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L, E>, impl Debug>> + Unpin),
+fn sync_channels<'a, L>(
+    sink: &mut (impl Sink<TopicLogSyncMessage<L>, Error = impl Debug> + Unpin),
+    stream: &mut (impl Stream<Item = Result<TopicLogSyncMessage<L>, impl Debug>> + Unpin),
 ) -> (
     impl Sink<LogSyncMessage<L>, Error = TopicLogSyncChannelError> + Unpin,
     impl Stream<Item = Result<LogSyncMessage<L>, TopicLogSyncChannelError>> + Unpin,
 )
 where
     L: LogId,
-    E: Extensions,
 {
     let log_sync_sink = LogSyncSink::new(sink);
 
@@ -400,6 +410,9 @@ pub enum TopicLogSyncError {
 
     #[error(transparent)]
     Channel(#[from] TopicLogSyncChannelError),
+
+    #[error(transparent)]
+    Decode(#[from] AnyHeaderError),
 
     #[error("remote unexpectedly closed stream in live-mode")]
     UnexpectedStreamClosure,
@@ -460,7 +473,7 @@ impl From<LogSyncMetrics> for Metrics {
 
 /// Events emitted from topic log sync sessions.
 #[derive(Debug, Clone, PartialEq)]
-pub enum TopicLogSyncEvent<E = ()> {
+pub enum TopicLogSyncEvent {
     /// A session has been initiated locally.
     ///
     /// This event is always sent and will be followed by `SyncStarted` or `Failed` events.
@@ -485,7 +498,7 @@ pub enum TopicLogSyncEvent<E = ()> {
 
     /// An operation has been received, this can be in the "sync" or "live mode" phase of a session.
     OperationReceived {
-        operation: Box<Operation<E>>,
+        operation: Box<AnyOperation>,
         metrics: Metrics,
     },
 
@@ -501,8 +514,8 @@ pub enum TopicLogSyncEvent<E = ()> {
     Failed { error: String },
 }
 
-impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
-    fn from(event: LogSyncEvent<E>) -> Self {
+impl From<LogSyncEvent> for TopicLogSyncEvent {
+    fn from(event: LogSyncEvent) -> Self {
         match event {
             LogSyncEvent::MetricsExchanged { metrics } => TopicLogSyncEvent::SyncStarted {
                 metrics: metrics.into(),
@@ -521,20 +534,18 @@ impl<E> From<LogSyncEvent<E>> for TopicLogSyncEvent<E> {
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(bound(deserialize = "L: LogId"))]
 #[allow(clippy::large_enum_variant)]
-pub enum TopicLogSyncMessage<L, E>
+pub enum TopicLogSyncMessage<L>
 where
     L: LogId,
-    E: Extensions,
 {
     Sync(LogSyncMessage<L>),
-    Live(Header<E>, Option<Body>),
+    Live(Vec<u8>, Option<Vec<u8>>),
     Close,
 }
 
-impl<L, E> std::fmt::Display for TopicLogSyncMessage<L, E>
+impl<L> std::fmt::Display for TopicLogSyncMessage<L>
 where
     L: LogId,
-    E: Extensions,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
@@ -548,14 +559,14 @@ where
 
 pin_project! {
     /// Sink wrapper which converts messages and errors into the expected types.
-    pub struct LogSyncSink<S, L, E> {
+    pub struct LogSyncSink<S, L> {
         #[pin]
         inner: S,
-        _phantom: std::marker::PhantomData<(L, E)>,
+        _phantom: std::marker::PhantomData<L>,
     }
 }
 
-impl<S, L, E> LogSyncSink<S, L, E> {
+impl<S, L> LogSyncSink<S, L> {
     pub fn new(inner: S) -> Self {
         Self {
             inner,
@@ -564,12 +575,11 @@ impl<S, L, E> LogSyncSink<S, L, E> {
     }
 }
 
-impl<S, L, E> Sink<LogSyncMessage<L>> for LogSyncSink<S, L, E>
+impl<S, L> Sink<LogSyncMessage<L>> for LogSyncSink<S, L>
 where
     L: LogId,
-    S: Sink<TopicLogSyncMessage<L, E>>,
+    S: Sink<TopicLogSyncMessage<L>>,
     S::Error: Debug,
-    E: Extensions,
 {
     type Error = TopicLogSyncChannelError;
 
@@ -610,7 +620,7 @@ pub mod tests {
     use futures::channel::mpsc;
     use futures::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_core::{Body, Operation, Topic};
+    use p2panda_core::{AnyOperation, Body, Topic};
 
     use crate::ToSync;
     use crate::protocols::{LogSyncError, LogSyncMessage};
@@ -675,7 +685,7 @@ pub mod tests {
         let topic = Topic::random();
         let mut peer = Peer::new(0).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer.create_operation(&body, log_id).await;
         let (header_1, header_bytes_1) = peer.create_operation(&body, log_id).await;
         let (header_2, header_bytes_2) = peer.create_operation(&body, log_id).await;
@@ -741,7 +751,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_0);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 3 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
@@ -749,7 +759,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_1);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 4 => {
                     let (header, body_inner) = assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
@@ -757,7 +767,7 @@ pub mod tests {
                         Some(body),
                     )) => (header, body));
                     assert_eq!(header, header_bytes_2);
-                    assert_eq!(Body::new(&body_inner), body)
+                    assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 5 => {
                     assert_eq!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done));
@@ -777,7 +787,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, _) = peer_a.create_operation(&body, 0).await;
         let (header_1, _) = peer_a.create_operation(&body, 0).await;
         let (header_2, _) = peer_a.create_operation(&body, 0).await;
@@ -815,7 +825,7 @@ pub mod tests {
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -824,7 +834,7 @@ pub mod tests {
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -833,7 +843,7 @@ pub mod tests {
         let (header, body_inner) = assert_matches!(
             peer_b_events_rx.recv().await.unwrap(),
             TopicLogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
+                let AnyOperation { header, body, .. } = *operation;
                 (header, body)
             }
         );
@@ -856,7 +866,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
         let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
@@ -867,17 +877,17 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u32
+            + header_0.encode().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u32;
+            + header_1.encode().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
+        let expected_bytes_sent = header_2.payload_size + header_2.encode().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(ToSync::Payload(Operation {
+            .send(ToSync::Payload(AnyOperation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),
@@ -967,7 +977,7 @@ pub mod tests {
         let mut peer_a = Peer::new(0).await;
         let mut peer_b = Peer::new(1).await;
 
-        let body = Body::new("Hello, Sloth!".as_bytes());
+        let body = Body::from_bytes("Hello, Sloth!".as_bytes());
         let (header_0, header_bytes_0) = peer_b.create_operation(&body, log_id).await;
 
         let logs = BTreeMap::from([(peer_a.id(), vec![log_id])]);
@@ -978,17 +988,17 @@ pub mod tests {
 
         let (header_1, _) = peer_b.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_received = header_0.payload_size
-            + header_0.to_bytes().len() as u32
+            + header_0.encode().len() as u32
             + header_1.payload_size
-            + header_1.to_bytes().len() as u32;
+            + header_1.encode().len() as u32;
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
-        let expected_bytes_sent = header_2.payload_size + header_2.to_bytes().len() as u32;
+        let expected_bytes_sent = header_2.payload_size + header_2.encode().len() as u32;
 
         let (protocol, mut events_rx, mut live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
-            .send(ToSync::Payload(Operation {
+            .send(ToSync::Payload(AnyOperation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),
@@ -998,7 +1008,7 @@ pub mod tests {
 
         // Sending subscription message twice.
         live_mode_tx
-            .send(ToSync::Payload(Operation {
+            .send(ToSync::Payload(AnyOperation {
                 hash: header_2.hash(),
                 header: header_2.clone(),
                 body: Some(body.clone()),

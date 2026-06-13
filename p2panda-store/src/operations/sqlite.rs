@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
+use p2panda_core::cbor::encode_cbor;
 use p2panda_core::hash::{Hash, HashError};
-use p2panda_core::{Extensions, LogId, Operation};
+use p2panda_core::{Extensions, Header, LogId, Operation};
 use sqlx::{FromRow, query, query_as};
 
 use crate::operations::OperationStore;
@@ -69,18 +69,15 @@ where
                     encode_cbor(&log_id)
                         .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
                 )
-                .bind(operation.header.version.to_string())
+                .bind(operation.header.version)
                 .bind(operation.header.verifying_key.to_hex())
-                .bind(operation.header.signature.map(|sig| sig.to_hex()))
-                .bind(operation.header.payload_size.to_string())
+                .bind(operation.header.signature.to_hex())
+                .bind(operation.header.payload_size)
                 .bind(operation.header.payload_hash.map(|hash| hash.to_hex()))
-                .bind(operation.header.seq_num.to_string())
-                .bind(
-                    encode_cbor(&operation.header)
-                        .map_err(|err| SqliteError::Encode("header".to_string(), err))?,
-                )
-                .bind(operation.header.to_bytes().len().to_string())
-                .bind(operation.body().map(|body| body.to_bytes()))
+                .bind(operation.header.seq_num)
+                .bind(operation.header.encode())
+                .bind(operation.header.size())
+                .bind(operation.body.as_ref().map(|body| body.to_bytes()))
                 .execute(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
@@ -216,7 +213,7 @@ where
                 .hash
                 .parse()
                 .map_err(|err: HashError| SqliteError::Decode("hash".to_string(), err.into()))?,
-            header: decode_cbor(&row.header[..])
+            header: Header::decode(&row.header)
                 .map_err(|err| SqliteError::Decode("header".into(), err.into()))?,
             body: row.body.map(|body| body.into()),
         })

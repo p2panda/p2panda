@@ -311,7 +311,7 @@ async fn main() -> Result<()> {
     // Sign and encode each line of text input and broadcast it on the chat topic.
     tokio::task::spawn(async move {
         while let Some(text) = line_rx.recv().await {
-            let body = Body::new(text.as_bytes());
+            let body = Body::from_bytes(text.as_bytes());
             let (hash, operation) = create_operation(&signing_key, &body, seq_num, backlink);
             let permit = store.begin().await.unwrap();
             store

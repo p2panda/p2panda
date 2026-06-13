@@ -91,5 +91,5 @@ async fn gossip_and_sync_with_same_topic() {
     assert_eq!(message, Some(b"Hello, Panda!".to_vec()));
 
     let operation = panda_sync_task.await.unwrap().unwrap();
-    assert_eq!(operation.body, Some(Body::new(b"Hello, again, Panda!")));
+    assert_eq!(operation.body, Some(Body::from_bytes(b"Hello, again, Panda!")));
 }
