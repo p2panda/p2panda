@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
+  push:
+    branches:
+      - main
+      - development
+
+jobs:
+  features:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      - name: Check if feature combinations actually compile
+        run: cargo hack check --feature-powerset --workspace --depth 4
