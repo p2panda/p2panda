@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
+      - name: Check known advisories, licenses etc. with cargo-deny
+        run: cargo deny --workspace --all-features check -D warnings
