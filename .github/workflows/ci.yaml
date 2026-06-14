@@ -36,7 +36,7 @@ jobs:
           channel: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Check project and dependencies
-        run: cargo check --all-features
+        run: cargo check --all-targets --all-features
 
   fmt:
     runs-on: ubuntu-latest
