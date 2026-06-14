@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use p2panda_core::identity::Author;
+use p2panda_core::traits::OperationId;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
@@ -14,7 +16,7 @@ use thiserror::Error;
 
 use crate::access::Access;
 use crate::group::{GroupAction, GroupMember, GroupMembersState, GroupMembershipError};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, Operation, Resolver};
 
 /// Max depth of group nesting allowed.
 ///
@@ -34,7 +36,7 @@ pub enum GroupCrdtInnerError<OP> {
 #[derive(Debug, Error)]
 pub enum GroupCrdtError<ID, OP, M, C, RS>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     RS: Resolver<ID, OP, M, C>,
 {
@@ -63,10 +65,25 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 /// including operation graph and membership snapshots.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
-#[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
+#[cfg_attr(
+    any(test, feature = "serde"),
+    derive(Deserialize, Serialize),
+    serde(bound(
+        deserialize = "
+            OP: Deserialize<'de>, 
+            M: Deserialize<'de>, 
+            C: Deserialize<'de>, 
+        ",
+        serialize = "
+            OP: Serialize, 
+            M: Serialize, 
+            C: Serialize, 
+        "
+    ))
+)]
 pub struct GroupCrdtInnerState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
 {
     /// All operations processed by this group.
@@ -87,7 +104,7 @@ where
 
 impl<ID, OP, M, C> Default for GroupCrdtInnerState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
 {
     fn default() -> Self {
@@ -103,7 +120,7 @@ where
 
 impl<ID, OP, M, C> GroupCrdtInnerState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     M: Operation<ID, OP, C>,
     C: Conditions,
@@ -305,13 +322,11 @@ where
     derive(Deserialize, Serialize),
     serde(bound(
         deserialize = "
-            ID: Deserialize<'de>, 
             OP: Deserialize<'de>, 
             M: Deserialize<'de>, 
             C: Deserialize<'de>, 
         ",
         serialize = "
-            ID: Serialize, 
             OP: Serialize, 
             M: Serialize, 
             C: Serialize, 
@@ -320,7 +335,7 @@ where
 )]
 pub struct GroupCrdtState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
 {
     /// Inner groups state.
@@ -329,7 +344,7 @@ where
 
 impl<ID, OP, M, C> Default for GroupCrdtState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     M: Operation<ID, OP, C>,
     C: Conditions,
@@ -343,7 +358,7 @@ where
 
 impl<ID, OP, M, C> GroupCrdtState<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     M: Operation<ID, OP, C>,
     C: Conditions,
@@ -435,7 +450,7 @@ pub struct GroupCrdt<ID, OP, M, C, RS> {
 
 impl<ID, OP, M, C, RS> GroupCrdt<ID, OP, M, C, RS>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     M: Operation<ID, OP, C> + Clone,
     C: Conditions,
@@ -657,7 +672,7 @@ pub(crate) fn apply_action<ID, OP, C>(
     filter: &HashSet<OP>,
 ) -> StateChangeResult<ID, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId + Ord,
     C: Conditions,
 {
@@ -735,7 +750,7 @@ pub(crate) fn apply_remove_unsafe<ID, C>(
     removed: GroupMember<ID>,
 ) -> GroupStates<ID, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     C: Conditions,
 {
     let mut members_y = groups_y
@@ -754,7 +769,7 @@ where
 /// Return types expected from applying an action to group state.
 pub enum StateChangeResult<ID, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     C: Conditions,
 {
     /// Action was applied and no error occurred.
@@ -773,7 +788,7 @@ where
 
 impl<ID, C> StateChangeResult<ID, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     C: Conditions,
 {
     pub fn state(&self) -> &GroupStates<ID, C> {

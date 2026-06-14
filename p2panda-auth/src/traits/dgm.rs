@@ -3,14 +3,16 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
+use p2panda_core::identity::Author;
+use p2panda_core::traits::OperationId;
+
 use crate::Access;
 use crate::group::GroupMember;
-use crate::traits::{IdentityHandle, OperationId};
 
 /// Decentralised group membership (DGM) API for managing membership of a single group.
 pub trait Groups<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
 {
     type Error: Debug;

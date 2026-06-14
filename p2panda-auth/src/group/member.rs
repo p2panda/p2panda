@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::identity::Author;
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
-
-use crate::traits::IdentityHandle;
 
 /// A group member which can be a single individual or another group.
 ///
@@ -42,4 +41,4 @@ where
     }
 }
 
-impl<ID> IdentityHandle for GroupMember<ID> where ID: IdentityHandle {}
+impl<ID> Author for GroupMember<ID> where ID: Author {}

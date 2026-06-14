@@ -21,6 +21,7 @@
 //! assert!(verifying_key.verify(bytes, &signature))
 //! ```
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
@@ -41,9 +42,11 @@ pub const SIGNING_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 pub const VERIFYING_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
 pub trait Author:
-    Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
+    Copy + Debug + Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
 {
 }
+
+impl Author for char {}
 
 /// Private Ed25519 key used for digital signatures.
 #[derive(Clone, Eq, PartialEq)]

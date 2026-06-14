@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Strong remove group resolver implementation.
-use petgraph::graphmap::DiGraphMap;
-use petgraph::visit::{IntoNodeIdentifiers, Topo};
 use std::collections::{HashMap, HashSet};
 use std::{fmt::Debug, marker::PhantomData};
+
+use p2panda_core::identity::Author;
+use p2panda_core::traits::OperationId;
+use petgraph::graphmap::DiGraphMap;
+use petgraph::visit::{IntoNodeIdentifiers, Topo};
 
 use crate::graph::{concurrent_bubbles, split_bubble};
 use crate::group::crdt::{GroupCrdtInnerError, apply_remove_unsafe};
 use crate::group::{AuthorityGraphs, GroupAction, GroupCrdtInnerState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, Operation, Resolver};
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.  
 ///
@@ -52,7 +55,7 @@ pub struct StrongRemove<ID, OP, M, C> {
 
 impl<ID, OP, M, C> Resolver<ID, OP, M, C> for StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -103,7 +106,7 @@ where
 
 impl<ID, OP, M, C> StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -311,7 +314,7 @@ where
 /// manager access.
 fn removed_or_demoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -337,7 +340,7 @@ where
 /// manager access.
 fn added_or_promoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
