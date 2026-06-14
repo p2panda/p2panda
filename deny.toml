@@ -1,0 +1,41 @@
+[graph]
+all-features = true
+
+[advisories]
+ignore = [
+    # paste is not maintained anymore - used by netlink-packet-core > .. > netwatch .. > iroh.
+    # https://github.com/rust-netlink/netlink-packet-core/issues/41
+    {
+      id = "RUSTSEC-2024-0436",
+      reason = "Advisory is notice / INFO",
+    },
+
+    # proc-macro-error2 is not maintained anymore, used by hax-lib-macros > .. > hpke-rs.
+    {
+      id = "RUSTSEC-2026-0173",
+      reason = "Advisory is notice / INFO",
+    },
+]
+
+[licenses]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "NCSA",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
