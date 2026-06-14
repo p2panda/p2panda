@@ -29,7 +29,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
 use clap::Parser;
 use futures_util::StreamExt;
 use iroh::EndpointAddr;
@@ -90,7 +89,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging();
 
     let args = Args::parse();
@@ -349,12 +348,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
+fn input_loop(line_tx: mpsc::Sender<String>) -> Result<(), std::io::Error> {
     let mut buffer = String::new();
     let stdin = std::io::stdin();
     loop {
         stdin.read_line(&mut buffer)?;
-        line_tx.blocking_send(buffer.clone())?;
+        line_tx
+            .blocking_send(buffer.clone())
+            .map_err(|err| std::io::Error::other(err))?;
         buffer.clear();
     }
 }

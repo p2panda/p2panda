@@ -831,6 +831,8 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
+    pub use p2panda_core::cbor::{decode_cbor, encode_cbor};
+
     use crate::Access;
     use crate::group::{GroupCrdtError, GroupMember, GroupMembershipError};
     use crate::test_utils::{
@@ -1761,11 +1763,10 @@ pub(crate) mod tests {
         assert_eq!(members, vec![(ALICE, Access::manage())]);
 
         // Serialize auth state to cbor bytes.
-        let mut bytes = vec![];
-        ciborium::ser::into_writer(&y_i, &mut bytes).unwrap();
+        let bytes = encode_cbor(&y_i).unwrap();
 
         // Deserialize auth state from cbor bytes.
-        let y_i_de: TestGroupState = ciborium::from_reader(&bytes[..]).unwrap();
+        let y_i_de: TestGroupState = decode_cbor(&bytes[..]).unwrap();
 
         // Assert members are the same.
         let members = y_i_de.members(G1);

@@ -3,7 +3,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_core::Stream;
+use futures_util::Stream;
 use pin_project::pin_project;
 
 use crate::processors::Processor;

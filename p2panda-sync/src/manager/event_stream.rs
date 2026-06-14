@@ -5,9 +5,9 @@ use std::hash::Hash as StdHash;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures::channel::mpsc;
-use futures::stream::SelectAll;
-use futures::{SinkExt, Stream, StreamExt};
+use futures_channel::mpsc;
+use futures_util::sink::SinkExt;
+use futures_util::stream::{SelectAll, Stream, StreamExt};
 use p2panda_core::traits::Digest;
 use p2panda_core::{Extensions, Hash};
 use tokio_stream::wrappers::BroadcastStream;

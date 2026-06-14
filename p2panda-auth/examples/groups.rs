@@ -28,7 +28,6 @@ use std::borrow::Borrow;
 use std::collections::VecDeque;
 use std::thread;
 
-use anyhow::Result;
 use futures_util::StreamExt;
 use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
 use p2panda_auth::traits::Operation as GroupsOperationTrait;
@@ -109,7 +108,7 @@ impl<E> Borrow<Operation<E>> for IngestEvent<E> {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging();
 
     let signing_key = SigningKey::generate();
@@ -287,12 +286,14 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn input_loop(line_tx: mpsc::Sender<String>) -> Result<()> {
+fn input_loop(line_tx: mpsc::Sender<String>) -> Result<(), std::io::Error> {
     let mut buffer = String::new();
     let stdin = std::io::stdin();
     loop {
         stdin.read_line(&mut buffer)?;
-        line_tx.blocking_send(buffer.clone())?;
+        line_tx
+            .blocking_send(buffer.clone())
+            .map_err(|err| std::io::Error::other(err))?;
         buffer.clear();
     }
 }
