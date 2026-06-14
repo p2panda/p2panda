@@ -31,7 +31,7 @@ test_utils = [
 ]
 
 [dependencies]
-blake3 = "1.8.2"
+blake3 = { workspace = true }
 futures-util = { workspace = true, features = ["sink"] }
 p2panda-core = { workspace = true }
 p2panda-store = { workspace = true }
@@ -42,7 +42,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
-futures-channel = { version = "0.3.31", features = ["sink"] }
+futures-channel = { workspace = true, features = ["sink"] }
 p2panda-discovery = { path = ".", features = ["test_utils"] }
 p2panda-store = { workspace = true, features = ["test_utils", "sqlite", "macros"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }

@@ -18,9 +18,24 @@ members = [
 [workspace.lints.rust]
 
 [workspace.dependencies]
-ciborium = { version = "0.2.2" }
+blake3 = { version = "1.8.5" }
+futures-channel = { version = "0.3.32" }
+futures-test = { version = "0.3.32" }
 futures-util = { version = "0.3.32", default-features = false }
 hex = { version = "0.4.3" }
+mock_instant = { version = "0.6.1" }
+pin-project = { version = "1.1.13" }
+rand = { version = "0.10.1" }
+rand_chacha = { version = "0.10.0" }
+serde = { version = "1.0.228" }
+serde_bytes = { version = "0.11.19" }
+thiserror = { version = "2.0.18" }
+tokio = { version = "1.52.3", default-features = false }
+tokio-stream = { version = "0.1.18", default-features = false }
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3.23" }
+
+# p2panda workspace
 p2panda = { path = "p2panda", version = "0.6.1", default-features = false }
 p2panda-auth = { path = "p2panda-auth", version = "0.6.1", default-features = false }
 p2panda-core = { path = "p2panda-core", version = "0.6.1", default-features = false }
@@ -31,11 +46,3 @@ p2panda-spaces = { path = "p2panda-spaces", version = "0.6.1", default-features 
 p2panda-store = { path = "p2panda-store", version = "0.6.1", default-features = false }
 p2panda-stream = { path = "p2panda-stream", version = "0.6.1", default-features = false }
 p2panda-sync = { path = "p2panda-sync", version = "0.6.1", default-features = false }
-rand = { version = "0.10.1" }
-rand_chacha = { version = "0.10.0" }
-serde = { version = "1.0.228" }
-thiserror = { version = "2.0.18" }
-tokio = { version = "1.52.3", default-features = false }
-tokio-stream = { version = "0.1.18" }
-tracing = { version = "0.1.44" }
-tracing-subscriber = { version = "0.3.23" }

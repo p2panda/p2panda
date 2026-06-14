@@ -7,22 +7,19 @@
 mod event_stream;
 mod session_map;
 
-pub use event_stream::ManagerEventStream;
-use p2panda_store::topics::TopicStore;
-pub use session_map::SessionTopicMap;
-
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use futures::channel::mpsc;
-use futures::future::ready;
-use futures::stream::SelectAll;
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use futures_channel::mpsc;
+use futures_util::future::ready;
+use futures_util::sink::{Sink, SinkExt};
+use futures_util::stream::{SelectAll, Stream, StreamExt};
 use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
+use p2panda_store::topics::TopicStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -36,6 +33,9 @@ use crate::protocols::{TopicLogSync, TopicLogSyncError, TopicLogSyncEvent};
 use crate::traits::Manager;
 use crate::{FromSync, SessionConfig, ToSync};
 
+pub use event_stream::ManagerEventStream;
+pub use session_map::SessionTopicMap;
+
 static CHANNEL_BUFFER: usize = 1028;
 
 pub type ToTopicSync<E> = ToSync<Operation<E>>;
@@ -48,7 +48,7 @@ pub type ToTopicSync<E> = ToSync<Operation<E>>;
 ///
 /// A handle can be acquired to a sync session via the session_handle method for sending any live
 /// mode operations to a specific session. It's expected that users map sessions (by their id) to
-/// any topic subscriptions in order to understand the correct mappings.  
+/// any topic subscriptions in order to understand the correct mappings.
 ///
 /// There are two points where message deduplication occurs; 1) per-subscription deduplication of
 /// received operations across all sessions for this manager occurs in the event stream 2)
@@ -241,8 +241,8 @@ mod tests {
     use std::time::Duration;
 
     use assert_matches::assert_matches;
-    use futures::channel::mpsc;
-    use futures::{SinkExt, StreamExt};
+    use futures_channel::mpsc;
+    use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Operation, Topic};
     use p2panda_store::SqliteStore;

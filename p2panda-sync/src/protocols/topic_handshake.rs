@@ -4,8 +4,8 @@
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use futures::channel::mpsc;
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use futures_channel::mpsc;
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

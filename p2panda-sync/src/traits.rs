@@ -5,7 +5,7 @@ use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::pin::Pin;
 
-use futures::Sink;
+use futures_util::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 

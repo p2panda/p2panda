@@ -3,9 +3,8 @@
 //! Test utilities.
 use std::collections::BTreeMap;
 
-use futures::{FutureExt, SinkExt, Stream, StreamExt};
-
-use futures::channel::mpsc;
+use futures_channel::mpsc;
+use futures_util::{FutureExt, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;

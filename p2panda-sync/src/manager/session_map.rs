@@ -85,7 +85,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use futures::channel::mpsc;
+    use futures_channel::mpsc;
     use p2panda_core::Topic;
 
     use crate::manager::SessionTopicMap;

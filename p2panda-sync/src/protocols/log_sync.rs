@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use futures::{Sink, SinkExt, Stream, StreamExt, stream};
+use futures_util::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
 use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
@@ -514,8 +514,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches::assert_matches;
-    use futures::StreamExt;
-    use futures::channel::mpsc;
+    use futures_channel::mpsc;
+    use futures_util::StreamExt;
     use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Hash};
     use p2panda_store::operations::OperationStore;

@@ -41,7 +41,7 @@ hpke-rs-rust-crypto = "0.2.0"
 p2panda-core = { workspace = true }
 rand_chacha = { version = "0.9.0", features = ["os_rng"] }
 serde = { workspace = true, features = ["derive"] }
-serde_bytes = "0.11.17"
+serde_bytes = { workspace = true }
 sha2 = "0.10.8"
 subtle = "2.6.1"
 thiserror = { workspace = true }

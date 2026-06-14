@@ -49,7 +49,7 @@ thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, default-features = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
-futures-test = "0.3.31"
+futures-test = { workspace = true }
 p2panda-core = { workspace = true, features = ["test_utils"] }
 p2panda-store = { path = ".", features = ["test_utils"] }
 tokio = { workspace = true, default-features = true, features = ["rt", "macros"] }

@@ -18,6 +18,9 @@ rust-version = "1.94"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[lints]
+workspace = true
+
 [features]
 default = []
 test_utils = [
@@ -26,8 +29,12 @@ test_utils = [
   "dep:tracing-subscriber",
   "serde",
 ]
-serde = ["dep:serde"]
-test = ["test_utils"]
+serde = [
+  "dep:serde",
+]
+test = [
+  "test_utils",
+]
 
 [dependencies]
 p2panda-core = { workspace = true, default-features = true }
@@ -40,15 +47,10 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
-anyhow = "1.0.102"
-ciborium = "0.2.2"
-futures-util = "0.3.32"
+futures-util = { workspace = true }
 p2panda-auth = { path = ".", features = ["test_utils"] }
 p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-net = { workspace = true, default-features = true }
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
-p2panda-sync = { workspace = true, default-features = true }
 p2panda-stream = { workspace = true, features = ["ingest", "groups"] }
-
-[lints]
-workspace = true
+p2panda-sync = { workspace = true, default-features = true }

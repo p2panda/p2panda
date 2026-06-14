@@ -8,8 +8,8 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures::channel::mpsc;
-use futures::{Sink, SinkExt, Stream, StreamExt};
+use futures_channel::mpsc;
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
@@ -607,8 +607,8 @@ pub mod tests {
     use std::collections::BTreeMap;
 
     use assert_matches::assert_matches;
-    use futures::channel::mpsc;
-    use futures::{SinkExt, StreamExt};
+    use futures_channel::mpsc;
+    use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Body, Operation, Topic};
 

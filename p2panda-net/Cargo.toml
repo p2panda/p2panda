@@ -69,7 +69,7 @@ test_utils = [
 ]
 
 [dependencies]
-futures-channel = "0.3.31"
+futures-channel = { workspace = true }
 futures-util = { workspace = true, default-features = true }
 hex =  { workspace = true }
 iroh = { version = "1.0.0", default-features = false, features = ["tls-ring"], optional = true }
@@ -81,23 +81,22 @@ p2panda-discovery = { workspace = true, default-features = true, optional = true
 p2panda-store = { workspace = true }
 p2panda-sync = { workspace = true, default-features = true, optional = true }
 postcard = { version = "1.1.3", default-features = false, features = ["alloc", "use-std"] }
-ractor = "0.15.8"
+ractor = "0.15.13"
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["rt", "sync"] }
-tokio-stream = { version = "0.1.17", features = ["sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util = { version = "0.7.16", features = ["codec", "compat"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
-anyhow = "1.0.100"
 assert_matches = "1.5.0"
 clap = { version = "4.5.54", features = ["derive"] }
-futures-test = "0.3.31"
-mock_instant = "0.6.0"
+futures-test = { workspace = true }
+mock_instant = { workspace = true }
 p2panda-discovery = { workspace = true, default-features = true, features = ["test_utils"] }
 p2panda-net = { path = ".", features = ["test_utils"] }
 p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
