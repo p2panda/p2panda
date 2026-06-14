@@ -37,7 +37,8 @@ ingest = []
 log_prune = []
 orderer = []
 spaces = [
-  "p2panda-spaces"
+  "p2panda-auth",
+  "p2panda-spaces",
 ]
 
 [dependencies]
