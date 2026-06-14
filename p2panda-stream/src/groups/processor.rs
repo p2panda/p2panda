@@ -18,7 +18,6 @@ use tracing::{debug, trace};
 
 use crate::Processor;
 use crate::groups::{GroupsArgs, GroupsOperation};
-use crate::ingest::IngestError;
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
 type GroupsCrdtError<C> =
@@ -184,9 +183,6 @@ where
 
     #[error(transparent)]
     Groups(#[from] GroupsCrdtError<C>),
-
-    #[error(transparent)]
-    Ingest(#[from] IngestError),
 
     #[error("missing operation: {0}")]
     MissingOperation(Hash),
