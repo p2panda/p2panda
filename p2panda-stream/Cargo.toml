@@ -31,7 +31,7 @@ default = [
 ]
 groups = [
   "p2panda-auth/serde",
-  "dep:serde"
+  "dep:serde",
 ]
 ingest = []
 log_prune = []
