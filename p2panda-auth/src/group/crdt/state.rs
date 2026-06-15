@@ -247,10 +247,11 @@ pub fn remove<ID: Eq + Hash, C: Conditions>(
         return Err(GroupMembershipError::UnrecognisedActor(remover));
     };
 
-    // Ensure that "remover" is a member of the group with manage access level.
+    // Ensure that "remover" is a member of the group with manage access level or they are are
+    // removing themselves.
     if !remover_state.is_member() {
         return Err(GroupMembershipError::InactiveActor(remover));
-    } else if !remover_state.is_manager() {
+    } else if !remover_state.is_manager() && remover != removed {
         return Err(GroupMembershipError::InsufficientAccess(remover));
     }
 
@@ -462,6 +463,29 @@ mod tests {
         let group_y = remove(group_y, alice, bob).unwrap();
 
         assert!(!group_y.members().contains(&bob));
+    }
+
+    #[test]
+    fn self_remove() {
+        let alice = 0;
+        let bob = 1;
+
+        let initial_members = [(alice, <Access>::manage()), (bob, Access::read())];
+
+        // Alice creates a group with Alice and Bob as members.
+        let group_y = create(&initial_members);
+
+        assert!(group_y.members().contains(&alice));
+        assert!(group_y.members().contains(&bob));
+
+        assert!(group_y.managers().contains(&alice));
+        assert!(!group_y.managers().contains(&bob));
+
+        // Alice removes themselves.
+        let group_y = remove(group_y, alice, alice).unwrap();
+
+        assert!(!group_y.members().contains(&alice));
+        assert!(group_y.members().contains(&bob));
     }
 
     #[test]

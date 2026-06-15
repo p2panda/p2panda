@@ -33,6 +33,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
+- auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
 
 ## [0.6.1] - 22/05/2026
 
