@@ -919,6 +919,31 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn self_remove() {
+        let y = TestGroupState::new();
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        let op2 = remove_member(ALICE, 1, G1, GroupMember::Individual(ALICE), vec![op1.id()]);
+
+        let y_i = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(members, vec![]);
+    }
+
+    #[test]
     fn concurrent_removal() {
         let y = TestGroupState::new();
 
