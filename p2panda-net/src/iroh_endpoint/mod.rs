@@ -13,6 +13,7 @@ mod tests;
 pub(crate) mod user_data;
 
 // Re-export useful iroh types.
+pub use iroh;
 pub use iroh::{EndpointAddr, RelayUrl};
 
 pub use api::{Endpoint, EndpointError};
