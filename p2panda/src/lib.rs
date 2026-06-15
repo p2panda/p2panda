@@ -267,7 +267,7 @@ pub use p2panda_core::{Cursor, Hash, SigningKey, Topic, VerifyingKey};
 #[doc(no_inline)]
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 #[doc(no_inline)]
-pub use p2panda_net::{NetworkId, NodeId};
+pub use p2panda_net::{Endpoint, NetworkId, NodeId};
 
 pub use builder::NodeBuilder;
 #[doc(inline)]

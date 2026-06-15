@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use futures_util::Stream;
 use p2panda_core::Topic;
 use p2panda_net::iroh_endpoint::RelayUrl;
-use p2panda_net::{NetworkId, NodeId};
+use p2panda_net::{Endpoint, NetworkId, NodeId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -361,6 +361,15 @@ impl Node {
     /// Returns the network identifier being used by the node.
     pub fn network_id(&self) -> NetworkId {
         self.network.network_id()
+    }
+
+    /// Returns a handle to the shared networking endpoint.
+    ///
+    /// This is the same endpoint used internally by the node for all peer-to-peer connections.
+    /// Call [`Endpoint::endpoint`] on the returned handle to access the underlying `iroh::Endpoint`,
+    /// or [`Endpoint::accept`] to register additional protocol handlers on it.
+    pub fn endpoint(&self) -> Endpoint {
+        self.network.endpoint.clone()
     }
 
     /// Inserts a bootstrap node into the local address book.
