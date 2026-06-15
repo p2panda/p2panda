@@ -54,7 +54,7 @@ type LogId = u64;
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
 
-const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
+const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh.link.";
 
 /// Heartbeat message to be sent over gossip (ephemeral messaging).
 #[derive(Debug, Serialize, Deserialize)]
