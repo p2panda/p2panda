@@ -11,7 +11,7 @@ use crate::group::crdt::{GroupCrdtInnerError, apply_remove_unsafe};
 use crate::group::{AuthorityGraphs, GroupAction, GroupCrdtInnerState, GroupMember, apply_action};
 use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
-/// An implementation of `Resolver` trait which follows strong remove ruleset.  
+/// An implementation of `Resolver` trait which follows strong remove ruleset.
 ///
 /// Concurrent operations are identified and processed, any which should be invalidated are added
 /// to the operation filter and not applied to the group state. Once an operation has been
