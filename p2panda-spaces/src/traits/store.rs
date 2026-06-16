@@ -6,12 +6,11 @@ use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
-use p2panda_encryption::key_registry::KeyRegistryState;
 
+use crate::OperationId;
 use crate::space::SpaceState;
 use crate::traits::SpaceId;
 use crate::types::AuthGroupState;
-use crate::{ActorId, OperationId};
 
 /// Interface for setting and getting space state.
 pub trait SpacesStore<ID, C>
@@ -47,18 +46,6 @@ where
     fn auth(&self) -> impl Future<Output = Result<AuthGroupState<C>, Self::Error>>;
 
     fn set_auth(&self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
-}
-
-/// Interface for setting and getting key registry state.
-pub trait KeyRegistryStore {
-    type Error: Debug;
-
-    fn key_registry(&self) -> impl Future<Output = Result<KeyRegistryState<ActorId>, Self::Error>>;
-
-    fn set_key_registry(
-        &self,
-        y: &KeyRegistryState<ActorId>,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
 /// Interface for setting and getting pre key secrets.

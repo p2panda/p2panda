@@ -10,6 +10,8 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::RngError;
+use p2panda_encryption::key_registry::KeyRegistryState;
+use p2panda_store::key_registry::KeyRegistryStore;
 use thiserror::Error;
 
 use crate::OperationId;
@@ -19,9 +21,8 @@ use crate::identity::IdentityError;
 use crate::manager::Manager;
 use crate::message::{SpacesArgs, SpacesMessage};
 use crate::traits::{
-    AuthStore, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore,
+    AuthStore, AuthoredMessage, Forge, KeySecretStore, MessageStore, SpaceId, SpacesStore,
 };
-use crate::traits::{AuthoredMessage, SpaceId};
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionGroupError,
@@ -56,7 +57,7 @@ impl<ID, S, K, F, C, RS> Group<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -244,7 +245,7 @@ pub enum GroupError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
-    K: KeyRegistryStore + KeySecretStore,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore,
     F: Forge<ID, C>,
     C: Conditions,
     RS: AuthResolver<C> + Debug,

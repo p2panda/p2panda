@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 
 pub use forge::Forge;
 pub use message::AuthoredMessage;
-pub use store::{AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpacesStore};
+pub use store::{AuthStore, KeySecretStore, MessageStore, SpacesStore};
 
 /// Trait representing the identifier of a space.
 pub trait SpaceId:
