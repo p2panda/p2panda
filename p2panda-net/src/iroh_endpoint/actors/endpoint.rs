@@ -51,6 +51,12 @@ pub enum ToIrohEndpoint {
     /// Register protocol handler for a given ALPN (protocol identifier).
     RegisterProtocol(ProtocolId, Box<dyn DynProtocolHandler>),
 
+    /// Register a protocol handler under its raw ALPN, *without* mixing in the
+    /// network id. Use this only for protocols that intentionally interoperate
+    /// with vanilla iroh peers (e.g. iroh-blobs' `Downloader`, which dials the
+    /// bare `iroh-bytes/4` ALPN). Loses network-id isolation for that protocol.
+    RegisterProtocolUnmixed(ProtocolId, Box<dyn DynProtocolHandler>),
+
     /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
     /// awaited for establishing the final connection.
     ///
@@ -232,6 +238,20 @@ impl ThreadLocalActor for IrohEndpoint {
                 protocols.insert(mixed_protocol_id, protocol_handler);
 
                 // Inform iroh endpoint about the new protocol as well.
+                state
+                    .endpoint
+                    .as_ref()
+                    .expect(
+                        "bind always takes place first, an endpoint must exist after this point",
+                    )
+                    .set_alpns(protocols.keys().cloned().collect());
+            }
+            ToIrohEndpoint::RegisterProtocolUnmixed(alpn, protocol_handler) => {
+                debug!(alpn = %alpn.fmt_short(), "register protocol (unmixed)");
+
+                let mut protocols = state.protocols.write().await;
+                protocols.insert(alpn, protocol_handler);
+
                 state
                     .endpoint
                     .as_ref()

@@ -142,6 +142,25 @@ impl Endpoint {
         Ok(())
     }
 
+    /// Register a protocol handler under its raw ALPN, without mixing in the
+    /// network id (unlike [`Self::accept`]). The protocol will interoperate with
+    /// vanilla iroh peers that dial the bare ALPN, at the cost of network-id
+    /// isolation for that one protocol.
+    pub async fn accept_unmixed<P: ProtocolHandler>(
+        &self,
+        protocol_id: impl AsRef<[u8]>,
+        protocol_handler: P,
+    ) -> Result<(), EndpointError> {
+        let protocol_id = protocol_id.as_ref().to_vec();
+        let inner = self.inner.read().await;
+        cast!(
+            inner.actor_ref.as_ref().expect("actor spawned in builder"),
+            ToIrohEndpoint::RegisterProtocolUnmixed(protocol_id, Box::new(protocol_handler))
+        )
+        .map_err(Box::new)?;
+        Ok(())
+    }
+
     /// Starts a connection attempt to a remote iroh endpoint and returns a future which can be
     /// awaited for establishing the final connection.
     ///
