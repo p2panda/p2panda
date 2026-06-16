@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- More methods (`traverse_members`, `groups`) to traverse and filter graph [#1242](https://github.com/p2panda/p2panda/pull/1242)
+
 ### Changed
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)

@@ -198,7 +198,7 @@ where
     fn members_inner(
         &self,
         group_id: ID,
-        members: &mut HashMap<ID, Access<C>>,
+        members: &mut HashMap<GroupMember<ID>, Access<C>>,
         root_access: Option<Access<C>>,
         mut depth: u32,
     ) {
@@ -214,9 +214,9 @@ where
         };
 
         for (member, access) in group_state.access_levels() {
-            // As we recurse into sub-groups we must assure that the newly
-            // assignable access level is never higher than the previous root
-            // access level. To do this we take whichever is less.
+            // As we recurse into sub-groups we must assure that the newly assignable access level
+            // is never higher than the previous root access level. To do this we take whichever is
+            // less.
             let next_access = match root_access.clone() {
                 Some(root_access) => {
                     if access <= root_access {
@@ -228,37 +228,65 @@ where
                 None => access.clone(),
             };
 
-            match member {
-                GroupMember::Individual(id) => {
-                    // If this is an individual member, then add them straight to the members map.
-                    members
-                        .entry(id)
-                        .and_modify(|current_access| {
-                            // If the transitive access level this member holds (the access
-                            // level the member has in it's sub-group) is greater than it's
-                            // current access level, but not greater than the root access
-                            // level (the access level initially assigned from the parent
-                            // group) then update the access level.
+            members
+                .entry(member)
+                .and_modify(|current_access| {
+                    // If the transitive access level this member holds (the access level
+                    // the member has in it's sub-group) is greater than it's current access
+                    // level, but not greater than the root access level (the access level
+                    // initially assigned from the parent group) then update the access
+                    // level.
 
-                            // @TODO: we need to combine access levels here,
-                            // which requires adding a trait bound to conditions
-                            // which allows combining them as well. Or we return
-                            // an array of access levels for each peer.
-                            if *current_access < next_access {
-                                *current_access = next_access.clone();
-                            }
-                        })
-                        .or_insert_with(|| next_access);
-                }
-                GroupMember::Group(id) => self.members_inner(id, members, Some(next_access), depth),
+                    // @TODO: we need to combine access levels here, which requires adding a
+                    // trait bound to conditions which allows combining them as well. Or we
+                    // return an array of access levels for each peer.
+                    if *current_access < next_access {
+                        *current_access = next_access.clone();
+                    }
+                })
+                .or_insert_with(|| next_access.clone());
+
+            if let GroupMember::Group(id) = member {
+                self.members_inner(id, members, Some(next_access), depth)
             }
         }
     }
 
-    /// Get all current members of a group.
+    /// Get all current individual members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
+        self.traverse_members(group_id, 0)
+            .into_iter()
+            .filter_map(|(member, access)| {
+                if member.is_individual() {
+                    Some((member.id(), access))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Get all current transitive groups inside a group.
+    pub fn groups(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
+        self.traverse_members(group_id, 0)
+            .into_iter()
+            .filter_map(|(member, access)| {
+                if member.is_group() {
+                    Some((member.id(), access))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Traverse membership graph with a specified max. depth and return all visited members
+    /// (individuals and transitive groups) of a group.
+    ///
+    /// Set depth to 0 to traverse the full graph.
+    pub fn traverse_members(&self, group_id: ID, depth: u32) -> Vec<(GroupMember<ID>, Access<C>)> {
         let mut members = HashMap::new();
-        self.members_inner(group_id, &mut members, None, 0);
+        self.members_inner(group_id, &mut members, None, depth);
         members.into_iter().collect()
     }
 
@@ -305,16 +333,16 @@ where
     derive(Deserialize, Serialize),
     serde(bound(
         deserialize = "
-            ID: Deserialize<'de>, 
-            OP: Deserialize<'de>, 
-            M: Deserialize<'de>, 
-            C: Deserialize<'de>, 
+            ID: Deserialize<'de>,
+            OP: Deserialize<'de>,
+            M: Deserialize<'de>,
+            C: Deserialize<'de>,
         ",
         serialize = "
-            ID: Serialize, 
-            OP: Serialize, 
-            M: Serialize, 
-            C: Serialize, 
+            ID: Serialize,
+            OP: Serialize,
+            M: Serialize,
+            C: Serialize,
         "
     ))
 )]
@@ -364,12 +392,28 @@ where
         }
     }
 
-    /// Get all transitive members of a group.
+    /// Get all individuals of a group.
     ///
-    /// This method recurses into all sub-groups and returns a resolved list of
-    /// individual group members and their access levels.
+    /// This method recurses into all sub-groups and returns a resolved list of individual group
+    /// members and their access levels.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.inner.members(group_id)
+    }
+
+    /// Get all transitive groups inside a group.
+    ///
+    /// This method recurses into all sub-groups and returns a resolved list of nested group members
+    /// and their access levels.
+    pub fn groups(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
+        self.inner.groups(group_id)
+    }
+
+    /// Traverse membership graph with a specified max. depth and return all visited members
+    /// (individuals and transitive groups) of a group.
+    ///
+    /// Set depth to 0 to traverse the full graph.
+    pub fn traverse_members(&self, group_id: ID, depth: u32) -> Vec<(GroupMember<ID>, Access<C>)> {
+        self.inner.traverse_members(group_id, depth)
     }
 
     /// Returns `true` if the passed group exists in the current state.
@@ -1048,12 +1092,16 @@ pub(crate) mod tests {
         );
 
         let y_iii = TestGroup::process(y_ii, &op3).unwrap();
-        let mut members = y_iii.members(G1);
-        members.sort();
+        let mut individuals = y_iii.members(G1);
+        individuals.sort();
         assert_eq!(
-            members,
+            individuals,
             vec![(ALICE, Access::manage()), (BOB, Access::read())]
         );
+
+        let mut groups = y_iii.groups(G1);
+        groups.sort();
+        assert_eq!(groups, vec![(G2, Access::read())]);
     }
 
     #[test]
