@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-left.gif" width="auto" height="30px">
-  <strong>Out-of-the-box p2panda Node API for application developers</strong>
+  <strong>Out-of-the-box p2panda API for application developers</strong>
   <img src="https://raw.githubusercontent.com/p2panda/.github/main/assets/panda-right.gif" width="auto" height="30px">
 </div>
 
@@ -22,7 +22,7 @@
   </h3>
 </div>
 
-p2panda's high-level Node API is an opiniated, out-of-the-box peer-to-peer stack which orchestrates
+p2panda's high-level API is an opiniated, out-of-the-box peer-to-peer stack which orchestrates
 all individual [p2panda] modules.
 
 ```rust
@@ -40,7 +40,7 @@ ordering, storage, and more in one easy-to-use API.
 
 ## Features
 
-- High-level p2panda Node API for building decentralised p2p and [local-first] applications with
+- High-level p2panda API for building decentralised p2p and [local-first] applications with
   minimal setup
 - Unified orchestration of p2p networking, node discovery, mDNS, bootstrap, [eventually consistent]
   sync, event streaming, causal ordering, pruning, and persistence
@@ -61,12 +61,12 @@ ordering, storage, and more in one easy-to-use API.
 ## Getting Started
 
 Install the Rust crate using `cargo add p2panda` and read our [documentation] and [examples] folder
-for an introduction and code examples of the Node API.
+for an introduction and code examples of the API.
 
 ## Other languages / FFI
 
-There's experimental support for bindings of p2panda's Node API into alternative programming
-languages and flavours:
+There's experimental support for bindings of p2panda's API into alternative programming languages
+and flavours:
 
 - [`p2panda-gobject`] Introspectable GLib/GObject API for various languages
 - [`p2panda-ffi`] Node.js, Python and Go support via UniFFI
