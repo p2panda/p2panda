@@ -195,6 +195,9 @@ pub enum KeyRegistryError {
     #[error(transparent)]
     KeyBundle(#[from] KeyBundleError),
 
+    #[error("no key bundles found")]
+    KeyBundlesNotFound,
+
     #[error("all available key bundles of this member expired")]
     KeyBundlesExpired,
 }

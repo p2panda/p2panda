@@ -29,6 +29,7 @@ test_utils = [
 p2panda-auth = { workspace = true, features = ["serde"], default-features = false }
 p2panda-core = { workspace = true, default-features = false }
 p2panda-encryption = { workspace = true, features = ["data_scheme"], default-features = false }
+p2panda-store = { workspace = true, default-features = false }
 petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }

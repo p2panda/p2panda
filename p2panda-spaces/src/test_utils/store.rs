@@ -7,14 +7,13 @@ use std::sync::Arc;
 use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
+use p2panda_store::key_registry::KeyRegistryStore;
 use tokio::sync::RwLock;
 
 use crate::OperationId;
 use crate::space::SpaceState;
 use crate::test_utils::{TestConditions, TestMessage, TestSpaceId};
-use crate::traits::{
-    AuthStore, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId, SpacesStore,
-};
+use crate::traits::{AuthStore, KeySecretStore, MessageStore, SpaceId, SpacesStore};
 use crate::types::{ActorId, AuthGroupState};
 
 pub type TestStore = MemoryStore<TestSpaceId, TestMessage, TestConditions>;
@@ -151,12 +150,12 @@ impl TestKeyStore {
     }
 }
 
-impl KeyRegistryStore for TestKeyStore {
+impl KeyRegistryStore<KeyRegistryState<ActorId>> for TestKeyStore {
     type Error = Infallible;
 
-    async fn key_registry(&self) -> Result<KeyRegistryState<ActorId>, Self::Error> {
+    async fn get_key_registry(&self) -> Result<Option<KeyRegistryState<ActorId>>, Self::Error> {
         let inner = self.inner.read().await;
-        Ok(inner.key_registry.clone())
+        Ok(Some(inner.key_registry.clone()))
     }
 
     async fn set_key_registry(&self, y: &KeyRegistryState<ActorId>) -> Result<(), Self::Error> {

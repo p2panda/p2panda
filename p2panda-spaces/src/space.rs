@@ -9,8 +9,10 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::SigningKey;
+use p2panda_encryption::key_registry::{KeyRegistryError, KeyRegistryState};
 use p2panda_encryption::traits::GroupMessage;
 use p2panda_encryption::{Rng, RngError};
+use p2panda_store::key_registry::KeyRegistryStore;
 use petgraph::algo::toposort;
 use thiserror::Error;
 
@@ -24,8 +26,7 @@ use crate::identity::IdentityError;
 use crate::manager::Manager;
 use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesStore,
+    AuthStore, AuthoredMessage, Forge, KeySecretStore, MessageStore, SpaceId, SpacesStore,
 };
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
@@ -65,7 +66,7 @@ impl<ID, S, K, F, C, RS> Space<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -593,7 +594,11 @@ where
         // Inject latest key material to space DCGKA state.
         let key_manager_y = manager.identity.key_manager().await?;
 
-        let key_registry_y = manager.identity.key_registry().await?;
+        let Some(key_registry_y) = manager.identity.key_registry().await? else {
+            return Err(SpaceError::IdentityManager(IdentityError::KeyRegistry(
+                KeyRegistryError::KeyBundlesNotFound,
+            )));
+        };
 
         space_y.encryption_y.dcgka.my_keys = key_manager_y;
         space_y.encryption_y.dcgka.pki = key_registry_y;
@@ -611,7 +616,11 @@ where
 
         let key_manager_y = manager.identity.key_manager().await?;
 
-        let key_registry_y = manager.identity.key_registry().await?;
+        let Some(key_registry_y) = manager.identity.key_registry().await? else {
+            return Err(SpaceError::IdentityManager(IdentityError::KeyRegistry(
+                KeyRegistryError::KeyBundlesNotFound,
+            )));
+        };
 
         let result = manager
             .store
@@ -795,7 +804,7 @@ pub enum SpaceError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
-    K: KeyRegistryStore + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,

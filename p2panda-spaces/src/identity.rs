@@ -10,13 +10,14 @@ use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerSta
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryError, KeyRegistryState};
 use p2panda_encryption::traits::{KeyBundle, PreKeyManager};
 use p2panda_encryption::{Rng, RngError};
+use p2panda_store::key_registry::KeyRegistryStore;
 use thiserror::Error;
 
 use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
 use crate::traits::SpaceId;
-use crate::traits::{Forge, KeyRegistryStore, KeySecretStore};
+use crate::traits::{Forge, KeySecretStore};
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
@@ -43,7 +44,7 @@ pub struct IdentityManager<ID, K, F, C> {
 impl<ID, K, F, C> IdentityManager<ID, K, F, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore + Debug,
+    K: KeySecretStore + KeyRegistryStore<KeyRegistryState<ActorId>> + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
 {
@@ -102,7 +103,11 @@ where
             &self.rng,
         )?;
 
-        let key_registry_y = self.key_registry().await?;
+        let Some(key_registry_y) = self.key_registry().await? else {
+            return Err(IdentityError::KeyRegistry(
+                KeyRegistryError::KeyBundlesNotFound,
+            ));
+        };
 
         // Register our own key bundle.
         let key_bundle = KeyManager::prekey_bundle(&key_manager_y_i)?;
@@ -163,7 +168,11 @@ where
         member: &Member,
     ) -> Result<(), IdentityError<ID, K, F, C>> {
         let pki = {
-            let y = self.key_registry().await?;
+            let Some(y) = self.key_registry().await? else {
+                return Err(IdentityError::KeyRegistry(
+                    KeyRegistryError::KeyBundlesNotFound,
+                ));
+            };
             KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone())?
         };
 
@@ -210,9 +219,9 @@ where
 
     pub async fn key_registry(
         &self,
-    ) -> Result<KeyRegistryState<ActorId>, IdentityError<ID, K, F, C>> {
+    ) -> Result<Option<KeyRegistryState<ActorId>>, IdentityError<ID, K, F, C>> {
         self.key_store
-            .key_registry()
+            .get_key_registry()
             .await
             .map_err(IdentityError::KeyRegistryStore)
     }
@@ -223,7 +232,7 @@ where
 pub enum IdentityError<ID, K, F, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore,
+    K: KeySecretStore + KeyRegistryStore<KeyRegistryState<ActorId>>,
     F: Forge<ID, C>,
     C: Conditions,
 {
@@ -246,7 +255,7 @@ where
     KeyBundleAuthor(ActorId, ActorId),
 
     #[error("{0}")]
-    KeyRegistryStore(<K as KeyRegistryStore>::Error),
+    KeyRegistryStore(<K as KeyRegistryStore<KeyRegistryState<ActorId>>>::Error),
 
     #[error("{0}")]
     KeyManagerStore(<K as KeySecretStore>::Error),
@@ -367,7 +376,11 @@ mod tests {
             .await
             .unwrap();
 
-        let key_registry_y = alice_identity_manager.key_registry().await.unwrap();
+        let key_registry_y = alice_identity_manager
+            .key_registry()
+            .await
+            .unwrap()
+            .unwrap();
         let (_, bundle): (_, Option<LongTermKeyBundle>) =
             KeyRegistry::key_bundle(key_registry_y, &bob_id).unwrap();
         assert!(bundle.is_some());
