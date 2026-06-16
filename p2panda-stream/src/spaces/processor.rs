@@ -6,12 +6,15 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
+use p2panda_encryption::key_manager::PreKeyBundlesState;
+use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_spaces::manager::{Manager, ManagerError};
 use p2panda_spaces::traits::{
-    AuthStore, AuthoredMessage, Forge, KeyRegistryStore, KeySecretStore, MessageStore, SpaceId,
-    SpacesStore,
+    AuthStore, AuthoredMessage, Forge, MessageStore, SpaceId, SpacesStore,
 };
-use p2panda_spaces::{Event, SpacesArgs as SpacesMessageArgs, StrongRemoveResolver};
+use p2panda_spaces::{ActorId, Event, SpacesArgs as SpacesMessageArgs, StrongRemoveResolver};
+use p2panda_store::key_registry::KeyRegistryStore;
+use p2panda_store::key_secrets::KeySecretsStore;
 use tokio::sync::Notify;
 use tracing::trace;
 
@@ -58,7 +61,7 @@ where
     T: Borrow<SpacesArgs<ID, C>>,
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesMessageArgs<ID, C>>,
     C: Conditions,
