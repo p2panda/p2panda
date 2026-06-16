@@ -3,7 +3,7 @@
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
-use p2panda_encryption::key_manager::KeyManager;
+use p2panda_encryption::key_manager::{KeyManager, PreKeyBundlesState};
 
 use crate::key_secrets::traits::KeySecretsStore;
 use crate::{SqliteStore, tx_unwrap};
@@ -23,10 +23,15 @@ async fn set_get_pre_key_secret() {
     let state = key_manager.prekey_bundles();
 
     // Store should be empty to start with.
-    assert!(store.get_prekey_secrets().await.unwrap().is_none());
+    assert!(
+        <SqliteStore as KeySecretsStore<PreKeyBundlesState>>::get_prekey_secrets(&store)
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     // Store the prekey bundles.
-    tx_unwrap!(store, store.set_prekey_secrets(&state).await.unwrap());
+    tx_unwrap!(store, store.set_prekey_secrets(state).await.unwrap());
 
     // Prekey bundles are successfully retrieved from the store.
     assert_eq!(
@@ -43,7 +48,7 @@ async fn set_get_pre_key_secret() {
     assert_ne!(state, new_state);
 
     // Store the new prekey bundles.
-    tx_unwrap!(store, store.set_prekey_secrets(&new_state).await.unwrap());
+    tx_unwrap!(store, store.set_prekey_secrets(new_state).await.unwrap());
 
     // New prekey bundles have overwritten the previous state.
     assert_eq!(
