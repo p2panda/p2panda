@@ -4,7 +4,7 @@ use p2panda_core::SigningKey;
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
-use p2panda_encryption::key_registry::KeyRegistry;
+use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_spaces::ActorId;
 
 use crate::key_registry::traits::KeyRegistryStore;
@@ -40,7 +40,12 @@ async fn set_get_key_registry() {
     let state = KeyRegistry::add_longterm_bundle(state, member_id, bundle_1.clone()).unwrap();
 
     // Store should be empty to start with.
-    assert!(store.get_key_registry().await.unwrap().is_none());
+    assert!(
+        <SqliteStore as KeyRegistryStore<KeyRegistryState<ActorId>>>::get_key_registry(&store)
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     // Store the key registry.
     tx_unwrap!(store, store.set_key_registry(&state).await.unwrap());

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_encryption::key_manager::PreKeyBundlesState;
+use serde::{Deserialize, Serialize};
 use sqlx::{query, query_scalar};
 
 use crate::key_secrets::traits::KeySecretsStore;
@@ -11,21 +11,24 @@ use crate::{SqliteError, SqliteStore};
 // This makes it possible to use INSERT OR REPLACE to update the prekey secrets state.
 const DEFAULT: &str = "prekey_secrets_state_id";
 
-impl KeySecretsStore for SqliteStore {
+impl<S> KeySecretsStore<S> for SqliteStore
+where
+    S: for<'a> Deserialize<'a> + Serialize,
+{
     type Error = SqliteError;
 
-    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, SqliteError> {
+    async fn get_prekey_secrets(&self) -> Result<Option<S>, SqliteError> {
         let state_bytes: Option<Vec<u8>> = self
             .execute(async |pool| {
                 query_scalar(
                     "
-                SELECT
-                    state
-                FROM
-                    key_secrets_v1
-                WHERE
-                    id = ?
-                ",
+                    SELECT
+                        state
+                    FROM
+                        key_secrets_v1
+                    WHERE
+                        id = ?
+                    ",
                 )
                 .bind(DEFAULT)
                 .fetch_optional(pool)
@@ -35,7 +38,7 @@ impl KeySecretsStore for SqliteStore {
             .await?;
 
         if let Some(bytes) = state_bytes {
-            let state: PreKeyBundlesState = decode_cbor(&bytes[..])
+            let state = decode_cbor(&bytes[..])
                 .map_err(|err| SqliteError::Decode("state".into(), err.into()))?;
 
             Ok(Some(state))
@@ -44,7 +47,7 @@ impl KeySecretsStore for SqliteStore {
         }
     }
 
-    async fn set_prekey_secrets(&self, state: &PreKeyBundlesState) -> Result<(), SqliteError> {
+    async fn set_prekey_secrets(&self, state: &S) -> Result<(), SqliteError> {
         self.tx(async |tx| {
             query(
                 "
