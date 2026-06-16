@@ -194,6 +194,9 @@ pub enum KeyBundleError {
 
     #[error(transparent)]
     Lifetime(#[from] LifetimeError),
+
+    #[error("no key bundles found")]
+    KeyBundlesNotFound,
 }
 
 #[cfg(test)]

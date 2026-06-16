@@ -9,9 +9,11 @@ use std::sync::Arc;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::SigningKey;
+use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::key_registry::KeyRegistryStore;
+use p2panda_store::key_secrets::KeySecretsStore;
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -21,9 +23,7 @@ use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
 use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError, SpaceState};
-use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeySecretStore, MessageStore, SpaceId, SpacesStore,
-};
+use crate::traits::{AuthStore, AuthoredMessage, Forge, MessageStore, SpaceId, SpacesStore};
 use crate::types::{ActorId, AuthGroupState, AuthResolver, OperationId};
 use crate::{Config, Credentials};
 
@@ -72,7 +72,7 @@ where
     // groups.rs due to challenges handling cyclical errors. If that issue is solved in a more
     // satisfactory way then this bound can be removed.
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -569,7 +569,7 @@ pub enum ManagerError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,

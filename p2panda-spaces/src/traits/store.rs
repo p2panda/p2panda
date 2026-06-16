@@ -5,7 +5,6 @@
 use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_encryption::key_manager::PreKeyBundlesState;
 
 use crate::OperationId;
 use crate::space::SpaceState;
@@ -46,18 +45,6 @@ where
     fn auth(&self) -> impl Future<Output = Result<AuthGroupState<C>, Self::Error>>;
 
     fn set_auth(&self, y: &AuthGroupState<C>) -> impl Future<Output = Result<(), Self::Error>>;
-}
-
-/// Interface for setting and getting pre key secrets.
-pub trait KeySecretStore {
-    type Error: Debug;
-
-    fn prekey_secrets(&self) -> impl Future<Output = Result<PreKeyBundlesState, Self::Error>>;
-
-    fn set_prekey_secrets(
-        &self,
-        y: &PreKeyBundlesState,
-    ) -> impl Future<Output = Result<(), Self::Error>>;
 }
 
 // @TODO: This will be replaced with `OperationStore` in `p2panda-store` as soon as it's ready

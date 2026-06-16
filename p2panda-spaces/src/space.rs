@@ -9,10 +9,12 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::SigningKey;
+use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::{KeyRegistryError, KeyRegistryState};
 use p2panda_encryption::traits::GroupMessage;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::key_registry::KeyRegistryStore;
+use p2panda_store::key_secrets::KeySecretsStore;
 use petgraph::algo::toposort;
 use thiserror::Error;
 
@@ -25,9 +27,7 @@ use crate::group::{Group, GroupError};
 use crate::identity::IdentityError;
 use crate::manager::Manager;
 use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
-use crate::traits::{
-    AuthStore, AuthoredMessage, Forge, KeySecretStore, MessageStore, SpaceId, SpacesStore,
-};
+use crate::traits::{AuthStore, AuthoredMessage, Forge, MessageStore, SpaceId, SpacesStore};
 use crate::types::{
     ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
@@ -66,7 +66,7 @@ impl<ID, S, K, F, C, RS> Space<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -804,7 +804,7 @@ pub enum SpaceError<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message>,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretStore + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
