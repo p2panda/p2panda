@@ -8,12 +8,13 @@ use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryState};
 use p2panda_store::key_registry::KeyRegistryStore;
+use p2panda_store::key_secrets::KeySecretsStore;
 use tokio::sync::RwLock;
 
 use crate::OperationId;
 use crate::space::SpaceState;
 use crate::test_utils::{TestConditions, TestMessage, TestSpaceId};
-use crate::traits::{AuthStore, KeySecretStore, MessageStore, SpaceId, SpacesStore};
+use crate::traits::{AuthStore, MessageStore, SpaceId, SpacesStore};
 use crate::types::{ActorId, AuthGroupState};
 
 pub type TestStore = MemoryStore<TestSpaceId, TestMessage, TestConditions>;
@@ -165,12 +166,12 @@ impl KeyRegistryStore<KeyRegistryState<ActorId>> for TestKeyStore {
     }
 }
 
-impl KeySecretStore for TestKeyStore {
+impl KeySecretsStore<PreKeyBundlesState> for TestKeyStore {
     type Error = Infallible;
 
-    async fn prekey_secrets(&self) -> Result<PreKeyBundlesState, Self::Error> {
+    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
         let inner = self.inner.read().await;
-        Ok(inner.prekey_secrets.clone())
+        Ok(Some(inner.prekey_secrets.clone()))
     }
 
     async fn set_prekey_secrets(&self, y: &PreKeyBundlesState) -> Result<(), Self::Error> {

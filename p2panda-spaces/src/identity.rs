@@ -6,18 +6,20 @@ use std::marker::PhantomData;
 
 use p2panda_auth::traits::Conditions;
 use p2panda_encryption::key_bundle::{KeyBundleError, Lifetime, LongTermKeyBundle};
-use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
+use p2panda_encryption::key_manager::{
+    KeyManager, KeyManagerError, KeyManagerState, PreKeyBundlesState,
+};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryError, KeyRegistryState};
 use p2panda_encryption::traits::{KeyBundle, PreKeyManager};
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::key_registry::KeyRegistryStore;
+use p2panda_store::key_secrets::KeySecretsStore;
 use thiserror::Error;
 
 use crate::event::Event;
 use crate::member::Member;
 use crate::message::SpacesArgs;
-use crate::traits::SpaceId;
-use crate::traits::{Forge, KeySecretStore};
+use crate::traits::{Forge, SpaceId};
 use crate::types::ActorId;
 use crate::{Config, Credentials};
 
@@ -44,7 +46,7 @@ pub struct IdentityManager<ID, K, F, C> {
 impl<ID, K, F, C> IdentityManager<ID, K, F, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore<KeyRegistryState<ActorId>> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
 {
@@ -205,11 +207,14 @@ where
 
     /// Assemble and return key manager state from persisted pre-key bundles and identity secret.
     pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<ID, K, F, C>> {
-        let prekeys = self
+        let Some(prekeys) = self
             .key_store
-            .prekey_secrets()
+            .get_prekey_secrets()
             .await
-            .map_err(IdentityError::KeyManagerStore)?;
+            .map_err(IdentityError::KeyManagerStore)?
+        else {
+            return Err(IdentityError::KeyBundle(KeyBundleError::KeyBundlesNotFound));
+        };
 
         Ok(KeyManager::init_from_prekey_bundles(
             &self.credentials.identity_secret(),
@@ -232,7 +237,7 @@ where
 pub enum IdentityError<ID, K, F, C>
 where
     ID: SpaceId,
-    K: KeySecretStore + KeyRegistryStore<KeyRegistryState<ActorId>>,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState>,
     F: Forge<ID, C>,
     C: Conditions,
 {
@@ -258,7 +263,7 @@ where
     KeyRegistryStore(<K as KeyRegistryStore<KeyRegistryState<ActorId>>>::Error),
 
     #[error("{0}")]
-    KeyManagerStore(<K as KeySecretStore>::Error),
+    KeyManagerStore(<K as KeySecretsStore<PreKeyBundlesState>>::Error),
 }
 
 #[cfg(test)]
