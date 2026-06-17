@@ -44,27 +44,26 @@ where
 {
     type Output = T;
 
-    type Error = OrdererError<T, ID, S>;
+    type Error = (Option<T>, OrdererError<T, ID, S>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let permit = self
-            .store
-            .begin()
-            .await
-            .map_err(|err| OrdererError::Transaction(err))?;
+        let permit = match self.store.begin().await {
+            Ok(permit) => permit,
+            Err(err) => return Err((Some(input), OrdererError::Transaction(err))),
+        };
 
         let inner = self.inner.lock().await;
-        inner
-            .process(input.hash(), input.dependencies())
-            .await
-            .map_err(|err| OrdererError::OrdererStore(err))?;
+        if let Err(err) = inner.process(input.hash(), input.dependencies()).await {
+            return Err((Some(input), OrdererError::OrdererStore(err)));
+        };
 
         self.store
             .commit(permit)
             .await
-            .map_err(|err| OrdererError::Transaction(err))?;
+            .map_err(|err| (Some(input), OrdererError::Transaction(err)))?;
 
         self.notify.notify_one(); // Wake up any pending next call
+
         Ok(())
     }
 
@@ -76,13 +75,17 @@ where
                 .store
                 .begin()
                 .await
-                .map_err(|err| OrdererError::Transaction(err))?;
+                .map_err(|err| (None, OrdererError::Transaction(err)))?;
 
-            if let Some(id) = inner.next().await.map_err(OrdererError::OrdererStore)? {
+            if let Some(id) = inner
+                .next()
+                .await
+                .map_err(|err| (None, OrdererError::OrdererStore(err)))?
+            {
                 self.store
                     .commit(permit)
                     .await
-                    .map_err(|err| OrdererError::Transaction(err))?;
+                    .map_err(|err| (None, OrdererError::Transaction(err)))?;
 
                 return match self
                     .store
@@ -91,8 +94,8 @@ where
                     .map_err(OrdererError::OperationStore)
                 {
                     Ok(Some(operation)) => Ok(operation),
-                    Ok(None) => Err(OrdererError::StoreInconsistency(id)),
-                    Err(err) => Err(err),
+                    Ok(None) => Err((None, OrdererError::StoreInconsistency(id))),
+                    Err(err) => Err((None, err)),
                 };
             }
 
