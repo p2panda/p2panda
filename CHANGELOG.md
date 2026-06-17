@@ -36,7 +36,9 @@ Highlights are marked with a pancake 🥞
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
+- stream: Return input with error in orderer processor [#1249](https://github.com/p2panda/p2panda/pull/1249)
 - spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
+- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
 
 ### Fixed
 
