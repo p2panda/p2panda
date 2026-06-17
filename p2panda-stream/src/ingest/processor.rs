@@ -26,7 +26,7 @@ pub struct Ingest<S, T, L, E, TP> {
 impl<S, T, L, E, TP> Ingest<S, T, L, E, TP>
 where
     S: Transaction
-        + OperationStore<Operation<E>, Hash, L>
+        + OperationStore<Operation<E>, Hash>
         + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     L: LogId,
@@ -45,7 +45,7 @@ where
 impl<S, T, L, E, TP> Processor<T> for Ingest<S, T, L, E, TP>
 where
     S: Transaction
-        + OperationStore<Operation<E>, Hash, L>
+        + OperationStore<Operation<E>, Hash>
         + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,

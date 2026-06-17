@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::test_utils::TestLog;
-use p2panda_core::{Hash, Operation, Topic};
+use p2panda_core::{Hash, Operation};
 
 use crate::operations::OperationStore;
 use crate::{SqliteStore, Transaction};
@@ -54,13 +54,13 @@ async fn insert_get_delete_operations() {
     // ~~~
 
     assert!(
-        OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_1.hash)
+        OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_1.hash)
             .await
             .unwrap()
     );
     // Operation 2 was not inserted.
     assert!(
-        !OperationStore::<Operation<()>, Hash, Topic>::has_operation(&store, &operation_2.hash)
+        !OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_2.hash)
             .await
             .unwrap()
     );
@@ -69,13 +69,13 @@ async fn insert_get_delete_operations() {
     // ~~~
 
     assert_eq!(
-        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
         Some(operation_4.clone())
     );
     assert_eq!(
-        OperationStore::<Operation<()>, Hash, Topic>::get_operation(&store, &operation_2.hash)
+        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_2.hash)
             .await
             .unwrap(),
         None
@@ -87,13 +87,13 @@ async fn insert_get_delete_operations() {
     let permit = store.begin().await.unwrap();
 
     assert!(
-        OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
     // Deleting the same item again returns false.
     assert!(
-        !OperationStore::<Operation<()>, Hash, Topic>::delete_operation(&store, &operation_4.hash)
+        !OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
             .await
             .unwrap(),
     );

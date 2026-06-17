@@ -26,7 +26,7 @@ pub async fn ingest_operation<S, T, L, E, TP>(
 ) -> Result<bool, IngestError>
 where
     S: Transaction
-        + OperationStore<Operation<E>, Hash, L>
+        + OperationStore<Operation<E>, Hash>
         + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>>,
