@@ -25,4 +25,7 @@ pub use config::Config;
 pub use credentials::Credentials;
 pub use event::Event;
 pub use message::{SpacesArgs, SpacesMessage};
-pub use types::{ActorId, OperationId, StrongRemoveResolver};
+pub use types::{
+    ActorId, GroupsStore, OperationId, SpacesMessageStore, SpacesStore, SpacesStoreWrite,
+    StrongRemoveResolver,
+};

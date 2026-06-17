@@ -8,6 +8,7 @@ use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::GroupMessage;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
+use serde::{Deserialize, Serialize};
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
@@ -17,7 +18,7 @@ use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, O
 /// dependencies for encryption messages and performs some internal buffering. It does _not_ take
 /// care of ordering of control and application messages; p2panda-spaces expects messages to be
 /// orderer before being processed.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionOrderer {}
 
 impl Default for EncryptionOrderer {
@@ -33,7 +34,7 @@ impl EncryptionOrderer {
 }
 
 /// Orderer for encryption messages.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionOrdererState {
     /// Current graph heads (cache)
     heads: Vec<OperationId>,

@@ -4,10 +4,11 @@ use std::fmt::Debug;
 
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
+use serde::{Deserialize, Serialize};
 
 use crate::types::{ActorId, OperationId};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthMessage<C> {
     pub(crate) operation_id: OperationId,
     pub(crate) author: ActorId,
