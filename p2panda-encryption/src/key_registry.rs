@@ -17,7 +17,10 @@ use crate::key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle, lat
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
 
 /// Key registry to maintain public key material of other members we've collected.
-#[derive(Clone, Debug)]
+// @TODO(sam): the serde derive traits are not actually required (KeyRegistry is never serialized)
+// however we're forced to include them to satisfy inferred trait bounds of generic parameters on
+// GroupState. I'm sure there is a trick to get around this...
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyRegistry<ID> {
     _marker: PhantomData<ID>,
 }
