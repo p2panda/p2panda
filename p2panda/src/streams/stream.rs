@@ -751,9 +751,7 @@ impl<M> StreamSubscription<M> {
     /// applicaton-level processing has successfully finished. See high-level description in
     /// [`Node::stream`](crate::node::Node::stream) for more details.
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
-        if let Some(operation) =
-            OperationStore::<_, _, LogId>::get_operation(&self.store, &id).await?
-        {
+        if let Some(operation) = OperationStore::<_, _>::get_operation(&self.store, &id).await? {
             self.acked.ack(&operation.header).await?;
         }
 

@@ -240,7 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     SyncEvent::OperationReceived { operation, .. } => {
-                        if <SqliteStore as OperationStore<Operation, Hash, LogId>>::has_operation(
+                        if <SqliteStore as OperationStore<Operation, Hash>>::has_operation(
                             &store,
                             &operation.hash,
                         )

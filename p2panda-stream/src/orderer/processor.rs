@@ -22,7 +22,7 @@ pub struct Orderer<T, ID, S> {
 impl<T, ID, S> Orderer<T, ID, S>
 where
     ID: OperationId,
-    S: Clone + Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Clone + Transaction + OrdererStore<ID> + OperationStore<T, ID>,
 {
     pub fn new(store: S) -> Self {
         let inner = CausalOrderer::new(store.clone());
@@ -40,7 +40,7 @@ impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
 where
     T: Digest<ID> + Ordering<ID>,
     ID: OperationId,
-    S: Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Transaction + OrdererStore<ID> + OperationStore<T, ID>,
 {
     type Output = T;
 
@@ -106,7 +106,7 @@ pub enum OrdererError<T, ID, S>
 where
     T: Ordering<ID>,
     ID: OperationId,
-    S: Transaction + OrdererStore<ID> + OperationStore<T, ID, u64>,
+    S: Transaction + OrdererStore<ID> + OperationStore<T, ID>,
 {
     #[error("could not find item with id {0} in operation store")]
     StoreInconsistency(ID),
@@ -115,7 +115,7 @@ where
     OrdererStore(<S as OrdererStore<ID>>::Error),
 
     #[error("{0}")]
-    OperationStore(<S as OperationStore<T, ID, u64>>::Error),
+    OperationStore(<S as OperationStore<T, ID>>::Error),
 
     #[error("{0}")]
     Transaction(<S as Transaction>::Error),

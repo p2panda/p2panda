@@ -84,7 +84,7 @@ where
     where
         S: Clone
             + Transaction
-            + OperationStore<Operation<E>, Hash, L>
+            + OperationStore<Operation<E>, Hash>
             + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
             + TopicStore<TP, VerifyingKey, L>
             + Send

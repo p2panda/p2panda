@@ -924,7 +924,7 @@ mod tests {
 
             if let LogSyncEvent::OperationReceived { .. } = event {
                 tx_unwrap!(&peer_a.store, {
-                    <SqliteStore as OperationStore<Operation<()>, Hash, ()>>::delete_operation(
+                    <SqliteStore as OperationStore<Operation<()>, Hash>>::delete_operation(
                         &peer_a.store,
                         &to_be_pruned_log[0],
                     )

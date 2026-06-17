@@ -2,22 +2,24 @@
 
 use std::error::Error;
 
+use p2panda_core::LogId;
+
 /// Interface for storing, deleting and querying operations.
 ///
 /// The concrete type of an "operation" is generic and implementors can use the same interface for
 /// different approaches: sets, append-only logs, hash-graphs (DAG) etc.
-pub trait OperationStore<T, ID, C> {
+pub trait OperationStore<T, ID> {
     type Error: Error;
 
     /// Insert an operation.
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation already existed and
     /// no insertion occurred.
-    fn insert_operation(
+    fn insert_operation<L: LogId>(
         &self,
         id: &ID,
         operation: &T,
-        collection_id: &C,
+        collection_id: &L,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Get an operation by id.
