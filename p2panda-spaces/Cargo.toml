@@ -21,21 +21,26 @@ workspace = true
 
 [features]
 test_utils = [
+  "dep:anyhow",
   "p2panda-auth/test_utils",
   "p2panda-encryption/test_utils",
 ]
 
 [dependencies]
+anyhow = { version = "1.0.102", optional = true }
 p2panda-auth = { workspace = true, features = ["serde"], default-features = false }
 p2panda-core = { workspace = true, default-features = false }
 p2panda-encryption = { workspace = true, features = ["data_scheme"], default-features = false }
-p2panda-store = { workspace = true, default-features = false }
+# @TODO: we're using tx_unwrap (which is behind test_utils flag) to fix an issue with unhandled 
+# transaction error return types, remove when we don't need that anymore.
+p2panda-store = { workspace = true, features = ["macros", "sqlite", "test_utils"] }
 petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["sync"] }
 
 [dev-dependencies]
+anyhow = { version = "1.0.102" }
 assert_matches = "1.5.0"
 p2panda-auth = { workspace = true, features = ["test_utils"], default-features = false }
 p2panda-encryption = { workspace = true, features = ["test_utils"], default-features = false }

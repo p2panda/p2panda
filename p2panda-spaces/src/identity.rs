@@ -69,7 +69,7 @@ where
 
     /// The public key of the local actor.
     pub(crate) fn id(&self) -> ActorId {
-        self.credentials.verifying_key().into()
+        self.credentials.verifying_key()
     }
 
     /// The local actor id and their long-term key bundle.
@@ -275,10 +275,10 @@ mod tests {
     use p2panda_encryption::key_bundle::LongTermKeyBundle;
     use p2panda_encryption::key_registry::KeyRegistry;
     use p2panda_encryption::traits::{KeyBundle, PreKeyRegistry};
+    use p2panda_store::SqliteStore;
 
     use crate::message::SpacesArgs;
-    use crate::test_utils::{TestForge, TestKeyStore, TestStore};
-    use crate::traits::AuthoredMessage;
+    use crate::test_utils::{TestForge, TestKeyStore};
     use crate::{ActorId, Config, Credentials};
 
     use super::IdentityManager;
@@ -290,9 +290,9 @@ mod tests {
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
 
-        let message_store = TestStore::new();
+        let store = SqliteStore::temporary().await;
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.signing_key());
+        let forge = TestForge::new(store, credentials.signing_key());
 
         let mut identity_manager =
             IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
@@ -314,20 +314,20 @@ mod tests {
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
 
-        let message_store = TestStore::new();
+        let store = SqliteStore::temporary().await;
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.signing_key());
+        let forge = TestForge::new(store, credentials.signing_key());
 
         let mut identity_manager =
             IdentityManager::new(key_store, forge, credentials.clone(), &config, &rng)
                 .await
                 .unwrap();
 
-        let msg = identity_manager.key_bundle_message().await.unwrap();
+        let operation = identity_manager.key_bundle_message().await.unwrap();
 
-        let actor_id: ActorId = credentials.signing_key().verifying_key().into();
-        assert_eq!(msg.author(), actor_id);
-        match msg.borrow() {
+        let author = credentials.signing_key().verifying_key();
+        assert_eq!(operation.header().verifying_key, author);
+        match operation.header().extensions.borrow() {
             SpacesArgs::KeyBundle { key_bundle } => {
                 assert!(key_bundle.verify().is_ok());
             }
@@ -341,9 +341,9 @@ mod tests {
         let alice_credentials = Credentials::from_rng(&alice_rng).unwrap();
         let alice_config = Config::default();
 
-        let alice_message_store = TestStore::new();
+        let alice_store = SqliteStore::temporary().await;
         let alice_key_store = TestKeyStore::new();
-        let alice_forge = TestForge::new(alice_message_store, alice_credentials.signing_key());
+        let alice_forge = TestForge::new(alice_store, alice_credentials.signing_key());
 
         let mut alice_identity_manager = IdentityManager::new(
             alice_key_store,
@@ -359,9 +359,9 @@ mod tests {
         let bob_credentials = Credentials::from_rng(&bob_rng).unwrap();
         let bob_config = Config::default();
 
-        let bob_message_store = TestStore::new();
+        let bob_store = SqliteStore::temporary().await;
         let bob_key_store = TestKeyStore::new();
-        let bob_forge = TestForge::new(bob_message_store, bob_credentials.signing_key());
+        let bob_forge = TestForge::new(bob_store, bob_credentials.signing_key());
 
         let mut bob_identity_manager = IdentityManager::new(
             bob_key_store,
@@ -403,9 +403,9 @@ mod tests {
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
 
-        let message_store = TestStore::new();
+        let store = SqliteStore::temporary().await;
         let key_store = TestKeyStore::new();
-        let forge = TestForge::new(message_store, credentials.signing_key());
+        let forge = TestForge::new(store, credentials.signing_key());
 
         let mut alice_identity_manager =
             IdentityManager::new(key_store, forge, credentials, &config, &rng)

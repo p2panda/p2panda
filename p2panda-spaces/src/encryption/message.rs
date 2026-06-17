@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::LazyLock;
+
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::hash::HASH_LEN;
+use p2panda_core::identity::VERIFYING_KEY_LEN;
+use p2panda_core::{Hash, VerifyingKey};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessageContent};
+use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
@@ -14,7 +20,7 @@ use crate::types::{
 use crate::utils::removed_members;
 
 /// Arguments which are returned from p2panda-encryption APIs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EncryptionArgs {
     System {
         dependencies: Vec<OperationId>,
@@ -30,7 +36,7 @@ pub enum EncryptionArgs {
 }
 
 /// Message which can be processed by p2panda-encryption APIs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum EncryptionMessage {
     Args(EncryptionArgs),
@@ -171,7 +177,8 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of an operation id, so we can give it a
                 // placeholder instead.
-                OperationId::placeholder()
+                static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
+                PLACEHOLDER_ID
             }
             EncryptionMessage::Forged { operation_id, .. } => *operation_id,
         }
@@ -183,7 +190,11 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of a sender, so we can give it a
                 // placeholder instead.
-                ActorId::placeholder()
+                static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
+                    VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
+                        .expect("can create public key from constant bytes")
+                });
+                *PLACEHOLDER_PUBLIC_KEY
             }
             EncryptionMessage::Forged { author, .. } => *author,
         }

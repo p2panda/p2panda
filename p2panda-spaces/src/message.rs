@@ -20,25 +20,27 @@ use crate::types::{ActorId, EncryptionDirectMessage, OperationId};
 /// required and also exposes an API for converting into specific message variants where these are
 /// needed.
 #[derive(Clone, Debug)]
-pub struct SpacesMessage<SID, C> {
-    pub id: OperationId,
-    pub author: ActorId,
-    pub args: SpacesArgs<SID, C>,
+pub struct SpacesMessage<SID, C>(pub(crate) crate::types::SpacesMessage<SID, C>);
+
+impl<SID, C> From<crate::types::SpacesMessage<SID, C>> for SpacesMessage<SID, C> {
+    fn from(value: crate::types::SpacesMessage<SID, C>) -> Self {
+        Self(value)
+    }
 }
 
 impl<SID, C> Borrow<SpacesArgs<SID, C>> for SpacesMessage<SID, C> {
     fn borrow(&self) -> &SpacesArgs<SID, C> {
-        &self.args
+        &self.0.args
     }
 }
 
 impl<SID, C> AuthoredMessage for SpacesMessage<SID, C> {
     fn id(&self) -> OperationId {
-        self.id
+        self.0.id
     }
 
     fn author(&self) -> ActorId {
-        self.author
+        self.0.author
     }
 }
 

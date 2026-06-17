@@ -23,7 +23,7 @@ use crate::traits::{IdentityManager, PreKeyManager};
 /// public pre-key bundles.
 // @TODO(sam): the serde derive traits are not actually required (KeyManager is never serialized)
 // however we're forced to include them to satisfy inferred trait bounds of generic parameters on
-// GroupState. I'm sure there is a trick to get around this... 
+// GroupState. I'm sure there is a trick to get around this...
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeyManager;
 
