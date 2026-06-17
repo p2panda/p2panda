@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
 - Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
 
 ## [0.6.1] - 22/05/2026
 
