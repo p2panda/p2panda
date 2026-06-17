@@ -28,19 +28,21 @@ const HAS_OPERATION: &str = "
         hash = ?
 ";
 
-impl<E, L> OperationStore<Operation<E>, Hash, L> for SqliteStore
+impl<E> OperationStore<Operation<E>, Hash> for SqliteStore
 where
     E: Extensions,
-    L: LogId,
 {
     type Error = SqliteError;
 
-    async fn insert_operation(
+    async fn insert_operation<L>(
         &self,
         id: &Hash,
         operation: &Operation<E>,
         log_id: &L,
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<bool, Self::Error>
+    where
+        L: LogId,
+    {
         let result = self
             .tx(async |tx| {
                 query(
