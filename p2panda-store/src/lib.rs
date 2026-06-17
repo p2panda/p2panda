@@ -128,6 +128,7 @@ pub mod logs;
 mod macros;
 pub mod operations;
 pub mod orderer;
+pub mod spaces;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
 pub mod topics;
