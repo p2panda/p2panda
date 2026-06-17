@@ -14,6 +14,7 @@ Highlights are marked with a pancake 🥞
 - auth: More methods (`traverse_members`, `groups`) to traverse and filter graph [#1242](https://github.com/p2panda/p2panda/pull/1242)
 - auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
 - Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
+- SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
 
 ### Changed
 
