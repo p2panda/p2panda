@@ -53,20 +53,16 @@ use tokio::task::LocalSet;
 use tracing::{debug, error, info};
 
 type LogId = usize;
-type StateId = u8;
+
 type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation<()>, ()>;
-type Groups = p2panda_stream::groups::Groups<
-    StateId,
-    GroupsArgs<StateId, AppExtensions>,
-    AppExtensions,
-    LogId,
->;
+
+type Groups = p2panda_stream::groups::Groups<GroupsArgs<AppExtensions>, AppExtensions, LogId>;
 
 /// This application maintains only one log per author, this is why we can hard-code it.
 const LOG_ID: LogId = 1;
 
 /// Identifier for the group state used in this example.
-const GROUPS_STATE_ID: u8 = 0;
+const GROUPS_STATE_ID: &[u8] = b"default";
 
 /// Topic id for this example.
 const TOPIC: [u8; 32] = [1; 32];
@@ -203,7 +199,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     let y: GroupsState = tx_unwrap!(store, {
                         store
-                            .get_groups_state_tx(&GROUPS_STATE_ID)
+                            .get_groups_state_tx(Hash::digest(GROUPS_STATE_ID))
                             .await
                             .unwrap()
                             .unwrap_or_default()
@@ -270,7 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Pass the ingested operation into the groups processor.
         if let Err(err) = groups
             .process(GroupsArgs::Process {
-                state_id: GROUPS_STATE_ID,
+                state_id: Hash::digest(GROUPS_STATE_ID),
                 operation: ingested_op,
             })
             .await
@@ -320,7 +316,7 @@ async fn text_2_action(
 ) -> Result<(VerifyingKey, GroupAction<VerifyingKey>), Text2ActionError> {
     let y = tx_unwrap!(store, {
         store
-            .get_groups_state_tx(&GROUPS_STATE_ID)
+            .get_groups_state_tx(Hash::digest(GROUPS_STATE_ID))
             .await
             .unwrap()
             .unwrap_or_default()
@@ -412,7 +408,7 @@ async fn print_group(store: &SqliteStore, operation: &Operation<AppExtensions>) 
     };
     let y: GroupsState = tx_unwrap!(store, {
         store
-            .get_groups_state_tx(&GROUPS_STATE_ID)
+            .get_groups_state_tx(Hash::digest(GROUPS_STATE_ID))
             .await
             .unwrap()
             .unwrap_or_default()
