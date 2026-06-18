@@ -120,14 +120,18 @@
 //! ```
 pub mod address_book;
 pub mod cursors;
+#[cfg(feature = "groups")]
 pub mod groups;
+#[cfg(feature = "encryption")]
 pub mod key_registry;
+#[cfg(feature = "encryption")]
 pub mod key_secrets;
 pub mod logs;
 #[cfg(feature = "macros")]
 mod macros;
 pub mod operations;
 pub mod orderer;
+#[cfg(feature = "spaces")]
 pub mod spaces;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
