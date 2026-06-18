@@ -87,9 +87,9 @@ where
             .await?;
 
         if let Some(latest) = result {
-            let hash_seq_num = latest.try_into()?;
+            let operation = latest.try_into()?;
 
-            Ok(Some(hash_seq_num))
+            Ok(Some(operation))
         } else {
             Ok(None)
         }
