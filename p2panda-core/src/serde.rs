@@ -245,7 +245,9 @@ where
                 if let Some(remainder) = seq.size_hint()
                     && remainder > 0
                 {
-                    return Err(SerdeError::custom("unexpected excessive fields in header"));
+                    return Err(SerdeError::custom(format!(
+                        "unexpected {remainder} excessive field(s) in header"
+                    )));
                 }
 
                 Ok(Header {
