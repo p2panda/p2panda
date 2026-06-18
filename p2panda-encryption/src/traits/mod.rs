@@ -27,7 +27,6 @@ pub use message::{GroupMessage, GroupMessageContent};
 pub use ordering::ForwardSecureOrdering;
 #[cfg(any(test, feature = "data_scheme"))]
 pub use ordering::Ordering;
-use p2panda_core::{Hash, VerifyingKey};
 
 /// Handle to identify a group member.
 ///
@@ -35,7 +34,7 @@ use p2panda_core::{Hash, VerifyingKey};
 /// long byte string.
 pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
 
-impl IdentityHandle for VerifyingKey {}
+impl IdentityHandle for p2panda_core::VerifyingKey {}
 
 #[cfg(any(test, feature = "test_utils"))]
 impl IdentityHandle for &str {}
@@ -50,7 +49,7 @@ impl IdentityHandle for usize {}
 /// hash.
 pub trait OperationId: Copy + Debug + PartialEq + Eq + StdHash {}
 
-impl OperationId for Hash {}
+impl OperationId for p2panda_core::Hash {}
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OperationId for (usize, usize) {} // (ID, Seq)
