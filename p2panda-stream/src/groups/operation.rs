@@ -4,7 +4,7 @@ use p2panda_core::{Hash, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::group::GroupAction;
-use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 
 /// Concrete groups operation type.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,7 +17,7 @@ pub struct GroupsOperation<C = ()> {
 }
 
 /// Implementation of groups Operation trait.
-impl<C> Operation<VerifyingKey, Hash, C> for GroupsOperation<C>
+impl<C> AuthOperation<VerifyingKey, Hash, C> for GroupsOperation<C>
 where
     C: Conditions,
 {
