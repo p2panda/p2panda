@@ -61,7 +61,9 @@ impl<ID, S, K, F, C, RS> Group<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + SpacesMessageStore<ID, C> + GroupsStore<C> + Transaction,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>>
+        + KeySecretsStore<PreKeyBundlesState>
+        + Transaction,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -86,7 +88,7 @@ where
         y: AuthGroupState<C>,
         group_id: ActorId,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, K, F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, F, C, RS>> {
         let initial_members = typed_members(&y, initial_members);
 
         let auth_dependencies = y.inner.heads().into_iter().collect();
@@ -113,7 +115,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, K, F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, F, C, RS>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -129,7 +131,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, K, F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, F, C, RS>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -145,7 +147,7 @@ where
     pub(crate) async fn process(
         manager_ref: Manager<ID, S, K, F, C, RS>,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(AuthGroupState<C>, Event<ID, C>)>, GroupError<ID, K, F, C, RS>> {
+    ) -> Result<Option<(AuthGroupState<C>, Event<ID, C>)>, GroupError<ID, F, C, RS>> {
         // @TODO: make two variants of this method, one which doesn't persist state but rather
         // just returns it, the other just for testing which persists it as well.
         let mut groups_y = manager_ref.get_groups_state().await?;
@@ -168,7 +170,7 @@ where
         group_id: ActorId,
         auth_dependencies: Vec<OperationId>,
         group_action: GroupAction<ActorId, C>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, K, F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<ID, F, C, RS>> {
         let args = SpacesArgs::Auth {
             group_id,
             auth_dependencies,
@@ -192,7 +194,7 @@ where
     }
 
     /// Current group members and access levels.
-    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, K, F, C, RS>> {
+    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, GroupError<ID, F, C, RS>> {
         let y = self.manager.get_groups_state().await?;
         let mut group_members = y.members(self.id);
         sort_members(&mut group_members);
@@ -209,7 +211,9 @@ where
         + SpacesMessageStore<ID, C>
         + GroupsStore<C>
         + Transaction,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>>
+        + KeySecretsStore<PreKeyBundlesState>
+        + Transaction,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -222,7 +226,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<F::Message, GroupError<ID, K, F, C, RS>> {
+    ) -> Result<F::Message, GroupError<ID, F, C, RS>> {
         let (y, message) = self.add(member, access).await?;
         self.manager.set_groups_state(&y).await?;
 
@@ -235,7 +239,7 @@ where
     pub async fn remove_persisted(
         &self,
         member: ActorId,
-    ) -> Result<F::Message, GroupError<ID, K, F, C, RS>> {
+    ) -> Result<F::Message, GroupError<ID, F, C, RS>> {
         let (y, message) = self.remove(member).await?;
         self.manager.set_groups_state(&y).await?;
 
@@ -245,10 +249,9 @@ where
 
 /// Group error type.
 #[derive(Debug, Error)]
-pub enum GroupError<ID, K, F, C, RS>
+pub enum GroupError<ID, F, C, RS>
 where
     ID: SpaceId,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState>,
     F: Forge<ID, C>,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
@@ -263,7 +266,7 @@ where
     EncryptionGroup(EncryptionGroupError),
 
     #[error(transparent)]
-    IdentityManager(#[from] IdentityError<ID, K, F, C>),
+    IdentityManager(#[from] IdentityError<ID, F, C>),
 
     #[error(transparent)]
     Store(#[from] StoreError),

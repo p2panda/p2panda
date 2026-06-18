@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod forge;
-mod store;
 
 use std::borrow::Borrow;
 
@@ -25,7 +24,6 @@ use crate::traits::SpaceId;
 use crate::types::StrongRemoveResolver;
 
 pub use forge::TestForge;
-pub use store::TestKeyStore;
 
 pub type TestSpaceId = usize;
 
@@ -74,19 +72,14 @@ pub type SqliteSpacesStore = p2panda_store::spaces::SqliteSpacesStore<Operation>
 pub type TestManager = Manager<
     TestSpaceId,
     SqliteSpacesStore,
-    TestKeyStore,
+    SqliteStore,
     TestForge,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
-pub type TestSpaceError = SpaceError<
-    TestSpaceId,
-    TestKeyStore,
-    TestForge,
-    TestConditions,
-    StrongRemoveResolver<TestConditions>,
->;
+pub type TestSpaceError =
+    SpaceError<TestSpaceId, TestForge, TestConditions, StrongRemoveResolver<TestConditions>>;
 
 pub struct TestPeer {
     #[allow(unused)]
@@ -113,12 +106,11 @@ impl TestPeer {
     ) -> Self {
         let store = SqliteStore::temporary().await;
         let spaces_store = SqliteSpacesStore::new(store.clone());
-        let key_store = TestKeyStore::new();
-        let forge = TestForge::new(store, credentials.signing_key());
+        let forge = TestForge::new(store.clone(), credentials.signing_key());
 
         let manager = TestManager::new_with_config(
             spaces_store,
-            key_store,
+            store,
             forge,
             credentials.clone(),
             config,

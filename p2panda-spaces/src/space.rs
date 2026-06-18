@@ -10,7 +10,7 @@ use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::SigningKey;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
-use p2panda_encryption::key_registry::{KeyRegistryError, KeyRegistryState};
+use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_encryption::traits::GroupMessage;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::Transaction;
@@ -70,7 +70,9 @@ impl<ID, S, K, F, C, RS> Space<ID, S, K, F, C, RS>
 where
     ID: SpaceId,
     S: SpacesStore<ID, C> + SpacesMessageStore<ID, C> + GroupsStore<C> + Transaction,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>>
+        + KeySecretsStore<PreKeyBundlesState>
+        + Transaction,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -93,7 +95,7 @@ where
         manager_ref: Manager<ID, S, K, F, C, RS>,
         space_id: ID,
         mut initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(AuthGroupState<C>, SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, K, F, C, RS>>
+    ) -> Result<(AuthGroupState<C>, SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, F, C, RS>>
     {
         let my_id = manager_ref.id();
 
@@ -144,7 +146,7 @@ where
         access: Access<C>,
     ) -> Result<
         (AuthGroupState<C>, SpaceState<ID, C>, F::Message, F::Message),
-        SpaceError<ID, K, F, C, RS>,
+        SpaceError<ID, F, C, RS>,
     > {
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
@@ -169,7 +171,7 @@ where
         member: ActorId,
     ) -> Result<
         (AuthGroupState<C>, SpaceState<ID, C>, F::Message, F::Message),
-        SpaceError<ID, K, F, C, RS>,
+        SpaceError<ID, F, C, RS>,
     > {
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
@@ -195,7 +197,7 @@ where
         manager_ref: Manager<ID, S, K, F, C, RS>,
         mut y: SpaceState<ID, C>,
         auth_message: &AuthMessage<C>,
-    ) -> Result<(SpaceState<ID, C>, F::Message), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(SpaceState<ID, C>, F::Message), SpaceError<ID, F, C, RS>> {
         // Get current space members.
         let current_members = secret_members(y.groups_y.members(y.group_id));
 
@@ -254,7 +256,7 @@ where
         manager_ref: Manager<ID, S, K, F, C, RS>,
         space_id: ID,
         group_id: ActorId,
-    ) -> Result<(SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, F, C, RS>> {
         // Instantiate empty space state.
         let mut y = { Self::get_or_init_state(space_id, group_id, manager_ref.clone()).await? };
         let mut messages = vec![];
@@ -299,7 +301,7 @@ where
         &self,
         space_message: &SpaceMembershipMessage,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(SpaceState<ID, C>, Vec<Event<ID, C>>)>, SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<Option<(SpaceState<ID, C>, Vec<Event<ID, C>>)>, SpaceError<ID, F, C, RS>> {
         let SpaceMembershipMessage {
             id,
             group_id,
@@ -405,7 +407,7 @@ where
         current_members: Vec<ActorId>,
         next_members: Vec<ActorId>,
         rng: &Rng,
-    ) -> Result<(EncryptionGroupState, Vec<EncryptionDirectMessage>), SpaceError<ID, K, F, C, RS>>
+    ) -> Result<(EncryptionGroupState, Vec<EncryptionDirectMessage>), SpaceError<ID, F, C, RS>>
     {
         // Make the DGM aware of group members after this group membership change has been
         // processed.
@@ -466,7 +468,7 @@ where
     pub(crate) async fn handle_application_message(
         &self,
         message: &ApplicationMessage,
-    ) -> Result<Option<(SpaceState<ID, C>, Vec<Event<ID, C>>)>, SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<Option<(SpaceState<ID, C>, Vec<Event<ID, C>>)>, SpaceError<ID, F, C, RS>> {
         let mut y = self.state().await?;
 
         // Process encryption message.
@@ -491,7 +493,7 @@ where
 
     pub async fn repair(
         &self,
-    ) -> Result<(SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(SpaceState<ID, C>, Vec<F::Message>), SpaceError<ID, F, C, RS>> {
         let groups_y = self.manager.get_groups_state().await?;
         let mut space_y = self.state().await?;
 
@@ -537,7 +539,7 @@ where
     }
 
     /// Get the space state.
-    pub(crate) async fn state(&self) -> Result<SpaceState<ID, C>, SpaceError<ID, K, F, C, RS>> {
+    pub(crate) async fn state(&self) -> Result<SpaceState<ID, C>, SpaceError<ID, F, C, RS>> {
         let mut space_y = self
             .manager
             .get_space_state(&self.id)
@@ -550,11 +552,7 @@ where
         let manager = self.manager.inner.read().await;
         let key_manager_y = manager.identity.key_manager().await?;
 
-        let Some(key_registry_y) = manager.identity.key_registry().await? else {
-            return Err(SpaceError::IdentityManager(IdentityError::KeyRegistry(
-                KeyRegistryError::KeyBundlesNotFound,
-            )));
-        };
+        let key_registry_y = manager.identity.key_registry().await?;
 
         space_y.encryption_y.dcgka.my_keys = key_manager_y;
         space_y.encryption_y.dcgka.pki = key_registry_y;
@@ -567,15 +565,11 @@ where
         space_id: ID,
         group_id: ActorId,
         manager_ref: Manager<ID, S, K, F, C, RS>,
-    ) -> Result<SpaceState<ID, C>, SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<SpaceState<ID, C>, SpaceError<ID, F, C, RS>> {
         let (key_manager_y, key_registry_y) = {
             let manager = manager_ref.inner.read().await;
             let key_manager_y = manager.identity.key_manager().await?;
-            let Some(key_registry_y) = manager.identity.key_registry().await? else {
-                return Err(SpaceError::IdentityManager(IdentityError::KeyRegistry(
-                    KeyRegistryError::KeyBundlesNotFound,
-                )));
-            };
+            let key_registry_y = manager.identity.key_registry().await?;
             (key_manager_y, key_registry_y)
         };
 
@@ -625,13 +619,13 @@ where
     }
 
     /// Id of the group associated with this space.
-    pub async fn group_id(&self) -> Result<ActorId, SpaceError<ID, K, F, C, RS>> {
+    pub async fn group_id(&self) -> Result<ActorId, SpaceError<ID, F, C, RS>> {
         let y = self.state().await?;
         Ok(y.group_id)
     }
 
     /// The members of this space.
-    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<ID, K, F, C, RS>> {
+    pub async fn members(&self) -> Result<Vec<(ActorId, Access<C>)>, SpaceError<ID, F, C, RS>> {
         let y = self.state().await?;
         let mut group_members = y.groups_y.members(y.group_id);
         sort_members(&mut group_members);
@@ -642,7 +636,7 @@ where
     pub async fn publish(
         &self,
         plaintext: &[u8],
-    ) -> Result<(SpaceState<ID, C>, F::Message), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(SpaceState<ID, C>, F::Message), SpaceError<ID, F, C, RS>> {
         let mut y = self.state().await?;
 
         if !y.encryption_y.orderer.is_welcomed() {
@@ -703,7 +697,9 @@ where
         + SpacesMessageStore<ID, C>
         + GroupsStore<C>
         + Transaction,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>>
+        + KeySecretsStore<PreKeyBundlesState>
+        + Transaction,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesArgs<ID, C>>,
     C: Conditions,
@@ -716,7 +712,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(F::Message, F::Message), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(F::Message, F::Message), SpaceError<ID, F, C, RS>> {
         let (groups_y, space_y, auth_message, space_message) = self.add(member, access).await?;
 
         self.manager.set_groups_state(&groups_y).await?;
@@ -731,7 +727,7 @@ where
     pub async fn remove_persisted(
         &self,
         member: ActorId,
-    ) -> Result<(F::Message, F::Message), SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<(F::Message, F::Message), SpaceError<ID, F, C, RS>> {
         let (groups_y, space_y, auth_message, space_message) = self.remove(member).await?;
 
         self.manager.set_groups_state(&groups_y).await?;
@@ -744,13 +740,13 @@ where
     pub async fn publish_persisted(
         &self,
         plaintext: &[u8],
-    ) -> Result<F::Message, SpaceError<ID, K, F, C, RS>> {
+    ) -> Result<F::Message, SpaceError<ID, F, C, RS>> {
         let (space_y, message) = self.publish(plaintext).await?;
         self.manager.set_space_state(&self.id(), &space_y).await?;
         Ok(message)
     }
 
-    pub async fn repair_persisted(&self) -> Result<Vec<F::Message>, SpaceError<ID, K, F, C, RS>> {
+    pub async fn repair_persisted(&self) -> Result<Vec<F::Message>, SpaceError<ID, F, C, RS>> {
         let (space_y, messages) = self.repair().await?;
         self.manager.set_space_state(&self.id(), &space_y).await?;
         Ok(messages)
@@ -792,10 +788,9 @@ where
 
 /// Space error type.
 #[derive(Debug, Error)]
-pub enum SpaceError<ID, K, F, C, RS>
+pub enum SpaceError<ID, F, C, RS>
 where
     ID: SpaceId,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
     F: Forge<ID, C> + Debug,
     C: Conditions,
     RS: AuthResolver<C> + Debug,
@@ -807,13 +802,13 @@ where
     AuthGroup(AuthGroupError<C, RS>),
 
     #[error("{0}")]
-    Group(GroupError<ID, K, F, C, RS>),
+    Group(GroupError<ID, F, C, RS>),
 
     #[error("{0}")]
     EncryptionGroup(EncryptionGroupError),
 
     #[error(transparent)]
-    IdentityManager(#[from] IdentityError<ID, K, F, C>),
+    IdentityManager(#[from] IdentityError<ID, F, C>),
 
     #[error(transparent)]
     Store(#[from] StoreError),
