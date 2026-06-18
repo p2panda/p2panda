@@ -3,22 +3,25 @@
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
 
+use p2panda_core::{Hash, VerifyingKey};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::GroupMessage;
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
+use serde::{Deserialize, Serialize};
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
-use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
+use crate::types::{EncryptionControlMessage, EncryptionDirectMessage};
 
-/// Implementation of Ordering trait from p2panda-encryption which computes
-/// dependencies for encryption messages and performs some internal buffering. It does _not_ take
-/// care of ordering of control and application messages; p2panda-spaces expects messages to be
-/// orderer before being processed.
+/// Implementation of Ordering trait from p2panda-encryption which computes dependencies for
+/// encryption messages and performs some internal buffering.
+///
+/// It does _not_ take care of ordering of control and application messages; p2panda-spaces expects
+/// messages to be orderer before being processed.
 #[derive(Clone, Debug)]
-pub struct EncryptionOrderer {}
+pub struct EncryptionOrderer;
 
 impl Default for EncryptionOrderer {
     fn default() -> Self {
@@ -28,31 +31,31 @@ impl Default for EncryptionOrderer {
 
 impl EncryptionOrderer {
     pub fn new() -> Self {
-        Self {}
+        Self
     }
 }
 
 /// Orderer for encryption messages.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptionOrdererState {
     /// Current graph heads (cache)
-    heads: Vec<OperationId>,
+    heads: Vec<Hash>,
 
-    // @TODO: currently application messages are also included in the dependency graph, we want
-    // to separate these from control messages eventually in order to support pruning.
     /// Graph of all operations processed by this group.
-    graph: DiGraphMap<OperationId, ()>,
+    // TODO: currently application messages are also included in the dependency graph, we want to
+    // separate these from control messages eventually in order to support pruning.
+    graph: DiGraphMap<Hash, ()>,
 
     /// Queue of operations we have not yet processed.
     ///
     /// This should only grow in the case where we are not yet welcomed into the group by an "Add"
     /// message.
-    queue: VecDeque<OperationId>,
+    queue: VecDeque<Hash>,
 
-    // @TODO: We keep all messages in memory currently which is bad. We need a persistence
-    // layer where we can fetch messages from.
     /// In-memory store of all messages.
-    messages: HashMap<OperationId, EncryptionMessage>,
+    // TODO: We keep all messages in memory currently which is bad. We need a persistence layer
+    // where we can fetch messages from.
+    messages: HashMap<Hash, EncryptionMessage>,
 
     /// "Create" or "Add" message which got us into the group.
     welcome_message: Option<EncryptionMessage>,
@@ -77,7 +80,7 @@ impl EncryptionOrdererState {
     }
 
     /// Add a new dependency relationship to the operation graph.
-    pub fn add_dependency(&mut self, id: OperationId, dependencies: &[OperationId]) {
+    pub fn add_dependency(&mut self, id: Hash, dependencies: &[Hash]) {
         if self.graph.contains_node(id) {
             return;
         }
@@ -96,7 +99,7 @@ impl EncryptionOrdererState {
     }
 
     /// Get the current dependency graph heads.
-    pub fn heads(&self) -> &[OperationId] {
+    pub fn heads(&self) -> &[Hash] {
         &self.heads
     }
 
@@ -106,12 +109,12 @@ impl EncryptionOrdererState {
     }
 
     /// Has the orderer seen a certain message.
-    pub fn has_seen(&self, id: OperationId) -> bool {
+    pub fn has_seen(&self, id: Hash) -> bool {
         self.graph.contains_node(id)
     }
 }
 
-impl p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
+impl p2panda_encryption::traits::Ordering<VerifyingKey, Hash, EncryptionGroupMembership>
     for EncryptionOrderer
 {
     type State = EncryptionOrdererState;

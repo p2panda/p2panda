@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::Access;
@@ -7,39 +8,38 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_encryption::data_scheme::GroupOutput;
 
-use crate::ActorId;
 use crate::auth::message::AuthMessage;
 use crate::message::SpaceMembershipMessage;
-use crate::traits::SpaceId;
+use crate::space::SpaceId;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{added_members, removed_members, sort_members};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct GroupActor {
-    id: ActorId,
+    id: VerifyingKey,
     is_group: bool,
 }
 
 impl GroupActor {
-    pub fn individual(id: ActorId) -> Self {
+    pub fn individual(id: VerifyingKey) -> Self {
         Self {
             id,
             is_group: false,
         }
     }
 
-    pub fn group(id: ActorId) -> Self {
+    pub fn group(id: VerifyingKey) -> Self {
         Self { id, is_group: true }
     }
 
-    pub fn from_group_member(group_member: GroupMember<ActorId>) -> Self {
+    pub fn from_group_member(group_member: GroupMember<VerifyingKey>) -> Self {
         match group_member {
             GroupMember::Individual(id) => GroupActor::individual(id),
             GroupMember::Group(id) => GroupActor::group(id),
         }
     }
 
-    pub fn id(&self) -> ActorId {
+    pub fn id(&self) -> VerifyingKey {
         self.id
     }
 
@@ -51,44 +51,44 @@ impl GroupActor {
 /// Events emitted when system state changes or application messages are processed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
-pub enum Event<ID, C> {
-    Application { space_id: ID, data: Vec<u8> },
+pub enum Event<C> {
+    Application { space_id: SpaceId, data: Vec<u8> },
     // @TODO: Could maybe add field to show when the bundle is valid until?
-    KeyBundle { author: ActorId },
+    KeyBundle { author: VerifyingKey },
     Group(GroupEvent<C>),
-    Space(SpaceEvent<ID>),
+    Space(SpaceEvent),
 }
 
 /// Additional context attached to group events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GroupContext<C> {
     /// The actor who authored this action.
-    pub author: ActorId,
+    pub author: VerifyingKey,
 
     /// Root group actors, can be individuals or groups.
     pub group_actors: Vec<(GroupActor, Access<C>)>,
 
     /// Members of this group.
-    pub members: Vec<(ActorId, Access<C>)>,
+    pub members: Vec<(VerifyingKey, Access<C>)>,
 }
 
 /// Additional context attached to space events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpaceContext {
     /// The actor who authored this group change action.
-    pub auth_author: ActorId,
+    pub auth_author: VerifyingKey,
 
     /// The actor who applied this action to the spaces state.
     ///
     /// Note: this can be different to the auth_actor in cases where concurrent auth changes which
     /// effect a space are applied later.
-    pub spaces_author: ActorId,
+    pub spaces_author: VerifyingKey,
 
     /// Id of the group associated with this space.
-    pub group_id: ActorId,
+    pub group_id: VerifyingKey,
 
     /// Members in the spaces' encryption context.
-    pub members: Vec<ActorId>,
+    pub members: Vec<VerifyingKey>,
 }
 
 /// Events emitted when global auth state changes.
@@ -97,7 +97,7 @@ pub enum GroupEvent<C> {
     /// A group was created.
     Created {
         /// Group id.
-        group_id: ActorId,
+        group_id: VerifyingKey,
 
         /// Initial group members.
         initial_members: Vec<(GroupActor, Access<C>)>,
@@ -109,7 +109,7 @@ pub enum GroupEvent<C> {
     /// A member was added to a group.
     Added {
         /// Group id.
-        group_id: ActorId,
+        group_id: VerifyingKey,
 
         /// Group actor that was added, can be individual or group.
         added: GroupActor,
@@ -124,7 +124,7 @@ pub enum GroupEvent<C> {
     /// A member was removed from a group.
     Removed {
         /// Group id.
-        group_id: ActorId,
+        group_id: VerifyingKey,
 
         /// Group actor that was removed, can be individual or group.
         removed: GroupActor,
@@ -136,14 +136,14 @@ pub enum GroupEvent<C> {
 
 /// Events emitted when space encryption group membership changes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpaceEvent<ID> {
+pub enum SpaceEvent {
     /// A space was created.
     Created {
         /// Space id.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Initial members in the encryption context.
-        initial_members: Vec<ActorId>,
+        initial_members: Vec<VerifyingKey>,
 
         /// Additional event context and space state after any change occurred.
         context: SpaceContext,
@@ -152,10 +152,10 @@ pub enum SpaceEvent<ID> {
     /// One or many individuals were added to the space.
     Added {
         /// Space id.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Members added to the encryption context.
-        added: Vec<ActorId>,
+        added: Vec<VerifyingKey>,
 
         /// Additional event context and space state after any change occurred.
         context: SpaceContext,
@@ -164,28 +164,24 @@ pub enum SpaceEvent<ID> {
     /// One or many individuals were removed from the space.
     Removed {
         /// Space id.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Members removed from the encryption context.
-        removed: Vec<ActorId>,
+        removed: Vec<VerifyingKey>,
 
         /// Additional event context and space state after any change occurred.
         context: SpaceContext,
     },
 
     /// Local actor was removed from the space.
-    Ejected {
-        /// Space id.
-        space_id: ID,
-    },
+    Ejected { space_id: SpaceId },
 }
 
-pub(crate) fn encryption_output_to_space_events<ID, C>(
-    space_id: &ID,
+pub(crate) fn encryption_output_to_space_events<C>(
+    space_id: &SpaceId,
     encryption_output: Vec<EncryptionGroupOutput>,
-) -> Vec<Event<ID, C>>
+) -> Vec<Event<C>>
 where
-    ID: SpaceId,
     C: Conditions,
 {
     encryption_output
@@ -208,10 +204,10 @@ where
         .collect()
 }
 
-pub(crate) fn auth_message_to_group_event<ID, C>(
+pub(crate) fn auth_message_to_group_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
-) -> Event<ID, C>
+) -> Event<C>
 where
     C: Conditions,
 {
@@ -255,15 +251,14 @@ where
     Event::Group(group_event)
 }
 
-pub(crate) fn space_message_to_space_event<ID, C>(
-    space_id: ID,
+pub(crate) fn space_message_to_space_event<C>(
+    space_id: SpaceId,
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
-    current_members: Vec<ActorId>,
-    next_members: Vec<ActorId>,
-) -> Event<ID, C>
+    current_members: Vec<VerifyingKey>,
+    next_members: Vec<VerifyingKey>,
+) -> Event<C>
 where
-    ID: SpaceId,
     C: Conditions,
 {
     let group_id = auth_message.group_id();

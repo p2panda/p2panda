@@ -23,20 +23,20 @@ workspace = true
 test_utils = [
   "p2panda-auth/test_utils",
   "p2panda-encryption/test_utils",
+  "p2panda-store/macros",
+  "p2panda-store/test_utils",
 ]
 
 [dependencies]
-p2panda-auth = { workspace = true, features = ["serde"], default-features = false }
+p2panda-auth = { workspace = true, default-features = false, features = ["serde"] }
 p2panda-core = { workspace = true, default-features = false }
-p2panda-encryption = { workspace = true, features = ["data_scheme"], default-features = false }
-p2panda-store = { workspace = true, default-features = false }
+p2panda-encryption = { workspace = true, default-features = false, features = ["data_scheme", "test_utils"] }
+p2panda-store = { workspace = true, default-features = false, features = ["sqlite", "spaces"] }
 petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, default-features = true, features = ["sync"] }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
 
 [dev-dependencies]
-assert_matches = "1.5.0"
-p2panda-auth = { workspace = true, features = ["test_utils"], default-features = false }
-p2panda-encryption = { workspace = true, features = ["test_utils"], default-features = false }
-tokio = { workspace = true, default-features = true, features = ["rt", "macros"] }
+p2panda-spaces = { path = ".", features = ["test_utils"] }
+tokio = { workspace = true, default-features = false, features = ["rt", "macros"] }

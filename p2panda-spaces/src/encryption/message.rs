@@ -1,28 +1,32 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::LazyLock;
+
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::hash::HASH_LEN;
+use p2panda_core::identity::VERIFYING_KEY_LEN;
+use p2panda_core::{Hash, VerifyingKey};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessageContent};
+use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::{ApplicationMessage, SpaceMembershipMessage};
-use crate::types::{
-    ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
-};
+use crate::types::{AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage};
 use crate::utils::removed_members;
 
 /// Arguments which are returned from p2panda-encryption APIs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EncryptionArgs {
     System {
-        dependencies: Vec<OperationId>,
+        dependencies: Vec<Hash>,
         control_message: EncryptionControlMessage,
         direct_messages: Vec<EncryptionDirectMessage>,
     },
     Application {
-        dependencies: Vec<OperationId>,
+        dependencies: Vec<Hash>,
         group_secret_id: GroupSecretId,
         nonce: XAeadNonce,
         ciphertext: Vec<u8>,
@@ -30,13 +34,13 @@ pub enum EncryptionArgs {
 }
 
 /// Message which can be processed by p2panda-encryption APIs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum EncryptionMessage {
     Args(EncryptionArgs),
     Forged {
-        author: ActorId,
-        operation_id: OperationId,
+        author: VerifyingKey,
+        operation_id: Hash,
         args: EncryptionArgs,
     },
 }
@@ -74,16 +78,16 @@ impl EncryptionMessage {
     /// This method is required when we receive a space message and associated auth message and we
     /// want to adjust our local encryption state accordingly. The main requirement is that we
     /// process our own direct messages (contained in the space message); in many cases the actual
-    /// encryption control message type and content is redundant as the DGM state is always
-    /// manually replaced with the latest membership state provided by p2panda-auth. The only case
-    /// where it does matter is if we ourselves were added or removed from the group; here we
-    /// should make sure that the control message contains our own actor id.
+    /// encryption control message type and content is redundant as the DGM state is always manually
+    /// replaced with the latest membership state provided by p2panda-auth. The only case where it
+    /// does matter is if we ourselves were added or removed from the group; here we should make
+    /// sure that the control message contains our own actor id.
     pub(crate) fn from_membership<C>(
         space_message: &SpaceMembershipMessage,
-        my_id: ActorId,
+        my_id: VerifyingKey,
         auth_message: &AuthMessage<C>,
-        current_members: &Vec<ActorId>,
-        next_members: &Vec<ActorId>,
+        current_members: &[VerifyingKey],
+        next_members: &[VerifyingKey],
     ) -> Self
     where
         C: Conditions,
@@ -118,11 +122,10 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "add", if there is a direct message for us then use our ActorId
-            // for the added member, otherwise use the added members ActorId. Even if this is a
-            // group being added, meaning they won't actual be known to the DCGKA, we can use
-            // their id as the only thing we care about is making sure the direct messages are
-            // processed.
+            // The auth message is "add", if there is a direct message for us then use our actor id
+            // for the added member, otherwise use the added members actor id. Even if this is a
+            // group being added, meaning they won't actual be known to the DCGKA, we can use their
+            // id as the only thing we care about is making sure the direct messages are processed.
             AuthGroupAction::Add { member, .. } => {
                 let control_message = if hash_my_direct_messages {
                     EncryptionControlMessage::Add { added: my_id }
@@ -135,9 +138,9 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "remove", if we were removed, then use our ActorId for the
-            // removed member, otherwise use the ActorId of the actual removed member (which may
-            // be an individual or group).
+            // The auth message is "remove", if we were removed, then use our actor id for the
+            // removed member, otherwise use the id of the actual removed member (which may be an
+            // individual or group).
             AuthGroupAction::Remove { member } => {
                 let removed = removed_members(current_members.to_owned(), next_members.to_owned());
                 let control_message = if removed.contains(&my_id) {
@@ -164,32 +167,32 @@ impl EncryptionMessage {
     }
 }
 
-impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for EncryptionMessage {
-    fn id(&self) -> OperationId {
+impl EncryptionOperation<VerifyingKey, Hash, EncryptionGroupMembership> for EncryptionMessage {
+    fn id(&self) -> Hash {
         match self {
             EncryptionMessage::Args(_) => {
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of an operation id, so we can give it a
                 // placeholder instead.
-                OperationId::placeholder()
+                hash_placeholder()
             }
             EncryptionMessage::Forged { operation_id, .. } => *operation_id,
         }
     }
 
-    fn sender(&self) -> ActorId {
+    fn sender(&self) -> VerifyingKey {
         match self {
             EncryptionMessage::Args(_) => {
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of a sender, so we can give it a
                 // placeholder instead.
-                ActorId::placeholder()
+                verifying_key_placeholder()
             }
             EncryptionMessage::Forged { author, .. } => *author,
         }
     }
 
-    fn content(&self) -> GroupMessageContent<ActorId> {
+    fn content(&self) -> GroupMessageContent<VerifyingKey> {
         let EncryptionMessage::Forged { args, .. } = self else {
             // Nothing of this will ever be called at this stage where we're just preparing the
             // arguments for a future message to be forged.
@@ -226,4 +229,22 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
             EncryptionArgs::Application { .. } => Vec::new(),
         }
     }
+}
+// When processing locally created operations we handle unsigned messages where the actor id is not
+// known and not required. In these cases we need to satisfy the trait interfaces using a
+// placeholder value.
+fn verifying_key_placeholder() -> VerifyingKey {
+    static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
+        VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
+            .expect("can create public key from constant bytes")
+    });
+    *PLACEHOLDER_PUBLIC_KEY
+}
+
+// When processing locally created operations we handle unsigned messages where the operation id is
+// not known and not required. In these cases we need to satisfy the trait interfaces using a
+// placeholder value.
+fn hash_placeholder() -> Hash {
+    static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
+    PLACEHOLDER_ID
 }
