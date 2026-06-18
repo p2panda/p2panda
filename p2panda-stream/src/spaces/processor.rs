@@ -3,34 +3,34 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::fmt::Debug;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_encryption::key_manager::PreKeyBundlesState;
-use p2panda_encryption::key_registry::KeyRegistryState;
+use p2panda_spaces::forge::Forge;
 use p2panda_spaces::manager::{Manager, ManagerError};
-use p2panda_spaces::traits::{
-    AuthStore, AuthoredMessage, Forge, MessageStore, SpaceId, SpacesStore,
-};
-use p2panda_spaces::{ActorId, Event, SpacesArgs as SpacesMessageArgs, StrongRemoveResolver};
+use p2panda_spaces::space::SpaceState;
+use p2panda_spaces::{AuthMessage, Event, StrongRemoveResolver};
+use p2panda_store::Transaction;
+use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
+use p2panda_store::spaces::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
 use tokio::sync::Notify;
 use tracing::trace;
 
 use crate::Processor;
-use crate::spaces::SpacesArgs;
+use crate::spaces::SpacesProcessorArgs;
 
-pub type SpacesManager<ID, S, K, F, C> = Manager<ID, S, K, F, C, StrongRemoveResolver<C>>;
-pub type SpacesManagerError<ID, S, K, F, C> = ManagerError<ID, S, K, F, C, StrongRemoveResolver<C>>;
+pub type SpacesManager<S, F, C> = Manager<S, F, C, StrongRemoveResolver<C>>;
+
+pub type SpacesManagerError<F, C> = ManagerError<F, C, StrongRemoveResolver<C>>;
 
 #[derive(Clone)]
-pub enum SpacesResult<ID, C> {
-    Processed { events: Vec<Event<ID, C>> },
+pub enum SpacesResult<C> {
+    Processed { events: Vec<Event<C>> },
     Ignored,
 }
 
-impl<ID, C> SpacesResult<ID, C> {
+impl<C> SpacesResult<C> {
     pub fn was_processed(self) -> bool {
         match self {
             Self::Processed { .. } => true,
@@ -40,14 +40,14 @@ impl<ID, C> SpacesResult<ID, C> {
 }
 
 /// Processor for spaces operations.
-pub struct Spaces<T, ID, S, K, F, C> {
-    manager: SpacesManager<ID, S, K, F, C>,
+pub struct Spaces<T, S, F, C> {
+    manager: SpacesManager<S, F, C>,
     notify: Notify,
-    queue: RefCell<VecDeque<(T, SpacesResult<ID, C>)>>,
+    queue: RefCell<VecDeque<(T, SpacesResult<C>)>>,
 }
 
-impl<T, ID, S, K, F, C> Spaces<T, ID, S, K, F, C> {
-    pub fn new(manager: SpacesManager<ID, S, K, F, C>) -> Self {
+impl<T, S, F, C> Spaces<T, S, F, C> {
+    pub fn new(manager: SpacesManager<S, F, C>) -> Self {
         Self {
             manager,
             notify: Notify::new(),
@@ -56,24 +56,28 @@ impl<T, ID, S, K, F, C> Spaces<T, ID, S, K, F, C> {
     }
 }
 
-impl<T, ID, S, K, F, C> Processor<T> for Spaces<T, ID, S, K, F, C>
+impl<T, S, F, C> Processor<T> for Spaces<T, S, F, C>
 where
-    T: Borrow<SpacesArgs<ID, C>>,
-    ID: SpaceId,
-    S: SpacesStore<ID, C> + AuthStore<C> + MessageStore<F::Message> + Debug,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
-    F: Forge<ID, C> + Debug,
-    F::Message: AuthoredMessage + Borrow<SpacesMessageArgs<ID, C>>,
+    T: Borrow<SpacesProcessorArgs<C>>,
+    S: Clone
+        + Transaction
+        + SpacesStore<SpaceState<C>>
+        + SpacesStoreWrite<SpaceState<C>>
+        + SpacesMessageStore<p2panda_spaces::SpacesArgs<C>>
+        + GroupsStore<AuthMessage<C>, C>
+        + KeyRegistryStore
+        + KeySecretsStore,
+    F: Forge<C>,
     C: Conditions,
 {
-    type Output = (T, SpacesResult<ID, C>);
+    type Output = (T, SpacesResult<C>);
 
-    type Error = (T, SpacesManagerError<ID, S, K, F, C>);
+    type Error = (T, SpacesManagerError<F, C>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &SpacesArgs<ID, C> = input.borrow();
+        let input_args: &SpacesProcessorArgs<C> = input.borrow();
 
-        let result = if let SpacesArgs::Process { msg } = input_args {
+        let result = if let SpacesProcessorArgs::Process { msg } = input_args {
             let events = match self.manager.process(msg).await {
                 Ok(events) => events,
                 Err(err) => return Err((input, err)),

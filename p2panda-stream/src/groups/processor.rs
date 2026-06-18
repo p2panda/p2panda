@@ -21,10 +21,11 @@ use crate::groups::{GroupsArgs, GroupsOperation};
 use crate::ingest::IngestError;
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+
 type GroupsCrdtError<C> =
     group::GroupCrdtError<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+
 type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
-type GroupsState<C> = group::GroupCrdtState<VerifyingKey, Hash, GroupsOperation<C>, C>;
 
 #[derive(Clone)]
 pub enum GroupsResult {
@@ -42,14 +43,14 @@ impl GroupsResult {
 }
 
 /// Processor for groups operations.
-pub struct Groups<SID, T, E, L, C = ()> {
+pub struct Groups<T, E, L, C = ()> {
     store: SqliteStore,
     notify: Notify,
     queue: RefCell<VecDeque<(T, GroupsResult)>>,
-    _marker: PhantomData<(SID, E, L, C)>,
+    _marker: PhantomData<(E, L, C)>,
 }
 
-impl<SID, T, E, L, C> Groups<SID, T, E, L, C>
+impl<T, E, L, C> Groups<T, E, L, C>
 where
     E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
@@ -65,10 +66,9 @@ where
     }
 }
 
-impl<SID, T, E, L, C> Processor<T> for Groups<SID, T, E, L, C>
+impl<T, E, L, C> Processor<T> for Groups<T, E, L, C>
 where
-    SID: for<'a> Deserialize<'a> + Serialize,
-    T: Borrow<GroupsArgs<SID, E>>,
+    T: Borrow<GroupsArgs<E>>,
     E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
@@ -78,7 +78,7 @@ where
     type Error = (T, GroupsError<C>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &GroupsArgs<SID, E> = input.borrow();
+        let input_args: &GroupsArgs<E> = input.borrow();
 
         let result = if let GroupsArgs::Process {
             state_id,
@@ -106,9 +106,9 @@ where
             };
 
             // Retrieve the current groups state from the store.
-            let mut y = match GroupsStore::<SID, GroupsState<C>>::get_groups_state_tx(
+            let mut y = match GroupsStore::<GroupsOperation<C>, C>::get_groups_state_tx(
                 &self.store,
-                state_id,
+                *state_id,
             )
             .await
             {
@@ -133,7 +133,7 @@ where
             };
 
             // Set the groups state after processing is finished.
-            if let Err(err) = self.store.set_groups_state_tx(state_id, &y).await {
+            if let Err(err) = self.store.set_groups_state_tx(*state_id, &y).await {
                 return Err((input, err.into()));
             }
 
@@ -219,10 +219,8 @@ mod tests {
     use super::GroupsArgs;
 
     type LogId = usize;
-    type StateId = u8;
     type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
-    type Groups =
-        crate::groups::Groups<StateId, GroupsArgs<StateId, TestExtensions>, TestExtensions, LogId>;
+    type Groups = crate::groups::Groups<GroupsArgs<TestExtensions>, TestExtensions, LogId>;
 
     const LOG_ID: usize = 0;
 
@@ -285,7 +283,7 @@ mod tests {
 
         let topic = Topic::random();
 
-        let state_id = 0;
+        let state_id = Hash::digest(b"default");
         let group_id = SigningKey::generate().verifying_key();
 
         let alice_log = TestLog::new();
@@ -334,7 +332,7 @@ mod tests {
         assert!(result.was_processed());
 
         let permit = store.begin().await.unwrap();
-        let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
+        let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
         store.commit(permit).await.unwrap();
 
         let members = y.members(group_id);
@@ -348,7 +346,7 @@ mod tests {
         setup_logging();
         let topic = Topic::random();
 
-        let state_id = 0;
+        let state_id = Hash::digest(b"default");
         let group_id = SigningKey::generate().verifying_key();
 
         let alice_log = TestLog::new();
@@ -452,7 +450,7 @@ mod tests {
         }
 
         let permit = store.begin().await.unwrap();
-        let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
+        let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
         store.commit(permit).await.unwrap();
 
         let members = y.members(group_id);
@@ -467,7 +465,7 @@ mod tests {
         let topic = Topic::random();
 
         // All operations are processed on the same groups state context.
-        let state_id = 1;
+        let state_id = Hash::digest(b"default");
 
         let alice_log = TestLog::new();
         let bobby_log = TestLog::new();
@@ -613,7 +611,7 @@ mod tests {
         // Then they create the chat group.
         let permit = alice_store.begin().await.unwrap();
         let y: GroupsState = alice_store
-            .get_groups_state_tx(&state_id)
+            .get_groups_state_tx(state_id)
             .await
             .unwrap()
             .unwrap();
@@ -677,7 +675,7 @@ mod tests {
         // Both Alice and Bobby have the correct groups state.
         for store in [alice_store.clone(), bobby_store.clone()] {
             let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
+            let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
             store.commit(permit).await.unwrap();
             let mut members = y.members(ab_chat);
             members.sort();
@@ -713,7 +711,7 @@ mod tests {
         // Then they create the chat group.
         let permit = cathy_store.begin().await.unwrap();
         let y: GroupsState = cathy_store
-            .get_groups_state_tx(&state_id)
+            .get_groups_state_tx(state_id)
             .await
             .unwrap()
             .unwrap();
@@ -777,7 +775,7 @@ mod tests {
         // Both Cathy and Bobby have the correct groups state.
         for store in [cathy_store, bobby_store] {
             let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state_tx(&state_id).await.unwrap().unwrap();
+            let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
             store.commit(permit).await.unwrap();
             let mut members = y.members(bc_chat);
             members.sort();
