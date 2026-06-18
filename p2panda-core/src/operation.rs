@@ -96,7 +96,7 @@ use crate::extensions::{Extension, Extensions};
 use crate::hash::Hash;
 use crate::identity::{Signature, SigningKey, VerifyingKey};
 use crate::logs::SeqNum;
-use crate::traits::Digest;
+use crate::traits::{Digest, Provenance};
 
 /// Encoded bytes of an operation header and optional body.
 pub type RawOperation = (Vec<u8>, Option<Vec<u8>>);
@@ -154,6 +154,19 @@ impl<E> Ord for Operation<E> {
 impl<E> Digest<Hash> for Operation<E> {
     fn hash(&self) -> Hash {
         self.hash
+    }
+}
+
+impl<E> Provenance<VerifyingKey> for Operation<E>
+where
+    E: Extensions,
+{
+    fn author(&self) -> VerifyingKey {
+        self.header.verifying_key
+    }
+
+    fn verify(&self) -> bool {
+        self.header.verify()
     }
 }
 
@@ -349,6 +362,19 @@ where
 {
     pub fn to_hex(&self) -> String {
         hex::encode(self.to_bytes())
+    }
+}
+
+impl<E> Provenance<VerifyingKey> for Header<E>
+where
+    E: Extensions,
+{
+    fn author(&self) -> VerifyingKey {
+        self.verifying_key
+    }
+
+    fn verify(&self) -> bool {
+        self.verify()
     }
 }
 
