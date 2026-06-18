@@ -1,45 +1,53 @@
-use std::{borrow::Borrow, marker::PhantomData};
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+use std::marker::PhantomData;
+use std::str::FromStr;
+
+use p2panda_auth::group::GroupCrdtState;
+use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Extensions, Hash, Operation};
+use p2panda_core::{Extensions, Hash, Operation, VerifyingKey};
+use p2panda_encryption::key_manager::PreKeyBundlesState;
+use p2panda_encryption::key_registry::KeyRegistryState;
 use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as};
 
 use crate::groups::GroupsStore;
+use crate::key_registry::KeyRegistryStore;
+use crate::key_secrets::KeySecretsStore;
+use crate::operations::OperationStore;
 use crate::spaces::SpacesMessage;
 use crate::spaces::traits::SpacesMessageStore;
 use crate::sqlite::TransactionPermit;
-use crate::{SqliteError, SqliteStore, operations::OperationStore};
+use crate::{SqliteError, SqliteStore};
 
-/// Concrete SqliteSpacesStore type which wraps the SqliteStore and introduces a generic M which
-/// represents the underlying persisted message type. For integration with the OperationStore the
-/// M will be an Operation<E>.
-pub struct SqliteSpacesStore<M> {
+#[derive(Clone)]
+pub struct SqliteSpacesStore<E> {
     store: SqliteStore,
-    _phantom: PhantomData<M>,
+    _phantom: PhantomData<E>,
 }
 
-impl<M> SqliteSpacesStore<M> {
+impl<E> SqliteSpacesStore<E> {
     pub fn new(store: SqliteStore) -> Self {
         Self {
             store,
             _phantom: PhantomData,
         }
     }
-
-    pub fn inner(&self) -> SqliteStore {
-        self.store.clone()
-    }
 }
 
-impl<A, E> SpacesMessageStore<Hash, A> for SqliteSpacesStore<Operation<E>>
+impl<ARG, E> SpacesMessageStore<ARG> for SqliteSpacesStore<E>
 where
-    A: Clone,
-    E: Extensions + Borrow<A>,
+    ARG: Clone,
+    E: Extensions + Borrow<ARG>,
 {
     type Error = SqliteError;
 
-    async fn get_spaces_message(&self, id: &Hash) -> Result<Option<SpacesMessage<A>>, Self::Error> {
+    async fn get_spaces_message(
+        &self,
+        id: &Hash,
+    ) -> Result<Option<SpacesMessage<ARG>>, Self::Error> {
         match <SqliteStore as OperationStore<Operation<E>, Hash>>::get_operation(&self.store, id)
             .await?
         {
@@ -57,14 +65,13 @@ where
     }
 }
 
-impl<ID, S, M> crate::spaces::SpacesStore<ID, S> for SqliteSpacesStore<M>
+impl<S, M> crate::spaces::SpacesStore<S> for SqliteSpacesStore<M>
 where
-    ID: for<'a> Deserialize<'a> + Serialize,
     S: for<'a> Deserialize<'a> + Serialize,
 {
     type Error = SqliteError;
 
-    async fn get_space_state_tx(&self, id: &ID) -> Result<Option<S>, Self::Error> {
+    async fn get_space_state_tx(&self, id: &Hash) -> Result<Option<S>, Self::Error> {
         let row = self
             .store
             .tx(async |tx| {
@@ -78,7 +85,7 @@ where
                         id = ?
                     ",
                 )
-                .bind(encode_cbor(&id).map_err(|err| SqliteError::Encode("id".to_string(), err))?)
+                .bind(id.to_hex())
                 .fetch_optional(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
@@ -95,7 +102,7 @@ where
         Ok(Some(state))
     }
 
-    async fn has_space(&self, id: &ID) -> Result<bool, Self::Error> {
+    async fn has_space(&self, id: &Hash) -> Result<bool, Self::Error> {
         let result = self
             .store
             .execute(async |pool| {
@@ -109,7 +116,7 @@ where
                         id = ?
                     ",
                 )
-                .bind(encode_cbor(&id).map_err(|err| SqliteError::Encode("id".to_string(), err))?)
+                .bind(id.to_hex())
                 .fetch_optional(pool)
                 .await
                 .map_err(SqliteError::Sqlite)
@@ -119,11 +126,11 @@ where
         Ok(result.is_some())
     }
 
-    async fn space_ids(&self) -> Result<Vec<ID>, Self::Error> {
+    async fn space_ids(&self) -> Result<Vec<Hash>, Self::Error> {
         let result = self
             .store
             .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
+                query_as::<_, (String,)>(
                     "
                     SELECT
                         id
@@ -137,23 +144,22 @@ where
             })
             .await?;
 
-        let result: Result<Vec<ID>, _> = result
-            .into_iter()
-            .map(|(id_bytes,)| decode_cbor::<ID, _>(&id_bytes[..]))
+        let result: Result<Vec<Hash>, _> = result
+            .iter()
+            .map(|(id_str,)| Hash::from_str(id_str))
             .collect();
 
         result.map_err(|err| SqliteError::Decode("state".into(), err.into()))
     }
 }
 
-impl<ID, S, M> crate::spaces::SpacesStoreWrite<ID, S> for SqliteSpacesStore<M>
+impl<S, M> crate::spaces::SpacesStoreWrite<S> for SqliteSpacesStore<M>
 where
-    ID: for<'a> Deserialize<'a> + Serialize,
     S: for<'a> Deserialize<'a> + Serialize,
 {
     type Error = SqliteError;
 
-    async fn set_space_state_tx(&self, id: &ID, state: &S) -> Result<(), Self::Error> {
+    async fn set_space_state_tx(&self, id: &Hash, state: &S) -> Result<(), Self::Error> {
         self.store
             .tx(async |tx| {
                 query(
@@ -168,7 +174,7 @@ where
                     (?, ?)
                 ",
                 )
-                .bind(encode_cbor(&id).map_err(|err| SqliteError::Encode("id".to_string(), err))?)
+                .bind(id.to_hex())
                 .bind(
                     encode_cbor(&state)
                         .map_err(|err| SqliteError::Encode("state".to_string(), err))?,
@@ -183,23 +189,59 @@ where
     }
 }
 
-impl<ID, S, M> GroupsStore<ID, S> for SqliteSpacesStore<M>
+impl<E> KeyRegistryStore for SqliteSpacesStore<E> {
+    type Error = SqliteError;
+
+    async fn get_key_registry(
+        &self,
+    ) -> Result<Option<KeyRegistryState<VerifyingKey>>, Self::Error> {
+        self.store.get_key_registry().await
+    }
+
+    async fn set_key_registry(
+        &self,
+        state: &KeyRegistryState<VerifyingKey>,
+    ) -> Result<(), Self::Error> {
+        self.store.set_key_registry(state).await
+    }
+}
+
+impl<E> KeySecretsStore for SqliteSpacesStore<E> {
+    type Error = SqliteError;
+
+    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
+        self.store.get_prekey_secrets().await
+    }
+
+    async fn set_prekey_secrets(&self, state: &PreKeyBundlesState) -> Result<(), Self::Error> {
+        self.store.set_prekey_secrets(state).await
+    }
+}
+
+impl<E, M, C> GroupsStore<M, C> for SqliteSpacesStore<E>
 where
-    ID: for<'a> Deserialize<'a> + Serialize,
-    S: for<'a> Deserialize<'a> + Serialize,
+    C: Conditions + Serialize + for<'a> Deserialize<'a>,
+    M: AuthOperation<VerifyingKey, Hash, C> + Serialize + for<'a> Deserialize<'a>,
 {
     type Error = SqliteError;
 
-    async fn set_groups_state_tx(&self, id: &ID, state: &S) -> Result<(), SqliteError> {
+    async fn set_groups_state_tx(
+        &self,
+        id: Hash,
+        state: &GroupCrdtState<VerifyingKey, Hash, M, C>,
+    ) -> Result<(), SqliteError> {
         self.store.set_groups_state_tx(id, state).await
     }
 
-    async fn get_groups_state_tx(&self, id: &ID) -> Result<Option<S>, SqliteError> {
+    async fn get_groups_state_tx(
+        &self,
+        id: Hash,
+    ) -> Result<Option<GroupCrdtState<VerifyingKey, Hash, M, C>>, SqliteError> {
         self.store.get_groups_state_tx(id).await
     }
 }
 
-impl<M> crate::traits::Transaction for SqliteSpacesStore<M> {
+impl<E> crate::traits::Transaction for SqliteSpacesStore<E> {
     type Error = SqliteError;
 
     type Permit = TransactionPermit;

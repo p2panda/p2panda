@@ -2,7 +2,7 @@
 
 use std::borrow::Borrow;
 
-use p2panda_core::{Hash, Operation};
+use p2panda_core::Hash;
 use serde::{Deserialize, Serialize};
 
 use crate::spaces::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
@@ -28,8 +28,8 @@ impl Borrow<SpacesArgs> for SpacesExtensions {
     }
 }
 
-type SqliteSpacesStore = crate::spaces::SqliteSpacesStore<Operation<SpacesExtensions>>;
-type SpaceId = u32;
+type SqliteSpacesStore = crate::spaces::SqliteSpacesStore<SpacesExtensions>;
+
 type SpaceState = String;
 
 #[tokio::test]
@@ -53,7 +53,8 @@ async fn get_set_spaces_state() {
     let store = SqliteSpacesStore::new(inner);
 
     let space_state = String::from("Some important state");
-    let space_id = 0;
+    let space_id = Hash::digest(b"test");
+
     tx_unwrap!(store, {
         store.set_space_state_tx(&space_id, &space_state).await
     })
@@ -66,25 +67,22 @@ async fn get_set_spaces_state() {
     let y = y.unwrap();
     assert_eq!(y, space_state);
 
-    let has_space =
-        <SqliteSpacesStore as SpacesStore<SpaceId, SpaceState>>::has_space(&store, &space_id)
-            .await
-            .unwrap();
+    let has_space = <SqliteSpacesStore as SpacesStore<SpaceState>>::has_space(&store, &space_id)
+        .await
+        .unwrap();
     assert!(has_space);
 
-    let non_existent_space_id = 1;
+    let non_existent_space_id = Hash::digest(b"nonono");
     let y: Option<SpaceState> = tx_unwrap!(store, {
         store.get_space_state_tx(&non_existent_space_id).await
     })
     .unwrap();
     assert!(y.is_none());
 
-    let has_space = <SqliteSpacesStore as SpacesStore<SpaceId, SpaceState>>::has_space(
-        &store,
-        &non_existent_space_id,
-    )
-    .await
-    .unwrap();
+    let has_space =
+        <SqliteSpacesStore as SpacesStore<SpaceState>>::has_space(&store, &non_existent_space_id)
+            .await
+            .unwrap();
     assert!(!has_space);
 }
 
@@ -93,15 +91,30 @@ async fn get_space_ids() {
     let inner = SqliteStore::temporary().await;
     let store = SqliteSpacesStore::new(inner);
 
+    let space_id_0 = Hash::digest(b"0");
+    let space_id_1 = Hash::digest(b"1");
+    let space_id_2 = Hash::digest(b"2");
+
     let space_state = String::from("Some important state");
-    tx_unwrap!(store, { store.set_space_state_tx(&0, &space_state).await }).unwrap();
-    tx_unwrap!(store, { store.set_space_state_tx(&1, &space_state).await }).unwrap();
-    tx_unwrap!(store, { store.set_space_state_tx(&2, &space_state).await }).unwrap();
+    tx_unwrap!(store, {
+        store.set_space_state_tx(&space_id_0, &space_state).await
+    })
+    .unwrap();
+    tx_unwrap!(store, {
+        store.set_space_state_tx(&space_id_1, &space_state).await
+    })
+    .unwrap();
+    tx_unwrap!(store, {
+        store.set_space_state_tx(&space_id_2, &space_state).await
+    })
+    .unwrap();
 
-    let space_ids: Vec<SpaceId> =
-        <SqliteSpacesStore as SpacesStore<SpaceId, SpaceState>>::space_ids(&store)
-            .await
-            .unwrap();
+    let space_ids: Vec<Hash> = <SqliteSpacesStore as SpacesStore<SpaceState>>::space_ids(&store)
+        .await
+        .unwrap();
 
-    assert_eq!(space_ids, vec![0, 1, 2]);
+    assert_eq!(space_ids.len(), 3);
+    assert!(space_ids.contains(&space_id_0));
+    assert!(space_ids.contains(&space_id_1));
+    assert!(space_ids.contains(&space_id_2));
 }
