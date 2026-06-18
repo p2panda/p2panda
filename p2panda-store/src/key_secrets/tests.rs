@@ -3,7 +3,7 @@
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
-use p2panda_encryption::key_manager::{KeyManager, PreKeyBundlesState};
+use p2panda_encryption::key_manager::KeyManager;
 
 use crate::key_secrets::traits::KeySecretsStore;
 use crate::{SqliteStore, tx_unwrap};
@@ -24,7 +24,7 @@ async fn set_get_pre_key_secret() {
 
     // Store should be empty to start with.
     assert!(
-        <SqliteStore as KeySecretsStore<PreKeyBundlesState>>::get_prekey_secrets(&store)
+        <SqliteStore as KeySecretsStore>::get_prekey_secrets(&store)
             .await
             .unwrap()
             .is_none()
