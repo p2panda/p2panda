@@ -1,196 +1,41 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Types used across p2panda-spaces.
-use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
-use std::sync::LazyLock;
 
 use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
-use p2panda_auth::traits::{
-    Conditions, IdentityHandle as AuthIdentityHandle, OperationId as AuthOperationId, Resolver,
-};
-use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::identity::{VERIFYING_KEY_LEN, VerifyingKey};
-use p2panda_core::{HashError, IdentityError};
+use p2panda_auth::traits::{Conditions, Resolver};
+use p2panda_core::hash::Hash;
+use p2panda_core::identity::VerifyingKey;
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
-use p2panda_encryption::traits::{
-    IdentityHandle as EncryptionIdentityHandle, OperationId as EncryptionOperationId,
-};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
 
-pub const ACTOR_ID_SIZE: usize = VERIFYING_KEY_LEN;
-pub const OPERATION_ID_SIZE: usize = HASH_LEN;
-
-/// Identifier for an actor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ActorId(pub(crate) VerifyingKey);
-
-impl AuthIdentityHandle for ActorId {}
-
-impl EncryptionIdentityHandle for ActorId {}
-
-impl ActorId {
-    pub fn from_bytes(bytes: &[u8; ACTOR_ID_SIZE]) -> Result<Self, ActorIdError> {
-        Ok(Self(VerifyingKey::from_bytes(bytes)?))
-    }
-
-    pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
-        self.0.as_bytes()
-    }
-
-    pub fn to_hex(&self) -> String {
-        self.0.to_hex().to_string()
-    }
-
-    // When processing locally created operations we handle unsigned messages where the actor id is
-    // not known and not required. In these cases we need to satisfy the trait interfaces using a
-    // placeholder value.
-    pub(crate) fn placeholder() -> Self {
-        static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
-            VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
-                .expect("can create public key from constant bytes")
-        });
-        Self(*PLACEHOLDER_PUBLIC_KEY)
-    }
-}
-
-impl Display for ActorId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<VerifyingKey> for ActorId {
-    fn from(verifying_key: VerifyingKey) -> Self {
-        Self(verifying_key)
-    }
-}
-
-impl TryFrom<[u8; ACTOR_ID_SIZE]> for ActorId {
-    type Error = ActorIdError;
-
-    fn try_from(bytes: [u8; ACTOR_ID_SIZE]) -> Result<Self, Self::Error> {
-        Ok(Self(VerifyingKey::from_bytes(&bytes)?))
-    }
-}
-
-impl TryFrom<&[u8]> for ActorId {
-    type Error = ActorIdError;
-
-    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(VerifyingKey::try_from(bytes)?))
-    }
-}
-
-impl TryFrom<ActorId> for VerifyingKey {
-    type Error = ActorIdError;
-
-    fn try_from(actor_id: ActorId) -> Result<Self, Self::Error> {
-        Ok(VerifyingKey::from_bytes(actor_id.as_bytes())?)
-    }
-}
-
-impl FromStr for ActorId {
-    type Err = ActorIdError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Self(VerifyingKey::from_str(value)?))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum ActorIdError {
-    #[error(transparent)]
-    Identity(#[from] IdentityError),
-}
-
-/// Identifier for an operation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct OperationId(pub(crate) Hash);
-
-impl AuthOperationId for OperationId {}
-
-impl EncryptionOperationId for OperationId {}
-
-impl OperationId {
-    pub fn as_bytes(&self) -> &[u8; OPERATION_ID_SIZE] {
-        self.0.as_bytes()
-    }
-
-    pub fn to_hex(&self) -> String {
-        self.0.to_hex().to_string()
-    }
-
-    // When processing locally created operations we handle unsigned messages where the operation
-    // id is not known and not required. In these cases we need to satisfy the trait interfaces
-    // using a placeholder value.
-    pub(crate) fn placeholder() -> Self {
-        static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
-        Self(PLACEHOLDER_ID)
-    }
-}
-
-impl Display for OperationId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<Hash> for OperationId {
-    fn from(value: Hash) -> Self {
-        Self(value)
-    }
-}
-
-impl From<[u8; OPERATION_ID_SIZE]> for OperationId {
-    fn from(bytes: [u8; OPERATION_ID_SIZE]) -> Self {
-        Self(Hash::from_bytes(bytes))
-    }
-}
-
-impl FromStr for OperationId {
-    type Err = OperationIdError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Hash::from_str(value)?))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum OperationIdError {
-    #[error(transparent)]
-    Hash(#[from] HashError),
-}
-
 // ~~~ Auth ~~~
 
 pub type AuthGroup<C, RS> =
-    p2panda_auth::group::GroupCrdt<ActorId, OperationId, AuthMessage<C>, C, RS>;
+    p2panda_auth::group::GroupCrdt<VerifyingKey, Hash, AuthMessage<C>, C, RS>;
 
 pub type AuthGroupState<C> =
-    p2panda_auth::group::GroupCrdtState<ActorId, OperationId, AuthMessage<C>, C>;
+    p2panda_auth::group::GroupCrdtState<VerifyingKey, Hash, AuthMessage<C>, C>;
 
 pub type AuthGroupError<C, RS> =
-    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, AuthMessage<C>, C, RS>;
+    p2panda_auth::group::GroupCrdtError<VerifyingKey, Hash, AuthMessage<C>, C, RS>;
 
-pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
+pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<VerifyingKey, C>;
 
 pub type StrongRemoveResolver<C> =
-    p2panda_auth::group::resolver::StrongRemove<ActorId, OperationId, AuthMessage<C>, C>;
+    p2panda_auth::group::resolver::StrongRemove<VerifyingKey, Hash, AuthMessage<C>, C>;
 
 pub trait AuthResolver<C>:
     Resolver<
-        ActorId,
-        OperationId,
+        VerifyingKey,
+        Hash,
         AuthMessage<C>,
         C,
-        State = AuthInnerState<ActorId, OperationId, AuthMessage<C>, C>,
+        State = AuthInnerState<VerifyingKey, Hash, AuthMessage<C>, C>,
     >
 {
 }
@@ -202,70 +47,40 @@ impl<C> AuthResolver<C> for StrongRemoveResolver<C> where C: Conditions {}
 // ~~~ Encryption ~~~
 
 pub type EncryptionGroup = p2panda_encryption::data_scheme::EncryptionGroup<
-    ActorId,
-    OperationId,
-    KeyRegistry<ActorId>,
+    VerifyingKey,
+    Hash,
+    KeyRegistry<VerifyingKey>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
 pub type EncryptionGroupState = p2panda_encryption::data_scheme::GroupState<
-    ActorId,
-    OperationId,
-    KeyRegistry<ActorId>,
+    VerifyingKey,
+    Hash,
+    KeyRegistry<VerifyingKey>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
 pub type EncryptionDirectMessage =
-    p2panda_encryption::data_scheme::DirectMessage<ActorId, OperationId, EncryptionGroupMembership>;
+    p2panda_encryption::data_scheme::DirectMessage<VerifyingKey, Hash, EncryptionGroupMembership>;
 
-pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMessage<ActorId>;
+pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMessage<VerifyingKey>;
 
 pub type EncryptionGroupError = p2panda_encryption::data_scheme::GroupError<
-    ActorId,
-    OperationId,
-    KeyRegistry<ActorId>,
+    VerifyingKey,
+    Hash,
+    KeyRegistry<VerifyingKey>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
 pub type EncryptionGroupOutput = p2panda_encryption::data_scheme::GroupOutput<
-    ActorId,
-    OperationId,
+    VerifyingKey,
+    Hash,
     EncryptionGroupMembership,
     EncryptionOrderer,
 >;
-
-#[cfg(test)]
-mod tests {
-    use p2panda_core::{SigningKey, VerifyingKey};
-    use p2panda_encryption::Rng;
-
-    use crate::ActorId;
-
-    #[test]
-    fn from_actor_id() {
-        let signing_key = SigningKey::generate();
-        let verifying_key = signing_key.verifying_key();
-
-        let actor_id: ActorId = verifying_key.to_hex().parse().unwrap();
-
-        assert_eq!(VerifyingKey::try_from(actor_id).unwrap(), verifying_key);
-    }
-
-    #[test]
-    fn actor_id_from_rng() {
-        let rng = Rng::from_seed(*SigningKey::generate().as_bytes());
-
-        let signing_key = SigningKey::from_bytes(&rng.random_array().unwrap());
-        let verifying_key = signing_key.verifying_key();
-
-        let actor_id: ActorId = verifying_key.to_hex().parse().unwrap();
-
-        assert_eq!(VerifyingKey::try_from(actor_id).unwrap(), verifying_key);
-    }
-}
