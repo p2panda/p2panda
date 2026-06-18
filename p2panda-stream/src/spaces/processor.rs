@@ -24,7 +24,7 @@ use crate::Processor;
 use crate::spaces::SpacesArgs;
 
 pub type SpacesManager<ID, S, K, F, C> = Manager<ID, S, K, F, C, StrongRemoveResolver<C>>;
-pub type SpacesManagerError<ID, K, F, C> = ManagerError<ID, K, F, C, StrongRemoveResolver<C>>;
+pub type SpacesManagerError<ID, F, C> = ManagerError<ID, F, C, StrongRemoveResolver<C>>;
 
 #[derive(Clone)]
 pub enum SpacesResult<ID, C> {
@@ -63,14 +63,16 @@ where
     T: Borrow<SpacesArgs<ID, C>>,
     ID: SpaceId,
     S: SpacesStore<ID, C> + SpacesMessageStore<ID, C> + GroupsStore<C> + Transaction,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>> + KeySecretsStore<PreKeyBundlesState> + Debug,
+    K: KeyRegistryStore<KeyRegistryState<ActorId>>
+        + KeySecretsStore<PreKeyBundlesState>
+        + Transaction,
     F: Forge<ID, C> + Debug,
     F::Message: AuthoredMessage + Borrow<SpacesMessageArgs<ID, C>>,
     C: Conditions,
 {
     type Output = (T, SpacesResult<ID, C>);
 
-    type Error = (T, SpacesManagerError<ID, K, F, C>);
+    type Error = (T, SpacesManagerError<ID, F, C>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let input_args: &SpacesArgs<ID, C> = input.borrow();
