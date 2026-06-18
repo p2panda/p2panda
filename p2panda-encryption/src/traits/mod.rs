@@ -34,6 +34,8 @@ pub use ordering::Ordering;
 /// long byte string.
 pub trait IdentityHandle: Copy + Debug + PartialEq + Eq + StdHash {}
 
+impl IdentityHandle for p2panda_core::VerifyingKey {}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl IdentityHandle for &str {}
 
@@ -46,6 +48,8 @@ impl IdentityHandle for usize {}
 /// network. Each operation needs to be uniquely identifiable, preferably by a collision-resistant
 /// hash.
 pub trait OperationId: Copy + Debug + PartialEq + Eq + StdHash {}
+
+impl OperationId for p2panda_core::Hash {}
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OperationId for (usize, usize) {} // (ID, Seq)
