@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_auth::group::GroupCrdtState;
+use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
+use p2panda_core::{Hash, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::query;
 use sqlx::query_as;
@@ -8,14 +11,18 @@ use sqlx::query_as;
 use crate::groups::traits::GroupsStore;
 use crate::{SqliteError, SqliteStore};
 
-impl<ID, S> GroupsStore<ID, S> for SqliteStore
+impl<M, C> GroupsStore<M, C> for SqliteStore
 where
-    ID: for<'a> Deserialize<'a> + Serialize,
-    S: for<'a> Deserialize<'a> + Serialize,
+    C: Conditions + Serialize + for<'a> Deserialize<'a>,
+    M: AuthOperation<VerifyingKey, Hash, C> + Serialize + for<'a> Deserialize<'a>,
 {
     type Error = SqliteError;
 
-    async fn set_groups_state_tx(&self, id: &ID, state: &S) -> Result<(), SqliteError> {
+    async fn set_groups_state_tx(
+        &self,
+        id: Hash,
+        state: &GroupCrdtState<VerifyingKey, Hash, M, C>,
+    ) -> Result<(), SqliteError> {
         self.tx(async |tx| {
             query(
                 "
@@ -29,7 +36,7 @@ where
                     (?, ?)
                 ",
             )
-            .bind(encode_cbor(&id).map_err(|err| SqliteError::Encode("id".to_string(), err))?)
+            .bind(id.to_hex())
             .bind(encode_cbor(&state).map_err(|err| SqliteError::Encode("state".to_string(), err))?)
             .execute(&mut **tx)
             .await
@@ -40,7 +47,10 @@ where
         Ok(())
     }
 
-    async fn get_groups_state_tx(&self, id: &ID) -> Result<Option<S>, SqliteError> {
+    async fn get_groups_state_tx(
+        &self,
+        id: Hash,
+    ) -> Result<Option<GroupCrdtState<VerifyingKey, Hash, M, C>>, SqliteError> {
         let row = self
             .tx(async |tx| {
                 query_as::<_, (Vec<u8>,)>(
@@ -53,7 +63,7 @@ where
                         id = ?
                     ",
                 )
-                .bind(encode_cbor(&id).map_err(|err| SqliteError::Encode("id".to_string(), err))?)
+                .bind(id.to_hex())
                 .fetch_optional(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
