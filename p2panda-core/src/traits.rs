@@ -2,6 +2,8 @@
 
 use std::hash::Hash as StdHash;
 
+use crate::identity::Author;
+
 /// Identifier of a single operation.
 pub trait OperationId: Copy + Clone + PartialEq + Eq + StdHash {}
 
@@ -11,4 +13,14 @@ where
     ID: OperationId,
 {
     fn hash(&self) -> ID;
+}
+
+/// Returns the author of this published data type and a method to verify the authenticity of it.
+pub trait Provenance<A>
+where
+    A: Author,
+{
+    fn author(&self) -> A;
+
+    fn verify(&self) -> bool;
 }
