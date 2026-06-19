@@ -6,6 +6,7 @@ mod sqlite;
 mod tests;
 mod traits;
 
+#[cfg(feature = "sqlite")]
 pub use sqlite::SqliteSpacesStore;
 pub use traits::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
 
