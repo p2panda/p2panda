@@ -31,6 +31,7 @@ default = [
 ]
 groups = [
   "p2panda-auth/serde",
+  "p2panda-store/groups",
   "dep:serde",
 ]
 ingest = []
@@ -39,6 +40,7 @@ orderer = []
 spaces = [
   "p2panda-auth",
   "p2panda-spaces",
+  "p2panda-store/spaces",
 ]
 
 [dependencies]
