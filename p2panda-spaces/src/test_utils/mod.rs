@@ -4,90 +4,50 @@ mod forge;
 
 use std::borrow::Borrow;
 
-use p2panda_auth::traits::Conditions;
 use p2panda_encryption::Rng;
-use p2panda_store::SqliteError;
-use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
-use p2panda_store::tx_unwrap;
-use serde::Deserialize;
-use serde::Serialize;
+use p2panda_store::spaces::SqliteSpacesStore;
+use p2panda_store::{SqliteError, SqliteStore, tx_unwrap};
 
-use crate::Config;
-use crate::Credentials;
-use crate::SpacesArgs;
 use crate::manager::Manager;
 use crate::space::SpaceError;
 use crate::test_utils::forge::DEFAULT_LOG_ID;
-use crate::traits::AuthoredMessage;
-use crate::traits::SpaceId;
 use crate::types::StrongRemoveResolver;
+use crate::{Config, Credentials, SpacesArgs};
 
 pub use forge::TestForge;
 
-pub type TestSpaceId = usize;
-
-impl SpaceId for TestSpaceId {}
-
 pub type TestPeerId = u8;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Deserialize, Serialize)]
-pub struct TestConditions {}
+pub type TestConditions = ();
 
-impl Conditions for TestConditions {}
+pub type TestExtensions = SpacesArgs<TestConditions>;
 
-// Extension type defined in p2panda.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SpacesExtensions {
-    args: SpacesArgs<TestSpaceId, TestConditions>,
-}
+pub type TestOperation = p2panda_core::Operation<TestExtensions>;
 
-// Required Borrow<SpacesArgs> will be implemented in p2panda.
-impl Borrow<SpacesArgs<TestSpaceId, TestConditions>> for SpacesExtensions {
-    fn borrow(&self) -> &SpacesArgs<TestSpaceId, TestConditions> {
-        &self.args
+pub type TestSpacesStore = p2panda_store::spaces::SqliteSpacesStore<TestExtensions>;
+
+impl Borrow<SpacesArgs<TestConditions>> for TestOperation {
+    fn borrow(&self) -> &SpacesArgs<TestConditions> {
+        &self.header.extensions
     }
 }
-
-// Required Borrow<SpacesArgs> will be implemented in p2panda.
-impl Borrow<SpacesArgs<TestSpaceId, TestConditions>> for Operation {
-    fn borrow(&self) -> &SpacesArgs<TestSpaceId, TestConditions> {
-        &self.header().extensions.args
-    }
-}
-
-impl AuthoredMessage for Operation {
-    fn id(&self) -> crate::OperationId {
-        self.hash
-    }
-
-    fn author(&self) -> crate::ActorId {
-        self.header().verifying_key
-    }
-}
-
-pub type Operation = p2panda_core::Operation<SpacesExtensions>;
-pub type SqliteSpacesStore = p2panda_store::spaces::SqliteSpacesStore<SpacesExtensions>;
 
 pub type TestManager = Manager<
-    TestSpaceId,
-    SqliteSpacesStore,
-    SqliteStore,
+    SqliteSpacesStore<TestExtensions>,
     TestForge,
     TestConditions,
     StrongRemoveResolver<TestConditions>,
 >;
 
 pub type TestSpaceError =
-    SpaceError<TestSpaceId, TestForge, TestConditions, StrongRemoveResolver<TestConditions>>;
+    SpaceError<TestForge, TestConditions, StrongRemoveResolver<TestConditions>>;
 
 pub struct TestPeer {
-    #[allow(unused)]
-    pub(crate) id: TestPeerId,
-    #[allow(unused)]
-    pub(crate) manager: TestManager,
-    #[allow(unused)]
-    pub(crate) credentials: Credentials,
+    pub id: TestPeerId,
+    pub manager: TestManager,
+    pub credentials: Credentials,
+    pub store: SqliteStore,
 }
 
 impl TestPeer {
@@ -105,12 +65,11 @@ impl TestPeer {
         rng: Rng,
     ) -> Self {
         let store = SqliteStore::temporary().await;
-        let spaces_store = SqliteSpacesStore::new(store.clone());
+        let spaces_store = TestSpacesStore::new(store.clone());
         let forge = TestForge::new(store.clone(), credentials.signing_key());
 
         let manager = TestManager::new_with_config(
-            spaces_store,
-            store,
+            spaces_store.clone(),
             forge,
             credentials.clone(),
             config,
@@ -123,15 +82,13 @@ impl TestPeer {
             id: peer_id,
             manager,
             credentials,
+            store,
         }
     }
 
-    pub async fn persist_operation(&self, operation: &Operation) -> Result<bool, SqliteError> {
-        let manager = self.manager.inner.write().await;
-        tx_unwrap!(manager.store.inner(), {
-            manager
-                .store
-                .inner()
+    pub async fn persist_operation(&self, operation: &TestOperation) -> Result<bool, SqliteError> {
+        tx_unwrap!(self.store, {
+            self.store
                 .insert_operation(&operation.hash, operation, &DEFAULT_LOG_ID)
                 .await
         })

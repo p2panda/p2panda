@@ -12,26 +12,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
-use crate::types::{ActorId, EncryptionControlMessage, EncryptionDirectMessage, OperationId};
+use crate::types::{EncryptionControlMessage, EncryptionDirectMessage};
+use crate::{MemberId, OperationId};
 
 /// Implementation of Ordering trait from p2panda-encryption which computes
 /// dependencies for encryption messages and performs some internal buffering. It does _not_ take
 /// care of ordering of control and application messages; p2panda-spaces expects messages to be
 /// orderer before being processed.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EncryptionOrderer {}
-
-impl Default for EncryptionOrderer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl EncryptionOrderer {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+#[derive(Clone, Default, Debug)]
+pub struct EncryptionOrderer;
 
 /// Orderer for encryption messages.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -39,9 +28,9 @@ pub struct EncryptionOrdererState {
     /// Current graph heads (cache)
     heads: Vec<OperationId>,
 
-    // @TODO: currently application messages are also included in the dependency graph, we want
-    // to separate these from control messages eventually in order to support pruning.
     /// Graph of all operations processed by this group.
+    // TODO: currently application messages are also included in the dependency graph, we want to
+    // separate these from control messages eventually in order to support pruning.
     graph: DiGraphMap<OperationId, ()>,
 
     /// Queue of operations we have not yet processed.
@@ -50,9 +39,9 @@ pub struct EncryptionOrdererState {
     /// message.
     queue: VecDeque<OperationId>,
 
-    // @TODO: We keep all messages in memory currently which is bad. We need a persistence
-    // layer where we can fetch messages from.
     /// In-memory store of all messages.
+    // TODO: We keep all messages in memory currently which is bad. We need a persistence layer
+    // where we can fetch messages from.
     messages: HashMap<OperationId, EncryptionMessage>,
 
     /// "Create" or "Add" message which got us into the group.
@@ -112,7 +101,7 @@ impl EncryptionOrdererState {
     }
 }
 
-impl p2panda_encryption::traits::Ordering<ActorId, OperationId, EncryptionGroupMembership>
+impl p2panda_encryption::traits::Ordering<MemberId, OperationId, EncryptionGroupMembership>
     for EncryptionOrderer
 {
     type State = EncryptionOrdererState;

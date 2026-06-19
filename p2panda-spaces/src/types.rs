@@ -4,20 +4,13 @@
 
 use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
 use p2panda_auth::traits::{Conditions, Resolver};
-use p2panda_core::hash::Hash;
-use p2panda_core::identity::VerifyingKey;
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
 
-use crate::SpacesArgs;
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
-use crate::space::SpaceState;
-
-pub type ActorId = VerifyingKey;
-
-pub type OperationId = Hash;
+use crate::{ActorId, MemberId, OperationId};
 
 // ~~~ Auth ~~~
 
@@ -53,80 +46,43 @@ impl<C> AuthResolver<C> for StrongRemoveResolver<C> where C: Conditions {}
 // ~~~ Encryption ~~~
 
 pub type EncryptionGroup = p2panda_encryption::data_scheme::EncryptionGroup<
-    ActorId,
+    MemberId,
     OperationId,
-    KeyRegistry<ActorId>,
+    KeyRegistry<MemberId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
 pub type EncryptionGroupState = p2panda_encryption::data_scheme::GroupState<
-    ActorId,
+    MemberId,
     OperationId,
-    KeyRegistry<ActorId>,
+    KeyRegistry<MemberId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
-pub type EncryptionDirectMessage =
-    p2panda_encryption::data_scheme::DirectMessage<ActorId, OperationId, EncryptionGroupMembership>;
+pub type EncryptionDirectMessage = p2panda_encryption::data_scheme::DirectMessage<
+    MemberId,
+    OperationId,
+    EncryptionGroupMembership,
+>;
 
-pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMessage<ActorId>;
+pub type EncryptionControlMessage = p2panda_encryption::data_scheme::ControlMessage<MemberId>;
 
 pub type EncryptionGroupError = p2panda_encryption::data_scheme::GroupError<
-    ActorId,
+    MemberId,
     OperationId,
-    KeyRegistry<ActorId>,
+    KeyRegistry<MemberId>,
     EncryptionGroupMembership,
     KeyManager,
     EncryptionOrderer,
 >;
 
 pub type EncryptionGroupOutput = p2panda_encryption::data_scheme::GroupOutput<
-    ActorId,
+    MemberId,
     OperationId,
     EncryptionGroupMembership,
     EncryptionOrderer,
 >;
-
-// ~~~ Stores ~~~
-
-pub type SpacesMessage<ID, C> = p2panda_store::spaces::SpacesMessage<SpacesArgs<ID, C>>;
-pub trait SpacesStore<ID, C>: p2panda_store::spaces::SpacesStore<ID, SpaceState<ID, C>> {}
-pub trait SpacesStoreWrite<ID, C>:
-    p2panda_store::spaces::SpacesStoreWrite<ID, SpaceState<ID, C>>
-{
-}
-pub trait SpacesMessageStore<ID, C>:
-    p2panda_store::spaces::SpacesMessageStore<OperationId, SpacesArgs<ID, C>>
-{
-}
-
-pub type GroupsContextID = Hash;
-
-pub trait GroupsStore<C>:
-    p2panda_store::groups::GroupsStore<GroupsContextID, AuthGroupState<C>>
-{
-}
-
-impl<ID, C, T> SpacesStore<ID, C> for T where
-    T: p2panda_store::spaces::SpacesStore<ID, SpaceState<ID, C>>
-{
-}
-
-impl<ID, C, T> SpacesStoreWrite<ID, C> for T where
-    T: p2panda_store::spaces::SpacesStoreWrite<ID, SpaceState<ID, C>>
-{
-}
-
-impl<ID, C, T> SpacesMessageStore<ID, C> for T where
-    T: p2panda_store::spaces::SpacesMessageStore<OperationId, SpacesArgs<ID, C>>
-{
-}
-
-impl<C, T> GroupsStore<C> for T where
-    T: p2panda_store::groups::GroupsStore<GroupsContextID, AuthGroupState<C>>
-{
-}

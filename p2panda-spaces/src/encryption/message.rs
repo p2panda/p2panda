@@ -14,10 +14,9 @@ use serde::{Deserialize, Serialize};
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::{ApplicationMessage, SpaceMembershipMessage};
-use crate::types::{
-    ActorId, AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage, OperationId,
-};
+use crate::types::{AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage};
 use crate::utils::removed_members;
+use crate::{MemberId, OperationId};
 
 /// Arguments which are returned from p2panda-encryption APIs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,7 +40,7 @@ pub enum EncryptionArgs {
 pub enum EncryptionMessage {
     Args(EncryptionArgs),
     Forged {
-        author: ActorId,
+        author: MemberId,
         operation_id: OperationId,
         args: EncryptionArgs,
     },
@@ -80,16 +79,16 @@ impl EncryptionMessage {
     /// This method is required when we receive a space message and associated auth message and we
     /// want to adjust our local encryption state accordingly. The main requirement is that we
     /// process our own direct messages (contained in the space message); in many cases the actual
-    /// encryption control message type and content is redundant as the DGM state is always
-    /// manually replaced with the latest membership state provided by p2panda-auth. The only case
-    /// where it does matter is if we ourselves were added or removed from the group; here we
-    /// should make sure that the control message contains our own actor id.
+    /// encryption control message type and content is redundant as the DGM state is always manually
+    /// replaced with the latest membership state provided by p2panda-auth. The only case where it
+    /// does matter is if we ourselves were added or removed from the group; here we should make
+    /// sure that the control message contains our own actor id.
     pub(crate) fn from_membership<C>(
         space_message: &SpaceMembershipMessage,
-        my_id: ActorId,
+        my_id: MemberId,
         auth_message: &AuthMessage<C>,
-        current_members: &Vec<ActorId>,
-        next_members: &Vec<ActorId>,
+        current_members: &Vec<MemberId>,
+        next_members: &Vec<MemberId>,
     ) -> Self
     where
         C: Conditions,
@@ -124,8 +123,8 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "add", if there is a direct message for us then use our ActorId
-            // for the added member, otherwise use the added members ActorId. Even if this is a
+            // The auth message is "add", if there is a direct message for us then use our VerifyingKey
+            // for the added member, otherwise use the added members VerifyingKey. Even if this is a
             // group being added, meaning they won't actual be known to the DCGKA, we can use
             // their id as the only thing we care about is making sure the direct messages are
             // processed.
@@ -141,8 +140,8 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "remove", if we were removed, then use our ActorId for the
-            // removed member, otherwise use the ActorId of the actual removed member (which may
+            // The auth message is "remove", if we were removed, then use our VerifyingKey for the
+            // removed member, otherwise use the VerifyingKey of the actual removed member (which may
             // be an individual or group).
             AuthGroupAction::Remove { member } => {
                 let removed = removed_members(current_members.to_owned(), next_members.to_owned());
@@ -170,7 +169,7 @@ impl EncryptionMessage {
     }
 }
 
-impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for EncryptionMessage {
+impl EncryptionOperation<MemberId, OperationId, EncryptionGroupMembership> for EncryptionMessage {
     fn id(&self) -> OperationId {
         match self {
             EncryptionMessage::Args(_) => {
@@ -183,7 +182,7 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
         }
     }
 
-    fn sender(&self) -> ActorId {
+    fn sender(&self) -> MemberId {
         match self {
             EncryptionMessage::Args(_) => {
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
@@ -195,7 +194,7 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
         }
     }
 
-    fn content(&self) -> GroupMessageContent<ActorId> {
+    fn content(&self) -> GroupMessageContent<MemberId> {
         let EncryptionMessage::Forged { args, .. } = self else {
             // Nothing of this will ever be called at this stage where we're just preparing the
             // arguments for a future message to be forged.

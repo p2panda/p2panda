@@ -7,6 +7,7 @@ mod config;
 mod credentials;
 mod encryption;
 mod event;
+mod forge;
 pub mod group;
 pub mod identity;
 pub mod manager;
@@ -17,15 +18,25 @@ pub mod space;
 pub mod test_utils;
 #[cfg(test)]
 mod tests;
-pub mod traits;
 mod types;
 mod utils;
 
+use p2panda_core::{Hash, VerifyingKey};
+
+pub use auth::message::AuthMessage;
 pub use config::Config;
 pub use credentials::Credentials;
 pub use event::Event;
+pub use forge::Forge;
 pub use message::{SpacesArgs, SpacesMessage};
-pub use types::{
-    ActorId, GroupsStore, OperationId, SpacesMessageStore, SpacesStore, SpacesStoreWrite,
-    StrongRemoveResolver,
-};
+pub use types::StrongRemoveResolver;
+
+pub type SpaceId = Hash;
+
+pub type GroupId = ActorId;
+
+pub type MemberId = ActorId;
+
+pub type ActorId = VerifyingKey;
+
+pub type OperationId = Hash;
