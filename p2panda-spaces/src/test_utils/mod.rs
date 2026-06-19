@@ -67,7 +67,7 @@ impl AuthoredMessage for Operation {
 }
 
 pub type Operation = p2panda_core::Operation<SpacesExtensions>;
-pub type SqliteSpacesStore = p2panda_store::spaces::SqliteSpacesStore<Operation>;
+pub type SqliteSpacesStore = p2panda_store::spaces::SqliteSpacesStore<SpacesExtensions>;
 
 pub type TestManager = Manager<
     TestSpaceId,
