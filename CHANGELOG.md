@@ -15,6 +15,7 @@ Highlights are marked with a pancake 🥞
 - auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
 - Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
 - SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
+- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
 
 ### Changed
 
@@ -35,7 +36,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
-- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
 
 ### Fixed
 
