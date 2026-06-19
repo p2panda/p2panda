@@ -5,15 +5,15 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_spaces::forge::Forge;
 use p2panda_spaces::manager::{Manager, ManagerError};
-use p2panda_spaces::space::SpaceState;
+use p2panda_spaces::space::SpacesState;
 use p2panda_spaces::{AuthMessage, Event, StrongRemoveResolver};
+use p2panda_spaces::{Forge, SpacesArgs};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
-use p2panda_store::spaces::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
+use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use tokio::sync::Notify;
 use tracing::trace;
 
@@ -61,8 +61,8 @@ where
     T: Borrow<SpacesProcessorArgs<C>>,
     S: Clone
         + Transaction
-        + SpacesStore<SpaceState<C>>
-        + SpacesMessageStore<p2panda_spaces::SpacesArgs<C>>
+        + SpacesStore<SpacesState<C>>
+        + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore,
