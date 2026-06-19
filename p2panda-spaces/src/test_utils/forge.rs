@@ -3,11 +3,11 @@
 use p2panda_core::{Hash, Header, SigningKey, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
-use p2panda_store::{SqliteStore, tx};
+use p2panda_store::{SqliteError, SqliteStore, tx};
 
+use crate::forge::Forge;
 use crate::message::SpacesArgs;
-use crate::test_utils::{Operation, SpacesExtensions, TestConditions, TestSpaceId};
-use crate::traits::Forge;
+use crate::test_utils::{TestConditions, TestOperation};
 
 pub const DEFAULT_LOG_ID: u32 = 0;
 
@@ -26,34 +26,19 @@ impl TestForge {
     }
 }
 
-impl Forge<TestSpaceId, TestConditions> for TestForge {
-    type Message = Operation;
-    type Error = anyhow::Error;
+impl Forge<TestConditions> for TestForge {
+    type Message = TestOperation;
+
+    type Error = SqliteError;
 
     fn verifying_key(&self) -> VerifyingKey {
         self.signing_key.verifying_key()
     }
 
-    async fn forge(
-        &self,
-        args: SpacesArgs<TestSpaceId, TestConditions>,
-    ) -> Result<Self::Message, Self::Error> {
-        // Perform prerequisite computations outside of the locked transaction.
-        let payload_size = 0;
-        let body = None;
-        let payload_hash = None;
-        let extensions = SpacesExtensions { args: args.clone() };
-
-        // Acquire a lock on the store for the duration of the read to write cycle.
-        //
-        // This is to ensure that the data returned from the `get_latest_entry()` query does not
-        // become stale before the call to `insert_operation()`.
-        //
-        // Here we acquire a store permit, query the latest log entry, associate the topic with
-        // the log, insert the operation and commit the transaction before dropping the permit.
+    async fn forge(&self, args: SpacesArgs<TestConditions>) -> Result<Self::Message, Self::Error> {
         let operation = tx!(self.store, {
             let (seq_num, backlink) = <SqliteStore as LogStore<
-                Operation,
+                TestOperation,
                 VerifyingKey,
                 LogId,
                 SeqNum,
@@ -71,20 +56,20 @@ impl Forge<TestSpaceId, TestConditions> for TestForge {
                 version: 1,
                 verifying_key: self.signing_key.verifying_key(),
                 signature: None,
-                payload_size,
-                payload_hash,
+                payload_size: 0,
+                payload_hash: None,
                 seq_num,
                 backlink,
-                extensions,
+                extensions: args,
             };
 
             header.sign(&self.signing_key);
             let hash = header.hash();
 
-            let operation = Operation {
+            let operation = TestOperation {
                 hash,
-                header: header.clone(),
-                body,
+                header,
+                body: None,
             };
 
             self.store

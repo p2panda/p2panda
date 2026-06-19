@@ -4,8 +4,8 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
 
-use crate::ActorId;
 use crate::types::AuthGroupState;
+use crate::{ActorId, MemberId};
 
 /// Assign a GroupMember type to passed actor based on looking up if the actor is a group in the
 /// auth state.
@@ -46,9 +46,9 @@ pub(crate) fn secret_members<C>(members: Vec<(ActorId, Access<C>)>) -> Vec<Actor
 }
 
 pub(crate) fn added_members(
-    current_members: Vec<ActorId>,
-    next_members: Vec<ActorId>,
-) -> Vec<ActorId> {
+    current_members: Vec<MemberId>,
+    next_members: Vec<MemberId>,
+) -> Vec<MemberId> {
     let mut members = next_members
         .iter()
         .cloned()
@@ -59,9 +59,9 @@ pub(crate) fn added_members(
 }
 
 pub(crate) fn removed_members(
-    current_members: Vec<ActorId>,
-    next_members: Vec<ActorId>,
-) -> Vec<ActorId> {
+    current_members: Vec<MemberId>,
+    next_members: Vec<MemberId>,
+) -> Vec<MemberId> {
     let mut members = current_members
         .iter()
         .cloned()

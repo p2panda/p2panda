@@ -7,9 +7,7 @@ use std::marker::PhantomData;
 use p2panda_auth::traits::Conditions;
 use p2panda_core::VerifyingKey;
 use p2panda_encryption::key_bundle::{KeyBundleError, Lifetime, LongTermKeyBundle};
-use p2panda_encryption::key_manager::{
-    KeyManager, KeyManagerError, KeyManagerState, PreKeyBundlesState,
-};
+use p2panda_encryption::key_manager::{KeyManager, KeyManagerError, KeyManagerState};
 use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryError, KeyRegistryState};
 use p2panda_encryption::traits::{KeyBundle, PreKeyManager};
 use p2panda_encryption::{Rng, RngError};
@@ -19,11 +17,11 @@ use p2panda_store::key_secrets::KeySecretsStore;
 use thiserror::Error;
 
 use crate::event::Event;
+use crate::forge::Forge;
 use crate::manager::StoreError;
 use crate::member::Member;
 use crate::message::SpacesArgs;
-use crate::traits::{Forge, SpaceId};
-use crate::{ActorId, Config, Credentials};
+use crate::{Config, Credentials, MemberId};
 
 /// Manager for functionality relating to a peers identity, holds all cryptographic secrets for key
 /// agreement and signatures.
@@ -36,31 +34,28 @@ use crate::{ActorId, Config, Credentials};
 /// undefined behavior. Rotating both keys is possible but will result in the loss of access to
 /// existing spaces.
 #[derive(Debug)]
-pub struct IdentityManager<ID, K, F, C> {
-    key_store: K,
+pub struct IdentityManager<S, F, C> {
+    key_store: S,
     forge: F,
     credentials: Credentials,
     config: Config,
     rng: Rng,
-    _marker: PhantomData<(ID, F, C)>,
+    _marker: PhantomData<C>,
 }
 
-impl<ID, K, F, C> IdentityManager<ID, K, F, C>
+impl<S, F, C> IdentityManager<S, F, C>
 where
-    ID: SpaceId,
-    K: KeyRegistryStore<KeyRegistryState<ActorId>>
-        + KeySecretsStore<PreKeyBundlesState>
-        + Transaction,
-    F: Forge<ID, C>,
+    S: KeyRegistryStore + KeySecretsStore + Transaction,
+    F: Forge<C>,
     C: Conditions,
 {
     pub async fn new(
-        key_store: K,
+        key_store: S,
         forge: F,
         credentials: Credentials,
         config: Config,
         rng: &Rng,
-    ) -> Result<Self, IdentityError<ID, F, C>> {
+    ) -> Result<Self, IdentityError<F, C>> {
         Ok(Self {
             key_store,
             forge,
@@ -72,21 +67,21 @@ where
     }
 
     /// The public key of the local actor.
-    pub(crate) fn id(&self) -> VerifyingKey {
+    pub(crate) fn id(&self) -> MemberId {
         self.credentials.verifying_key()
     }
 
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<ID, F, C>> {
+    pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<F, C>> {
         Ok(Member::new(self.id(), self.key_bundle().await?))
     }
 
     /// Returns "latest", publishable key bundle of us or automatically generates a new one if
     /// either nothing was generated yet, if previous bundles expired or are about to be expired
     /// (given an additional "pessimistic" rotation window).
-    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<ID, F, C>> {
+    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<F, C>> {
         let key_manager_y = self.key_manager().await?;
 
         let valid_bundle = match KeyManager::prekey_bundle(&key_manager_y) {
@@ -147,7 +142,7 @@ where
     }
 
     /// Returns `true` if my latest key bundle has expired or is about to expire.
-    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<ID, F, C>> {
+    pub async fn key_bundle_expired(&self) -> Result<bool, IdentityError<F, C>> {
         let key_manager_y = self.key_manager().await?;
         match KeyManager::prekey_bundle(&key_manager_y) {
             Ok(bundle) => Ok(bundle
@@ -162,7 +157,7 @@ where
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&mut self) -> Result<F::Message, IdentityError<ID, F, C>> {
+    pub async fn key_bundle_message(&mut self) -> Result<F::Message, IdentityError<F, C>> {
         let args = SpacesArgs::KeyBundle {
             key_bundle: self.key_bundle().await?,
         };
@@ -178,10 +173,7 @@ where
     // given identity key but **not** if the member's handle / id is authentic. Applications need to
     // provide an authentication scheme and validate `Member` before calling this method to prevent
     // impersonation attacks.
-    pub async fn register_member(
-        &mut self,
-        member: &Member,
-    ) -> Result<(), IdentityError<ID, F, C>> {
+    pub async fn register_member(&mut self, member: &Member) -> Result<(), IdentityError<F, C>> {
         let pki = {
             let y = self.key_registry().await?;
             KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone())?
@@ -211,24 +203,21 @@ where
     /// Process a key bundle received from the network.
     pub async fn process_key_bundle(
         &mut self,
-        author: ActorId,
+        author: MemberId,
         key_bundle: &LongTermKeyBundle,
-    ) -> Result<Event<ID, C>, IdentityError<ID, F, C>> {
+    ) -> Result<Event<C>, IdentityError<F, C>> {
         key_bundle.verify()?;
         let member = Member::new(author, key_bundle.clone());
         self.register_member(&member).await?;
         Ok(Event::KeyBundle { author })
     }
 
-    pub async fn forge(
-        &mut self,
-        args: SpacesArgs<ID, C>,
-    ) -> Result<F::Message, IdentityError<ID, F, C>> {
+    pub async fn forge(&mut self, args: SpacesArgs<C>) -> Result<F::Message, IdentityError<F, C>> {
         self.forge.forge(args).await.map_err(IdentityError::Forge)
     }
 
     /// Assemble and return key manager state from persisted pre-key bundles and identity secret.
-    pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<ID, F, C>> {
+    pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<F, C>> {
         let y = self
             .key_store
             .get_prekey_secrets()
@@ -242,9 +231,7 @@ where
         )?)
     }
 
-    pub async fn key_registry(
-        &self,
-    ) -> Result<KeyRegistryState<VerifyingKey>, IdentityError<ID, F, C>> {
+    pub async fn key_registry(&self) -> Result<KeyRegistryState<MemberId>, IdentityError<F, C>> {
         let y = match self
             .key_store
             .get_key_registry()
@@ -261,10 +248,9 @@ where
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum IdentityError<ID, F, C>
+pub enum IdentityError<F, C>
 where
-    ID: SpaceId,
-    F: Forge<ID, C>,
+    F: Forge<C>,
     C: Conditions,
 {
     #[error("{0}")]
@@ -294,6 +280,7 @@ mod tests {
     use std::borrow::Borrow;
     use std::time::Duration;
 
+    use p2panda_core::traits::Provenance;
     use p2panda_encryption::Rng;
     use p2panda_encryption::key_bundle::LongTermKeyBundle;
     use p2panda_encryption::key_registry::KeyRegistry;
@@ -302,7 +289,6 @@ mod tests {
 
     use crate::message::SpacesArgs;
     use crate::test_utils::TestForge;
-    use crate::traits::AuthoredMessage;
     use crate::{Config, Credentials};
 
     use super::IdentityManager;

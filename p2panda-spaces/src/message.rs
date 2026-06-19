@@ -5,73 +5,77 @@ use std::fmt::Debug;
 
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
+use p2panda_core::traits::{Digest, Provenance};
+use p2panda_core::{Hash, VerifyingKey};
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::{crypto::xchacha20::XAeadNonce, key_bundle::LongTermKeyBundle};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthMessage;
-use crate::traits::{AuthoredMessage, SpaceId};
-use crate::types::{ActorId, EncryptionDirectMessage, OperationId};
+use crate::types::EncryptionDirectMessage;
+use crate::{ActorId, GroupId, OperationId, SpaceId};
 
 /// Spaces message type.
 ///
 /// Although the spaces API is generic over concrete data type both when messages are forged
-/// (output) and processed (input) this type is used internally where generic types are not
-/// required and also exposes an API for converting into specific message variants where these are
-/// needed.
+/// (output) and processed (input) this type is used internally where generic types are not required
+/// and also exposes an API for converting into specific message variants where these are needed.
 #[derive(Clone, Debug)]
-pub struct SpacesMessage<SID, C>(pub(crate) crate::types::SpacesMessage<SID, C>);
+pub struct SpacesMessage<C> {
+    pub id: Hash,
+    pub author: VerifyingKey,
+    pub args: SpacesArgs<C>,
+}
 
-impl<SID, C> From<crate::types::SpacesMessage<SID, C>> for SpacesMessage<SID, C> {
-    fn from(value: crate::types::SpacesMessage<SID, C>) -> Self {
-        Self(value)
+impl<C> Borrow<SpacesArgs<C>> for SpacesMessage<C> {
+    fn borrow(&self) -> &SpacesArgs<C> {
+        &self.args
     }
 }
 
-impl<SID, C> Borrow<SpacesArgs<SID, C>> for SpacesMessage<SID, C> {
-    fn borrow(&self) -> &SpacesArgs<SID, C> {
-        &self.0.args
+impl<C> Provenance<VerifyingKey> for SpacesMessage<C> {
+    fn author(&self) -> VerifyingKey {
+        self.author
+    }
+
+    fn verify(&self) -> bool {
+        unreachable!("we don't verify spaces messages on this layer")
     }
 }
 
-impl<SID, C> AuthoredMessage for SpacesMessage<SID, C> {
-    fn id(&self) -> OperationId {
-        self.0.id
-    }
-
-    fn author(&self) -> ActorId {
-        self.0.author
+impl<C> Digest<Hash> for SpacesMessage<C> {
+    fn hash(&self) -> Hash {
+        self.id
     }
 }
 
 /// Message type representing a group membership change on a space.
 pub(crate) struct SpaceMembershipMessage {
-    pub id: OperationId,
-    pub author: ActorId,
-    pub group_id: ActorId,
-    pub space_dependencies: Vec<OperationId>,
-    pub auth_message_id: OperationId,
+    pub id: Hash,
+    pub author: VerifyingKey,
+    pub group_id: VerifyingKey,
+    pub space_dependencies: Vec<Hash>,
+    pub auth_message_id: Hash,
     pub direct_messages: Vec<EncryptionDirectMessage>,
 }
 
 /// Message type representing application messages.
 pub(crate) struct ApplicationMessage {
-    pub id: OperationId,
-    pub author: ActorId,
-    pub space_dependencies: Vec<OperationId>,
+    pub id: Hash,
+    pub author: VerifyingKey,
+    pub space_dependencies: Vec<Hash>,
     pub group_secret_id: GroupSecretId,
     pub nonce: XAeadNonce,
     pub ciphertext: Vec<u8>,
 }
 
-impl<SID, C> SpacesMessage<SID, C>
+impl<C> SpacesMessage<C>
 where
-    SID: SpaceId,
     C: Conditions,
 {
     pub(crate) fn space_membership<M>(message: &M) -> SpaceMembershipMessage
     where
-        M: AuthoredMessage + Borrow<SpacesArgs<SID, C>>,
+        M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
         let SpacesArgs::SpaceMembership {
             group_id,
@@ -83,8 +87,9 @@ where
         else {
             panic!("unexpected message type")
         };
+
         SpaceMembershipMessage {
-            id: message.id(),
+            id: message.hash(),
             author: message.author(),
             group_id,
             space_dependencies,
@@ -95,7 +100,7 @@ where
 
     pub(crate) fn auth<M>(message: &M) -> AuthMessage<C>
     where
-        M: AuthoredMessage + Borrow<SpacesArgs<SID, C>>,
+        M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
         let SpacesArgs::Auth {
             group_id,
@@ -105,8 +110,9 @@ where
         else {
             panic!("unexpected message type")
         };
+
         AuthMessage {
-            operation_id: message.id(),
+            operation_id: message.hash(),
             author: message.author(),
             dependencies: auth_dependencies.to_owned(),
             group_id: *group_id,
@@ -116,7 +122,7 @@ where
 
     pub(crate) fn application<M>(message: &M) -> ApplicationMessage
     where
-        M: AuthoredMessage + Borrow<SpacesArgs<SID, C>>,
+        M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
         let SpacesArgs::Application {
             space_dependencies,
@@ -128,8 +134,9 @@ where
         else {
             panic!("unexpected message type")
         };
+
         ApplicationMessage {
-            id: message.id(),
+            id: message.hash(),
             author: message.author(),
             space_dependencies,
             group_secret_id,
@@ -141,7 +148,7 @@ where
 
 /// Enum representing all possible message types.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum SpacesArgs<ID, C> {
+pub enum SpacesArgs<C> {
     /// System message, contains key bundle of the given author.
     ///
     /// Note: Applications should check if the key bundle was authored by the sender.
@@ -150,7 +157,7 @@ pub enum SpacesArgs<ID, C> {
     /// System message containing an auth control message.
     Auth {
         /// id of the group this message applies to.
-        group_id: ActorId,
+        group_id: GroupId,
 
         /// Action to be applied to this group.
         group_action: GroupAction<ActorId, C>,
@@ -163,10 +170,10 @@ pub enum SpacesArgs<ID, C> {
     /// fields for applying the resulting membership change to a specific space.
     SpaceMembership {
         /// Space this message should be applied to.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Group associated with this space from which group membership is derived.
-        group_id: ActorId,
+        group_id: GroupId,
 
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
@@ -185,10 +192,10 @@ pub enum SpacesArgs<ID, C> {
     /// Rotate the entropy for a space's encryption context.
     SpaceUpdate {
         /// Space this message should be applied to.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Group associated with this space from which group membership is derived.
-        group_id: ActorId,
+        group_id: GroupId,
 
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
@@ -197,7 +204,7 @@ pub enum SpacesArgs<ID, C> {
     /// An encrypted application message.
     Application {
         /// Space this message should be applied to.
-        space_id: ID,
+        space_id: SpaceId,
 
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
@@ -213,16 +220,15 @@ pub enum SpacesArgs<ID, C> {
     },
 }
 
-impl<ID, C> SpacesArgs<ID, C> {
+impl<C> SpacesArgs<C> {
     /// Return all dependencies for this spaces message.
     ///
     /// These dependencies can be used to causally order messages before processing them on the
     /// spaces manager. A message should only be processed once all of it' dependencies have
     /// themselves been processed.
-    pub fn dependencies(&self) -> Vec<OperationId> {
+    pub fn dependencies(&self) -> Vec<Hash> {
         match self {
-            // @TODO: do key bundles have dependencies?
-            SpacesArgs::KeyBundle { .. } => todo!(),
+            SpacesArgs::KeyBundle { .. } => vec![],
             SpacesArgs::Auth {
                 auth_dependencies, ..
             } => auth_dependencies.to_owned(),
