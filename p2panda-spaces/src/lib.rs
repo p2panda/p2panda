@@ -14,6 +14,7 @@ pub mod manager;
 mod member;
 mod message;
 pub mod space;
+mod store;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 #[cfg(test)]
@@ -29,6 +30,7 @@ pub use credentials::Credentials;
 pub use event::Event;
 pub use forge::Forge;
 pub use message::{SpacesArgs, SpacesMessage};
+pub use store::SpacesStoreState;
 pub use types::StrongRemoveResolver;
 
 pub type SpaceId = Hash;

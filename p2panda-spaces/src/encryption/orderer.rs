@@ -15,10 +15,11 @@ use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::types::{EncryptionControlMessage, EncryptionDirectMessage};
 use crate::{MemberId, OperationId};
 
-/// Implementation of Ordering trait from p2panda-encryption which computes
-/// dependencies for encryption messages and performs some internal buffering. It does _not_ take
-/// care of ordering of control and application messages; p2panda-spaces expects messages to be
-/// orderer before being processed.
+/// Implementation of Ordering trait from p2panda-encryption which computes dependencies for
+/// encryption messages and performs some internal buffering.
+///
+/// It does _not_ take care of ordering of control and application messages; p2panda-spaces expects
+/// messages to be orderer before being processed.
 #[derive(Clone, Default, Debug)]
 pub struct EncryptionOrderer;
 

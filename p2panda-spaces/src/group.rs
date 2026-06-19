@@ -21,7 +21,7 @@ use crate::forge::Forge;
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
 use crate::message::{SpacesArgs, SpacesMessage};
-use crate::space::SpacesState;
+use crate::store::SpacesStoreState;
 use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver};
 use crate::utils::{sort_members, typed_member, typed_members};
 use crate::{ActorId, GroupId, MemberId, OperationId};
@@ -53,7 +53,7 @@ pub struct Group<S, F, C, RS> {
 impl<S, F, C, RS> Group<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
@@ -198,7 +198,7 @@ where
 impl<S, F, C, RS> Group<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore

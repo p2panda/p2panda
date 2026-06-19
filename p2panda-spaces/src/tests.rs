@@ -95,7 +95,7 @@ async fn create_space() {
     assert_eq!(HashSet::from([message_01.hash()]), groups_y.inner.heads());
 
     let y = manager.get_space_state(&space.id()).await.unwrap().unwrap();
-    assert_eq!(vec![message_02.hash()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_02.hash()], y.orderer.heads());
 }
 
 #[tokio::test]
@@ -145,10 +145,7 @@ async fn send_and_receive() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        vec![message.hash()],
-        bob_space_y.encryption_y.orderer.heads()
-    );
+    assert_eq!(vec![message.hash()], bob_space_y.orderer.heads());
 
     // Alice processes Bob's encrypted message.
 
@@ -164,10 +161,7 @@ async fn send_and_receive() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        vec![message.hash()],
-        alice_space_y.encryption_y.orderer.heads()
-    );
+    assert_eq!(vec![message.hash()], alice_space_y.orderer.heads());
 
     #[allow(irrefutable_let_patterns)]
     let Event::Application { space_id, data } = events.first().unwrap() else {
@@ -273,7 +267,7 @@ async fn add_member_to_space() {
 
     // Orderer states have been updated.
     let y = manager.get_space_state(&space_id).await.unwrap().unwrap();
-    assert_eq!(vec![message_04.hash()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_04.hash()], y.orderer.heads());
 
     let groups_y = manager.get_groups_state().await.unwrap();
     assert_eq!(HashSet::from([message_03.hash()]), groups_y.inner.heads());
@@ -450,7 +444,7 @@ async fn add_pull_member_to_space() {
 
     let y = manager.get_space_state(&space_id).await.unwrap().unwrap();
     // Encryption order has been updated.
-    assert_eq!(vec![message_04.hash()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_04.hash()], y.orderer.heads());
 }
 
 #[tokio::test]
@@ -525,7 +519,7 @@ async fn receive_control_messages() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(vec![message_02.hash()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_02.hash()], y.orderer.heads());
 
     // Alice: Publishes a message into the space
     // ~~~~~~~~~~~~
@@ -574,7 +568,7 @@ async fn receive_control_messages() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(vec![message_05.hash()], y.encryption_y.orderer.heads());
+    assert_eq!(vec![message_05.hash()], y.orderer.heads());
 }
 
 #[tokio::test]
