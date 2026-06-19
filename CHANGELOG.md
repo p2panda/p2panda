@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 - Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
 - SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
 - ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- core: Provenance trait to get author & verify [#1254](https://github.com/p2panda/p2panda/pull/1254)
 
 ### Changed
 
@@ -29,6 +30,7 @@ Highlights are marked with a pancake 🥞
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
 - Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
+- store: Reduce generics, remove serde from types [#1254](https://github.com/p2panda/p2panda/pull/1254)
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Don't sync all spaces when group membership changes [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
