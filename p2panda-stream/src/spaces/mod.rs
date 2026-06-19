@@ -5,4 +5,4 @@ mod args;
 mod processor;
 
 pub use args::SpacesProcessorArgs;
-pub use processor::{Spaces, SpacesManager, SpacesManagerError, SpacesResult};
+pub use processor::{Spaces, SpacesError, SpacesManager, SpacesManagerError, SpacesResult};

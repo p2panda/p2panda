@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::thread;
 
 use futures_util::StreamExt;
 use p2panda_core::traits::Digest;
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
-use p2panda_store::Transaction;
-use p2panda_store::logs::LogStore;
-use p2panda_store::operations::OperationStore;
-use p2panda_store::topics::TopicStore;
+use p2panda_core::{Extensions, Hash, LogId};
+use p2panda_store::SqliteStore;
+use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
+use serde::{Deserialize, Serialize};
 use tokio::pin;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
@@ -68,7 +66,7 @@ where
     // and we need to require a Send + 'static trait bounds, even though it's not used anywhere.
     L: LogId + Send + 'static,
     E: Extensions + Send + 'static,
-    TP: Clone + Send + 'static,
+    TP: Clone + Send + Serialize + for<'a> Deserialize<'a> + 'static,
 {
     /// Creates a new "event processor" pipeline.
     ///
@@ -82,20 +80,11 @@ where
     // processing required for p2panda-spaces, etc.).
     //
     // NOTE: For parallelizing pipelines some sort of "work stealing" approach will be required.
-    pub fn new<S>(
-        store: S,
+    pub fn new(
+        store: SqliteStore,
         tasks: TaskTracker<Event<L, E, TP>, Hash>,
         spaces_manager: SpacesManager,
-    ) -> Self
-    where
-        S: Clone
-            + Transaction
-            + OperationStore<Operation<E>, Hash>
-            + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
-            + TopicStore<TP, VerifyingKey, L>
-            + Send
-            + 'static,
-    {
+    ) -> Self {
         let (pipeline_tx, pipeline_rx) = mpsc::channel(PUBLISH_BUFFER_SIZE);
 
         {
@@ -111,9 +100,14 @@ where
 
                 local.spawn_local(async move {
                     // Prepare event processing pipeline.
-                    let ingest = Ingest::<S, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                    let log_prune = LogPrune::<S, Event<L, E, TP>, L, E>::new(store);
-                    let spaces = SpacesProcessor::<Event<L, E, TP>>::new(spaces_manager);
+                    let ingest =
+                        Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
+                    let log_prune =
+                        LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
+                    let spaces = SpacesProcessor::<Event<L, E, TP>>::new(
+                        SqliteSpacesStore::new(store),
+                        spaces_manager,
+                    );
 
                     // TODO: Add orderer whenever it's ready (needs API adjustments). Who is
                     // ordering for us currently? Is it still in the spaces processor?
@@ -149,7 +143,7 @@ where
                                 event
                             }
                             Err((mut event, err)) => {
-                                event.spaces = ProcessorStatus::Failed(Arc::new(err));
+                                event.spaces = ProcessorStatus::Failed(err);
                                 event
                             }
                         });

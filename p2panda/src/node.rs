@@ -87,7 +87,7 @@ impl Node {
 
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new::<SqliteStore>(store.clone(), tasks, spaces_manager.clone());
+        let pipeline = Pipeline::new(store.clone(), tasks, spaces_manager.clone());
 
         Ok(Node {
             config,
