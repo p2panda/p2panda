@@ -177,8 +177,7 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of an operation id, so we can give it a
                 // placeholder instead.
-                static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
-                PLACEHOLDER_ID
+                hash_placeholder()
             }
             EncryptionMessage::Forged { operation_id, .. } => *operation_id,
         }
@@ -190,11 +189,7 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
                 // Our design uses `p2panda_auth` instead of the DGM inside the encryption group
                 // API. The DGM is the only part in need of a sender, so we can give it a
                 // placeholder instead.
-                static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
-                    VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
-                        .expect("can create public key from constant bytes")
-                });
-                *PLACEHOLDER_PUBLIC_KEY
+                verifying_key_placeholder()
             }
             EncryptionMessage::Forged { author, .. } => *author,
         }
@@ -237,4 +232,23 @@ impl EncryptionOperation<ActorId, OperationId, EncryptionGroupMembership> for En
             EncryptionArgs::Application { .. } => Vec::new(),
         }
     }
+}
+
+// When processing locally created operations we handle unsigned messages where the actor id is not
+// known and not required. In these cases we need to satisfy the trait interfaces using a
+// placeholder value.
+fn verifying_key_placeholder() -> VerifyingKey {
+    static PLACEHOLDER_PUBLIC_KEY: LazyLock<VerifyingKey> = LazyLock::new(|| {
+        VerifyingKey::from_bytes(&[0; VERIFYING_KEY_LEN])
+            .expect("can create public key from constant bytes")
+    });
+    *PLACEHOLDER_PUBLIC_KEY
+}
+
+// When processing locally created operations we handle unsigned messages where the operation id is
+// not known and not required. In these cases we need to satisfy the trait interfaces using a
+// placeholder value.
+fn hash_placeholder() -> Hash {
+    static PLACEHOLDER_ID: Hash = Hash::from_bytes([0; HASH_LEN]);
+    PLACEHOLDER_ID
 }
