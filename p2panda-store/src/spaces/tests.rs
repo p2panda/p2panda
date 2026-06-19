@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 use p2panda_core::Hash;
 use serde::{Deserialize, Serialize};
 
-use crate::spaces::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
+use crate::spaces::{SpacesMessageStore, SpacesStore};
 use crate::{SqliteStore, tx_unwrap};
 
 // Additional message arguments required by and defined in p2panda-spaces.

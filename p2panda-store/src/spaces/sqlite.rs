@@ -18,7 +18,7 @@ use crate::key_registry::KeyRegistryStore;
 use crate::key_secrets::KeySecretsStore;
 use crate::operations::OperationStore;
 use crate::spaces::traits::SpacesMessageStore;
-use crate::spaces::{SpacesMessage, SpacesStore, SpacesStoreWrite};
+use crate::spaces::{SpacesMessage, SpacesStore};
 use crate::sqlite::TransactionPermit;
 use crate::{SqliteError, SqliteStore};
 
@@ -101,6 +101,35 @@ where
         Ok(Some(state))
     }
 
+    async fn set_space_state_tx(&self, id: &Hash, state: &S) -> Result<(), Self::Error> {
+        self.store
+            .tx(async |tx| {
+                query(
+                    "
+                INSERT OR REPLACE
+                INTO
+                    spaces_v1 (
+                        id,
+                        state
+                    )
+                VALUES
+                    (?, ?)
+                ",
+                )
+                .bind(id.to_hex())
+                .bind(
+                    encode_cbor(&state)
+                        .map_err(|err| SqliteError::Encode("state".to_string(), err))?,
+                )
+                .execute(&mut **tx)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        Ok(())
+    }
+
     async fn has_space(&self, id: &Hash) -> Result<bool, Self::Error> {
         let result = self
             .store
@@ -149,42 +178,6 @@ where
             .collect();
 
         result.map_err(|err| SqliteError::Decode("state".into(), err.into()))
-    }
-}
-
-impl<S, E> SpacesStoreWrite<S> for SqliteSpacesStore<E>
-where
-    S: for<'a> Deserialize<'a> + Serialize,
-{
-    type Error = SqliteError;
-
-    async fn set_space_state_tx(&self, id: &Hash, state: &S) -> Result<(), Self::Error> {
-        self.store
-            .tx(async |tx| {
-                query(
-                    "
-                INSERT OR REPLACE
-                INTO
-                    spaces_v1 (
-                        id,
-                        state
-                    )
-                VALUES
-                    (?, ?)
-                ",
-                )
-                .bind(id.to_hex())
-                .bind(
-                    encode_cbor(&state)
-                        .map_err(|err| SqliteError::Encode("state".to_string(), err))?,
-                )
-                .execute(&mut **tx)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        Ok(())
     }
 }
 

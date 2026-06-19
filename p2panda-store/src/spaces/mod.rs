@@ -13,7 +13,7 @@ use p2panda_core::{Hash, VerifyingKey};
 
 #[cfg(feature = "sqlite")]
 pub use sqlite::SqliteSpacesStore;
-pub use traits::{SpacesMessageStore, SpacesStore, SpacesStoreWrite};
+pub use traits::{SpacesMessageStore, SpacesStore};
 
 /// Spaces message type with generic parameter for additional arguments.
 #[derive(Clone, Debug)]
