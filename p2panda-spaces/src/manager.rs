@@ -630,7 +630,7 @@ where
 
         manager
             .store
-            .set_space_state_tx(&space_id, y)
+            .set_space_state_tx(space_id, y)
             .await
             .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
 
