@@ -9,7 +9,6 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_encryption::RngError;
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_store::Transaction;
@@ -28,8 +27,8 @@ use crate::traits::{AuthoredMessage, SpaceId};
 #[cfg(any(test, feature = "test_utils"))]
 use crate::types::SpacesStoreWrite;
 use crate::types::{
-    ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
-    EncryptionGroupError, GroupsStore, SpacesMessageStore, SpacesStore,
+    ActorId, AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver, GroupsStore,
+    SpacesMessageStore, SpacesStore,
 };
 use crate::utils::{sort_members, typed_member, typed_members};
 
@@ -148,8 +147,6 @@ where
         manager_ref: Manager<ID, S, K, F, C, RS>,
         auth_message: &AuthMessage<C>,
     ) -> Result<Option<(AuthGroupState<C>, Event<ID, C>)>, GroupError<ID, F, C, RS>> {
-        // @TODO: make two variants of this method, one which doesn't persist state but rather
-        // just returns it, the other just for testing which persists it as well.
         let mut groups_y = manager_ref.get_groups_state().await?;
 
         // If we already processed this auth message then return now.
@@ -256,23 +253,12 @@ where
     C: Conditions,
     RS: AuthResolver<C> + Debug,
 {
-    #[error(transparent)]
-    Rng(#[from] RngError),
-
     #[error("{0}")]
     AuthGroup(AuthGroupError<C, RS>),
-
-    #[error("{0}")]
-    EncryptionGroup(EncryptionGroupError),
 
     #[error(transparent)]
     IdentityManager(#[from] IdentityError<ID, F, C>),
 
     #[error(transparent)]
     Store(#[from] StoreError),
-
-    // @TODO: We lose the concrete error type which caused sync of spaces to fail, ideal we would
-    // retain this type information.
-    #[error("error syncing group change {0} with local spaces: {1}")]
-    SyncSpaces(OperationId, String),
 }

@@ -3,7 +3,6 @@
 //! API for managing members of a space and sending/receiving messages.
 use std::borrow::Borrow;
 use std::collections::HashSet;
-use std::convert::Infallible;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -191,9 +190,6 @@ where
     /// resulting group membership changes. Any resulting encryption direct messages are included
     /// in the space message alongside a reference to the auth message.
     pub(crate) async fn process_auth_message(
-        // @TODO: the manager is only needed here for accessing the Rng and the Forge. No spaces
-        // states are persist or queried. It would be nice to refactor this method so that this
-        // behavior is clearer.
         manager_ref: Manager<ID, S, K, F, C, RS>,
         mut y: SpaceState<ID, C>,
         auth_message: &AuthMessage<C>,
@@ -605,11 +601,6 @@ where
             }
         };
 
-        // @TODO: This is ugly, improve space initialization code so that we don't have to pass in
-        // the group id like we do now.
-        //
-        // Sanity check.
-        assert_eq!(space_y.group_id, group_id);
         Ok(space_y)
     }
 
@@ -812,9 +803,6 @@ where
 
     #[error(transparent)]
     Store(#[from] StoreError),
-
-    #[error("{0}")]
-    EncryptionOrderer(Infallible),
 
     #[error("tried to access unknown space id {0}")]
     UnknownSpace(ID),
