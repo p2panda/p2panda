@@ -90,15 +90,6 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
         // TODO: Do we need to query graph tips here for causal ordering or is this taken care off
         // by -spaces? If yes, are declaring _all_ dependencies really it's concern or only the ones
         // which are relevant to the spaces protocol?
-        //
-        // TODO: We need to apply a topic mapping so our TopicStore is aware of the relationship
-        // between key bundles, groups and spaces. Where does this take place? The trick will be to
-        // make also other nodes manage this mapping _before_ and _while_ they process spaces.
-        //
-        // 1. For locally created operations we can do the mapping here.
-        // 2. For remote, incoming operations we can do the mapping in the -spaces processor or
-        //    after.
-
         let operation = match args {
             // 1. Key Bundle logs.
             p2panda_spaces::SpacesArgs::KeyBundle { ref key_bundle } => {
@@ -145,7 +136,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
 
             // 3. Space logs.
             //
-            // TODO: These variants hav: a pending naming change in -spaces.
+            // TODO: These variants have a pending naming change in -spaces.
             p2panda_spaces::SpacesArgs::SpaceMembership { space_id, .. }
             | p2panda_spaces::SpacesArgs::SpaceUpdate { space_id, .. } => {
                 // Every author maintains their own log of control messages _per_ space.
@@ -166,11 +157,6 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
             }
 
             // 4. Application logs.
-            //
-            // TODO: We likely don't want to forge application messages here _at all_ and rather use
-            // an independent (new) method on `Manager` which allows us to encrypt anything (control
-            // messages & application messages) against the latest secret _without_ forging
-            // something.
             p2panda_spaces::SpacesArgs::Application {
                 space_id,
                 ref ciphertext,

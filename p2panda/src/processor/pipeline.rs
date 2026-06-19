@@ -109,8 +109,11 @@ where
                         spaces_manager,
                     );
 
-                    // TODO: Add orderer whenever it's ready (needs API adjustments). Who is
-                    // ordering for us currently? Is it still in the spaces processor?
+                    // TODO: Add orderer. Unfortunately this might come with a refactoring of the
+                    // ordering logic as we loose the input type (T or Event) during buffering.
+                    //
+                    // It might work out if we allow to store the input object as well in the
+                    // buffer, not sure if that's the right path right now.
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(pipeline_rx)
@@ -147,10 +150,6 @@ where
                                 event
                             }
                         });
-
-                    // TODO: After processing we want to update our topic mapping (in TopicStore)
-                    // based on the things we've learned about the space. This will mostly inform
-                    // what group logs we should include in the mapping for this topic / space id.
 
                     pin!(pipeline);
 
