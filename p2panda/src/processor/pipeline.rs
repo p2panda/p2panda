@@ -11,12 +11,14 @@ use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
+use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::pin;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc;
 use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::warn;
 
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
@@ -154,6 +156,14 @@ where
                     pin!(pipeline);
 
                     while let Some(operation) = pipeline.next().await {
+                        if let Some(err) = operation.failure_reason() {
+                            warn!(
+                                id = %operation.hash().fmt_short(),
+                                "failed processing event: {}",
+                                err
+                            );
+                        }
+
                         tasks.mark_as_done(operation.hash(), operation).await;
                     }
                 });
