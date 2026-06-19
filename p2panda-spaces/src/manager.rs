@@ -12,9 +12,9 @@ use p2panda_core::{Hash, SigningKey};
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_encryption::{Rng, RngError};
+use p2panda_store::Transaction;
 use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
-use p2panda_store::{Transaction, tx_unwrap};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -351,22 +351,50 @@ where
     /// Get the global auth state.
     pub async fn get_groups_state(&self) -> Result<AuthGroupState<C>, StoreError> {
         let manager = self.inner.read().await;
-        let y = tx_unwrap!(manager.store, {
-            manager
-                .store
-                .get_groups_state_tx(&Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-                .await
-        })
-        .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+
+        let permit = manager
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        let y = manager
+            .store
+            .get_groups_state_tx(&Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+            .await
+            .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+
+        manager
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
         Ok(y.unwrap_or_default())
     }
 
     pub async fn get_space_state(&self, id: &ID) -> Result<Option<SpaceState<ID, C>>, StoreError> {
         let manager = self.inner.write().await;
-        tx_unwrap!(manager.store, {
-            manager.store.get_space_state_tx(id).await
-        })
-        .map_err(|err| StoreError::SpacesStore(err.to_string()))
+
+        let permit = manager
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        let y = manager
+            .store
+            .get_space_state_tx(id)
+            .await
+            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
+
+        manager
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        Ok(y)
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
@@ -564,13 +592,25 @@ where
     /// Set the global auth state.
     pub async fn set_groups_state(&self, y: &AuthGroupState<C>) -> Result<(), StoreError> {
         let manager = self.inner.write().await;
-        tx_unwrap!(manager.store, {
-            manager
-                .store
-                .set_groups_state_tx(&Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), y)
-                .await
-        })
-        .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+
+        let permit = manager
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        manager
+            .store
+            .set_groups_state_tx(&Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), y)
+            .await
+            .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+
+        manager
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
         Ok(())
     }
 
@@ -581,10 +621,26 @@ where
         y: &SpaceState<ID, C>,
     ) -> Result<(), StoreError> {
         let manager = self.inner.write().await;
-        tx_unwrap!(manager.store, {
-            manager.store.set_space_state_tx(space_id, y).await
-        })
-        .map_err(|err| StoreError::SpacesStore(err.to_string()))
+
+        let permit = manager
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        manager
+            .store
+            .set_space_state_tx(&space_id, y)
+            .await
+            .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+
+        manager
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        Ok(())
     }
 
     pub async fn process_persisted<M>(
