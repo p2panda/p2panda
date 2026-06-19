@@ -687,8 +687,6 @@ impl<ID, S, K, F, C, RS> Clone for Manager<ID, S, K, F, C, RS> {
 }
 
 /// Errors which can be returned from stores.
-// @TODO: this is a stop-gap to make the errors slightly nicer to work with, should be
-// re-considered when a full splitting up of large errors takes place.
 #[derive(Debug, Error)]
 pub enum StoreError {
     #[error("spaces store error: {0}")]
