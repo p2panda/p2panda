@@ -35,15 +35,17 @@ impl NodeBuilder {
         }
     }
 
-    // TODO: Update documentation.
-    /// Sets the signing key.
+    /// Sets the credentials consisting of a signing- and identity secret.
     ///
-    /// The public key derived from the given private key is used to identify the node in the
-    /// network. For example, this key can be used to directly connect to the node. The private key
-    /// serves as the means of authenticating the node during the connection handshake (using TLS
-    /// 1.3) and is also used to sign operations to ensure data integrity and authenticity.
+    /// The public key derived from the given private signing key is used to identify the node in
+    /// the network. For example, this key can be used to directly connect to the node. The private
+    /// key serves as the means of authenticating the node during the connection handshake (using
+    /// TLS 1.3) and is also used to sign operations to ensure data integrity and authenticity.
     ///
-    /// If left unset, a new key will be randomly generated.
+    /// The identity secret is used for initial key agreement when encrypting data towards a space
+    /// of members.
+    ///
+    /// If left unset, a new set of credentials will be randomly generated.
     pub fn credentials(mut self, credentials: Credentials) -> Self {
         self.credentials = Some(credentials);
         self
