@@ -6,6 +6,7 @@ use futures_util::Stream;
 use p2panda_core::Topic;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
+use p2panda_spaces::{GroupId, SpaceId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -374,8 +375,8 @@ impl Node {
         Ok(())
     }
 
-    pub async fn group(&self, actor_id: impl Into<ActorId>) -> Result<Option<Group>, GroupError> {
-        match self.spaces_manager.group(actor_id.into()).await? {
+    pub async fn group(&self, group_id: impl Into<GroupId>) -> Result<Option<Group>, GroupError> {
+        match self.spaces_manager.group(group_id.into()).await? {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
@@ -411,7 +412,7 @@ impl Node {
 
     pub async fn space<M>(
         &self,
-        space_id: impl Into<Topic>,
+        space_id: impl Into<SpaceId>,
     ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -421,7 +422,7 @@ impl Node {
 
     pub async fn space_from<M>(
         &self,
-        space_id: impl Into<Topic>,
+        space_id: impl Into<SpaceId>,
         from: StreamFrom,
     ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
     where
@@ -442,7 +443,7 @@ impl Node {
 
     pub async fn create_space<M>(
         &self,
-        space_id: impl Into<Topic>,
+        space_id: impl Into<SpaceId>,
         initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
     where

@@ -6,7 +6,7 @@ use std::task::{Context, Poll};
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::cbor::{EncodeError, encode_cbor};
-use p2panda_spaces::{ActorId, SpaceContext, SpaceId};
+use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -120,10 +120,7 @@ where
         })
     }
 
-    // TODO: We want to return `Member` here instead of `ActorId` to clearly indicate that these are
-    // the _flattened_ members of the space. To make this work we need a way to access the key
-    // store / access members by querying them via id.
-    pub async fn members(&self) -> Result<Vec<(ActorId, AccessLevel)>, SpaceError> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceError> {
         let result = self.inner.members().await.map(|members| {
             members
                 .iter()

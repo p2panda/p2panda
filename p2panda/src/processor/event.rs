@@ -11,7 +11,7 @@ use p2panda_stream::spaces::{SpacesProcessorArgs, SpacesResult};
 use thiserror::Error;
 
 use crate::spaces::SpacesManagerError;
-use crate::spaces::types::AuthCapabilities;
+use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
 #[derive(Clone, Debug, PartialEq)]
@@ -62,7 +62,7 @@ where
         log_id: L,
         topic: TP,
         prune_flag: PruneFlag,
-        spaces_args: Option<crate::spaces::types::SpacesArgs>,
+        spaces_args: Option<SpacesArgs>,
     ) -> Self {
         Self {
             ingest_args: IngestArgs {
