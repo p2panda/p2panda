@@ -15,6 +15,8 @@ pub trait SpacesMessageStore<ARG> {
     ) -> impl Future<Output = Result<Option<SpacesMessage<ARG>>, Self::Error>>;
 }
 
+// TODO: Consider moving SpacesStoreState here. It makes sense that we have the object which gets
+// serialized into the database right next to it.
 pub trait SpacesStore<S> {
     type Error: Error;
 
