@@ -27,6 +27,7 @@ use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
 use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError, SpacesState};
+use crate::store::SpacesStoreState;
 use crate::types::{AuthGroupState, AuthResolver};
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 
@@ -74,7 +75,7 @@ pub(crate) struct ManagerInner<S, F, C, RS> {
 impl<S, F, C, RS> Manager<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
@@ -369,7 +370,7 @@ where
     pub(crate) async fn get_space_state(
         &self,
         id: &SpaceId,
-    ) -> Result<Option<SpacesState<C>>, StoreError> {
+    ) -> Result<Option<SpacesStoreState<C>>, StoreError> {
         let manager = self.inner.write().await;
 
         let permit = manager
@@ -536,7 +537,7 @@ where
 impl<S, F, C, RS> Manager<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
@@ -574,10 +575,11 @@ where
         let space_id = space_y.space_id;
 
         self.set_groups_state(&groups_y).await?;
-        self.set_space_state(&space_id, &space_y)
+        self.set_space_state(&space_id, &space_y.into())
             .await
             .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
         let space = Space::new(self.clone(), space_id);
+
         Ok((space, messages))
     }
 
@@ -610,7 +612,7 @@ where
     pub async fn set_space_state(
         &self,
         space_id: &SpaceId,
-        y: &SpacesState<C>,
+        y: &SpacesStoreState<C>,
     ) -> Result<(), StoreError> {
         let manager = self.inner.write().await;
 
@@ -643,12 +645,16 @@ where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>> + Debug,
     {
         let (groups_y, space_y, events) = self.process(message).await?;
+
         if let Some(groups_y) = groups_y {
             self.set_groups_state(&groups_y).await?;
         };
+
         if let Some(space_y) = space_y {
-            self.set_space_state(&space_y.space_id, &space_y).await?;
+            let space_id = space_y.space_id;
+            self.set_space_state(&space_id, &space_y.into()).await?;
         };
+
         Ok(events)
     }
 
@@ -657,9 +663,11 @@ where
         space_ids: &[SpaceId],
     ) -> Result<Vec<F::Message>, ManagerError<F, C, RS>> {
         let results = self.repair_spaces(space_ids).await?;
+
         let mut messages = vec![];
         for (space_y, messages_inner) in results {
-            self.set_space_state(&space_y.space_id, &space_y).await?;
+            let space_id = space_y.space_id;
+            self.set_space_state(&space_id, &space_y.into()).await?;
             messages.extend(messages_inner);
         }
 

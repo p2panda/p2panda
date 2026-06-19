@@ -6,8 +6,7 @@ use std::collections::VecDeque;
 
 use p2panda_auth::traits::Conditions;
 use p2panda_spaces::manager::{Manager, ManagerError};
-use p2panda_spaces::space::SpacesState;
-use p2panda_spaces::{AuthMessage, Event, StrongRemoveResolver};
+use p2panda_spaces::{AuthMessage, Event, SpacesStoreState, StrongRemoveResolver};
 use p2panda_spaces::{Forge, SpacesArgs};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -61,7 +60,7 @@ where
     T: Borrow<SpacesProcessorArgs<C>>,
     S: Clone
         + Transaction
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore

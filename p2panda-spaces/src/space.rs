@@ -8,6 +8,8 @@ use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::traits::Digest;
 use p2panda_core::{SigningKey, VerifyingKey};
+use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_encryption::traits::GroupMessage;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::Transaction;
@@ -16,7 +18,6 @@ use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use petgraph::algo::toposort;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::auth::message::AuthMessage;
@@ -29,6 +30,7 @@ use crate::group::{Group, GroupError};
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
 use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
+use crate::store::SpacesStoreState;
 use crate::types::{
     AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
@@ -66,7 +68,7 @@ pub struct Space<S, F, C, RS> {
 impl<S, F, C, RS> Space<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
@@ -530,7 +532,7 @@ where
 
     /// Get the space state.
     pub(crate) async fn state(&self) -> Result<SpacesState<C>, SpaceError<F, C, RS>> {
-        let mut space_y = self
+        let space_y = self
             .manager
             .get_space_state(&self.id)
             .await?
@@ -543,10 +545,11 @@ where
         let key_manager_y = manager.identity.key_manager().await?;
         let key_registry_y = manager.identity.key_registry().await?;
 
-        space_y.encryption_y.dcgka.my_keys = key_manager_y;
-        space_y.encryption_y.dcgka.pki = key_registry_y;
-
-        Ok(space_y)
+        Ok(SpacesState::assemble_from_store(
+            space_y,
+            key_manager_y,
+            key_registry_y,
+        ))
     }
 
     /// Get or if not present initialize a new space state.
@@ -565,15 +568,15 @@ where
         let result = manager_ref.get_space_state(&space_id).await?;
 
         let space_y = match result {
-            Some(mut y) => {
+            Some(y) => {
                 // Inject latest key material to space DCGKA state.
-                y.encryption_y.dcgka.my_keys = key_manager_y;
-                y.encryption_y.dcgka.pki = key_registry_y;
-                y
+                SpacesState::assemble_from_store(y, key_manager_y, key_registry_y)
             }
             None => {
                 let manager = manager_ref.inner.read().await;
                 let my_id = manager.identity.id();
+
+                let groups_y = AuthGroupState::new();
 
                 let dgm = EncryptionMembershipState {
                     members: HashSet::new(),
@@ -590,7 +593,12 @@ where
                     encryption_orderer_y,
                 );
 
-                SpacesState::from_state(space_id, group_id, AuthGroupState::new(), encryption_y)
+                SpacesState {
+                    space_id,
+                    group_id,
+                    groups_y,
+                    encryption_y,
+                }
             }
         };
 
@@ -676,7 +684,7 @@ where
 impl<S, F, C, RS> Space<S, F, C, RS>
 where
     S: Clone
-        + SpacesStore<SpacesState<C>>
+        + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
@@ -697,7 +705,9 @@ where
         let (groups_y, space_y, auth_message, space_message) = self.add(member, access).await?;
 
         self.manager.set_groups_state(&groups_y).await?;
-        self.manager.set_space_state(&self.id(), &space_y).await?;
+        self.manager
+            .set_space_state(&self.id(), &space_y.into())
+            .await?;
 
         Ok((auth_message, space_message))
     }
@@ -712,7 +722,9 @@ where
         let (groups_y, space_y, auth_message, space_message) = self.remove(member).await?;
 
         self.manager.set_groups_state(&groups_y).await?;
-        self.manager.set_space_state(&self.id(), &space_y).await?;
+        self.manager
+            .set_space_state(&self.id(), &space_y.into())
+            .await?;
 
         Ok((auth_message, space_message))
     }
@@ -723,19 +735,23 @@ where
         plaintext: &[u8],
     ) -> Result<F::Message, SpaceError<F, C, RS>> {
         let (space_y, message) = self.publish(plaintext).await?;
-        self.manager.set_space_state(&self.id(), &space_y).await?;
+        self.manager
+            .set_space_state(&self.id(), &space_y.into())
+            .await?;
         Ok(message)
     }
 
     pub async fn repair_persisted(&self) -> Result<Vec<F::Message>, SpaceError<F, C, RS>> {
         let (space_y, messages) = self.repair().await?;
-        self.manager.set_space_state(&self.id(), &space_y).await?;
+        self.manager
+            .set_space_state(&self.id(), &space_y.into())
+            .await?;
         Ok(messages)
     }
 }
 
 /// Space state object.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 pub struct SpacesState<C> {
     pub space_id: SpaceId,
@@ -748,12 +764,16 @@ impl<C> SpacesState<C>
 where
     C: Conditions,
 {
-    pub fn from_state(
-        space_id: SpaceId,
-        group_id: GroupId,
-        groups_y: AuthGroupState<C>,
-        encryption_y: EncryptionGroupState,
+    pub fn assemble_from_store(
+        space_y: SpacesStoreState<C>,
+        key_manager_y: KeyManagerState,
+        key_registry_y: KeyRegistryState<MemberId>,
     ) -> Self {
+        let space_id = space_y.space_id;
+        let group_id = space_y.group_id;
+        let (groups_y, encryption_y) =
+            space_y.assemble_encryption_state(key_manager_y, key_registry_y);
+
         Self {
             space_id,
             group_id,
