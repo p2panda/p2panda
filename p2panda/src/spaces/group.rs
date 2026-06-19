@@ -8,7 +8,7 @@ use futures_util::stream::StreamExt;
 use futures_util::{FutureExt, Stream};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::VerifyingKey;
-use p2panda_spaces::{ActorId, GroupContext};
+use p2panda_spaces::{ActorId, GroupContext, MemberId};
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
 use tokio::task::AbortHandle;
@@ -131,10 +131,7 @@ impl Group {
         })
     }
 
-    // TODO: We want to return `Member` here instead of `ActorId` to clearly indicate that these are
-    // the _flattened_ members of the space. To make this work we need a way to access the key
-    // store / access members by querying them via id.
-    pub async fn members(&self) -> Result<Vec<(ActorId, AccessLevel)>, GroupError> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupError> {
         let result = self.inner.members().await.map(|members| {
             members
                 .iter()

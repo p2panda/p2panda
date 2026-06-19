@@ -16,7 +16,7 @@ const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
 
 const SPACE_APPLICATION_MESSAGE: &[u8] = b"space_application/v1";
 
-/// This forge maintains space, key-bundle and group logs which start are organised independently.
+/// This forge maintains space, key-bundle and group logs which are organised independently.
 ///
 /// Space Operations have dependencies to Group and KeyBundle Operations. Through topic-mapping they
 /// are grouped to allow being synced and processed together.

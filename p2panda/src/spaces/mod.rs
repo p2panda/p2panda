@@ -13,20 +13,18 @@ use p2panda_store::SqliteStore;
 
 // Re-export useful types.
 pub use p2panda_auth::AccessLevel;
-pub use p2panda_spaces::ActorId;
 pub use p2panda_spaces::manager::ManagerError;
+pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext, SpaceId};
 
-pub use group::{Group, GroupError, GroupFuture};
+pub use group::{Group, GroupError, GroupEvent, GroupFuture};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use space::spaces_stream;
-pub use space::{Space, SpaceError, SpaceFuture, SpaceSubscription};
+pub use space::{Space, SpaceError, SpaceEvent, SpaceFuture, SpaceSubscription};
 pub use types::SpacesManagerError;
 
 use crate::Credentials;
 use crate::forge::OperationForge;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
-
-pub const SPACE_ID_LENGTH: usize = 32;
 
 pub async fn spaces_manager(
     forge: OperationForge,
