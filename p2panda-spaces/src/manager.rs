@@ -32,7 +32,7 @@ use crate::types::{AuthGroupState, AuthResolver};
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 
 /// Identifier used to store groups state into database.
-const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
+pub const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
 
 /// API for creating and managing groups and spaces.
 ///

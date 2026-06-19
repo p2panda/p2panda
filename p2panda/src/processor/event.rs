@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
-use std::sync::Arc;
 
 use p2panda_core::traits::Digest;
 use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
-use p2panda_stream::spaces::{SpacesProcessorArgs, SpacesResult};
+use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use thiserror::Error;
 
-use crate::spaces::SpacesManagerError;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
@@ -49,7 +47,7 @@ pub struct Event<L, E, TP> {
     spaces_args: SpacesProcessorArgs<AuthCapabilities>,
 
     /// Status of the "spaces" processor.
-    pub(crate) spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, Arc<SpacesManagerError>>,
+    pub(crate) spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -152,7 +150,7 @@ pub enum ProcessorError {
     LogPrune(#[from] LogPruneError),
 
     #[error("spaces processor failed with: {0}")]
-    Spaces(#[from] Arc<SpacesManagerError>),
+    Spaces(#[from] SpacesError),
 }
 
 impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {
