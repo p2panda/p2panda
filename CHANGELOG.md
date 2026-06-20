@@ -13,38 +13,37 @@ Highlights are marked with a pancake 🥞
 
 - auth: More methods (`traverse_members`, `groups`) to traverse and filter graph [#1242](https://github.com/p2panda/p2panda/pull/1242)
 - auth: Allow ordinary members to remove themselves from group [#1234](https://github.com/p2panda/p2panda/pull/1234)
-- Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
-- SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
-- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- store: Introduce SQLite implementations of `KeySecretsStore` and `KeyRegistryStore` [#1230](https://github.com/p2panda/p2panda/pull/1230)
+- store: SQLite implementations of spaces stores [#1241](https://github.com/p2panda/p2panda/pull/1241)
 - core: Provenance trait to get author & verify [#1254](https://github.com/p2panda/p2panda/pull/1254)
+- node: Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
+- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
 
 ### Changed
 
-- Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
-- Update to iroh `v1.0.0` [#1238](https://github.com/p2panda/p2panda/pull/1238)
-- Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
-- Core header type changes & stabilisation
+- core: Core header type changes & stabilisation
     - `payload_size` and `seq_num` from `u64` to `u32` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - `version` from `u64` to `u16` [#1194](https://github.com/p2panda/p2panda/pull/1194)
     - Remove `timestamp` [#1195](https://github.com/p2panda/p2panda/pull/1195)
     - Fix header encoding for ZST extensions [#1196](https://github.com/p2panda/p2panda/pull/1196)
-- Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
-- Future-proof extensions format in Node API [#1155](https://github.com/p2panda/p2panda/pull/1155)
+- net: Update to iroh `v1.0.0-rc.1` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- net: Update to iroh `v1.0.0` [#1238](https://github.com/p2panda/p2panda/pull/1238)
+- net: Use framed postcard codec instead of CBOR for wire protocols [#1198](https://github.com/p2panda/p2panda/pull/1198)
 - store: Reduce generics, remove serde from types [#1254](https://github.com/p2panda/p2panda/pull/1254)
 - spaces: Only return events when calling Manager::process [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Don't sync all spaces when group membership changes [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Adjust all "command" methods to not persist state locally [#1216](https://github.com/p2panda/p2panda/pull/1216)
 - spaces: Replace SpacesMessage trait with Borrow<SpacesArgs> [#1217](https://github.com/p2panda/p2panda/pull/1217)
 - spaces: Move top-level M generic to Manager::process<M>(..) [#1229](https://github.com/p2panda/p2panda/pull/1229)
-- spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
-- stream: Introduce spaces processor [#1218](https://github.com/p2panda/p2panda/pull/1218)
 - stream: Return input with error in orderer processor [#1249](https://github.com/p2panda/p2panda/pull/1249)
 - spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
-- ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- chore: Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
 
 ### Fixed
 
 - encryption: Update hpke-rs to 0.6.1 to fix RUSTSEC [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - ci: Check for unused mut and async, fix affected methods [#1163](https://github.com/p2panda/p2panda/pull/1163)
 
 ## [0.6.1] - 22/05/2026
