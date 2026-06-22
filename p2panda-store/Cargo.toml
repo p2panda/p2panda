@@ -45,6 +45,9 @@ spaces = [
   "groups",
   "encryption",
 ]
+processor = [
+  "sqlite"
+]
 macros = []
 test_utils = [
   "dep:rand",
