@@ -131,6 +131,8 @@ pub mod logs;
 mod macros;
 pub mod operations;
 pub mod orderer;
+#[cfg(feature = "processor")]
+pub mod processor;
 #[cfg(feature = "spaces")]
 pub mod spaces;
 #[cfg(feature = "sqlite")]
