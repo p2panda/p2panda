@@ -7,17 +7,12 @@ use p2panda_core::{Operation, SigningKey};
 
 use crate::logs::LogStore;
 use crate::operations::OperationStore;
-use crate::sqlite::{SqliteStore, SqliteStoreBuilder};
+use crate::sqlite::SqliteStore;
 use crate::traits::Transaction;
 
 #[tokio::test]
 async fn get_latest_entry() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let log = TestLog::new();
 
@@ -55,12 +50,7 @@ async fn get_latest_entry() {
 
 #[tokio::test]
 async fn get_log_heights() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let signing_key = SigningKey::generate();
 
@@ -110,12 +100,7 @@ async fn get_log_heights() {
 
 #[tokio::test]
 async fn get_log_size() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let log = TestLog::new();
 
@@ -162,12 +147,7 @@ async fn get_log_size() {
 
 #[tokio::test]
 async fn get_log_entries() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let log = TestLog::new();
 
@@ -236,12 +216,7 @@ async fn get_log_entries() {
 
 #[tokio::test]
 async fn prune_entries() {
-    let store = SqliteStoreBuilder::new()
-        .random_memory_url()
-        .max_connections(1)
-        .build()
-        .await
-        .unwrap();
+    let store = SqliteStore::temporary().await;
 
     let log = TestLog::new();
 
