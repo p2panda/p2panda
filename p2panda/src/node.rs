@@ -413,7 +413,7 @@ impl Node {
     pub async fn space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-    ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
+    ) -> Result<(Option<Space<M>>, SpaceSubscription<M>), SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -424,21 +424,16 @@ impl Node {
         &self,
         space_id: impl Into<SpaceId>,
         from: StreamFrom,
-    ) -> Result<Option<(Space<M>, SpaceSubscription<M>)>, SpaceError>
+    ) -> Result<(Option<Space<M>>, SpaceSubscription<M>), SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let space_id = space_id.into();
 
-        match self.spaces_manager.space(space_id).await? {
-            Some(inner) => {
-                let topic = space_id;
-                let (tx, rx) = self.stream_from::<M>(topic, from).await?;
-
-                Ok(Some(spaces_stream::<M>(inner, tx, rx)))
-            }
-            None => Ok(None),
-        }
+        let topic = space_id;
+        let inner = self.spaces_manager.space(space_id).await?;
+        let (tx, rx) = self.stream_from::<M>(topic, from).await?;
+        Ok(spaces_stream::<M>(inner, tx, rx))
     }
 
     pub async fn create_space<M>(
@@ -483,7 +478,11 @@ impl Node {
             .await?
             .expect("materialised space after processing operations");
 
-        Ok(spaces_stream::<M>(inner, tx, rx))
+        let (space, rx) = spaces_stream::<M>(Some(inner), tx, rx);
+        Ok((
+            space.expect("materialised space after processing operations"),
+            rx,
+        ))
     }
 
     /// Returns the node identifier (public key).
