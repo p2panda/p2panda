@@ -39,6 +39,7 @@ Highlights are marked with a pancake 🥞
 - stream: Return input with error in orderer processor [#1249](https://github.com/p2panda/p2panda/pull/1249)
 - spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
 - chore: Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- store: improve recommended configuration for in-memory SQLite db [#1258](https://github.com/p2panda/p2panda/pull/1258)
 
 ### Fixed
 
