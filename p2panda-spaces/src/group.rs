@@ -14,6 +14,7 @@ use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use thiserror::Error;
+use tracing::debug;
 
 use crate::auth::message::AuthMessage;
 use crate::event::{Event, auth_message_to_group_event};
@@ -23,7 +24,7 @@ use crate::manager::{Manager, StoreError};
 use crate::message::{SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver};
-use crate::utils::{sort_members, typed_member, typed_members};
+use crate::utils::{ShortFormat, sort_members, typed_member, typed_members};
 use crate::{ActorId, GroupId, MemberId, OperationId};
 
 /// A single group which exists in the global auth context.
@@ -146,6 +147,7 @@ where
 
         // If we already processed this auth message then return now.
         if groups_y.inner.operations.contains_key(&auth_message.id()) {
+            debug!(message_id = auth_message.id().fmt_short(), "ignore already processed auth groups message");
             return Ok(None);
         }
 

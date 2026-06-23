@@ -36,8 +36,10 @@ petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
+tracing.workspace = true
 
 [dev-dependencies]
 assert_matches = "1.5.0"
+p2panda-core = { workspace = true, default-features = false, features = ["test_utils"] }
 p2panda-spaces = { path = ".", features = ["test_utils"] }
 tokio = { workspace = true, features = ["rt", "macros"] }
