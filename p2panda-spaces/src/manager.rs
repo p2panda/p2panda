@@ -18,6 +18,7 @@ use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tracing::debug;
 
 use crate::auth::message::AuthMessage;
 use crate::event::Event;
@@ -29,6 +30,7 @@ use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError, SpacesState};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroupState, AuthResolver};
+use crate::utils::ShortFormat;
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 
 /// Identifier used to store groups state into database.
@@ -233,8 +235,19 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
+        let args = message.borrow();
+        let span = tracing::debug_span!("spaces", node_id = self.id().fmt_short());
+        let _guard = span.enter();
+
+        debug!(
+            message_id = message.hash().fmt_short(),
+            author = message.author().fmt_short(),
+            variant = args.variant(),
+            "process message"
+        );
+
         // Route message to the regarding member-, group- or space processor.
-        let result = match &message.borrow() {
+        let result = match args {
             // Received key bundle from a member.
             SpacesArgs::KeyBundle { key_bundle } => {
                 let mut manager = self.inner.write().await;

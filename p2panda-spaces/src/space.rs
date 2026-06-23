@@ -19,6 +19,7 @@ use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use petgraph::algo::toposort;
 use thiserror::Error;
+use tracing::debug;
 
 use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionMembershipState;
@@ -35,7 +36,7 @@ use crate::types::{
     AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
-use crate::utils::{added_members, removed_members, secret_members, sort_members};
+use crate::utils::{ShortFormat, added_members, removed_members, secret_members, sort_members};
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceId};
 
 /// A single encryption context with associated group of actors who will participate in the key
@@ -310,6 +311,11 @@ where
 
         // If we already processed this message return here.
         if y.encryption_y.orderer.has_seen(*id) {
+            debug!(
+                space_id = self.id().fmt_short(),
+                space_message = space_message.id.fmt_short(),
+                "ignore already processed space membership message"
+            );
             return Ok(None);
         }
 
@@ -317,6 +323,15 @@ where
 
         let mut current_members = secret_members(y.groups_y.members(y.group_id));
         current_members.sort();
+
+        debug!(
+            space_id = self.id().fmt_short(),
+            "current space members: {:?}",
+            current_members
+                .iter()
+                .map(ShortFormat::fmt_short)
+                .collect::<Vec<_>>()
+        );
 
         // Process auth message on space auth state.
         //
@@ -330,8 +345,23 @@ where
             next_members.sort();
             next_members
         } else {
+            debug!(
+                space_id = self.id().fmt_short(),
+                groups_message = auth_message.id().fmt_short(),
+                space_message = space_message.id.fmt_short(),
+                "ignoring group change already applied to space"
+            );
             current_members.clone()
         };
+
+        debug!(
+            space_id = self.id().fmt_short(),
+            "next space members: {:?}",
+            next_members
+                .iter()
+                .map(ShortFormat::fmt_short)
+                .collect::<Vec<_>>()
+        );
 
         // Make the dgm aware of the new space members.
         y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());

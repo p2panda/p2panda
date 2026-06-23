@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
-use std::fmt::Debug;
+use std::fmt::{Debug};
 
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
@@ -247,6 +247,16 @@ impl<C> SpacesArgs<C> {
             SpacesArgs::Application {
                 space_dependencies, ..
             } => space_dependencies.to_owned(),
+        }
+    }
+
+    pub fn variant(&self) -> String {
+        match self {
+            SpacesArgs::KeyBundle { .. } => "key bundle".to_string(),
+            SpacesArgs::Auth { .. } => "auth group".to_string(),
+            SpacesArgs::SpaceMembership { .. } => "space membership".to_string(),
+            SpacesArgs::SpaceUpdate { .. } => "space update".to_string(),
+            SpacesArgs::Application { .. } => "application".to_string(),
         }
     }
 }
