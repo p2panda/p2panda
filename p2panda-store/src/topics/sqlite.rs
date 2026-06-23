@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{LogId, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, query_scalar};
 
 use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 use crate::topics::TopicStore;
@@ -95,7 +95,10 @@ where
     }
 
     /// Retrieve a list of all logs associated with the provided topic for all known authors.
-    async fn resolve(&self, topic: &T) -> Result<BTreeMap<VerifyingKey, Vec<L>>, Self::Error> {
+    async fn resolve_associations(
+        &self,
+        topic: &T,
+    ) -> Result<BTreeMap<VerifyingKey, Vec<L>>, Self::Error> {
         let data_ids = self
             .execute(async |pool| {
                 query_as::<_, (String, Vec<u8>)>(
@@ -134,5 +137,45 @@ where
         }
 
         Ok(result)
+    }
+
+    /// Given a prior association, return the associated topic.
+    async fn resolve_topic(
+        &self,
+        author: &VerifyingKey,
+        data_id: &L,
+    ) -> Result<Option<T>, Self::Error> {
+        let topic = self
+            .execute(async |pool| {
+                query_scalar::<_, Vec<u8>>(
+                    "
+                    SELECT
+                        topic
+                    FROM
+                        topics_v1
+                    WHERE
+                        author = ?
+                        AND data_id = ?
+                    ",
+                )
+                .bind(author.to_string())
+                .bind(
+                    encode_cbor(&data_id)
+                        .map_err(|err| SqliteError::Encode("data_id".to_string(), err))?,
+                )
+                .fetch_optional(pool)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        let Some(topic) = topic else {
+            return Ok(None);
+        };
+
+        let topic = decode_cbor(&topic[..])
+            .map_err(|err| SqliteError::Decode("topic".into(), err.into()))?;
+
+        Ok(Some(topic))
     }
 }
