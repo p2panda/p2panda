@@ -86,7 +86,7 @@ impl Acked {
 
         // Get state vector of local replica for all logs related to this topic.
         let local_log_heights = {
-            let logs: Logs = self.store.resolve(&self.topic).await?;
+            let logs: Logs = self.store.resolve_associations(&self.topic).await?;
             get_log_heights(&self.store, &logs).await?
         };
 
