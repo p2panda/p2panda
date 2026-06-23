@@ -2,6 +2,7 @@
 
 //! SQLite database implementation with associated utility functions.
 use std::sync::Arc;
+use std::time::Duration;
 
 use p2panda_core::cbor::EncodeError;
 use sqlx::migrate::{MigrateDatabase, Migrator};
@@ -58,7 +59,10 @@ pub async fn run_pending_migrations(pool: &sqlx::SqlitePool) -> Result<(), Sqlit
 /// automatically run on start-up.
 pub struct SqliteStoreBuilder {
     url: String,
+    min_connections: u32,
     max_connections: u32,
+    idle_timeout: Option<Duration>,
+    max_lifetime: Option<Duration>,
     run_migrations: bool,
     create_database: bool,
 }
@@ -66,8 +70,11 @@ pub struct SqliteStoreBuilder {
 impl Default for SqliteStoreBuilder {
     fn default() -> Self {
         Self {
-            url: "sqlite::memory:".into(),
+            url: ":memory:".into(),
+            min_connections: 3,
             max_connections: 16,
+            idle_timeout: Some(Duration::from_secs(10 * 60)),
+            max_lifetime: Some(Duration::from_secs(30 * 60)),
             create_database: true,
             run_migrations: true,
         }
@@ -80,19 +87,17 @@ impl SqliteStoreBuilder {
         Self::default()
     }
 
-    /// Assigns a randomly-generated in-memory database URL with private cache.
-    #[cfg(any(test, feature = "test_utils"))]
-    pub fn random_memory_url(mut self) -> Self {
-        // Combining Rust tests with in-memory databases can lead to unsound behaviour, this
-        // "workaround" assigns every temporary database a different, random name and keeps them
-        // isolated from other tests.
-        //
-        // See related issue: https://github.com/launchbadge/sqlx/issues/2510
-        self.url = format!(
-            "sqlite://dbmem{}?mode=memory&cache=private",
-            rand::random::<u32>()
-        );
-        self
+    /// Creates a new in-memory `SqliteStoreBuilder` using recommended configuration values.
+    ///
+    /// The configuration values have been chosen to prevent the in-memory database being dropped
+    /// when there are no active connections and the idle timeout or max lifetime limit is reached.
+    pub fn memory() -> Self {
+        Self::default()
+            .database_url(":memory:")
+            .min_connections(1)
+            .max_connections(1)
+            .idle_timeout(None)
+            .max_lifetime(None)
     }
 
     /// Sets the database URL.
@@ -103,11 +108,43 @@ impl SqliteStoreBuilder {
         self
     }
 
+    /// Sets the minimum number of connections to be maintained by the database pool.
+    ///
+    /// If left unset, a minimum of 3 connections will be maintained.
+    pub fn min_connections(mut self, min_connections: u32) -> Self {
+        self.min_connections = min_connections;
+        self
+    }
+
     /// Sets the maximum number of connections to be maintained by the database pool.
     ///
     /// If left unset, a maximum of 16 connections will be maintained.
     pub fn max_connections(mut self, max_connections: u32) -> Self {
         self.max_connections = max_connections;
+        self
+    }
+
+    /// Set a maximum idle duration for individual connections.
+    ///
+    /// Any connection that remains in the idle queue longer than this will be closed.
+    pub fn idle_timeout(mut self, timeout: impl Into<Option<Duration>>) -> Self {
+        self.idle_timeout = timeout.into();
+        self
+    }
+
+    /// Set the maximum lifetime of individual connections.
+    ///
+    /// Any connection with a lifetime greater than this will be closed.
+    ///
+    /// When set to `None`, all connections live until either reaped by [`idle_timeout`] or
+    /// explicitly disconnected.
+    ///
+    /// Infinite connections are not recommended due to the unfortunate reality of memory/resource
+    /// leaks on the database-side. It is better to retire connections periodically (even if only
+    /// once daily) to allow the database the opportunity to clean up data structures (parse trees,
+    /// query metadata caches, thread-local storage, etc.) that are associated with a session.
+    pub fn max_lifetime(mut self, lifetime: impl Into<Option<Duration>>) -> Self {
+        self.max_lifetime = lifetime.into();
         self
     }
 
@@ -134,7 +171,10 @@ impl SqliteStoreBuilder {
         }
 
         let pool: sqlx::SqlitePool = SqlitePoolOptions::new()
+            .min_connections(self.min_connections)
             .max_connections(self.max_connections)
+            .idle_timeout(self.idle_timeout)
+            .max_lifetime(self.max_lifetime)
             .connect(&self.url)
             .await?;
 
@@ -231,12 +271,10 @@ impl SqliteStore {
         &self.pool
     }
 
-    /// Builds an in-memory SQLite database with a randomised name for testing purposes.
+    /// Builds an in-memory SQLite database for testing purposes.
     #[cfg(any(test, feature = "test_utils"))]
     pub async fn temporary() -> Self {
-        SqliteStoreBuilder::new()
-            .random_memory_url()
-            .max_connections(1)
+        SqliteStoreBuilder::memory()
             .build()
             .await
             .expect("migrations succeeded")
