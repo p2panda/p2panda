@@ -470,16 +470,16 @@ impl Node {
     {
         let space_id = space_id.into();
 
+        // Establish a topic pub/sub stream using the space id as a topic.
+        let topic = space_id;
+        let (tx, rx) = self.stream::<M>(topic).await?;
+
         // Issue the event to create a space.
         let initial_members = to_initial_members(initial_members);
         let (_, _, messages) = self
             .spaces_manager
             .create_space(space_id, &initial_members)
             .await?;
-
-        // Establish a topic pub/sub stream using the space id as a topic.
-        let topic = space_id;
-        let (tx, rx) = self.stream::<M>(topic).await?;
 
         // Process the -spaces events by importing them as an "external stream".
         let processed = tx
