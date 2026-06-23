@@ -280,9 +280,13 @@ where
                 group_id: y.group_id,
                 auth_message_id: operation.id(),
                 direct_messages: vec![],
-                space_dependencies,
+                space_dependencies: space_dependencies.clone(),
             };
             let message = manager.identity.forge(args).await?;
+
+            y.encryption_y
+                .orderer
+                .add_dependency(message.hash(), &space_dependencies);
 
             space_dependencies = vec![message.hash()];
             messages.push(message);
