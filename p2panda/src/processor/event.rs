@@ -26,7 +26,7 @@ pub enum ProcessorStatus<R, F> {
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
     /// p2panda Operation.
-    operation: Operation<E>,
+    pub operation: Operation<E>,
 
     /// Input arguments for the "ingest" processor.
     ingest_args: IngestArgs<L, TP>,

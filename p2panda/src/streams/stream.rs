@@ -924,7 +924,7 @@ pub enum StreamEvent<M> {
 /// Processed operation with application message coming from a topic stream.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcessedOperation<M> {
-    event: Event<LogId, Extensions, Topic>,
+    pub event: Event<LogId, Extensions, Topic>,
     topic: Topic,
     acked: Acked,
     message: M,
