@@ -6,10 +6,13 @@ use futures_util::Stream;
 use p2panda_core::{Hash, Topic};
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
-use p2panda_spaces::{GroupId, SpaceId};
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+use p2panda_spaces::{GroupId, SpaceId, SpacesStoreState};
+use p2panda_store::groups::GroupsStore;
+use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use p2panda_store::topics::TopicStore;
-use p2panda_store::tx;
+use p2panda_store::{Transaction, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -476,12 +479,37 @@ impl Node {
 
         // Issue the event to create a space.
         let initial_members = to_initial_members(initial_members);
-        let (_, _, messages) = self
+        let (groups_y, space_y, messages) = self
             .spaces_manager
             .create_space(space_id, &initial_members)
             .await?;
 
+        // Persist the computed groups and spaces state to the stores.
+        //
+        // @TODO: This needs some thought. We're persisting state here, rather than expecting this to
+        // happen in the processor, because it's not possible to re-create locally performed state
+        // changes from the messages alone. _If_ we have to persist here, then transactions need
+        // to be considered more carefully, we would need to make this write part of the same
+        // transaction where the operations are forged.
+        //
+        // @TODO: Need to make the same change in the Space API as well.
+        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
+        let permit = spaces_store.begin().await?;
+
+        // @TODO: We don't strictly need to persist the groups state here as this is re-creatable
+        // with only the operation.
+        spaces_store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+            .await?;
+        spaces_store
+            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+            .await?;
+
+        spaces_store.commit(permit).await?;
+
         // Process the -spaces events by importing them as an "external stream".
+        //
+        // @TODO: Related to above comment. We're still sending the messages to the pipeline.
         let processed = tx
             .import(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),
