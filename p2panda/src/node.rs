@@ -3,11 +3,13 @@
 use std::fmt::Debug;
 
 use futures_util::Stream;
-use p2panda_core::Topic;
+use p2panda_core::{Hash, Topic};
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::{GroupId, SpaceId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
+use p2panda_store::topics::TopicStore;
+use p2panda_store::tx;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -19,8 +21,9 @@ use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
-    AccessLevel, ActorId, Group, GroupError, Member, MemberError, Space, SpaceError,
-    SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream, to_initial_members,
+    AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
+    SpaceError, SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, StreamFrom, StreamPublisher,
@@ -430,9 +433,30 @@ impl Node {
     {
         let space_id = space_id.into();
 
+        // Associate this topic with the key bundle logs.
+        tx!(&self.store, {
+            self.store
+                .associate(
+                    &Topic::from(space_id),
+                    &self.id(),
+                    &Hash::digest(KEY_BUNDLE_LOG_ID),
+                )
+                .await
+        })?;
+
         let topic = space_id;
         let inner = self.spaces_manager.space(space_id).await?;
         let (tx, rx) = self.stream_from::<M>(topic, from).await?;
+
+        // Publish one key bundle whenever we subscribe to a space.
+        //
+        // @TODO: this is a rather naive approach, I likely want some service that periodically
+        // publishes key bundles.
+        let message = self.spaces_manager.key_bundle_message().await?;
+        let topic = Topic::from(Hash::digest(KEY_BUNDLE_LOG_ID));
+        let _event =
+            process_published_operation(message.into_operation(), topic, &self.pipeline).await;
+
         Ok(spaces_stream::<M>(inner, tx, rx))
     }
 
