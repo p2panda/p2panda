@@ -44,6 +44,9 @@ where
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
 
+    #[error("missing dependency {0} for operation {1}")]
+    MissingDependencies(OP, OP),
+
     #[error("group cycle detected adding {0} to {1} operation={2}")]
     GroupCycle(ID, ID, OP),
 
@@ -138,7 +141,7 @@ where
                     let operation = self
                         .operations
                         .get(&inner_id)
-                        .expect("operation is present in map");
+                        .expect("operation in graph is present in store");
                     if operation.action().is_create() && groups.contains(&operation.group_id()) {
                         return true;
                     }
@@ -497,6 +500,14 @@ where
         mut y: GroupCrdtState<ID, OP, M, C>,
         operation: &M,
     ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
+        for dependency in operation.dependencies() {
+            if !y.inner.operations.contains_key(&dependency) {
+                return Err(GroupCrdtError::MissingDependencies(
+                    dependency,
+                    operation.id(),
+                ));
+            }
+        }
         let operation_id = operation.id();
         let actor = operation.author();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
