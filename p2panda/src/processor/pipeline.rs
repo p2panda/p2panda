@@ -20,6 +20,7 @@ use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
+use crate::processor::orderer::Orderer;
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::types::{SpacesManager, SpacesProcessor};
@@ -104,6 +105,8 @@ where
                     // Prepare event processing pipeline.
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
+                    let orderer =
+                        Orderer::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
                     let log_prune =
                         LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
                     let spaces = SpacesProcessor::<Event<L, E, TP>>::new(
@@ -128,6 +131,25 @@ where
                             Err((mut event, err)) => {
                                 event.ingest = ProcessorStatus::Failed(err);
                                 event
+                            }
+                        })
+                        .layer(orderer)
+                        .map(|result| match result {
+                            Ok((mut event, result)) => {
+                                event.orderer = ProcessorStatus::Completed(result);
+                                event
+                            }
+                            Err((event, err)) => {
+                                if let Some(mut event) = event {
+                                    event.orderer = ProcessorStatus::Failed(err);
+                                    event
+                                } else {
+                                    // TODO: Properly handle error case. I'm not entirely sure what
+                                    // to do here...we don't have the `event` anymore when this
+                                    // error occurs, so it's not possible to continue with
+                                    // processing.
+                                    panic!("orderer processor returned None err")
+                                }
                             }
                         })
                         .layer(log_prune)
@@ -206,7 +228,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::test_utils::TestLog;
+    use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
     use p2panda_core::{PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
@@ -221,6 +243,8 @@ mod tests {
 
     #[tokio::test]
     async fn processing_operations() {
+        setup_logging();
+
         let store = SqliteStore::temporary().await;
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();

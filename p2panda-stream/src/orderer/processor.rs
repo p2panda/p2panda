@@ -42,6 +42,8 @@ where
     ID: OperationId,
     S: Transaction + OrdererStore<ID> + OperationStore<T, ID>,
 {
+    // TODO: Define result type and leverage Noop variant to pass-through.
+    // type Output = (T, OrdererResult);
     type Output = T;
 
     type Error = (Option<T>, OrdererError<T, ID, S>);
@@ -53,7 +55,7 @@ where
         };
 
         let inner = self.inner.lock().await;
-        if let Err(err) = inner.process(input.hash(), input.dependencies()).await {
+        if let Err(err) = inner.process(input.hash(), &input.dependencies()[..]).await {
             return Err((Some(input), OrdererError::OrdererStore(err)));
         };
 
@@ -144,8 +146,8 @@ mod tests {
     }
 
     impl Ordering<Hash> for Operation<TestExtension> {
-        fn dependencies(&self) -> &[Hash] {
-            &self.header.extensions.dependencies
+        fn dependencies(&self) -> Vec<Hash> {
+            self.header.extensions.dependencies.to_owned()
         }
     }
 
