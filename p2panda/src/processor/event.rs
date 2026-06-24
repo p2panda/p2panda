@@ -6,13 +6,16 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
+use p2panda_stream::orderer::Ordering;
 use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::processor::orderer::{OrdererError, OrdererResult};
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ProcessorStatus<R, F> {
     /// Operation has not been processed yet.
     Pending,
@@ -23,6 +26,38 @@ pub enum ProcessorStatus<R, F> {
 
     /// An error occurred when this operation was processed. A concrete error type is attached.
     Failed(F),
+}
+
+/// Metadata required to construct a new `Event` (excluding the operation).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct EventMetadata<L, TP> {
+    pub(crate) log_id: L,
+    pub(crate) topic: TP,
+    pub(crate) prune_flag: PruneFlag,
+    pub(crate) spaces_args: Option<SpacesArgs>,
+    pub(crate) ingest: ProcessorStatus<IngestResult, IngestError>,
+}
+
+/// Extract `EventMetadata` from an `Event`.
+impl<L, E, TP> From<Event<L, E, TP>> for EventMetadata<L, TP> {
+    fn from(event: Event<L, E, TP>) -> Self {
+        let log_id = event.ingest_args.log_id;
+        let topic = event.ingest_args.topic;
+        let prune_flag = PruneFlag::new(event.ingest_args.prune_flag);
+        let spaces_args = match event.spaces_args {
+            SpacesProcessorArgs::Ignore => None,
+            SpacesProcessorArgs::Process { msg } => Some(msg.args),
+        };
+        let ingest = event.ingest;
+
+        Self {
+            log_id,
+            topic,
+            prune_flag,
+            spaces_args,
+            ingest,
+        }
+    }
 }
 
 /// Single event running through the "event processor" pipeline.
@@ -36,6 +71,9 @@ pub struct Event<L, E, TP> {
 
     /// Status of the "ingest" processor.
     pub(crate) ingest: ProcessorStatus<IngestResult, IngestError>,
+
+    /// Status of the "orderer" processor.
+    pub(crate) orderer: ProcessorStatus<OrdererResult, OrdererError>,
 
     /// Input arguments for the "log prune" processor.
     log_prune_args: LogPruneArgs<VerifyingKey, L, SeqNum>,
@@ -53,7 +91,6 @@ pub struct Event<L, E, TP> {
 impl<L, E, TP> Event<L, E, TP>
 where
     L: LogId,
-    TP: Clone,
 {
     pub(crate) fn new(
         operation: Operation<E>,
@@ -69,6 +106,7 @@ where
                 prune_flag: prune_flag.is_set(),
             },
             ingest: ProcessorStatus::Pending,
+            orderer: ProcessorStatus::Pending,
             // Do not allow pruning when spaces args are set.
             log_prune_args: if prune_flag.is_set() && spaces_args.is_none() {
                 LogPruneArgs::PruneEntriesUntil {
@@ -108,6 +146,7 @@ where
     /// Returns `true` if event has been successfully processed by the whole pipeline.
     pub fn is_completed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Completed(_))
+            && matches!(self.orderer, ProcessorStatus::Completed(_))
             && matches!(self.log_prune, ProcessorStatus::Completed(_))
             && matches!(self.spaces, ProcessorStatus::Completed(_))
     }
@@ -115,6 +154,7 @@ where
     /// Returns `true` if event failed somewhere during processing.
     pub fn is_failed(&self) -> bool {
         matches!(self.ingest, ProcessorStatus::Failed(_))
+            || matches!(self.orderer, ProcessorStatus::Failed(_))
             || matches!(self.log_prune, ProcessorStatus::Failed(_))
             || matches!(self.spaces, ProcessorStatus::Failed(_))
     }
@@ -122,6 +162,10 @@ where
     /// Returns the error which occurred during a processing failure or `None`.
     pub fn failure_reason(&self) -> Option<ProcessorError> {
         if let ProcessorStatus::Failed(err) = &self.ingest {
+            return Some(err.to_owned().into());
+        }
+
+        if let ProcessorStatus::Failed(err) = &self.orderer {
             return Some(err.to_owned().into());
         }
 
@@ -137,6 +181,15 @@ where
     }
 }
 
+impl<L, E, TP> Ordering<Hash> for Event<L, E, TP> {
+    fn dependencies(&self) -> Vec<Hash> {
+        match &self.spaces_args {
+            SpacesProcessorArgs::Ignore => vec![],
+            SpacesProcessorArgs::Process { msg } => msg.args.dependencies(),
+        }
+    }
+}
+
 /// Operation failed during event processing of the system-level pipeline.
 ///
 /// This is likely to come from either processing invalid operations from a broken / malicious node
@@ -145,6 +198,9 @@ where
 pub enum ProcessorError {
     #[error("ingest processor failed with: {0}")]
     Ingest(#[from] IngestError),
+
+    #[error("orderer processor failed with: {0}")]
+    Orderer(#[from] OrdererError),
 
     #[error("log_prune processor failed with: {0}")]
     LogPrune(#[from] LogPruneError),

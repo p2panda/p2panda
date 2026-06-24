@@ -240,8 +240,8 @@ mod tests {
     }
 
     impl Ordering<Hash> for Operation<TestExtensions> {
-        fn dependencies(&self) -> &[Hash] {
-            &self.header.extensions.dependencies
+        fn dependencies(&self) -> Vec<Hash> {
+            self.header.extensions.dependencies.to_owned()
         }
     }
 

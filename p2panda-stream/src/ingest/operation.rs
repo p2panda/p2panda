@@ -4,13 +4,12 @@
 use std::borrow::Borrow;
 
 use p2panda_core::prune::validate_prunable_backlink;
-use p2panda_core::{
-    Extensions, Hash, LogId, Operation, OperationError, SeqNum, VerifyingKey, validate_operation,
-};
+use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey, validate_operation};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
@@ -36,7 +35,7 @@ where
     let operation: &Operation<E> = operation.borrow();
 
     // Validate operation format.
-    validate_operation(operation)?;
+    validate_operation(operation).map_err(|err| IngestError::InvalidOperation(err.to_string()))?;
 
     let permit = store
         .begin()
@@ -67,7 +66,8 @@ where
 
     // If no pruning flag is set, we expect the log to have integrity with the previously given
     // operation.
-    validate_prunable_backlink(past_header.as_ref(), &operation.header, prune_flag)?;
+    validate_prunable_backlink(past_header.as_ref(), &operation.header, prune_flag)
+        .map_err(|err| IngestError::InvalidOperation(err.to_string()))?;
 
     // Insert operation into store and associate its log with the given topic.
     let id = operation.hash;
@@ -91,12 +91,12 @@ where
 }
 
 /// Errors which can occur due to invalid operations or critical storage failures.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Error, Serialize, Deserialize)]
 pub enum IngestError {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
     /// the p2panda specification.
-    #[error(transparent)]
-    InvalidOperation(#[from] OperationError),
+    #[error("invalid operation: {0}")]
+    InvalidOperation(String),
 
     /// Critical storage failure occurred. This is usually a reason to panic.
     #[error("critical storage failure: {0}")]
