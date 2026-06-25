@@ -339,8 +339,7 @@ pub(crate) async fn process_operation<M>(
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let log_id = LogId::from_topic(topic);
-
+    let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
@@ -437,7 +436,7 @@ pub(crate) async fn process_published_operation(
     topic: Topic,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
 ) -> Event<LogId, Extensions, Topic> {
-    let log_id = LogId::from_topic(topic);
+    let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
@@ -668,7 +667,12 @@ where
 
         let operation = self
             .forge
-            .create_operation(self.topic(), extensions.log_id(), body_bytes, extensions)
+            .create_operation(
+                Some(self.topic()),
+                extensions.log_id(),
+                body_bytes,
+                extensions,
+            )
             .await?;
         let hash = operation.hash;
 

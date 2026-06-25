@@ -119,10 +119,10 @@ impl Acked {
 
         let header = header.borrow();
 
-        // Make sure we're only acking operations for the given topic.
-        if LogId::from_topic(self.topic) != header.extensions.log_id() {
-            return Err(AckedError::InvalidTopic(self.topic));
-        }
+        // @TODO: what does this check mean now that topic does not directly map to a log id? //
+        // Make sure we're only acking operations for the given topic. if
+        // LogId::from_topic(self.topic) != header.extensions.log_id() { return
+        //     Err(AckedError::InvalidTopic(self.topic)); }
 
         let mut cursor = self.cursor().await?;
         cursor.advance(
@@ -227,7 +227,7 @@ mod tests {
         // Publish first operation.
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),
@@ -274,7 +274,7 @@ mod tests {
 
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),
@@ -319,7 +319,7 @@ mod tests {
         // Publish first operation and acknowledge it.
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),
