@@ -22,7 +22,7 @@ use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::{Extensions, LogId};
 use crate::processor::{Pipeline, TaskTracker};
-use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
+use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
     SpaceError, SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream,
@@ -419,7 +419,7 @@ impl Node {
     pub async fn space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-    ) -> Result<(Option<Space<M>>, SpaceSubscription<M>), SpaceError>
+    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -430,13 +430,17 @@ impl Node {
         &self,
         space_id: impl Into<SpaceId>,
         from: StreamFrom,
-    ) -> Result<(Option<Space<M>>, SpaceSubscription<M>), SpaceError>
+    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let space_id = space_id.into();
 
-        // Associate this topic with the key bundle logs.
+        // Associate the space topic with the key bundle logs.
+        //
+        // This does _not_ happen during ingest as at that point there is no topic which could be
+        // used to perform this association. The same key bundle log can be associated with many
+        // spaces.
         tx!(&self.store, {
             self.store
                 .associate(
@@ -448,56 +452,73 @@ impl Node {
         })?;
 
         let topic = space_id;
-        let inner = self.spaces_manager.space(space_id).await?;
+        let inner = self
+            .spaces_manager
+            .space(space_id)
+            .await?
+            // @TODO: even if there is no space yet we allow the user to subscribe and get a
+            // handle to the as-yet-non-existent space. In the current API if they tried to use
+            // the space API _before_ the space is instantiated then an error would occur. We
+            // maybe want to consider how we communicate to the user that they are subscribed to
+            // the space topic but only to announce their key bundles and await receiving control
+            // messages.
+            .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
         let (tx, rx) = self.stream_from::<M>(topic, from).await?;
 
         // Publish one key bundle whenever we subscribe to a space.
         //
-        // @TODO: this is a rather naive approach, I likely want some service that periodically
-        // publishes key bundles.
+        // @TODO: this is a rather naive approach, we likely want some (configurable?) service
+        // that periodically publishes key bundles.S
         let message = self.spaces_manager.key_bundle_message().await?;
-        let topic = Topic::from(Hash::digest(KEY_BUNDLE_LOG_ID));
-        let _event =
-            process_published_operation(message.into_operation(), topic, &self.pipeline).await;
 
-        Ok(spaces_stream::<M>(inner, tx, rx))
+        let operation = message.into_operation();
+        let _processed = tx
+            .import(futures_util::stream::once(async { operation }))
+            .await?;
+
+        // No need to wait for the key bundle message to be processed.
+
+        Ok(spaces_stream::<M>(inner, self.store.clone(), tx, rx))
     }
 
     pub async fn create_space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-        initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let space_id = space_id.into();
 
-        // Establish a topic pub/sub stream using the space id as a topic.
+        // Establish a topic pub/sub stream using the space id as a topic. This also associates
+        // the key bundle log with the space topic.
         let topic = space_id;
         let (tx, rx) = self.stream::<M>(topic).await?;
 
         // Issue the event to create a space.
-        let initial_members = to_initial_members(initial_members);
-        let (groups_y, space_y, messages) = self
-            .spaces_manager
-            .create_space(space_id, &initial_members)
-            .await?;
-
-        // Persist the computed groups and spaces state to the stores.
         //
-        // @TODO: This needs some thought. We're persisting state here, rather than expecting this to
-        // happen in the processor, because it's not possible to re-create locally performed state
-        // changes from the messages alone. _If_ we have to persist here, then transactions need
-        // to be considered more carefully, we would need to make this write part of the same
+        // We always create a space with only us as the initial members.
+        //
+        // @TODO: Consider if we want an alternative method for instantiating a space with initial
+        // members. I (sam) removed it from the API for now as without a manual member
+        // registration flow a user likely doesn't have access to any member key bundles at the
+        // point of space creation.
+        let (groups_y, space_y, messages) = self.spaces_manager.create_space(space_id, &[]).await?;
+
+        // Persist the computed groups and spaces state to the stores and make required group log
+        // associations.
+        //
+        // @TODO: This needs some thought. We're persisting state here, rather than expecting this
+        // to happen in the processor, because it's not possible to re-create locally performed
+        // state changes from the messages alone. _If_ we have to persist here, then transactions
+        // need to be considered more carefully, we would need to make this write part of the same
         // transaction where the operations are forged.
         //
-        // @TODO: Need to make the same change in the Space API as well.
-        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-        let permit = spaces_store.begin().await?;
-
         // @TODO: We don't strictly need to persist the groups state here as this is re-creatable
-        // with only the operation.
+        // with only the operation in the processor.
+        let permit = self.store.begin().await?;
+
+        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
         spaces_store
             .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
             .await?;
@@ -505,11 +526,13 @@ impl Node {
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
 
-        spaces_store.commit(permit).await?;
+        self.store.commit(permit).await?;
 
         // Process the -spaces events by importing them as an "external stream".
         //
-        // @TODO: Related to above comment. We're still sending the messages to the pipeline.
+        // @TODO: Related to above comment. Even though the state is already mutated & persisted
+        // locally we're still sending the messages to the pipeline. Revisit this if state does
+        // indeed need to be persisted here instead of in the pipeline.
         let processed = tx
             .import(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),
@@ -524,17 +547,35 @@ impl Node {
         if processed.await.is_err() {
             panic!();
         }
+
+        // Publish one key bundle whenever we create a space.
+        //
+        // @TODO: this is a rather naive approach, we likely want some service that periodically
+        // publishes key bundles.
+        let message = self.spaces_manager.key_bundle_message().await?;
+
+        let operation = message.into_operation();
+        let processed = tx
+            .import(futures_util::stream::once(async { operation }))
+            .await?;
+
+        // Wait until processing the events has finished. This should result in a "materialised
+        // space" we can finally call and return to the user.
+
+        // TODO: Would be good to get an error / report here if processing the imported operations
+        // failed. This error so far only tells us that the channel broke down.
+        if processed.await.is_err() {
+            panic!();
+        }
+
         let inner = self
             .spaces_manager
             .space(space_id)
             .await?
             .expect("materialised space after processing operations");
 
-        let (space, rx) = spaces_stream::<M>(Some(inner), tx, rx);
-        Ok((
-            space.expect("materialised space after processing operations"),
-            rx,
-        ))
+        let (space, rx) = spaces_stream::<M>(inner, self.store.clone(), tx, rx);
+        Ok((space, rx))
     }
 
     /// Returns the node identifier (public key).
@@ -585,6 +626,11 @@ impl Node {
     // I'll leave it here for now until we've made a decision.
     pub fn store(&self) -> SqliteStore {
         self.store.clone()
+    }
+
+    /// Access the inner spaces manager.
+    pub fn spaces_manager(&self) -> SpacesManager {
+        self.spaces_manager.clone()
     }
 }
 

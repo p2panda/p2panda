@@ -5,13 +5,19 @@ use std::task::{Context, Poll};
 
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_auth::{Access, AccessLevel};
+use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
-use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId};
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId, SpacesStoreState};
+use p2panda_store::groups::GroupsStore;
+use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
+use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
 
 use crate::node::CreateStreamError;
+use crate::operation::Extensions;
 use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::streams::{
     ExternalStreamFuture, ImportError, ProcessedOperation, Source, StreamEvent, StreamPublisher,
@@ -21,10 +27,18 @@ use crate::streams::{
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
 pub(crate) fn spaces_stream<M>(
     inner: InnerSpace,
+    store: SqliteStore,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
 ) -> (Space<M>, SpaceSubscription<M>) {
-    (Space { inner, tx }, SpaceSubscription { rx })
+    (
+        Space {
+            inner,
+            store: SqliteSpacesStore::new(store),
+            tx,
+        },
+        SpaceSubscription { rx },
+    )
 }
 
 // TODO: We need a way to automatically publish key bundles (if configured, it should also be an
@@ -36,6 +50,7 @@ pub(crate) fn spaces_stream<M>(
 #[derive(Debug)]
 pub struct Space<M> {
     inner: InnerSpace,
+    store: SqliteSpacesStore<Extensions>,
     tx: StreamPublisher<M>,
 }
 
@@ -58,7 +73,17 @@ where
         //
         // We could also handle this outside of p2panda-spaces, simply by coming up with an argument
         // in the extensions for the spaces processor in p2panda-stream.
-        let (_, message) = self.inner.publish(&body_bytes).await?;
+        let (space_y, message) = self.inner.publish(&body_bytes).await?;
+
+        let permit = self.store.begin().await?;
+
+        // Persist the computed groups and spaces state to the stores and make required group log
+        // associations.
+        self.store
+            .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
+            .await?;
+
+        self.store.commit(permit).await?;
 
         let processed = self
             .tx
@@ -78,7 +103,7 @@ where
         actor: impl Into<ActorId>,
         access: AccessLevel,
     ) -> Result<SpaceFuture, SpaceError> {
-        let (_, _, auth_message, space_message) = self
+        let (groups_y, space_y, auth_message, space_message) = self
             .inner
             .add(
                 actor.into(),
@@ -88,6 +113,28 @@ where
                 },
             )
             .await?;
+
+        let permit = self.store.begin().await?;
+
+        // Persist the computed groups and spaces state to the stores and make required group log
+        // associations.
+        //
+        // @TODO: This needs some thought. We're persisting state here, rather than expecting this
+        // to happen in the processor, because it's not possible to re-create locally performed
+        // state changes from the messages alone. _If_ we have to persist here, then transactions
+        // need to be considered more carefully, we would need to make this write part of the same
+        // transaction where the operations are forged.
+        //
+        // @TODO: We don't strictly need to persist the groups state here as this is re-creatable
+        // with only the operation in the processor.
+        self.store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+            .await?;
+        self.store
+            .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
+            .await?;
+
+        self.store.commit(permit).await?;
 
         let processed = self
             .tx
@@ -231,6 +278,9 @@ pub enum SpaceError {
 
     #[error(transparent)]
     CreateStream(#[from] CreateStreamError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]
@@ -244,4 +294,7 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Import(#[from] ImportError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
 }
