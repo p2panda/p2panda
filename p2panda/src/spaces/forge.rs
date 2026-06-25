@@ -1,18 +1,29 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_auth::group::GroupAction;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Hash, Topic, VerifyingKey};
+use p2panda_spaces::AuthGroupState;
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+use p2panda_store::groups::GroupsStore;
+use p2panda_store::operations::OperationStore;
+use p2panda_store::topics::TopicStore;
+use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_sync::protocols::ShortFormat;
+use thiserror::Error;
+use tracing::debug;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
-use crate::operation::{Extensions, LogId};
+use crate::operation::{Extensions, LogId, Operation};
+use crate::spaces::group_log_id;
 use crate::spaces::message::SpacesMessage;
-use crate::spaces::types::AuthCapabilities;
+use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
-const KEY_BUNDLE_LOG_ID: &[u8] = b"key_bundle/v1";
+pub(crate) const KEY_BUNDLE_LOG_ID: &[u8] = b"key_bundle/v1";
 
-const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
+pub(crate) const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
 
-const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
+pub const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
 
 const SPACE_APPLICATION_MESSAGE: &[u8] = b"space_application/v1";
 
@@ -77,7 +88,7 @@ const SPACE_APPLICATION_MESSAGE: &[u8] = b"space_application/v1";
 impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
     type Message = SpacesMessage;
 
-    type Error = ForgeError;
+    type Error = SpacesForgeError;
 
     fn verifying_key(&self) -> VerifyingKey {
         crate::forge::Forge::verifying_key(self)
@@ -103,57 +114,61 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // after a while (without breaking the whole key bundle log.
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                // TODO: The associated topic should be the space_id but we don't have this info
-                // here (should be passed in the spaces args).
-                let topic = Topic::from(Hash::digest(b"space_id"));
-
-                self.create_operation(topic, log_id, Some(bytes), extensions)
+                self.create_operation(None, log_id, Some(bytes), extensions)
                     .await?
             }
 
             // 2. Group logs.
             p2panda_spaces::SpacesArgs::Auth { group_id, .. } => {
                 // Every author maintains their own log of control messages _per_ group.
-                let log_id = LogId::digest(&{
-                    let mut bytes = Vec::new();
-                    bytes.extend_from_slice(group_id.as_bytes());
-                    // The group id would be enough to indicate the log id, we hash it here together
-                    // with a constant value to prevent possible collisions with logs of same id but
-                    // different purpose.
-                    bytes.extend_from_slice(GROUP_CONTROL_MESSAGE);
-                    bytes
-                });
+                let log_id = group_log_id(group_id);
 
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                // TODO: The associated topic should be the space_id but we don't have this info
-                // here (should be passed in the spaces args).
-                let topic = Topic::from(Hash::digest(b"space_id"));
-
-                self.create_operation(topic, log_id, None, extensions)
+                self.create_operation(None, log_id, None, extensions)
                     .await?
             }
 
             // 3. Space logs.
             //
             // TODO: These variants have a pending naming change in -spaces.
-            p2panda_spaces::SpacesArgs::SpaceMembership { space_id, .. }
-            | p2panda_spaces::SpacesArgs::SpaceUpdate { space_id, .. } => {
+            p2panda_spaces::SpacesArgs::SpaceMembership {
+                space_id,
+                group_id,
+                auth_message_id,
+                ..
+            } => {
                 // Every author maintains their own log of control messages _per_ space.
-                let log_id = LogId::digest(&{
-                    let mut bytes = Vec::new();
-                    bytes.extend_from_slice(space_id.as_bytes());
-                    bytes.extend_from_slice(SPACE_CONTROL_MESSAGE);
-                    bytes
-                });
+                let log_id = space_log_id(space_id);
 
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                // Associate this log with the space id / topic.
                 let topic = Topic::from(space_id);
 
-                self.create_operation(topic, log_id, None, extensions)
-                    .await?
+                let operation = self
+                    .create_operation(Some(topic), log_id, None, extensions)
+                    .await?;
+
+                // @TODO: We want to create the operation and make the log associations in one transaction.
+                let permit = self.store.begin().await?;
+
+                make_group_topic_associations(
+                    &self.store,
+                    Forge::verifying_key(self),
+                    space_id,
+                    group_id,
+                    auth_message_id,
+                )
+                .await?;
+
+                self.store.commit(permit).await?;
+
+                operation
+            }
+
+            p2panda_spaces::SpacesArgs::SpaceUpdate { .. } => {
+                // @TODO: not implemented in -spaces API yet.
+                unimplemented!()
             }
 
             // 4. Application logs.
@@ -163,7 +178,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 ..
             } => {
                 // TODO: This should be plaintext. We encrypt _later_ in the processor.
-                let body = ciphertext.clone();
+                let _body = ciphertext.clone();
 
                 // Every author maintains their own log of application messages _per_ space.
                 let log_id = LogId::digest(&{
@@ -178,11 +193,121 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // Associate this log with the space id / topic.
                 let topic = Topic::from(space_id);
 
-                self.create_operation(topic, log_id, Some(body), extensions)
+                self.create_operation(Some(topic), log_id, None, extensions)
                     .await?
             }
         };
 
         Ok(operation.into())
     }
+}
+
+fn space_log_id(space_id: Hash) -> LogId {
+    LogId::digest(&{
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(space_id.as_bytes());
+        // The group id would be enough to indicate the log id, we hash it here together
+        // with a constant value to prevent possible collisions with logs of same id but
+        // different purpose.
+        bytes.extend_from_slice(SPACE_CONTROL_MESSAGE);
+        bytes
+    })
+}
+
+#[derive(Debug, Error)]
+pub enum SpacesForgeError {
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Forge(#[from] ForgeError),
+
+    #[error("missing auth groups operation: {0}")]
+    MissingGroupsOperation(Hash),
+
+    #[error("missing args from groups operation: {0}")]
+    MissingGroupsArgs(Hash),
+}
+
+pub(crate) async fn make_group_topic_associations(
+    store: &SqliteStore,
+    me: VerifyingKey,
+    space_id: Hash,
+    space_group_id: VerifyingKey,
+    groups_message_id: Hash,
+) -> Result<(), SpacesForgeError> {
+    let Some(auth_operation): Option<Operation> = store.get_operation(&groups_message_id).await?
+    else {
+        return Err(SpacesForgeError::MissingGroupsOperation(groups_message_id));
+    };
+
+    let Some(SpacesArgs::Auth { group_action, .. }) =
+        auth_operation.header.extensions.spaces_args()
+    else {
+        return Err(SpacesForgeError::MissingGroupsArgs(groups_message_id));
+    };
+
+    let new_sub_groups = match group_action {
+        GroupAction::Create { initial_members } => initial_members
+            .into_iter()
+            .filter_map(|(member, _)| {
+                if member.is_group() {
+                    Some(member.id())
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        GroupAction::Add { member, .. } => {
+            if member.is_group() {
+                vec![member.id()]
+            } else {
+                vec![]
+            }
+        }
+        _ => vec![],
+    };
+
+    let groups_y: AuthGroupState<AuthCapabilities> = store
+        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .await?
+        .unwrap_or_default();
+
+    // For every new sub-group in this space, calculate all of _their_ sub-groups and associate
+    // the logs with this space.
+    for sub_group in new_sub_groups {
+        // Associate logs for all groups in the space. Concretely this means one log for the
+        // spaces' root group and all of it's nested sub-groups.
+        let mut related_groups = vec![sub_group];
+        related_groups.extend(groups_y.groups(sub_group).into_iter().map(|(id, _)| id));
+        for group_id in related_groups {
+            // Every author maintains their own log of control messages _per_ group.
+            let log_id = group_log_id(group_id);
+
+            debug!(
+                topic = space_id.fmt_short(),
+                group_id = group_id.fmt_short(),
+                log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+                "associate group log with space topic"
+            );
+
+            // Associate this topic with our own log for each group. As we assume all actors do
+            // this, then we can rely on performing this association on a "push" basis when we
+            // receive group operations and process them in the pipeline.
+            //
+            // @TODO: We only really need to make this association if we were ever group managers
+            // (this is the only case where we would publish operations to this log). We could
+            // optimise here based on that assumption by not always making this association.
+            store
+                .associate(&Topic::from(space_id), &me, &log_id)
+                .await?;
+        }
+    }
+
+    // Also associate the spaces group itself.
+    store
+        .associate(&Topic::from(space_id), &me, &group_log_id(space_group_id))
+        .await?;
+
+    Ok(())
 }
