@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
