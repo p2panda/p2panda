@@ -372,18 +372,33 @@ where
         });
     }
 
-    // Do not forward operations to the application-layer if there's no body and _always_ ack
-    // system-level events, even if no automatic policy was configured.
-    let Some(body) = event.body() else {
-        if let Err(error) = acked.ack(&event).await {
-            return Some(StreamEvent::AckFailed {
-                event,
-                error: Arc::new(error),
-            });
-        }
+    // Handle message decoding for both unencrypted (from the body) and group encrypted (from the
+    // extensions) cases.
+    //
+    // @TODO: this is a bit of a hack, we should properly convert all spaces events and expose
+    // them to the user.
+    let decode_result =
+        if let ProcessorStatus::Completed(SpacesResult::Processed { events }) = &event.spaces {
+            let Some(p2panda_spaces::Event::Application { data, .. }) = events.first() else {
+                // Do not forward other operation types to the app level.
+                return None;
+            };
+            decode_cbor::<M, _>(&data[..])
+        } else {
+            // Do not forward operations to the application-layer if there's no body and _always_ ack
+            // system-level events, even if no automatic policy was configured.
+            let Some(body) = event.body() else {
+                if let Err(error) = acked.ack(&event).await {
+                    return Some(StreamEvent::AckFailed {
+                        event,
+                        error: Arc::new(error),
+                    });
+                }
 
-        return None;
-    };
+                return None;
+            };
+            decode_cbor::<M, _>(body.as_bytes())
+        };
 
     // Attempt decoding application-layer message. This takes place _after_ system-level processing
     // completed and the operation was ingested.
@@ -396,7 +411,7 @@ where
     //
     // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users do
     // decoding on application layer?
-    let event = match decode_cbor::<M, _>(body.as_bytes()) {
+    let event = match decode_result {
         Ok(message) => {
             // Do only ack events automatically if processing or decoding did not fail.
             if ack_policy == AckPolicy::Automatic
