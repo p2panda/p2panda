@@ -408,7 +408,7 @@ impl Node {
 
         if event.is_failed() {
             // @TODO: we remove the first error here but there might be more which we should also
-            // return to the user. 
+            // return to the user.
             Err(event.failure_reasons().remove(0))?
         } else {
             let group = self.group(group_id).await?.expect("");

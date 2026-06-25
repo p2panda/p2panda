@@ -147,7 +147,10 @@ where
 
         // If we already processed this auth message then return now.
         if groups_y.inner.operations.contains_key(&auth_message.id()) {
-            debug!(message_id = auth_message.id().fmt_short(), "ignore already processed auth groups message");
+            debug!(
+                message_id = auth_message.id().fmt_short(),
+                "ignore already processed auth groups message"
+            );
             return Ok(None);
         }
 
