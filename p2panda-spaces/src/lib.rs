@@ -31,7 +31,7 @@ pub use event::{Event, GroupActor, GroupContext, SpaceContext};
 pub use forge::Forge;
 pub use message::{SpacesArgs, SpacesMessage};
 pub use store::SpacesStoreState;
-pub use types::StrongRemoveResolver;
+pub use types::{AuthGroupState, StrongRemoveResolver};
 
 pub type SpaceId = Hash;
 
