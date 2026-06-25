@@ -7,7 +7,9 @@ use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_sync::protocols::ShortFormat;
 use thiserror::Error;
+use tracing::trace;
 
 use crate::credentials::Credentials;
 use crate::operation::{Extensions, Header, LogId, Operation};
@@ -20,7 +22,7 @@ pub trait Forge<TP, C, E> {
 
     fn create_operation(
         &self,
-        topic: TP,
+        topic: Option<TP>,
         collection_id: C,
         body: Option<Vec<u8>>,
         extensions: E,
@@ -30,7 +32,7 @@ pub trait Forge<TP, C, E> {
 #[derive(Clone, Debug)]
 pub struct OperationForge {
     credentials: Credentials,
-    store: SqliteStore,
+    pub(crate) store: SqliteStore,
 }
 
 impl OperationForge {
@@ -55,7 +57,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
     /// single transaction, thereby ensuring atomicity.
     async fn create_operation(
         &self,
-        topic: Topic,
+        topic: Option<Topic>,
         log_id: LogId,
         body: Option<Vec<u8>>,
         extensions: Extensions,
@@ -106,17 +108,26 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 body,
             };
 
-            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                &self.store,
-                &topic,
-                &self.credentials.verifying_key(),
-                &log_id,
-            )
-            .await?;
+            if let Some(topic) = topic {
+                <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
+                    &self.store,
+                    &topic,
+                    &self.credentials.verifying_key(),
+                    &log_id,
+                )
+                .await?;
+            }
 
             self.store
                 .insert_operation(&hash, &operation, &log_id)
                 .await?;
+
+            trace!(
+                id = operation.hash.fmt_short(),
+                log_id = Hash::from(log_id.as_bytes()).fmt_short(),
+                seq = operation.header.seq_num,
+                "operation created"
+            );
 
             operation
         });
@@ -157,7 +168,7 @@ mod tests {
 
         forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some("spring!".as_bytes().to_vec()),
                 extensions.clone(),
@@ -167,7 +178,7 @@ mod tests {
 
         forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some("summer!".as_bytes().to_vec()),
                 extensions,
