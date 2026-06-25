@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use core::panic;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -17,6 +18,7 @@ use p2panda_net::sync::SyncHandle;
 use p2panda_net::utils::ShortFormat;
 use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
+use p2panda_stream::spaces::SpacesResult;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -27,7 +29,7 @@ use tracing::warn;
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
-use crate::processor::{Event, Pipeline, ProcessorError};
+use crate::processor::{Event, Pipeline, ProcessorError, ProcessorStatus};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
@@ -106,6 +108,9 @@ where
 {
     let acked = Acked::new(store.clone(), topic);
 
+    // Sync handle is used on the publisher and when importing from external streams.
+    let sync_handle = Arc::new(sync_handle);
+
     let mut sync_stream = sync_handle
         .subscribe()
         .await
@@ -141,6 +146,7 @@ where
         let pipeline = pipeline.clone();
         let acked = acked.clone();
         let store = store.clone();
+        let sync_handle = sync_handle.clone();
 
         tokio::spawn(async move {
             // =======================
@@ -273,6 +279,17 @@ where
                         match event {
                             ExternalStreamEvent::Start { session_id } => StreamEvent::ImportStarted { session_id },
                             ExternalStreamEvent::Operation { session_id, operation } => {
+                                // Try pushing operation to other nodes if we have an active and "live" sync session with
+                                // them. This allows disseminating new messages quickly in the network.
+                                //
+                                // If no active live session exists, nodes will pick up the operation later when running the
+                                // sync protocol.
+                                if sync_handle
+                                    .publish(*operation.clone())
+                                    .await.is_err() {
+                                        warn!(session_id = session_id, operation_id = %operation.hash(), "failed sending imported operation on sync channel")
+                                    };
+
                                 let Some(event) = process_operation::<M>(
                                     *operation,
                                     topic,
@@ -295,14 +312,14 @@ where
                 //
                 // If channel stopped working because the subscriber got dropped, ignore it as we
                 // still might want to process locally published operations.
-                let _ = app_tx.send(event).await;
+                if let Err(err) = app_tx.send(event).await {
+                    warn!("error sending event to application layer: {err:?}");
+                };
             }
+
+            warn!("stream processing task exited");
         });
     }
-
-    // Keep around the sync handle on both the publisher and subscriber ends to keep it running
-    // even if one half got dropped.
-    let sync_handle = Arc::new(sync_handle);
 
     let tx = StreamPublisher {
         topic,
@@ -597,7 +614,7 @@ pub struct StreamPublisher<M> {
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     forge: OperationForge,
     #[allow(clippy::type_complexity)]
-    publish_tx: mpsc::Sender<(
+    pub(crate) publish_tx: mpsc::Sender<(
         Operation,
         Option<M>,
         oneshot::Sender<Event<LogId, Extensions, Topic>>,
