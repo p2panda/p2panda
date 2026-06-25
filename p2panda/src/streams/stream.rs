@@ -356,7 +356,8 @@ where
         .await;
 
     if event.is_failed() {
-        let error = event.failure_reason().expect("event has failed");
+        // @TODO: refactor to return all errors here.
+        let error = event.failure_reasons().remove(0);
 
         warn!(
             id = %event.hash(),
@@ -452,11 +453,11 @@ pub(crate) async fn process_published_operation(
         ))
         .await;
 
-    if event.is_failed() {
+    for err in event.failure_reasons() {
         warn!(
             id = %event.hash(),
             "processing local operation failed: {}",
-            event.failure_reason().expect("error")
+            err
         );
     }
 

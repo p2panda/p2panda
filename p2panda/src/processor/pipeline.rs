@@ -178,7 +178,7 @@ where
                     pin!(pipeline);
 
                     while let Some(operation) = pipeline.next().await {
-                        if let Some(err) = operation.failure_reason() {
+                        for err in operation.failure_reasons() {
                             warn!(
                                 id = %operation.hash().fmt_short(),
                                 "failed processing event: {}",
