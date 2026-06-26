@@ -82,7 +82,7 @@ pub struct Event<L, E, TP> {
     pub(crate) log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
 
     /// Input arguments for the "spaces" processor.
-    spaces_args: SpacesProcessorArgs<AuthCapabilities>,
+    pub(crate) spaces_args: SpacesProcessorArgs<AuthCapabilities>,
 
     /// Status of the "spaces" processor.
     pub(crate) spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
