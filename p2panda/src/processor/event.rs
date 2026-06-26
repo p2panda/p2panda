@@ -167,7 +167,7 @@ where
         }
 
         if let ProcessorStatus::Failed(err) = &self.orderer {
-            return Some(err.to_owned().into());
+            reasons.push(err.to_owned().into());
         }
 
         if let ProcessorStatus::Failed(err) = &self.log_prune {

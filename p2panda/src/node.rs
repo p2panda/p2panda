@@ -472,11 +472,17 @@ impl Node {
         let message = self.spaces_manager.key_bundle_message().await?;
 
         let operation = message.into_operation();
-        let _processed = tx
+        let processed = tx
             .import(futures_util::stream::once(async { operation }))
             .await?;
 
-        // No need to wait for the key bundle message to be processed.
+        // Wait until processing the events has finished.
+
+        // TODO: Would be good to get an error / report here if processing the imported operations
+        // failed. This error so far only tells us that the channel broke down.
+        if processed.await.is_err() {
+            panic!();
+        }
 
         Ok(spaces_stream::<M>(inner, self.store.clone(), tx, rx))
     }
@@ -490,10 +496,44 @@ impl Node {
     {
         let space_id = space_id.into();
 
+        // Associate the space topic with the key bundle logs.
+        //
+        // This does _not_ happen during ingest as at that point there is no topic which could be
+        // used to perform this association. The same key bundle log can be associated with many
+        // spaces.
+        tx!(&self.store, {
+            self.store
+                .associate(
+                    &Topic::from(space_id),
+                    &self.id(),
+                    &Hash::digest(KEY_BUNDLE_LOG_ID),
+                )
+                .await
+        })?;
+
         // Establish a topic pub/sub stream using the space id as a topic. This also associates
         // the key bundle log with the space topic.
         let topic = space_id;
         let (tx, rx) = self.stream::<M>(topic).await?;
+
+        // Publish one key bundle whenever we create a space.
+        //
+        // @TODO: this is a rather naive approach, we likely want some service that periodically
+        // publishes key bundles.
+        let message = self.spaces_manager.key_bundle_message().await?;
+
+        let operation = message.into_operation();
+        let processed = tx
+            .import(futures_util::stream::once(async { operation }))
+            .await?;
+
+        // Wait until processing the events has finished.
+
+        // TODO: Would be good to get an error / report here if processing the imported operations
+        // failed. This error so far only tells us that the channel broke down.
+        if processed.await.is_err() {
+            panic!();
+        }
 
         // Issue the event to create a space.
         //
@@ -537,26 +577,6 @@ impl Node {
             .import(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),
             ))
-            .await?;
-
-        // Wait until processing the events has finished. This should result in a "materialised
-        // space" we can finally call and return to the user.
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
-
-        // Publish one key bundle whenever we create a space.
-        //
-        // @TODO: this is a rather naive approach, we likely want some service that periodically
-        // publishes key bundles.
-        let message = self.spaces_manager.key_bundle_message().await?;
-
-        let operation = message.into_operation();
-        let processed = tx
-            .import(futures_util::stream::once(async { operation }))
             .await?;
 
         // Wait until processing the events has finished. This should result in a "materialised

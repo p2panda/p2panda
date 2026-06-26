@@ -77,14 +77,16 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     let penguin = p2panda::spawn().await?;
 
     // Penguin subscribes to the space (and publishes a key bundle).
-    let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+    let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+
+    sleep(Duration::from_secs(3)).await;
 
     // Panda creates and subscribes to a space.
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
     // Wait some time for key bundle, groups and space logs to sync.
     // @TODO: replace sleep when spaces events are watchable.
-    sleep(Duration::from_secs(4)).await;
+    sleep(Duration::from_secs(3)).await;
 
     // Panda adds penguin as a member of the space.
     //
@@ -113,17 +115,17 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // penguin also receives the message.
-    // @TODO: currently fails because of lack of ordering and operation decoding bug.
-    // loop {
-    //     let Some(event) = penguin_rx.next().await else {
-    //         panic!("unexpected stream closure");
-    //     };
-    //     let SpaceEvent::Processed { operation, .. } = event else {
-    //         continue;
-    //     };
-    //     assert_eq!(&message, operation.message());
-    //     break;
-    // }
+    // @TODO: currently fails because of operation decoding bug.
+    loop {
+        let Some(event) = penguin_rx.next().await else {
+            panic!("unexpected stream closure");
+        };
+        let SpaceEvent::Processed { operation, .. } = event else {
+            continue;
+        };
+        assert_eq!(&message, operation.message());
+        break;
+    }
 
     // @TODO: assert that penguin has also successfully joined the space and can publish a
     // message. This would often fail now due to ordering not yet being implemented.
