@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! API for managing members of a space and sending/receiving messages.
-use std::collections::HashSet;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
@@ -368,7 +367,7 @@ where
         );
 
         // Make the dgm aware of the new space members.
-        y.encryption_y.dcgka.dgm.members = HashSet::from_iter(next_members.clone());
+        y.encryption_y.dcgka.dgm.members = next_members.clone();
 
         // Construct encryption message.
         //
@@ -441,7 +440,7 @@ where
         // Make the DGM aware of group members after this group membership change has been
         // processed.
         encryption_y.dcgka.dgm = EncryptionMembershipState {
-            members: HashSet::from_iter(next_members.clone()),
+            members: next_members.clone(),
         };
 
         let mut direct_messages = vec![];
@@ -613,7 +612,7 @@ where
                 let groups_y = AuthGroupState::new();
 
                 let dgm = EncryptionMembershipState {
-                    members: HashSet::new(),
+                    members: Vec::new(),
                 };
 
                 // Encryption orderer state is empty when we're initializing a new encryption

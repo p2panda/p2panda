@@ -16,7 +16,7 @@ pub struct EncryptionGroupMembership;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
-    pub(crate) members: HashSet<MemberId>,
+    pub(crate) members: Vec<MemberId>,
 }
 
 impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
@@ -26,7 +26,7 @@ impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
 
     fn create(_my_id: MemberId, initial_members: &[MemberId]) -> Result<Self::State, Self::Error> {
         Ok(EncryptionMembershipState {
-            members: HashSet::from_iter(initial_members.iter().cloned()),
+            members: initial_members.to_vec(),
         })
     }
 
@@ -57,6 +57,6 @@ impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
     }
 
     fn members(y: &Self::State) -> Result<HashSet<MemberId>, Self::Error> {
-        Ok(y.members.clone())
+        Ok(y.members.clone().into_iter().collect())
     }
 }
