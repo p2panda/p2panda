@@ -11,7 +11,6 @@ use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
-use p2panda_stream::spaces::SpacesProcessorArgs;
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::pin;
@@ -124,10 +123,7 @@ where
                             }
                             Err((mut event, err)) => {
                                 event.ingest = ProcessorStatus::Failed(err);
-                                // As processing the operation failed here we should ignore it in
-                                // the spaces processor.
-                                event.spaces_args = SpacesProcessorArgs::Ignore;
-                                event
+                                event.noop()
                             }
                         })
                         .layer(orderer)
@@ -139,10 +135,7 @@ where
                             Err((event, err)) => {
                                 if let Some(mut event) = event {
                                     event.orderer = ProcessorStatus::Failed(err);
-                                    // As processing the operation failed here we should ignore it
-                                    // in the spaces processor.
-                                    event.spaces_args = SpacesProcessorArgs::Ignore;
-                                    event
+                                    event.noop()
                                 } else {
                                     // TODO: Properly handle error case. I'm not entirely sure what
                                     // to do here...we don't have the `event` anymore when this
@@ -160,7 +153,7 @@ where
                             }
                             Err((mut event, err)) => {
                                 event.log_prune = ProcessorStatus::Failed(err);
-                                event
+                                event.noop()
                             }
                         })
                         .layer(spaces)
@@ -171,7 +164,7 @@ where
                             }
                             Err((mut event, err)) => {
                                 event.spaces = ProcessorStatus::Failed(err);
-                                event
+                                event.noop()
                             }
                         });
 
