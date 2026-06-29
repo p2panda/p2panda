@@ -3,15 +3,16 @@
 use std::borrow::Borrow;
 
 use p2panda_core::traits::Digest;
-use p2panda_core::{Body, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey};
+use p2panda_core::{
+    Body, Extensions, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey,
+};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
-use p2panda_stream::orderer::Ordering;
 use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::processor::orderer::{OrdererError, OrdererResult};
+use crate::processor::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
@@ -28,64 +29,35 @@ pub enum ProcessorStatus<R, F> {
     Failed(F),
 }
 
-/// Metadata required to construct a new `Event` (excluding the operation).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct EventMetadata<L, TP> {
-    pub(crate) log_id: L,
-    pub(crate) topic: TP,
-    pub(crate) prune_flag: PruneFlag,
-    pub(crate) spaces_args: Option<SpacesArgs>,
-    pub(crate) ingest: ProcessorStatus<IngestResult, IngestError>,
-}
-
-/// Extract `EventMetadata` from an `Event`.
-impl<L, E, TP> From<Event<L, E, TP>> for EventMetadata<L, TP> {
-    fn from(event: Event<L, E, TP>) -> Self {
-        let log_id = event.ingest_args.log_id;
-        let topic = event.ingest_args.topic;
-        let prune_flag = PruneFlag::new(event.ingest_args.prune_flag);
-        let spaces_args = match event.spaces_args {
-            SpacesProcessorArgs::Ignore => None,
-            SpacesProcessorArgs::Process { msg } => Some(msg.args),
-        };
-        let ingest = event.ingest;
-
-        Self {
-            log_id,
-            topic,
-            prune_flag,
-            spaces_args,
-            ingest,
-        }
-    }
-}
-
 /// Single event running through the "event processor" pipeline.
 #[derive(Clone, Debug)]
 pub struct Event<L, E, TP> {
     /// p2panda Operation.
-    operation: Operation<E>,
+    pub operation: Operation<E>,
 
     /// Input arguments for the "ingest" processor.
-    ingest_args: IngestArgs<L, TP>,
+    pub ingest_args: IngestArgs<L, TP>,
 
     /// Status of the "ingest" processor.
-    pub(crate) ingest: ProcessorStatus<IngestResult, IngestError>,
+    pub ingest: ProcessorStatus<IngestResult, IngestError>,
+
+    /// Input arguments for the "orderer" processor.
+    pub orderer_args: OrdererArgs,
 
     /// Status of the "orderer" processor.
-    pub(crate) orderer: ProcessorStatus<OrdererResult, OrdererError>,
+    pub orderer: ProcessorStatus<OrdererResult, OrdererError>,
 
     /// Input arguments for the "log prune" processor.
-    log_prune_args: LogPruneArgs<VerifyingKey, L, SeqNum>,
+    pub log_prune_args: LogPruneArgs<VerifyingKey, L, SeqNum>,
 
     /// Status of the "log prune" processor.
-    pub(crate) log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
+    pub log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
 
     /// Input arguments for the "spaces" processor.
-    pub(crate) spaces_args: SpacesProcessorArgs<AuthCapabilities>,
+    pub spaces_args: SpacesProcessorArgs<AuthCapabilities>,
 
     /// Status of the "spaces" processor.
-    pub(crate) spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
+    pub spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -106,16 +78,24 @@ where
                 prune_flag: prune_flag.is_set(),
             },
             ingest: ProcessorStatus::Pending,
+            orderer_args: OrdererArgs::Process {
+                dependencies: match &spaces_args {
+                    Some(args) => args.dependencies(),
+                    None => vec![],
+                },
+            },
             orderer: ProcessorStatus::Pending,
-            // Do not allow pruning when spaces args are set.
-            log_prune_args: if prune_flag.is_set() && spaces_args.is_none() {
-                LogPruneArgs::PruneEntriesUntil {
-                    author: operation.header.verifying_key,
-                    log_id,
-                    seq_num: operation.header.seq_num,
+            log_prune_args: {
+                // Do not allow pruning when spaces args are set.
+                if prune_flag.is_set() && spaces_args.is_none() {
+                    LogPruneArgs::PruneEntriesUntil {
+                        author: operation.header.verifying_key,
+                        log_id,
+                        seq_num: operation.header.seq_num,
+                    }
+                } else {
+                    LogPruneArgs::Ignore
                 }
-            } else {
-                LogPruneArgs::Ignore
             },
             log_prune: ProcessorStatus::Pending,
             spaces_args: match spaces_args {
@@ -128,8 +108,8 @@ where
                 },
                 None => SpacesProcessorArgs::Ignore,
             },
-            operation,
             spaces: ProcessorStatus::Pending,
+            operation,
         }
     }
 
@@ -181,12 +161,51 @@ where
     }
 }
 
-impl<L, E, TP> Ordering<Hash> for Event<L, E, TP> {
-    fn dependencies(&self) -> Vec<Hash> {
-        match &self.spaces_args {
-            SpacesProcessorArgs::Ignore => vec![],
-            SpacesProcessorArgs::Process { msg } => msg.args.dependencies(),
+/// Metadata required to construct a new `Event` (excluding the operation).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EventMetadata<L, TP> {
+    log_id: L,
+    topic: TP,
+    prune_flag: PruneFlag,
+    spaces_args: Option<SpacesArgs>,
+    ingest: ProcessorStatus<IngestResult, IngestError>,
+}
+
+impl<L, E, TP> OrdererMetadata<E> for Event<L, E, TP>
+where
+    L: LogId,
+    E: Extensions,
+    TP: Clone + Serialize + for<'a> Deserialize<'a>,
+{
+    type Metadata = EventMetadata<L, TP>;
+
+    fn metadata(&self) -> Self::Metadata {
+        let log_id = self.ingest_args.log_id.clone();
+        let topic = self.ingest_args.topic.clone();
+        let prune_flag = PruneFlag::new(self.ingest_args.prune_flag);
+        let spaces_args = match &self.spaces_args {
+            SpacesProcessorArgs::Ignore => None,
+            SpacesProcessorArgs::Process { msg } => Some(msg.args.clone()),
+        };
+        let ingest = self.ingest.clone();
+
+        EventMetadata {
+            log_id,
+            topic,
+            prune_flag,
+            spaces_args,
+            ingest,
         }
+    }
+
+    fn from_operation(operation: Operation<E>, meta: Self::Metadata) -> Self {
+        Self::new(
+            operation,
+            meta.log_id,
+            meta.topic,
+            meta.prune_flag,
+            meta.spaces_args,
+        )
     }
 }
 
@@ -228,6 +247,16 @@ where
 {
     fn borrow(&self) -> &IngestArgs<L, TP> {
         &self.ingest_args
+    }
+}
+
+impl<L, E, TP> Borrow<OrdererArgs> for Event<L, E, TP>
+where
+    L: LogId,
+    TP: Clone,
+{
+    fn borrow(&self) -> &OrdererArgs {
+        &self.orderer_args
     }
 }
 
