@@ -37,10 +37,17 @@ pub enum OrdererArgs {
     Ignore,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum OrdererResult {
-    Processed,
+    Ready,
+    Pending,
     Ignored,
+}
+
+impl OrdererResult {
+    pub fn is_pending(&self) -> bool {
+        matches!(self, OrdererResult::Pending)
+    }
 }
 
 pub struct Orderer<S, T, E> {
@@ -100,10 +107,13 @@ where
                 return Err((Some(input), OrdererError::ProcessorStore(err.to_string())));
             };
 
-            self.store
-                .commit(permit)
-                .await
-                .map_err(|err| (Some(input), OrdererError::Transaction(err.to_string())))?;
+            if let Err(err) = self.store.commit(permit).await {
+                return Err((Some(input), OrdererError::Transaction(err.to_string())));
+            }
+
+            self.queue
+                .borrow_mut()
+                .push_back((input, OrdererResult::Pending));
         } else {
             self.queue
                 .borrow_mut()
@@ -157,10 +167,7 @@ where
                     Err(err) => return Err((None, OrdererError::ProcessorStore(err.to_string()))),
                 };
 
-                return Ok((
-                    T::from_operation(operation, metadata),
-                    OrdererResult::Processed,
-                ));
+                return Ok((T::from_operation(operation, metadata), OrdererResult::Ready));
             }
 
             self.store
