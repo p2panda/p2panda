@@ -106,20 +106,13 @@ where
                     // Prepare event processing pipeline.
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                    let orderer =
-                        Orderer::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
+                    let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone());
                     let log_prune =
                         LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
                     let spaces = SpacesProcessor::<Event<L, E, TP>>::new(
                         SqliteSpacesStore::new(store),
                         spaces_manager,
                     );
-
-                    // TODO: Add orderer. Unfortunately this might come with a refactoring of the
-                    // ordering logic as we loose the input type (T or Event) during buffering.
-                    //
-                    // It might work out if we allow to store the input object as well in the
-                    // buffer, not sure if that's the right path right now.
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(pipeline_rx)
@@ -146,8 +139,8 @@ where
                             Err((event, err)) => {
                                 if let Some(mut event) = event {
                                     event.orderer = ProcessorStatus::Failed(err);
-                                    // As processing the operation failed here we should ignore it in
-                                    // the spaces processor.
+                                    // As processing the operation failed here we should ignore it
+                                    // in the spaces processor.
                                     event.spaces_args = SpacesProcessorArgs::Ignore;
                                     event
                                 } else {
