@@ -130,7 +130,14 @@ where
                         .map(|result| match result {
                             Ok((mut event, result)) => {
                                 event.orderer = ProcessorStatus::Completed(result);
-                                event
+
+                                // If the orderer returns a "pending" result we don't want to affect
+                                // any next processors anymore.
+                                if result.is_pending() {
+                                    event.noop()
+                                } else {
+                                    event
+                                }
                             }
                             Err((event, err)) => {
                                 if let Some(mut event) = event {
