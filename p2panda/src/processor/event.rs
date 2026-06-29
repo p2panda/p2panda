@@ -159,6 +159,28 @@ where
 
         None
     }
+
+    /// Turn all processor arguments into no-ops by setting them to "ignore".
+    ///
+    /// This will cause this event to not be processed by _any_ next processors. Usually we want to
+    /// call this after an failure happenend.
+    pub(crate) fn noop(self) -> Self {
+        Self {
+            operation: self.operation,
+            ingest_args: IngestArgs {
+                log_id: self.ingest_args.log_id,
+                topic: self.ingest_args.topic,
+                prune_flag: false,
+            },
+            ingest: self.ingest,
+            orderer_args: OrdererArgs::Ignore,
+            orderer: self.orderer,
+            log_prune_args: LogPruneArgs::Ignore,
+            log_prune: self.log_prune,
+            spaces_args: SpacesProcessorArgs::Ignore,
+            spaces: self.spaces,
+        }
+    }
 }
 
 /// Metadata required to construct a new `Event` (excluding the operation).
