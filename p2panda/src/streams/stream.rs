@@ -396,11 +396,20 @@ where
     // them to the user.
     let decode_result =
         if let ProcessorStatus::Completed(SpacesResult::Processed { events }) = &event.spaces {
-            let Some(p2panda_spaces::Event::Application { data, .. }) = events.first() else {
-                // Do not forward other operation types to the app level.
-                return None;
-            };
-            decode_cbor::<M, _>(&data[..])
+            let mut events = events.iter();
+            loop {
+                let event = events.next();
+
+                if event.is_none() {
+                    return None;
+                }
+
+                if let Some(p2panda_spaces::Event::Application { data, .. }) = event {
+                    break decode_cbor::<M, _>(&data[..]);
+                } else {
+                    continue;
+                };
+            }
         } else {
             // Do not forward operations to the application-layer if there's no body and _always_ ack
             // system-level events, even if no automatic policy was configured.
@@ -416,6 +425,7 @@ where
             };
             decode_cbor::<M, _>(body.as_bytes())
         };
+
 
     // Attempt decoding application-layer message. This takes place _after_ system-level processing
     // completed and the operation was ingested.
