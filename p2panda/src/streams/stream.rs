@@ -400,9 +400,7 @@ where
             loop {
                 let event = events.next();
 
-                if event.is_none() {
-                    return None;
-                }
+                event?;
 
                 if let Some(p2panda_spaces::Event::Application { data, .. }) = event {
                     break decode_cbor::<M, _>(&data[..]);
@@ -425,7 +423,6 @@ where
             };
             decode_cbor::<M, _>(body.as_bytes())
         };
-
 
     // Attempt decoding application-layer message. This takes place _after_ system-level processing
     // completed and the operation was ingested.

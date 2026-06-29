@@ -271,26 +271,26 @@ pub(crate) async fn make_group_topic_associations(
 
     // For every new sub-group in a space group associate the logs with this space.
     for group_id in sub_groups {
-            // Every author maintains their own log of control messages _per_ group.
-            let log_id = group_log_id(group_id);
+        // Every author maintains their own log of control messages _per_ group.
+        let log_id = group_log_id(group_id);
 
-            debug!(
-                topic = space_id.fmt_short(),
-                group_id = group_id.fmt_short(),
-                log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
-                "associate group log with space topic"
-            );
+        debug!(
+            topic = space_id.fmt_short(),
+            group_id = group_id.fmt_short(),
+            log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+            "associate group log with space topic"
+        );
 
-            // Associate this topic with our own log for each group. As we assume all actors do
-            // this, then we can rely on performing this association on a "push" basis when we
-            // receive group operations and process them in the pipeline.
-            //
-            // @TODO: We only really need to make this association if we were ever group managers
-            // (this is the only case where we would publish operations to this log). We could
-            // optimise here based on that assumption by not always making this association.
-            store
-                .associate(&Topic::from(space_id), &me, &log_id)
-                .await?;
+        // Associate this topic with our own log for each group. As we assume all actors do
+        // this, then we can rely on performing this association on a "push" basis when we
+        // receive group operations and process them in the pipeline.
+        //
+        // @TODO: We only really need to make this association if we were ever group managers
+        // (this is the only case where we would publish operations to this log). We could
+        // optimise here based on that assumption by not always making this association.
+        store
+            .associate(&Topic::from(space_id), &me, &log_id)
+            .await?;
     }
 
     // Also associate the spaces group itself.
