@@ -136,6 +136,8 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 space_id,
                 group_id,
                 auth_message_id,
+                // @TODO: add "related groups" here and then we don't need to do queries in the
+                // make_group_topic_associations.
                 ..
             } => {
                 // Every author maintains their own log of control messages _per_ space.
@@ -265,6 +267,8 @@ pub(crate) async fn make_group_topic_associations(
                 vec![]
             }
         }
+        // We don't handle removals here, this is a concern of a higher layer which may even
+        // require consensus.
         _ => vec![],
     };
 
