@@ -3,9 +3,6 @@
 use p2panda_auth::group::GroupAction;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Hash, Topic, VerifyingKey};
-use p2panda_spaces::AuthGroupState;
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
@@ -249,7 +246,7 @@ pub(crate) async fn make_group_topic_associations(
         return Err(SpacesForgeError::MissingGroupsArgs(groups_message_id));
     };
 
-    let new_sub_groups = match group_action {
+    let sub_groups = match group_action {
         GroupAction::Create { initial_members } => initial_members
             .into_iter()
             .filter_map(|(member, _)| {
@@ -272,19 +269,8 @@ pub(crate) async fn make_group_topic_associations(
         _ => vec![],
     };
 
-    let groups_y: AuthGroupState<AuthCapabilities> = store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-        .await?
-        .unwrap_or_default();
-
-    // For every new sub-group in this space, calculate all of _their_ sub-groups and associate
-    // the logs with this space.
-    for sub_group in new_sub_groups {
-        // Associate logs for all groups in the space. Concretely this means one log for the
-        // spaces' root group and all of it's nested sub-groups.
-        let mut related_groups = vec![sub_group];
-        related_groups.extend(groups_y.groups(sub_group).into_iter().map(|(id, _)| id));
-        for group_id in related_groups {
+    // For every new sub-group in a space group associate the logs with this space.
+    for group_id in sub_groups {
             // Every author maintains their own log of control messages _per_ group.
             let log_id = group_log_id(group_id);
 
@@ -305,7 +291,6 @@ pub(crate) async fn make_group_topic_associations(
             store
                 .associate(&Topic::from(space_id), &me, &log_id)
                 .await?;
-        }
     }
 
     // Also associate the spaces group itself.
