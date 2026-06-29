@@ -468,7 +468,7 @@ impl Node {
         // Publish one key bundle whenever we subscribe to a space.
         //
         // @TODO: this is a rather naive approach, we likely want some (configurable?) service
-        // that periodically publishes key bundles.S
+        // that periodically publishes key bundles.
         let message = self.spaces_manager.key_bundle_message().await?;
 
         let operation = message.into_operation();
