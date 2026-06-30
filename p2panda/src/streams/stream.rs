@@ -279,11 +279,18 @@ where
                         match event {
                             ExternalStreamEvent::Start { session_id } => StreamEvent::ImportStarted { session_id },
                             ExternalStreamEvent::Operation { session_id, operation } => {
-                                // Try pushing operation to other nodes if we have an active and "live" sync session with
-                                // them. This allows disseminating new messages quickly in the network.
+                                // Try pushing operation to other nodes if we have an active and
+                                // "live" sync session with them. This allows disseminating new
+                                // messages quickly in the network.
                                 //
-                                // If no active live session exists, nodes will pick up the operation later when running the
-                                // sync protocol.
+                                // If no active live session exists, nodes will pick up the
+                                // operation later when running the sync protocol.
+                                //
+                                // @TODO: There are two paths for operations to be published into
+                                // live-mode channels now (here and when one directly publishes
+                                // new messages). Consider if these should be unified into one
+                                // path somehow so as to avoid the chance of introducing
+                                // inconsistency later on.
                                 if sync_handle
                                     .publish(*operation.clone())
                                     .await.is_err() {
