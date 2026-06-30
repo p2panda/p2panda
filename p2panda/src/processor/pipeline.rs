@@ -198,6 +198,7 @@ where
                         }
 
                         // This informs any process waiting for the input event to be finished.
+                        // Unknown tasks are ignored.
                         tasks
                             .mark_as_done(output_event.hash(), output_event.clone())
                             .await;
