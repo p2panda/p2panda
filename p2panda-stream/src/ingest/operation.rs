@@ -180,9 +180,11 @@ mod tests {
 
         // Topic "dogs" contains two logs: 0 with two operations and 1 with one operation.
         let authors =
-            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve(&store, &dogs)
-                .await
-                .unwrap();
+            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve_associations(
+                &store, &dogs,
+            )
+            .await
+            .unwrap();
         assert_eq!(*authors.get(&log_0.author()).unwrap(), [0]);
         assert_eq!(*authors.get(&log_1.author()).unwrap(), [1]);
 
@@ -200,9 +202,11 @@ mod tests {
 
         // Topic "cats" contains one log: 2 with four operations.
         let authors =
-            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve(&store, &cats)
-                .await
-                .unwrap();
+            <SqliteStore as TopicStore<[u8; 32], VerifyingKey, usize>>::resolve_associations(
+                &store, &cats,
+            )
+            .await
+            .unwrap();
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
         let operation = <SqliteStore as LogStore<

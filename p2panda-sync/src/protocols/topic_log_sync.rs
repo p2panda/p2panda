@@ -127,7 +127,7 @@ where
         // Get the log ids which are associated with this topic query.
         let logs = self
             .store
-            .resolve(&self.topic)
+            .resolve_associations(&self.topic)
             .await
             .map_err(|err| TopicLogSyncError::TopicStore(err.to_string()))?;
 

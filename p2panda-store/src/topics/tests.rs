@@ -40,8 +40,32 @@ async fn update_and_resolve_topic_mapping() {
 
     let expected_logs = BTreeMap::from([(alice, vec![topic]), (bob, vec![topic])]);
 
-    let logs = store.resolve(&topic).await.unwrap();
+    let logs = store.resolve_associations(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
+}
+
+#[tokio::test]
+async fn resolve_topic_from_association() {
+    let store = SqliteStore::temporary().await;
+
+    let topic = Topic::random();
+    let log_id = topic;
+
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
+    let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
+
+    let permit = store.begin().await.unwrap();
+    let result = store.associate(&topic, &alice, &log_id).await.unwrap();
+    assert!(result);
+    store.commit(permit).await.unwrap();
+
+    // Resolving a known association returns the topic.
+    let resolved = store.resolve_topic(&alice, &log_id).await.unwrap();
+    assert_eq!(resolved, Some(topic));
+
+    // An unknown author/data id pair returns None.
+    let resolved = store.resolve_topic(&bob, &log_id).await.unwrap();
+    assert_eq!(resolved, None::<Topic>);
 }
 
 #[tokio::test]
@@ -85,7 +109,7 @@ async fn path_based_log_ids() {
         (bob, vec![log_id_puppies]),
     ]);
 
-    let logs = store.resolve(&topic).await.unwrap();
+    let logs = store.resolve_associations(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
 }
 
@@ -122,7 +146,7 @@ async fn remove_association() {
         vec![log_id_kittens.clone(), log_id_kittens_sleepy.clone()],
     )]);
 
-    let logs = store.resolve(&topic).await.unwrap();
+    let logs = store.resolve_associations(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
 
     let permit = store.begin().await.unwrap();
@@ -138,6 +162,6 @@ async fn remove_association() {
 
     let expected_logs = BTreeMap::from([(alice, vec![log_id_kittens])]);
 
-    let logs = store.resolve(&topic).await.unwrap();
+    let logs = store.resolve_associations(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
 }
