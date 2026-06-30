@@ -3,7 +3,6 @@
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
-use p2panda_core::{Hash, VerifyingKey};
 
 use crate::types::AuthGroupState;
 use crate::{ActorId, MemberId};
@@ -70,23 +69,4 @@ pub(crate) fn removed_members(
         .collect::<Vec<_>>();
     members.sort();
     members
-}
-
-// TODO: we define and this trait in many crates, let's move it to -core.
-/// Returns a displayable string representing the underlying value in a short format, easy to read
-/// during debugging and logging.
-pub trait ShortFormat {
-    fn fmt_short(&self) -> String;
-}
-
-impl ShortFormat for VerifyingKey {
-    fn fmt_short(&self) -> String {
-        self.to_hex()[0..10].to_string()
-    }
-}
-
-impl ShortFormat for Hash {
-    fn fmt_short(&self) -> String {
-        self.to_hex()[0..5].to_string()
-    }
 }

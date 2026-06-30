@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::traits::ShortFormat;
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
@@ -24,7 +25,7 @@ use crate::manager::{Manager, StoreError};
 use crate::message::{SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver};
-use crate::utils::{ShortFormat, sort_members, typed_member, typed_members};
+use crate::utils::{sort_members, typed_member, typed_members};
 use crate::{ActorId, GroupId, MemberId, OperationId};
 
 /// A single group which exists in the global auth context.

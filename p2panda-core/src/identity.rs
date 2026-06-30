@@ -31,6 +31,8 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::traits::ShortFormat;
+
 /// The length of an Ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
@@ -274,6 +276,12 @@ impl<'a> Arbitrary<'a> for VerifyingKey {
         let verifying_key =
             VerifyingKey::from_bytes(&bytes).map_err(|_| arbitrary::Error::IncorrectFormat)?;
         Ok(verifying_key)
+    }
+}
+
+impl ShortFormat for VerifyingKey {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..10].to_string()
     }
 }
 
