@@ -268,6 +268,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+    use std::collections::HashSet;
+
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
     use p2panda_core::{PruneFlag, SigningKey, Topic};
@@ -276,8 +279,8 @@ mod tests {
     use crate::credentials::Credentials;
     use crate::forge::OperationForge;
     use crate::operation::LogId;
-    use crate::processor::TaskTracker;
-    use crate::processor::orderer::OrdererArgs;
+    use crate::processor::orderer::{OrdererArgs, OrdererResult};
+    use crate::processor::{ProcessorStatus, TaskTracker};
     use crate::spaces::spaces_manager;
 
     use super::{Event, Pipeline};
@@ -386,5 +389,120 @@ mod tests {
             assert!(result.is_completed());
             assert!(!result.is_failed());
         }
+    }
+
+    #[tokio::test]
+    async fn buffered_outputs() {
+        setup_logging();
+
+        let store = SqliteStore::temporary().await;
+        let tasks = TaskTracker::new();
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials.clone(), store.clone());
+        let spaces_manager = spaces_manager(forge, credentials, store.clone())
+            .await
+            .unwrap();
+
+        let mut pipeline = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
+
+        let log_icebear = TestLog::new();
+        let log_panda = TestLog::new();
+        let log_penguin = TestLog::new();
+
+        let topic = Topic::random();
+
+        let event_1 = {
+            let mut event = Event::new(
+                log_icebear.operation(b"op", ()),
+                LogId::from_topic(topic),
+                topic,
+                PruneFlag::default(),
+                None,
+            );
+            event.orderer_args = OrdererArgs::Process {
+                dependencies: vec![],
+            };
+            event
+        };
+
+        let event_2 = {
+            let mut event = Event::new(
+                log_panda.operation(b".. or no-op", ()),
+                LogId::from_topic(topic),
+                topic,
+                PruneFlag::default(),
+                None,
+            );
+            event.orderer_args = OrdererArgs::Process {
+                dependencies: vec![event_1.hash()],
+            };
+            event
+        };
+
+        let event_3 = {
+            let mut event = Event::new(
+                log_penguin.operation(b"that's the question", ()),
+                LogId::from_topic(topic),
+                topic,
+                PruneFlag::default(),
+                None,
+            );
+            event.orderer_args = OrdererArgs::Process {
+                dependencies: vec![event_1.hash()],
+            };
+            event
+        };
+
+        // 3 and 2 depend on 1. We send event 1 at the very end and expect 2 and 3 to be freed
+        // "at the same time":
+        //
+        // [3]
+        //     \
+        //      -> [1]
+        //     /
+        // [2]
+
+        let events = [event_3.clone(), event_2.clone(), event_1.clone()];
+
+        // Input all three events, here we just expect processing to finish.
+        for event in events {
+            let event_hash = event.hash();
+            let result = pipeline.process(event).await;
+
+            assert_eq!(result.hash(), event_hash);
+            assert!(result.is_completed());
+            assert!(!result.is_failed());
+        }
+
+        // When calling "next" on the pipeline we expect the 3 events to come out:
+        let result = pipeline.next().await;
+        assert!(!result.is_failed());
+        assert_eq!(result.hash(), event_1.hash());
+        assert_matches!(
+            result.orderer,
+            ProcessorStatus::Completed(OrdererResult::Ready)
+        );
+
+        // 2 or 3 can arrive in any order.
+        let mut expected_hashes: HashSet<p2panda_core::Hash> =
+            HashSet::from_iter([event_2.hash(), event_3.hash()]);
+
+        let result = pipeline.next().await;
+        assert!(expected_hashes.remove(&result.hash()));
+        assert!(!result.is_failed());
+        assert_matches!(
+            result.orderer,
+            ProcessorStatus::Completed(OrdererResult::Ready)
+        );
+
+        let result = pipeline.next().await;
+        assert!(!result.is_failed());
+        assert!(expected_hashes.remove(&result.hash()));
+        assert_matches!(
+            result.orderer,
+            ProcessorStatus::Completed(OrdererResult::Ready)
+        );
+
+        assert_eq!(expected_hashes.len(), 0);
     }
 }
