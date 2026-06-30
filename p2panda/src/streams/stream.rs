@@ -312,12 +312,8 @@ where
                 //
                 // If channel stopped working because the subscriber got dropped, ignore it as we
                 // still might want to process locally published operations.
-                if let Err(err) = app_tx.send(event).await {
-                    warn!("error sending event to application layer: {err:?}");
-                };
+                let _ = app_tx.send(event).await;
             }
-
-            warn!("stream processing task exited");
         });
     }
 
