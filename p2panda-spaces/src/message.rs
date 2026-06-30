@@ -250,7 +250,7 @@ impl<C> SpacesArgs<C> {
         }
     }
 
-    pub fn variant(&self) -> String {
+    pub fn variant_str(&self) -> String {
         match self {
             SpacesArgs::KeyBundle { .. } => "key bundle".to_string(),
             SpacesArgs::Auth { .. } => "auth group".to_string(),

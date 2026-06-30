@@ -241,7 +241,7 @@ where
         debug!(
             message_id = message.hash().fmt_short(),
             author = message.author().fmt_short(),
-            variant = args.variant(),
+            variant = args.variant_str(),
             "process message"
         );
 
