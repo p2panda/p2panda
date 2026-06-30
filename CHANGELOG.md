@@ -52,6 +52,7 @@ Highlights are marked with a pancake 🥞
 - encryption: Update hpke-rs to 0.6.1 to fix RUSTSEC [#1233](https://github.com/p2panda/p2panda/pull/1233)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
+- node: Allow event processing to handle out-of-order buffering by separating i/o streams and preserve input ordering [#1271](https://github.com/p2panda/p2panda/pull/1271)
 
 ## [0.6.1] - 22/05/2026
 

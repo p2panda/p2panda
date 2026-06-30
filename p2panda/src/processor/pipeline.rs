@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::thread;
@@ -21,7 +21,7 @@ use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
-use crate::processor::orderer::Orderer;
+use crate::processor::orderer::{Orderer, OrdererResult};
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::types::{SpacesManager, SpacesProcessor};
@@ -59,12 +59,94 @@ const TO_PIPELINE_BUFFER_SIZE: usize = 128;
 ///           Event
 /// ```
 ///
-/// ## Cloning pipelines
+/// ## Important design considerations
 ///
-/// Re-using a pipeline across streams can lead to undesirable effects such as a) receiving
-/// unwanted output events which were not intended for the topic stream b) broadcast channel designs
-/// dropping events when running full.
+/// ### Task tracking
+///
+/// Every input event needs to _strictly_ lead to an equivalent output event (1:1), otherwise the
+/// process who inserted the event will await a result forever. This is managed by the task tracker.
+///
+/// For processors who buffer events (because they are out-of-order) we need to output "pending"
+/// events to inform the task tracker that the event was successfully processed and is now buffered
+/// for a while.
+///
+/// ### Cloning pipelines
+///
+/// Re-using a pipeline across streams can lead to undesirable effects such as receiving unwanted
+/// output events which were not intended for the topic stream.
+///
+/// Only clone the pipeline _within_ a topic stream. Across different topic streams a new pipeline
+/// should be created.
+///
+/// ### Failed or pending events
+///
+/// Any failed or pending event needs to strictly be "disabled" for any processor which follows
+/// after being marked as such. A failed event can be due to an unauthorized action which should not
+/// have any further effect. A pending event is "out of order" and should not have any effect _yet_
+/// until it is "ready" / in-order.
+///
+/// The event needs to still travel through the pipeline, to be successfully marked as "done" (see
+/// "Task tracking") but shouldn't cause any effects in processors anymore. This is achieved by
+/// calling the `noop` method on the event. It will set all processor arguments to "ignore".
+///
+/// ### Input / Output separation and ordering
+///
+/// Input event streams are independent from the output event stream. Both streams are supposed to
+/// be ordered, that is:
+///
+/// 1. Input events should be marked as done _after_ all caused side effects have been processed,
+///    the order on how they were input needs to be preserved, independent of buffering
+/// 2. Output events should arrive in topologically sorted, causal order (if required)
+///
+/// Both rules are important for the whole system to function correctly and not cause surprising
+/// results to the application layer.
+///
+/// Pending events are not forwarded to the output stream.
+///
+/// For upholding all orderer rules the following takes place, here shown with a simple example:
+///
+/// ```text
+/// A is dependent on B:
+/// [A] -> [B]
+///
+/// 1. A is inserted _before_ B into the pipeline:
+///
+/// [A] <- marked as "pending" since out-of-order
+/// [B] <- marked as "ready input", since in-order & freeing A
+///
+/// 2. On the *inner* output stream we receive now:
+///
+/// [A] "pending" <- not forwarded to outer output stream *
+/// [B] "ready input" *
+/// [A] "ready output"
+///
+/// *) These events were part of the input stream.
+///
+/// 3. On the *outer* output stream we receive now:
+///
+/// [B]
+/// [A]
+///
+/// 4. We wait until A was put on the output stream to mark B as done:
+///
+/// [A] <- .. is on the output stream now (step 3.)
+/// [B] <- We mark this input task as "done" now
+///
+/// Note how we've changed the ordering of A and B in Step 2. and 3. but needed to preserve the
+/// original input ordering in 4.
 /// ```
+///
+/// The topological ordering is assured by the "orderer" processor. In step 3. we can see how B is
+/// put on the output stream _before_ A even though they were input in reversed order.
+///
+/// To ensure that B is still marked _after_ all side-effects (freed A) took place we keep track of
+/// the dependents of B. When they all left the output stream we can finally mark B as done.
+///
+/// This ensures that any process awaiting the result of processing B will be marked ready in the
+/// original input order.
+//
+// FIXME: The pipeline thread keeps currently running even when the struct was dropped.
+// See related issue: https://github.com/p2panda/p2panda/issues/1275
 #[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
     to_pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
@@ -178,7 +260,13 @@ where
 
                     pin!(pipeline);
 
+                    let mut pending_dependencies = HashSet::<Hash>::new();
+                    let mut pending: Option<Event<L, E, TP>> = None;
+
                     while let Some(output_event) = pipeline.next().await {
+                        // TODO: We need to handle "invalidating" the pending buffers when something
+                        // went wrong _after_ the orderer processor. Otherwise these items might be
+                        // stuck here forever.
                         if let Some(err) = output_event.failure_reason() {
                             warn!(
                                 id = %output_event.hash().fmt_short(),
@@ -187,18 +275,51 @@ where
                             );
                         }
 
-                        // This informs any process waiting for the input event to be finished.
-                        // Unknown tasks are ignored.
-                        tasks
-                            .mark_as_done(output_event.hash(), output_event.clone())
-                            .await;
+                        // An event arrived which "freed" some dependent operations. This "parent"
+                        // event needs to be forwarded _first_ on the output, but we want it to be
+                        // processed _last_ on the input side. See documentation above for more
+                        // context.
+                        //
+                        // For this we are "reversing" the dependency tree and delay marking the
+                        // "parent" event as done when all dependencies have been visited.
+                        if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
+                            ref dependent_operations,
+                        }) = output_event.orderer
+                        {
+                            pending_dependencies = HashSet::from_iter(dependent_operations.clone());
+                            pending = Some(output_event.clone());
+                        }
 
-                        // If the output event is "ready" (that is, _not_ pending, not being
+                        // We've visited a dependency.
+                        if let ProcessorStatus::Completed(OrdererResult::ReadyOutput) =
+                            output_event.orderer
+                        {
+                            pending_dependencies.remove(&output_event.hash());
+                        }
+
+                        // If the output event is "ready" (that is, _not_ pending / not being
                         // buffered somewhere), then we can finally forward it on the output stream
                         // towards the application layer.
+                        //
+                        // We want this to happen _before_ we mark the task as done to allow all
+                        // consumers to yield the items in correct order.
                         if !output_event.is_pending() {
-                            from_pipeline_queue.lock().await.push_back(output_event);
+                            from_pipeline_queue
+                                .lock()
+                                .await
+                                .push_back(output_event.clone());
                             from_pipeline_notify.notify_one(); // Wake up any pending next call
+                        }
+
+                        // This informs any process waiting for the input event to be finished.
+                        if pending.is_some() && pending_dependencies.is_empty() {
+                            // All dependencies have been visited, we can finally mark the "parent"
+                            // input event  as done.
+                            if let Some(pending) = pending.take() {
+                                tasks.mark_as_done(pending.hash(), pending).await;
+                            }
+                        } else {
+                            tasks.mark_as_done(output_event.hash(), output_event).await;
                         }
                     }
                 });
@@ -475,7 +596,7 @@ mod tests {
         assert!(!result.is_failed());
         assert_eq!(result.hash(), event_1.hash());
 
-        if let ProcessorStatus::Completed(OrdererResult::Resolved {
+        if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
             mut dependent_operations,
         }) = result.orderer
         {
@@ -498,7 +619,7 @@ mod tests {
         assert!(!result.is_failed());
         assert_matches!(
             result.orderer,
-            ProcessorStatus::Completed(OrdererResult::Ready)
+            ProcessorStatus::Completed(OrdererResult::ReadyOutput)
         );
 
         let result = pipeline.next().await;
@@ -506,7 +627,7 @@ mod tests {
         assert!(expected_hashes.remove(&result.hash()));
         assert_matches!(
             result.orderer,
-            ProcessorStatus::Completed(OrdererResult::Ready)
+            ProcessorStatus::Completed(OrdererResult::ReadyOutput)
         );
 
         assert_eq!(expected_hashes.len(), 0);
