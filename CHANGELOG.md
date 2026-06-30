@@ -45,6 +45,7 @@ Highlights are marked with a pancake 🥞
 - encryption: Update hpke-rs to 0.6.1 to fix RUSTSEC [#1233](https://github.com/p2panda/p2panda/pull/1233)
 - spaces: Fix generics in MessageStore and MemoryStore [#1229](https://github.com/p2panda/p2panda/pull/1229)
 - ci: Check for unused mut and async, fix affected methods [#1163](https://github.com/p2panda/p2panda/pull/1163)
+- net: Return existing rx on call to sync manager subscribe [#1269](https://github.com/p2panda/p2panda/pull/1269)
 
 ## [0.6.1] - 22/05/2026
 
