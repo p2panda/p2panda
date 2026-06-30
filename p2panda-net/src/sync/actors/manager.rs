@@ -37,6 +37,9 @@ const GOSSIP_TOPIC_MIX_VALUE: [u8; 32] = [
     229, 93, 143, 227, 97, 61, 38, 202, 63, 250, 26, 233,
 ];
 
+/// Size of channel buffer for the channel where events are received from topic sync managers.
+const FROM_SYNC_CHANNEL_BUFFER: usize = 1024;
+
 pub enum ToSyncManager<M, E> {
     /// Create stream for this topic and return related manager.
     Create(
@@ -311,7 +314,7 @@ where
 
                 // This is used to send sync messages to the associated stream handle(s). We use a
                 // broadcast channel to allow multiple handles to the same topic.
-                let (from_sync_tx, from_sync_rx) = broadcast::channel(256);
+                let (from_sync_tx, from_sync_rx) = broadcast::channel(FROM_SYNC_CHANNEL_BUFFER);
 
                 // Store the sync receiver so it can later be used to create a subscription
                 // instance by the user.
@@ -347,9 +350,13 @@ where
                 let _ = reply.send(sync_manager_ref);
             }
             ToSyncManager::Subscribe(topic, reply) => {
-                if let Some(from_sync_rx) = state.sync_receivers.get(&topic) {
-                    let subscription = from_sync_rx.resubscribe();
-                    let _ = reply.send(Some(subscription));
+                // Remove the current subscription receiver and return this to the user. Replace
+                // it in the manager with a re-subscribed handle. This ensures that the user
+                // receives any buffered messages.
+                if let Some(from_sync_rx) = state.sync_receivers.remove(&topic) {
+                    let re_subscription = from_sync_rx.resubscribe();
+                    state.sync_receivers.insert(topic, re_subscription);
+                    let _ = reply.send(Some(from_sync_rx));
                 } else {
                     let _ = reply.send(None);
                 }
