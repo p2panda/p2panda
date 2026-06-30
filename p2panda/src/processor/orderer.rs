@@ -37,14 +37,19 @@ pub enum OrdererArgs {
     Ignore,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum OrdererResult {
-    /// Item was buffered and is now in "pending" state.
+    /// Item has unmet dependencies, is buffered and now in "pending" state.
     Pending,
 
-    /// Item was buffered by orderer and is now marked as "ready" to be finally forwarded in correct
-    /// order.
-    Ready,
+    /// Item is "ready" and was a dependency for one or more operations which are "freed" now.
+    ///
+    /// This input may trigger zero to many ReadyOutput items to follow.
+    ReadyInput { dependent_operations: Vec<Hash> },
+
+    /// Item was buffered by orderer and is now marked as "ready" by another "input" item, to be
+    /// finally forwarded in correct order.
+    ReadyOutput,
 
     /// Item was ignored as specified in input arguments.
     Ignored,
@@ -56,10 +61,20 @@ impl OrdererResult {
     }
 }
 
+// TODO: Move this back to p2panda-stream.
 pub struct Orderer<S, T, E> {
     inner: Mutex<CausalOrderer<Hash, S>>,
     store: S,
     notify: Notify,
+    // We're keeping an unbound, in-memory buffer of all "freed" events here. This means that if an
+    // event frees n events, we will need to keep all n of them here. This shouldn't be a problem as
+    // long as n stays low (<100 items).
+    //
+    // The alternative is to move the logic polling from the inner orderer into "next" which allows
+    // a more atomic and memory-efficient streaming design where we only look at one item at a time.
+    // We still need a way to tell the pipeline how many items got "freed" by it to allow the
+    // correct input stream ordering to take place (see docs in pipeline.rs of p2panda crate), this
+    // functionality should be possible to add to the inner orderer.
     queue: RefCell<VecDeque<(T, OrdererResult)>>,
     _marker: PhantomData<E>,
 }
@@ -92,7 +107,7 @@ where
 {
     type Output = (T, OrdererResult);
 
-    type Error = (Option<T>, OrdererError);
+    type Error = (T, OrdererError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let args = input.borrow();
@@ -102,24 +117,99 @@ where
 
             let permit = match self.store.begin().await {
                 Ok(permit) => permit,
-                Err(err) => return Err((Some(input), OrdererError::Transaction(err.to_string()))),
+                Err(err) => return Err((input, OrdererError::Transaction(err.to_string()))),
             };
 
-            if let Err(err) = inner.process(input.hash(), dependencies).await {
-                return Err((Some(input), OrdererError::OrdererStore(err.to_string())));
-            };
+            match inner.process(input.hash(), dependencies).await {
+                // a) Item has all dependencies met, we can directly mark it as "ready".
+                Ok(true) => {
+                    let mut dependent_operations = Vec::new();
 
-            if let Err(err) = self.store.set_event(&input.hash(), &input.metadata()).await {
-                return Err((Some(input), OrdererError::ProcessorStore(err.to_string())));
-            };
+                    loop {
+                        match inner.next().await {
+                            Ok(Some(id)) => {
+                                // Ignore our own input.
+                                if id != input.hash() {
+                                    dependent_operations.push(id);
+                                }
 
-            if let Err(err) = self.store.commit(permit).await {
-                return Err((Some(input), OrdererError::Transaction(err.to_string())));
+                                continue;
+                            }
+                            Ok(None) => {
+                                break;
+                            }
+                            Err(err) => {
+                                return Err((input, OrdererError::OrdererStore(err.to_string())));
+                            }
+                        }
+                    }
+
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, OrdererError::Transaction(err.to_string())));
+                    }
+
+                    let mut to_queue = Vec::new();
+
+                    for id in &dependent_operations {
+                        let operation = match self
+                            .store
+                            .get_operation(id)
+                            .await
+                            .map_err(|err| OrdererError::OperationStore(err.to_string()))
+                        {
+                            Ok(Some(operation)) => operation,
+                            Ok(None) => {
+                                return Err((input, OrdererError::StoreInconsistency(*id)));
+                            }
+                            Err(err) => return Err((input, err)),
+                        };
+
+                        let metadata = match self.store.get_event(id).await {
+                            Ok(Some(metadata)) => metadata,
+                            Ok(None) => {
+                                return Err((input, OrdererError::StoreInconsistency(*id)));
+                            }
+                            Err(err) => {
+                                return Err((input, OrdererError::ProcessorStore(err.to_string())));
+                            }
+                        };
+
+                        to_queue.push((
+                            T::from_operation(operation, metadata),
+                            OrdererResult::ReadyOutput,
+                        ));
+                    }
+
+                    // Always forward the current input first.
+                    self.queue.borrow_mut().push_back((
+                        input,
+                        OrdererResult::ReadyInput {
+                            dependent_operations,
+                        },
+                    ));
+
+                    // .. followed by all items which have been marked as "ready" by input.
+                    for item in to_queue {
+                        self.queue.borrow_mut().push_back(item);
+                    }
+                }
+
+                // b) Item doesn't have dependencies met yet, mark it as "pending", it is buffered now.
+                Ok(false) => {
+                    if let Err(err) = self.store.set_event(&input.hash(), &input.metadata()).await {
+                        return Err((input, OrdererError::ProcessorStore(err.to_string())));
+                    };
+
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, OrdererError::Transaction(err.to_string())));
+                    }
+
+                    self.queue
+                        .borrow_mut()
+                        .push_back((input, OrdererResult::Pending));
+                }
+                Err(err) => return Err((input, OrdererError::OrdererStore(err.to_string()))),
             }
-
-            self.queue
-                .borrow_mut()
-                .push_back((input, OrdererResult::Pending));
         } else {
             self.queue
                 .borrow_mut()
@@ -132,56 +222,13 @@ where
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
+        // TODO: If we decide to handle all logic in the "process" part (less memory efficient
+        // approach, see comment above) we should consider replacing the Processor trait with a
+        // Streamas "next" is not required anymore.
         loop {
-            // First check to see if there are any ignored or pending events which can be returned.
-            if let Some((event, result)) = self.queue.borrow_mut().pop_front() {
-                return Ok((event, result));
+            if let Some(output) = self.queue.borrow_mut().pop_front() {
+                return Ok(output);
             }
-
-            let permit = self
-                .store
-                .begin()
-                .await
-                .map_err(|err| (None, OrdererError::Transaction(err.to_string())))?;
-
-            let inner = self.inner.lock().await;
-
-            if let Some(id) = inner
-                .next()
-                .await
-                .map_err(|err| (None, OrdererError::OrdererStore(err.to_string())))?
-            {
-                self.store
-                    .commit(permit)
-                    .await
-                    .map_err(|err| (None, OrdererError::Transaction(err.to_string())))?;
-
-                let operation = match self
-                    .store
-                    .get_operation(&id)
-                    .await
-                    .map_err(|err| OrdererError::OperationStore(err.to_string()))
-                {
-                    Ok(Some(operation)) => operation,
-                    Ok(None) => return Err((None, OrdererError::StoreInconsistency(id))),
-                    Err(err) => return Err((None, err)),
-                };
-
-                let metadata = match self.store.get_event(&id).await {
-                    Ok(Some(metadata)) => metadata,
-                    Ok(None) => return Err((None, OrdererError::StoreInconsistency(id))),
-                    Err(err) => return Err((None, OrdererError::ProcessorStore(err.to_string()))),
-                };
-
-                return Ok((T::from_operation(operation, metadata), OrdererResult::Ready));
-            }
-
-            self.store
-                .commit(permit)
-                .await
-                .map_err(|err| (None, OrdererError::Transaction(err.to_string())))?;
-
-            drop(inner);
 
             self.notify.notified().await;
         }
