@@ -160,25 +160,24 @@ where
     }
 
     /// Returns the error which occurred during a processing failure or `None`.
-    pub fn failure_reasons(&self) -> Vec<ProcessorError> {
-        let mut reasons = vec![];
+    pub fn failure_reason(&self) -> Option<ProcessorError> {
         if let ProcessorStatus::Failed(err) = &self.ingest {
-            reasons.push(err.to_owned().into());
+            return Some(err.to_owned().into());
         }
 
         if let ProcessorStatus::Failed(err) = &self.orderer {
-            reasons.push(err.to_owned().into());
+            return Some(err.to_owned().into());
         }
 
         if let ProcessorStatus::Failed(err) = &self.log_prune {
-            reasons.push(err.to_owned().into());
+            return Some(err.to_owned().into());
         }
 
         if let ProcessorStatus::Failed(err) = &self.spaces {
-            reasons.push(err.to_owned().into());
+            return Some(err.to_owned().into());
         }
 
-        reasons
+        None
     }
 }
 
