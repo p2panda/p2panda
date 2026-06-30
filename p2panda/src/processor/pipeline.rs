@@ -26,10 +26,10 @@ use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::types::{SpacesManager, SpacesProcessor};
 
-/// Number of items which can stay in the pipeline buffer before backpressure is applied. If the
-/// buffer runs full, then sending of new operations into the processor will wait one is received
-/// by the processor.
-const PUBLISH_BUFFER_SIZE: usize = 128;
+/// Number of items which can stay in the pipeline input buffer before backpressure is applied.
+///
+/// If the buffer runs full, then sending of new operations into the processor will wait.
+const TO_PIPELINE_BUFFER_SIZE: usize = 128;
 
 /// Event processor pipeline which consists of multiple processors.
 ///
@@ -58,13 +58,21 @@ const PUBLISH_BUFFER_SIZE: usize = 128;
 ///             v
 ///           Event
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Pipeline<L, E, TP> {
     to_pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
     from_pipeline_queue: Arc<Mutex<VecDeque<Event<L, E, TP>>>>,
     from_pipeline_notify: Arc<Notify>,
     tasks: TaskTracker<Event<L, E, TP>, Hash>,
+    // Re-using a pipeline across streams can lead to undesirable effects such as a) receiving
+    // unwanted output events which were not intended for the topic stream b) broadcast channel
+    // designs dropping events when running full. This !Clone marker should hopefully make you think
+    // twice about re-using pipelines.
+    _marker: NotClone,
 }
+
+#[derive(Debug)]
+struct NotClone;
 
 impl<L, E, TP> Pipeline<L, E, TP>
 where
@@ -80,12 +88,6 @@ where
     ///
     /// Users can run multiple pipelines parallely, a common task manager instance makes sure that
     /// processors do not work on the same event at the same time.
-    //
-    // NOTE: For now this creates a simple pipeline, in the future we might want different
-    // pipelines for different streams (one with almost no processing and others with more complex
-    // processing required for p2panda-spaces, etc.).
-    //
-    // NOTE: For parallelizing pipelines some sort of "work stealing" approach will be required.
     pub fn new(
         store: SqliteStore,
         tasks: TaskTracker<Event<L, E, TP>, Hash>,
@@ -152,11 +154,13 @@ where
                                     event.orderer = ProcessorStatus::Failed(err);
                                     event.noop()
                                 } else {
-                                    // TODO: Properly handle error case. I'm not entirely sure what
-                                    // to do here...we don't have the `event` anymore when this
-                                    // error occurs, so it's not possible to continue with
-                                    // processing.
-                                    panic!("orderer processor returned None err")
+                                    // TODO: This happens when the orderer failed due to a critical
+                                    // database failure _before_ it could resolve the attached
+                                    // event.
+                                    //
+                                    // ... we don't have the `event` anymore when this error occurs,
+                                    // so it's not possible to continue with processing.
+                                    panic!("critical database failure in orderer")
                                 }
                             }
                         })
@@ -212,6 +216,7 @@ where
             from_pipeline_queue,
             from_pipeline_notify,
             tasks,
+            _marker: NotClone,
         }
     }
 

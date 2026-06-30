@@ -8,9 +8,12 @@ mod replay;
 mod stream;
 mod sync_metrics;
 
+use p2panda_core::{Hash, Topic};
 // Useful external types we want to re-export for convenience.
 #[doc(no_inline)]
 pub use p2panda_core::cbor::DecodeError;
+
+use crate::operation::{Extensions, LogId};
 
 pub use acked::AckedError;
 pub(crate) use ephemeral_stream::ephemeral_stream;
@@ -25,5 +28,11 @@ pub use stream::{
     ImportError, ProcessedOperation, PublishError, PublishFuture, Source, StreamEvent,
     StreamPublisher, StreamSubscription,
 };
-pub(crate) use stream::{process_published_operation, processed_stream};
+pub(crate) use stream::processed_stream;
 pub use sync_metrics::{SessionPhase, SyncError};
+
+pub(crate) type Event = crate::processor::Event<LogId, Extensions, Topic>;
+
+pub(crate) type Pipeline = crate::processor::Pipeline<LogId, Extensions, Topic>;
+
+pub(crate) type TaskTracker = crate::processor::TaskTracker<Event, Hash>;

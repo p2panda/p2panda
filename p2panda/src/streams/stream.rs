@@ -29,13 +29,14 @@ use tracing::warn;
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
-use crate::processor::{Event, Pipeline, ProcessorError, ProcessorStatus};
+use crate::processor::{ProcessorError, ProcessorStatus};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
+use crate::streams::{Event, Pipeline};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -100,7 +101,7 @@ pub(crate) async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
     forge: OperationForge,
-    pipeline: Pipeline<LogId, Extensions, Topic>,
+    mut pipeline: Pipeline,
     from: StreamFrom,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
@@ -121,11 +122,8 @@ where
 
     // Channel to send locally created operations to the processing pipeline. A "oneshot" callback
     // is attached to allow publishers to await the processing result.
-    let (publish_tx, mut publish_rx) = mpsc::channel::<(
-        Operation,
-        Option<M>,
-        oneshot::Sender<Event<LogId, Extensions, Topic>>,
-    )>(PUBLISH_BUFFER_SIZE);
+    let (publish_tx, mut publish_rx) =
+        mpsc::channel::<(Operation, Option<M>, oneshot::Sender<Event>)>(PUBLISH_BUFFER_SIZE);
 
     // Channel for importing external operation streams.
     let (import_tx, mut import_rx) = mpsc::channel::<(
@@ -143,7 +141,6 @@ where
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
     {
-        let pipeline = pipeline.clone();
         let acked = acked.clone();
         let store = store.clone();
         let sync_handle = sync_handle.clone();
@@ -277,7 +274,9 @@ where
                     // Receive the next ready event from any imported external source.
                     Some(event) = external_stream.next() => {
                         match event {
-                            ExternalStreamEvent::Start { session_id } => StreamEvent::ImportStarted { session_id },
+                            ExternalStreamEvent::Start {
+                                session_id
+                            } => StreamEvent::ImportStarted { session_id },
                             ExternalStreamEvent::Operation { session_id, operation } => {
                                 // Try pushing operation to other nodes if we have an active and
                                 // "live" sync session with them. This allows disseminating new
@@ -294,7 +293,11 @@ where
                                 if sync_handle
                                     .publish(*operation.clone())
                                     .await.is_err() {
-                                        warn!(session_id = session_id, operation_id = %operation.hash(), "failed sending imported operation on sync channel")
+                                        warn!(
+                                            session_id,
+                                            operation_id = %operation.hash(),
+                                            "failed sending imported operation on sync channel"
+                                        )
                                     };
 
                                 let Some(event) = process_operation::<M>(
@@ -310,8 +313,15 @@ where
 
                                 event
                             },
-                            ExternalStreamEvent::End { session_id } => StreamEvent::ImportEnded { session_id },
+                            ExternalStreamEvent::End {
+                                session_id
+                            } => StreamEvent::ImportEnded { session_id },
                         }
+                    },
+
+                    _from_pipeline_event = pipeline.next() => {
+                        // TODO: Handle processing result and forward to application layer.
+                        continue;
                     }
                 };
 
@@ -351,7 +361,7 @@ where
 pub(crate) async fn process_operation<M>(
     operation: Operation,
     topic: Topic,
-    pipeline: &Pipeline<LogId, Extensions, Topic>,
+    pipeline: &Pipeline,
     ack_policy: AckPolicy,
     acked: &Acked,
     source: Source,
@@ -474,8 +484,8 @@ where
 pub(crate) async fn process_published_operation(
     operation: Operation,
     topic: Topic,
-    pipeline: &Pipeline<LogId, Extensions, Topic>,
-) -> Event<LogId, Extensions, Topic> {
+    pipeline: &Pipeline,
+) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
@@ -511,7 +521,7 @@ pub(crate) async fn process_published_operation(
 /// If acking fails we inform the application-layer about it, to give them a chance to re-attempt
 /// acking it themselves.
 pub(crate) async fn ack_published_operation_wo_body<M>(
-    event: Event<LogId, Extensions, Topic>,
+    event: Event,
     acked: &Acked,
 ) -> Option<StreamEvent<M>> {
     if let Err(error) = acked.ack(&event).await {
@@ -527,7 +537,7 @@ pub(crate) async fn ack_published_operation_wo_body<M>(
 /// Acknowledge an operation with a body which was just created locally.
 pub(crate) async fn ack_published_operation<M>(
     message: M,
-    event: Event<LogId, Extensions, Topic>,
+    event: Event,
     topic: Topic,
     ack_policy: AckPolicy,
     acked: &Acked,
@@ -621,11 +631,7 @@ pub struct StreamPublisher<M> {
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     forge: OperationForge,
     #[allow(clippy::type_complexity)]
-    pub(crate) publish_tx: mpsc::Sender<(
-        Operation,
-        Option<M>,
-        oneshot::Sender<Event<LogId, Extensions, Topic>>,
-    )>,
+    pub(crate) publish_tx: mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>,
     import_tx: mpsc::Sender<(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
@@ -743,7 +749,7 @@ where
 #[derive(Debug)]
 pub struct PublishFuture {
     hash: Hash,
-    processed_rx: oneshot::Receiver<Event<LogId, Extensions, Topic>>,
+    processed_rx: oneshot::Receiver<Event>,
 }
 
 impl PublishFuture {
@@ -754,7 +760,7 @@ impl PublishFuture {
 }
 
 impl Future for PublishFuture {
-    type Output = Result<Event<LogId, Extensions, Topic>, oneshot::error::RecvError>;
+    type Output = Result<Event, oneshot::error::RecvError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.processed_rx.poll_unpin(cx)
@@ -926,7 +932,7 @@ pub enum StreamEvent<M> {
         /// Event which failed during system-level processing.
         ///
         /// Inspect the event to find the cause of the failure.
-        event: Event<LogId, Extensions, Topic>,
+        event: Event,
 
         /// Error which occurred during processing.
         error: ProcessorError,
@@ -952,14 +958,11 @@ pub enum StreamEvent<M> {
     /// This is an application-level error and indicates an invalid application payload.
     // TODO(adz): Since this is an applicaton-level concern we should remove encoding / decoding
     // from our APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
-    DecodeFailed {
-        event: Event<LogId, Extensions, Topic>,
-        error: DecodeError,
-    },
+    DecodeFailed { event: Event, error: DecodeError },
 
     /// Topic stream could not acknowledge events due to an internal error.
     AckFailed {
-        event: Event<LogId, Extensions, Topic>,
+        event: Event,
         error: Arc<AckedError>,
     },
 }
@@ -967,7 +970,7 @@ pub enum StreamEvent<M> {
 /// Processed operation with application message coming from a topic stream.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcessedOperation<M> {
-    event: Event<LogId, Extensions, Topic>,
+    event: Event,
     topic: Topic,
     acked: Acked,
     message: M,
@@ -1003,7 +1006,7 @@ impl<M> ProcessedOperation<M> {
 
     /// Meta-data for inspecting and debugging the processed event (failure / success status) and
     /// underlying [`Operation`] of the append-only log.
-    pub fn processed(&self) -> &Event<LogId, Extensions, Topic> {
+    pub fn processed(&self) -> &Event {
         &self.event
     }
 
