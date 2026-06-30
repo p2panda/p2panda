@@ -119,11 +119,6 @@ impl Acked {
 
         let header = header.borrow();
 
-        // @TODO: what does this check mean now that topic does not directly map to a log id? //
-        // Make sure we're only acking operations for the given topic. if
-        // LogId::from_topic(self.topic) != header.extensions.log_id() { return
-        //     Err(AckedError::InvalidTopic(self.topic)); }
-
         let mut cursor = self.cursor().await?;
         cursor.advance(
             header.verifying_key,
