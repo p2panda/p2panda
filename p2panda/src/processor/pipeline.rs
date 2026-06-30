@@ -237,6 +237,7 @@ mod tests {
     use crate::forge::OperationForge;
     use crate::operation::LogId;
     use crate::processor::TaskTracker;
+    use crate::processor::orderer::OrdererArgs;
     use crate::spaces::spaces_manager;
 
     use super::{Event, Pipeline};
@@ -291,5 +292,59 @@ mod tests {
         assert_eq!(result.hash(), operation.hash());
         assert!(!result.is_completed());
         assert!(result.is_failed());
+    }
+
+    #[tokio::test]
+    async fn out_of_order() {
+        setup_logging();
+
+        let store = SqliteStore::temporary().await;
+        let tasks = TaskTracker::new();
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials.clone(), store.clone());
+        let spaces_manager = spaces_manager(forge, credentials, store.clone())
+            .await
+            .unwrap();
+
+        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
+
+        let mut events = Vec::new();
+        let mut dependencies = Vec::new();
+
+        // Create many operations in own logs (each depth 1) which are dependent on each other
+        // (multi-writer). We reverse the order of how they are processed afterwards, so we need to
+        // process everything in "the worst order possible".
+        let topic = Topic::random();
+        for _ in 0..255 {
+            let log = TestLog::new();
+            let operation = log.operation(b"op", ());
+
+            let mut event = Event::new(
+                operation.clone(),
+                LogId::from_topic(topic),
+                topic,
+                PruneFlag::default(),
+                None,
+            );
+
+            event.orderer_args = OrdererArgs::Process {
+                dependencies: dependencies,
+            };
+
+            events.push(event);
+
+            dependencies = vec![operation.hash()];
+        }
+
+        events.reverse();
+
+        for event in events {
+            let event_hash = event.hash();
+            let result = processor.process(event).await;
+
+            assert_eq!(result.hash(), event_hash);
+            assert!(result.is_completed());
+            assert!(!result.is_failed());
+        }
     }
 }
