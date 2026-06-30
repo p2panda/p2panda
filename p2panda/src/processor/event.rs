@@ -139,6 +139,17 @@ where
             || matches!(self.spaces, ProcessorStatus::Failed(_))
     }
 
+    /// Returns `true` if event got buffered by some processor and is therefore in "pending" state
+    /// until it'll be released by another event.
+    ///
+    /// Buffering usually takes place when an event arrives out-of-order.
+    pub fn is_pending(&self) -> bool {
+        matches!(
+            self.orderer,
+            ProcessorStatus::Completed(OrdererResult::Pending)
+        )
+    }
+
     /// Returns the error which occurred during a processing failure or `None`.
     pub fn failure_reason(&self) -> Option<ProcessorError> {
         if let ProcessorStatus::Failed(err) = &self.ingest {
