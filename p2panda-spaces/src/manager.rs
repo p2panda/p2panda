@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::traits::{Digest, Provenance};
+use p2panda_core::traits::{Digest, Provenance, ShortFormat};
 use p2panda_core::{Hash, SigningKey, VerifyingKey};
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::Transaction;
@@ -30,7 +30,6 @@ use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError, SpacesState};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroupState, AuthResolver};
-use crate::utils::ShortFormat;
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 
 /// Identifier used to store groups state into database.

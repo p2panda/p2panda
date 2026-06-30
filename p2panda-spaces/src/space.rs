@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::traits::Digest;
+use p2panda_core::traits::{Digest, ShortFormat};
 use p2panda_core::{SigningKey, VerifyingKey};
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
@@ -35,7 +35,7 @@ use crate::types::{
     AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
     EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
-use crate::utils::{ShortFormat, added_members, removed_members, secret_members, sort_members};
+use crate::utils::{added_members, removed_members, secret_members, sort_members};
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceId};
 
 /// A single encryption context with associated group of actors who will participate in the key

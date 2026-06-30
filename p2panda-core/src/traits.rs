@@ -24,3 +24,9 @@ where
 
     fn verify(&self) -> bool;
 }
+
+/// Returns a displayable string representing the underlying value in a short format, easy to read
+/// during debugging and logging.
+pub trait ShortFormat {
+    fn fmt_short(&self) -> String;
+}
