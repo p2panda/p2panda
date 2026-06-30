@@ -34,7 +34,9 @@ groups = [
   "p2panda-store/groups",
   "dep:serde",
 ]
-ingest = []
+ingest = [
+    "dep:serde",
+]
 log_prune = []
 orderer = []
 spaces = [
