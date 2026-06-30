@@ -406,8 +406,8 @@ impl Node {
         let event =
             process_published_operation(message.into_operation(), topic, &self.pipeline).await;
 
-        if event.is_failed() {
-            Err(event.failure_reason().expect("error"))?
+        if let Some(err) = event.failure_reason() {
+            Err(err)?
         } else {
             let group = self.group(group_id).await?.expect("");
             Ok(group)

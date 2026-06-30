@@ -163,7 +163,7 @@ where
     /// Turn all processor arguments into no-ops by setting them to "ignore".
     ///
     /// This will cause this event to not be processed by _any_ next processors. Usually we want to
-    /// call this after an failure happenend.
+    /// call this after a processor failure happenend.
     pub(crate) fn noop(self) -> Self {
         Self {
             operation: self.operation,
