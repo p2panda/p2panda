@@ -25,6 +25,7 @@ use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
     SpaceError, SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Pipeline, StreamFrom, StreamPublisher,
@@ -394,25 +395,33 @@ impl Node {
 
     pub async fn create_group(
         &self,
-        _initial_members: &[(ActorId, AccessLevel)],
+        initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<Group, GroupError> {
-        // TODO: refactor this to process using the tx, similar like create_space. Like this we
-        // would already receive the CREATED_GROUP event on the rx which is nice.
-        todo!();
+        let initial_members = to_initial_members(initial_members);
+        let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
 
-        // let initial_members = to_initial_members(initial_members);
-        // let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
-        //
-        // let topic = actor_to_topic(group_id);
-        // let event =
-        //     process_published_operation(message.into_operation(), topic, &self.pipeline).await;
-        //
-        // if let Some(err) = event.failure_reason() {
-        //     Err(err)?
-        // } else {
-        //     let group = self.group(group_id).await?.expect("");
-        //     Ok(group)
-        // }
+        let topic = actor_to_topic(group_id);
+        let (tx, rx) = self.stream::<NoBody>(topic).await?;
+
+        let processed = tx
+            .import(futures_util::stream::once(async {
+                message.into_operation()
+            }))
+            .await?;
+
+        // TODO: Would be good to get an error / report here if processing the imported operations
+        // failed. This error so far only tells us that the channel broke down.
+        if processed.await.is_err() {
+            panic!();
+        }
+
+        let inner = self
+            .spaces_manager
+            .group(group_id)
+            .await?
+            .expect("materialised group after processing operations");
+
+        Ok(Group::new(inner, tx, rx))
     }
 
     pub async fn space<M>(
