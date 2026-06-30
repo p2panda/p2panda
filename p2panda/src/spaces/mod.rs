@@ -8,7 +8,7 @@ mod space;
 pub(crate) mod types;
 
 use p2panda_auth::Access;
-use p2panda_core::{Topic, VerifyingKey};
+use p2panda_core::Topic;
 use p2panda_store::SqliteStore;
 
 // Re-export useful types.
@@ -25,8 +25,6 @@ pub use types::SpacesManagerError;
 
 use crate::Credentials;
 use crate::forge::OperationForge;
-use crate::operation::LogId;
-use crate::spaces::forge::GROUP_CONTROL_MESSAGE;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
 
 pub async fn spaces_manager(
@@ -63,16 +61,4 @@ pub(crate) fn to_initial_members(
             )
         })
         .collect()
-}
-
-pub(crate) fn group_log_id(group_id: VerifyingKey) -> LogId {
-    LogId::digest(&{
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(group_id.as_bytes());
-        // The group id would be enough to indicate the log id, we hash it here together
-        // with a constant value to prevent possible collisions with logs of same id but
-        // different purpose.
-        bytes.extend_from_slice(GROUP_CONTROL_MESSAGE);
-        bytes
-    })
 }

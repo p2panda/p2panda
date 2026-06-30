@@ -12,15 +12,14 @@ use tracing::debug;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
-use crate::spaces::group_log_id;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 pub(crate) const KEY_BUNDLE_LOG_ID: &[u8] = b"key_bundle/v1";
 
-pub(crate) const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
+const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
 
-pub const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
+const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
 
 const SPACE_APPLICATION_MESSAGE: &[u8] = b"space_application/v1";
 
@@ -209,6 +208,18 @@ fn space_log_id(space_id: Hash) -> LogId {
         // with a constant value to prevent possible collisions with logs of same id but
         // different purpose.
         bytes.extend_from_slice(SPACE_CONTROL_MESSAGE);
+        bytes
+    })
+}
+
+fn group_log_id(group_id: VerifyingKey) -> LogId {
+    LogId::digest(&{
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(group_id.as_bytes());
+        // The group id would be enough to indicate the log id, we hash it here together
+        // with a constant value to prevent possible collisions with logs of same id but
+        // different purpose.
+        bytes.extend_from_slice(GROUP_CONTROL_MESSAGE);
         bytes
     })
 }
