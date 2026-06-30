@@ -140,29 +140,60 @@ where
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
+    // If any other process wants to bring an stream event forward to the application layer ("output
+    // stream"), this channel should be used.
+    let (to_output_tx, mut to_output_rx) = mpsc::channel::<StreamEvent<M>>(128);
+
+    // FIXME: Both tasks need to be gracefully shut down when the tx / rx halves got dropped,
+    // otherwise the sync session keeps running.
+    //
+    // See related issue: https://github.com/p2panda/p2panda/issues/1272
+
     // Spawn first task which receives processed "output events" from the processing pipeline, the
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
     // forwarded to the application layer.
     {
         let mut pipeline = pipeline.clone();
         let acked = acked.clone();
-        let app_tx = app_tx.clone();
 
         tokio::spawn(async move {
             loop {
-                // Handle resulting output events from the pipeline and forward them as stream
-                // events to application layer when applicable.
-                let from_pipeline_event = pipeline.next().await;
+                let stream_event = tokio::select! {
+                    // We need to process pipeline output events _before_ any other system events.
+                    // This is crucial to ensure correct ordering of events such as "replay started"
+                    // being followed by "processed operations" and then finally by "replay ended",
+                    // etc.
+                    biased;
 
-                if let Some(stream_event) =
-                    process_operation_out::<M>(from_pipeline_event, topic, ack_policy, &acked).await
-                {
-                    // Send processing result to application layer.
-                    //
-                    // If channel stopped working because the subscriber got dropped, ignore it as
-                    // we still might want to process locally published operations.
-                    let _ = app_tx.send(stream_event).await;
-                }
+                    // Handle resulting output events from the pipeline and forward them as stream
+                    // events to application layer, when applicable.
+                    from_pipeline_event = pipeline.next() => {
+                        if let Some(stream_event) =
+                            process_operation_out::<M>(
+                                from_pipeline_event,
+                                topic,
+                                ack_policy,
+                                &acked
+                            ).await
+                        {
+                            stream_event
+                        } else {
+                            continue;
+                        }
+                    },
+
+                    // Any other process forwarding an event (like "replay ended", etc.) to the
+                    // application layer.
+                    Some(stream_event) = to_output_rx.recv() => {
+                        stream_event
+                    }
+                };
+
+                // Send processing result to application layer.
+                //
+                // If channel stopped working because the subscriber got dropped, ignore it as
+                // we still might want to process locally published operations.
+                let _ = app_tx.send(stream_event).await;
             }
         });
     }
@@ -170,9 +201,8 @@ where
     // Spawn second task which assembles different sources of incoming operations (replays, external
     // streams, sync session, locally published, etc.) and inputs them into the processing pipeline.
     //
-    // Here we only forward "system events" to the application layer, such as "sync started" or
-    // "external stream import finished", etc. - actual application messages are handled in the task
-    // above.
+    // Here we only forward "system events" to the output stream, such as "sync started" or
+    // "external stream import finished", etc.
     {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
@@ -186,7 +216,8 @@ where
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
                 let replay_result =
-                    replay_log_ranges(topic, &store, &app_tx, &pipeline, nacked_log_ranges).await;
+                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
+                        .await;
 
                 // Errors occurring in the replay task which be returned to the user.
                 if let Err(error) = replay_result {
@@ -195,7 +226,7 @@ where
                         "error occurred in replay task: {error}"
                     );
 
-                    let _ = app_tx
+                    let _ = to_output_tx
                         .send(StreamEvent::ReplayFailed {
                             error: Arc::new(error),
                         })
@@ -310,16 +341,14 @@ where
                             },
                             ExternalStreamEvent::End {
                                 session_id
-                            } => StreamEvent::ImportEnded { session_id },
+                            } => {
+                                StreamEvent::ImportEnded { session_id }
+                            },
                         }
                     },
                 };
 
-                // Send stream events to application layer.
-                //
-                // If channel stopped working because the subscriber got dropped, ignore it as
-                // we still might want to process locally published operations.
-                let _ = app_tx.send(stream_event).await;
+                let _ = to_output_tx.send(stream_event).await;
             }
         });
     }
@@ -869,8 +898,9 @@ pub enum StreamEvent<M> {
     /// Deserializing the application message into the specified type failed.
     ///
     /// This is an application-level error and indicates an invalid application payload.
-    // TODO(adz): Since this is an applicaton-level concern we should remove encoding / decoding
-    // from our APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
+    //
+    // TODO: Since this is an applicaton-level concern we should remove encoding / decoding from our
+    // APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
     DecodeFailed { event: Event, error: DecodeError },
 
     /// Topic stream could not acknowledge events due to an internal error.
