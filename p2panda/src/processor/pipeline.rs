@@ -148,19 +148,9 @@ where
                                     event
                                 }
                             }
-                            Err((event, err)) => {
-                                if let Some(mut event) = event {
-                                    event.orderer = ProcessorStatus::Failed(err);
-                                    event.noop()
-                                } else {
-                                    // TODO: This happens when the orderer failed due to a critical
-                                    // database failure _before_ it could resolve the attached
-                                    // event.
-                                    //
-                                    // ... we don't have the `event` anymore when this error occurs,
-                                    // so it's not possible to continue with processing.
-                                    panic!("critical database failure in orderer")
-                                }
+                            Err((mut event, err)) => {
+                                event.orderer = ProcessorStatus::Failed(err);
+                                event.noop()
                             }
                         })
                         .layer(log_prune)
@@ -484,10 +474,20 @@ mod tests {
         let result = pipeline.next().await;
         assert!(!result.is_failed());
         assert_eq!(result.hash(), event_1.hash());
-        assert_matches!(
-            result.orderer,
-            ProcessorStatus::Completed(OrdererResult::Ready)
-        );
+
+        if let ProcessorStatus::Completed(OrdererResult::Resolved {
+            mut dependent_operations,
+        }) = result.orderer
+        {
+            let mut expected_operations = vec![event_2.hash(), event_3.hash()];
+
+            expected_operations.sort();
+            dependent_operations.sort();
+
+            assert_eq!(expected_operations, dependent_operations);
+        } else {
+            panic!("unexpected orderer result");
+        }
 
         // 2 or 3 can arrive in any order.
         let mut expected_hashes: HashSet<p2panda_core::Hash> =
