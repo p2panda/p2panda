@@ -1,21 +1,22 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::thread;
 
 use futures_util::StreamExt;
-use p2panda_core::traits::Digest;
+use p2panda_core::traits::{Digest, ShortFormat};
 use p2panda_core::{Extensions, Hash, LogId};
 use p2panda_store::SqliteStore;
 use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
-use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::pin;
 use tokio::runtime::Builder;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, Notify, mpsc};
 use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
@@ -59,7 +60,9 @@ const PUBLISH_BUFFER_SIZE: usize = 128;
 /// ```
 #[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
-    pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
+    to_pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
+    from_pipeline_queue: Arc<Mutex<VecDeque<Event<L, E, TP>>>>,
+    from_pipeline_notify: Arc<Notify>,
     tasks: TaskTracker<Event<L, E, TP>, Hash>,
 }
 
@@ -88,7 +91,9 @@ where
         tasks: TaskTracker<Event<L, E, TP>, Hash>,
         spaces_manager: SpacesManager,
     ) -> Self {
-        let (pipeline_tx, pipeline_rx) = mpsc::channel(PUBLISH_BUFFER_SIZE);
+        let (to_pipeline_tx, to_pipeline_rx) = mpsc::channel(TO_PIPELINE_BUFFER_SIZE);
+        let from_pipeline_queue = Arc::new(Mutex::new(VecDeque::new()));
+        let from_pipeline_notify = Arc::new(Notify::new());
 
         {
             let tasks = tasks.clone();
@@ -97,6 +102,9 @@ where
                 .enable_all()
                 .build()
                 .expect("runtime for current thread");
+
+            let from_pipeline_queue = from_pipeline_queue.clone();
+            let from_pipeline_notify = from_pipeline_notify.clone();
 
             thread::spawn(move || {
                 let local = LocalSet::new();
@@ -114,7 +122,7 @@ where
                     );
 
                     // Receive incoming events through mpsc channel.
-                    let pipeline = ReceiverStream::new(pipeline_rx)
+                    let pipeline = ReceiverStream::new(to_pipeline_rx)
                         .layer(ingest)
                         .map(|result| match result {
                             Ok((mut event, result)) => {
@@ -177,16 +185,21 @@ where
 
                     pin!(pipeline);
 
-                    while let Some(operation) = pipeline.next().await {
-                        if let Some(err) = operation.failure_reason() {
+                    while let Some(output_event) = pipeline.next().await {
+                        if let Some(err) = output_event.failure_reason() {
                             warn!(
-                                id = %operation.hash().fmt_short(),
+                                id = %output_event.hash().fmt_short(),
                                 "failed processing event: {}",
                                 err
                             );
                         }
 
-                        tasks.mark_as_done(operation.hash(), operation).await;
+                        tasks
+                            .mark_as_done(output_event.hash(), output_event.clone())
+                            .await;
+
+                        from_pipeline_queue.lock().await.push_back(output_event);
+                        from_pipeline_notify.notify_one(); // Wake up any pending next call
                     }
                 });
 
@@ -194,7 +207,12 @@ where
             });
         }
 
-        Self { pipeline_tx, tasks }
+        Self {
+            to_pipeline_tx,
+            from_pipeline_queue,
+            from_pipeline_notify,
+            tasks,
+        }
     }
 
     /// Queue up an incoming operation to be processed by this pipeline in the background.
@@ -215,7 +233,7 @@ where
 
         // Send operation to processing pipeline, it will handle this operation eventually in a
         // concurrent "background" task.
-        let _ = self.pipeline_tx.send(input).await;
+        let _ = self.to_pipeline_tx.send(input).await;
 
         // Block and await here until the mananger received the signal that the task has finished.
         // This assures that operations are handled in-order.
@@ -223,6 +241,17 @@ where
         // Please note that the task might have finished successfully or with a processor failure,
         // we do not treat the error here on this level.
         task.ready().await
+    }
+
+    pub async fn next(&mut self) -> Event<L, E, TP> {
+        loop {
+            if let Some(output) = self.from_pipeline_queue.lock().await.pop_front() {
+                return output;
+            }
+
+            // Wait for notification that an item was added.
+            self.from_pipeline_notify.notified().await;
+        }
     }
 }
 
