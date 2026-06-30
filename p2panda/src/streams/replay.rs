@@ -9,12 +9,10 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::debug;
 
-use crate::node::AckPolicy;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
-use crate::streams::acked::Acked;
-use crate::streams::stream::{Source, process_operation};
+use crate::streams::stream::{Source, process_operation_in};
 
 /// Determines the starting point of a subscription stream.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
@@ -49,8 +47,6 @@ pub(crate) async fn replay_log_ranges<M>(
     store: &SqliteStore,
     app_tx: &mpsc::Sender<StreamEvent<M>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
-    ack_policy: AckPolicy,
-    acked: &Acked,
     log_ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
 where
@@ -81,24 +77,7 @@ where
             };
 
             for (operation, _) in operations {
-                match process_operation::<M>(
-                    operation,
-                    topic,
-                    pipeline,
-                    ack_policy,
-                    acked,
-                    Source::LocalStore,
-                )
-                .await
-                {
-                    Some(event) => {
-                        app_tx
-                            .send(event)
-                            .await
-                            .map_err(|_| ReplayError::CriticalError)?;
-                    }
-                    None => continue,
-                }
+                process_operation_in(operation, Source::LocalStore, topic, pipeline).await;
             }
         }
     }
