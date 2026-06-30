@@ -6,6 +6,7 @@ use p2panda_core::{Extensions, Operation};
 use p2panda_net::NodeId;
 use p2panda_sync::FromSync;
 use p2panda_sync::protocols::{Metrics, TopicLogSyncEvent};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::streams::StreamEvent;
@@ -165,7 +166,7 @@ impl Aggregator {
 /// The nodes then move into the `Live` phase, where any newly-published messages for the relevant
 /// topic will be sent immediately over the sync session - without the nodes first having to
 /// announce and synchronise over their respective states.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SessionPhase {
     Sync,
     Live,

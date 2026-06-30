@@ -58,21 +58,20 @@ const TO_PIPELINE_BUFFER_SIZE: usize = 128;
 ///             v
 ///           Event
 /// ```
-#[derive(Debug)]
+///
+/// ## Cloning pipelines
+///
+/// Re-using a pipeline across streams can lead to undesirable effects such as a) receiving
+/// unwanted output events which were not intended for the topic stream b) broadcast channel designs
+/// dropping events when running full.
+/// ```
+#[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
     to_pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
     from_pipeline_queue: Arc<Mutex<VecDeque<Event<L, E, TP>>>>,
     from_pipeline_notify: Arc<Notify>,
     tasks: TaskTracker<Event<L, E, TP>, Hash>,
-    // Re-using a pipeline across streams can lead to undesirable effects such as a) receiving
-    // unwanted output events which were not intended for the topic stream b) broadcast channel
-    // designs dropping events when running full. This !Clone marker should hopefully make you think
-    // twice about re-using pipelines.
-    _marker: NotClone,
 }
-
-#[derive(Debug)]
-struct NotClone;
 
 impl<L, E, TP> Pipeline<L, E, TP>
 where
@@ -222,7 +221,6 @@ where
             from_pipeline_queue,
             from_pipeline_notify,
             tasks,
-            _marker: NotClone,
         }
     }
 
@@ -282,6 +280,7 @@ mod tests {
     use crate::processor::orderer::{OrdererArgs, OrdererResult};
     use crate::processor::{ProcessorStatus, TaskTracker};
     use crate::spaces::spaces_manager;
+    use crate::streams::Source;
 
     use super::{Event, Pipeline};
 
@@ -308,6 +307,7 @@ mod tests {
         let result = processor
             .process(Event::new(
                 operation.clone(),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
@@ -325,6 +325,7 @@ mod tests {
         let result = processor
             .process(Event::new(
                 operation.clone(),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
@@ -364,6 +365,7 @@ mod tests {
 
             let mut event = Event::new(
                 operation.clone(),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
@@ -414,6 +416,7 @@ mod tests {
         let event_1 = {
             let mut event = Event::new(
                 log_icebear.operation(b"op", ()),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
@@ -428,6 +431,7 @@ mod tests {
         let event_2 = {
             let mut event = Event::new(
                 log_panda.operation(b".. or no-op", ()),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
@@ -442,6 +446,7 @@ mod tests {
         let event_3 = {
             let mut event = Event::new(
                 log_penguin.operation(b"that's the question", ()),
+                Source::LocalStore,
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),

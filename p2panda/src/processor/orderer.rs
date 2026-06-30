@@ -39,8 +39,14 @@ pub enum OrdererArgs {
 
 #[derive(Copy, Clone, Debug)]
 pub enum OrdererResult {
-    Ready,
+    /// Item was buffered and is now in "pending" state.
     Pending,
+
+    /// Item was buffered by orderer and is now marked as "ready" to be finally forwarded in correct
+    /// order.
+    Ready,
+
+    /// Item was ignored as specified in input arguments.
     Ignored,
 }
 
@@ -127,7 +133,7 @@ where
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         loop {
-            // First check to see if there are any ignored events which can be returned.
+            // First check to see if there are any ignored or pending events which can be returned.
             if let Some((event, result)) = self.queue.borrow_mut().pop_front() {
                 return Ok((event, result));
             }

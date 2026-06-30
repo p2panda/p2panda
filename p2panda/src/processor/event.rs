@@ -14,6 +14,7 @@ use thiserror::Error;
 
 use crate::processor::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
+use crate::streams::Source;
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,6 +35,9 @@ pub enum ProcessorStatus<R, F> {
 pub struct Event<L, E, TP> {
     /// p2panda Operation.
     pub operation: Operation<E>,
+
+    /// Source of a processed operation.
+    pub source: Source,
 
     /// Input arguments for the "ingest" processor.
     pub ingest_args: IngestArgs<L, TP>,
@@ -66,6 +70,7 @@ where
 {
     pub(crate) fn new(
         operation: Operation<E>,
+        source: Source,
         log_id: L,
         topic: TP,
         prune_flag: PruneFlag,
@@ -110,6 +115,7 @@ where
             },
             spaces: ProcessorStatus::Pending,
             operation,
+            source,
         }
     }
 
@@ -178,6 +184,7 @@ where
     pub(crate) fn noop(self) -> Self {
         Self {
             operation: self.operation,
+            source: self.source,
             ingest_args: IngestArgs {
                 log_id: self.ingest_args.log_id,
                 topic: self.ingest_args.topic,
@@ -195,13 +202,18 @@ where
 }
 
 /// Metadata required to construct a new `Event` (excluding the operation).
+// TODO: Optimize serialization for database, consider adding version number for encoding.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EventMetadata<L, TP> {
-    log_id: L,
     topic: TP,
+    // TODO: Not all fields are required here, for example log id and prune flag and spaces args are
+    // in the header extensions.
+    log_id: L,
     prune_flag: PruneFlag,
     spaces_args: Option<SpacesArgs>,
+    // TODO: Store all processors results, not only ingest.
     ingest: ProcessorStatus<IngestResult, IngestError>,
+    source: Source,
 }
 
 impl<L, E, TP> OrdererMetadata<E> for Event<L, E, TP>
@@ -221,6 +233,7 @@ where
             SpacesProcessorArgs::Process { msg } => Some(msg.args.clone()),
         };
         let ingest = self.ingest.clone();
+        let source = self.source.clone();
 
         EventMetadata {
             log_id,
@@ -228,12 +241,14 @@ where
             prune_flag,
             spaces_args,
             ingest,
+            source,
         }
     }
 
     fn from_operation(operation: Operation<E>, meta: Self::Metadata) -> Self {
         Self::new(
             operation,
+            meta.source,
             meta.log_id,
             meta.topic,
             meta.prune_flag,

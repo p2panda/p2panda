@@ -101,7 +101,7 @@ pub(crate) async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
     forge: OperationForge,
-    mut pipeline: Pipeline,
+    pipeline: Pipeline,
     from: StreamFrom,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
@@ -140,8 +140,40 @@ where
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
+    // Spawn first task which receives processed "output events" from the processing pipeline, the
+    // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
+    // forwarded to the application layer.
     {
+        let mut pipeline = pipeline.clone();
         let acked = acked.clone();
+        let app_tx = app_tx.clone();
+
+        tokio::spawn(async move {
+            loop {
+                // Handle resulting output events from the pipeline and forward them as stream
+                // events to application layer when applicable.
+                let from_pipeline_event = pipeline.next().await;
+
+                if let Some(stream_event) =
+                    process_operation_out::<M>(from_pipeline_event, topic, ack_policy, &acked).await
+                {
+                    // Send processing result to application layer.
+                    //
+                    // If channel stopped working because the subscriber got dropped, ignore it as
+                    // we still might want to process locally published operations.
+                    let _ = app_tx.send(stream_event).await;
+                }
+            }
+        });
+    }
+
+    // Spawn second task which assembles different sources of incoming operations (replays, external
+    // streams, sync session, locally published, etc.) and inputs them into the processing pipeline.
+    //
+    // Here we only forward "system events" to the application layer, such as "sync started" or
+    // "external stream import finished", etc. - actual application messages are handled in the task
+    // above.
+    {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
 
@@ -153,16 +185,8 @@ where
             {
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
-                let replay_result = replay_log_ranges(
-                    topic,
-                    &store,
-                    &app_tx,
-                    &pipeline,
-                    ack_policy,
-                    &acked,
-                    nacked_log_ranges,
-                )
-                .await;
+                let replay_result =
+                    replay_log_ranges(topic, &store, &app_tx, &pipeline, nacked_log_ranges).await;
 
                 // Errors occurring in the replay task which be returned to the user.
                 if let Err(error) = replay_result {
@@ -180,12 +204,12 @@ where
             }
 
             // =========================
-            // 2. Stream external events
+            // 2. Handle incoming events
             // =========================
 
             let mut aggregator = Aggregator::new();
             loop {
-                let event = tokio::select! {
+                let stream_event = tokio::select! {
                     // Received incoming operation from remote source.
                     item = sync_stream.next() => {
                         let Some(result) = item else {
@@ -210,18 +234,8 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => event.into(),
                             sync_metrics::SyncEvent::SyncEnded { .. } => event.into(),
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                let Some(event) = process_operation::<M>(
-                                    *operation,
-                                    topic,
-                                    &pipeline,
-                                    ack_policy,
-                                    &acked,
-                                    source
-                                ).await else {
-                                    continue;
-                                };
-
-                                event
+                                process_operation_in(*operation, source, topic, &pipeline).await;
+                                continue;
                             },
                         }
                     }
@@ -231,9 +245,10 @@ where
                     // If the publishing channel gets closed, for example when the publisher handle
                     // got dropped, we still continue with this task, as we still might receive
                     // operations from the log sync stream.
-                    Some((operation, message, processed_tx)) = publish_rx.recv() => {
-                        let event = process_published_operation(
+                    Some((operation, _message, processed_tx)) = publish_rx.recv() => {
+                        let event = process_operation_in(
                             operation,
+                            Source::LocalStore,
                             topic,
                             &pipeline,
                         ).await;
@@ -242,23 +257,7 @@ where
                         // done here.
                         let _ = processed_tx.send(event.clone());
 
-                        // Operations with a body address the system- and application-layer while
-                        // operations without a body do _only_ address the system-layer. This
-                        // affects how we're acknowledging events in the pipeline.
-                        let result = match message {
-                            Some(message) => {
-                                ack_published_operation(message, event, topic, ack_policy, &acked).await
-                            },
-                            None => {
-                                ack_published_operation_wo_body(event, &acked).await
-                            },
-                        };
-
-                        let Some(event) = result else {
-                            continue;
-                        };
-
-                        event
+                        continue;
                     }
 
                     // Receive imported external source of operations.
@@ -285,11 +284,11 @@ where
                                 // If no active live session exists, nodes will pick up the
                                 // operation later when running the sync protocol.
                                 //
-                                // @TODO: There are two paths for operations to be published into
-                                // live-mode channels now (here and when one directly publishes
-                                // new messages). Consider if these should be unified into one
-                                // path somehow so as to avoid the chance of introducing
-                                // inconsistency later on.
+                                // TODO: There are two paths for operations to be published into
+                                // live-mode channels now (here and when one directly publishes new
+                                // messages). Consider if these should be unified into one path
+                                // somehow so as to avoid the chance of introducing inconsistency
+                                // later on.
                                 if sync_handle
                                     .publish(*operation.clone())
                                     .await.is_err() {
@@ -300,36 +299,27 @@ where
                                         )
                                     };
 
-                                let Some(event) = process_operation::<M>(
+                                process_operation_in(
                                     *operation,
+                                    Source::ExternalStream { session_id },
                                     topic,
                                     &pipeline,
-                                    ack_policy,
-                                    &acked,
-                                    Source::ExternalStream { session_id },
-                                ).await else {
-                                    continue;
-                                };
+                                ).await;
 
-                                event
+                                continue;
                             },
                             ExternalStreamEvent::End {
                                 session_id
                             } => StreamEvent::ImportEnded { session_id },
                         }
                     },
-
-                    _from_pipeline_event = pipeline.next() => {
-                        // TODO: Handle processing result and forward to application layer.
-                        continue;
-                    }
                 };
 
-                // Send processing result to application layer.
+                // Send stream events to application layer.
                 //
-                // If channel stopped working because the subscriber got dropped, ignore it as we
-                // still might want to process locally published operations.
-                let _ = app_tx.send(event).await;
+                // If channel stopped working because the subscriber got dropped, ignore it as
+                // we still might want to process locally published operations.
+                let _ = app_tx.send(stream_event).await;
             }
         });
     }
@@ -354,36 +344,47 @@ where
     Ok((tx, rx))
 }
 
-/// Process and acknowledge an incoming operation coming from an external stream (sync- or replay
-/// task).
-//
-/// When re-playing older events, this can include locally created operations.
-pub(crate) async fn process_operation<M>(
+/// Process an incoming operation in the pipeline.
+pub(crate) async fn process_operation_in(
     operation: Operation,
+    source: Source,
     topic: Topic,
     pipeline: &Pipeline,
-    ack_policy: AckPolicy,
-    acked: &Acked,
-    source: Source,
-) -> Option<StreamEvent<M>>
-where
-    M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
-{
+) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
-    // Send operation to processor task and wait for result. This blocks any parent stream and
-    // makes sure that all events are handled in same order.
+    // Send operation to processor task. This blocks any parent stream and makes sure that all
+    // events are handled in same order.
     let event = pipeline
         .process(Event::new(
             operation,
+            source,
             log_id,
             topic,
             prune_flag,
             spaces_args,
         ))
         .await;
+
+    // The actual output from the pipeline comes via a channel to the topic stream, see
+    // process_operation_out. The returned event here is only for (optional) inspection for users
+    // who published an operation locally and want to await until it is processed.
+    event
+}
+
+/// Handle the resulting event output coming from the processor pipeline.
+pub(crate) async fn process_operation_out<M>(
+    event: Event,
+    topic: Topic,
+    ack_policy: AckPolicy,
+    acked: &Acked,
+) -> Option<StreamEvent<M>>
+where
+    M: for<'a> Deserialize<'a> + Send + 'static,
+{
+    let source = event.source.clone();
 
     if let Some(error) = event.failure_reason() {
         warn!(
@@ -402,8 +403,8 @@ where
     // Handle message decoding for both unencrypted (from the body) and group encrypted (from the
     // extensions) cases.
     //
-    // @TODO: this is a bit of a hack, we should properly convert all spaces events and expose
-    // them to the user.
+    // TODO: this is a bit of a hack, we should properly convert all spaces events and expose them
+    // to the user.
     let decode_result =
         if let ProcessorStatus::Completed(SpacesResult::Processed { events }) = &event.spaces {
             let mut events = events.iter();
@@ -431,6 +432,7 @@ where
 
                 return None;
             };
+
             decode_cbor::<M, _>(body.as_bytes())
         };
 
@@ -471,95 +473,6 @@ where
     };
 
     Some(event)
-}
-
-/// Process an operation which was just published locally.
-///
-/// This is different from processing a remote or re-played operation coming from a stream:
-///
-/// 1. Since we know the message already we don't need to decode it.
-/// 2. We want to inform the publisher about the result of the processing if they want to. This is
-///    different from processing operations coming from an external stream where there's no
-///    explicit user call which created them.
-pub(crate) async fn process_published_operation(
-    operation: Operation,
-    topic: Topic,
-    pipeline: &Pipeline,
-) -> Event {
-    let log_id = operation.header.extensions.log_id();
-    let prune_flag = operation.header.extensions.prune_flag();
-    let spaces_args = operation.header.extensions.spaces_args();
-
-    // Send operation to processor task and wait for result. This blocks any parent stream and
-    // makes sure that all events are handled in same order.
-    let event = pipeline
-        .process(Event::new(
-            operation,
-            log_id,
-            topic,
-            prune_flag,
-            spaces_args,
-        ))
-        .await;
-
-    if let Some(err) = event.failure_reason() {
-        warn!(
-            id = %event.hash(),
-            "processing local operation failed: {}",
-            err
-        );
-    }
-
-    event
-}
-
-/// Acknowledge an operation _without a body_ which was just created locally.
-///
-/// We've published an operation without a body. In this case we _always_ automatically ack it,
-/// independent of ack policy.
-///
-/// If acking fails we inform the application-layer about it, to give them a chance to re-attempt
-/// acking it themselves.
-pub(crate) async fn ack_published_operation_wo_body<M>(
-    event: Event,
-    acked: &Acked,
-) -> Option<StreamEvent<M>> {
-    if let Err(error) = acked.ack(&event).await {
-        return Some(StreamEvent::AckFailed {
-            event,
-            error: Arc::new(error),
-        });
-    }
-
-    None
-}
-
-/// Acknowledge an operation with a body which was just created locally.
-pub(crate) async fn ack_published_operation<M>(
-    message: M,
-    event: Event,
-    topic: Topic,
-    ack_policy: AckPolicy,
-    acked: &Acked,
-) -> Option<StreamEvent<M>> {
-    if ack_policy == AckPolicy::Automatic
-        && let Err(error) = acked.ack(&event).await
-    {
-        return Some(StreamEvent::AckFailed {
-            event,
-            error: Arc::new(error),
-        });
-    }
-
-    Some(StreamEvent::Processed {
-        operation: ProcessedOperation {
-            event,
-            topic,
-            acked: acked.clone(),
-            message,
-        },
-        source: Source::LocalStore,
-    })
 }
 
 /// Publish messages into a topic stream.
@@ -1060,7 +973,7 @@ impl<M> Borrow<Header> for &ProcessedOperation<M> {
 }
 
 /// Source of a processed operation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Source {
     /// Source when an operation arrived via a sync session with a remote node.
