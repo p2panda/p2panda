@@ -20,18 +20,15 @@ pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
-use crate::operation::{Extensions, LogId};
-use crate::processor::{Pipeline, TaskTracker};
+use crate::operation::Extensions;
 use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
     SpaceError, SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream,
-    to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, StreamFrom, StreamPublisher,
-    StreamSubscription, SystemEvent, ephemeral_stream, event_stream, process_published_operation,
-    processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Pipeline, StreamFrom, StreamPublisher,
+    StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream, processed_stream,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -41,10 +38,7 @@ pub struct Node {
     store: SqliteStore,
     forge: OperationForge,
     credentials: Credentials,
-    // NOTE: One single pipeline is currently used to handle _all_ incoming operations, independent
-    // of number of streams. While this is sufficient for most applications for now we might want to
-    // make the number of processors configurable to avoid head-of-line blocking.
-    pipeline: Pipeline<LogId, Extensions, Topic>,
+    tasks: TaskTracker,
     network: Network,
     spaces_manager: SpacesManager,
 }
@@ -93,14 +87,13 @@ impl Node {
 
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
-        let pipeline = Pipeline::new(store.clone(), tasks, spaces_manager.clone());
 
         Ok(Node {
             config,
             store,
             forge,
             credentials,
-            pipeline,
+            tasks,
             network,
             spaces_manager,
         })
@@ -312,13 +305,19 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
+        let pipeline = Pipeline::new(
+            self.store.clone(),
+            self.tasks.clone(),
+            self.spaces_manager.clone(),
+        );
+
         let (tx, rx) = processed_stream(
             topic,
             self.config.ack_policy,
             sync_handle,
             self.store.clone(),
             self.forge.clone(),
-            self.pipeline.clone(),
+            pipeline,
             from,
         )
         .await
@@ -395,23 +394,25 @@ impl Node {
 
     pub async fn create_group(
         &self,
-        initial_members: &[(ActorId, AccessLevel)],
+        _initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<Group, GroupError> {
-        let initial_members = to_initial_members(initial_members);
-        let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
+        // TODO: refactor this to process using the tx, similar like create_space. Like this we
+        // would already receive the CREATED_GROUP event on the rx which is nice.
+        todo!();
 
-        // TODO: Could refactor this to process using the tx, similar like create_space. Like this
-        // we would already receive the CREATED_GROUP event on the rx which is nice.
-        let topic = actor_to_topic(group_id);
-        let event =
-            process_published_operation(message.into_operation(), topic, &self.pipeline).await;
-
-        if let Some(err) = event.failure_reason() {
-            Err(err)?
-        } else {
-            let group = self.group(group_id).await?.expect("");
-            Ok(group)
-        }
+        // let initial_members = to_initial_members(initial_members);
+        // let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
+        //
+        // let topic = actor_to_topic(group_id);
+        // let event =
+        //     process_published_operation(message.into_operation(), topic, &self.pipeline).await;
+        //
+        // if let Some(err) = event.failure_reason() {
+        //     Err(err)?
+        // } else {
+        //     let group = self.group(group_id).await?.expect("");
+        //     Ok(group)
+        // }
     }
 
     pub async fn space<M>(
