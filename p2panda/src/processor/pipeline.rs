@@ -143,7 +143,7 @@ where
 
                                 // If the orderer returns a "pending" result we don't want to affect
                                 // any next processors anymore.
-                                if result.is_pending() {
+                                if event.is_pending() {
                                     event.noop()
                                 } else {
                                     event
@@ -198,12 +198,18 @@ where
                             );
                         }
 
+                        // This informs any process waiting for the input event to be finished.
                         tasks
                             .mark_as_done(output_event.hash(), output_event.clone())
                             .await;
 
-                        from_pipeline_queue.lock().await.push_back(output_event);
-                        from_pipeline_notify.notify_one(); // Wake up any pending next call
+                        // If the output event is "ready" (that is, _not_ pending, not being
+                        // buffered somewhere), then we can finally forward it on the output stream
+                        // towards the application layer.
+                        if !output_event.is_pending() {
+                            from_pipeline_queue.lock().await.push_back(output_event);
+                            from_pipeline_notify.notify_one(); // Wake up any pending next call
+                        }
                     }
                 });
 
