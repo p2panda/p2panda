@@ -15,7 +15,10 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic, VerifyingKey};
 use p2panda_net::NodeId;
 use p2panda_net::sync::SyncHandle;
+// TODO: Replace with ShortFormat from p2panda-core.
+// See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
+use p2panda_spaces::{GroupEvent, SpaceEvent};
 use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_stream::spaces::SpacesResult;
@@ -24,12 +27,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
+use crate::spaces::types::AuthCapabilities;
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
@@ -142,7 +146,7 @@ where
 
     // If any other process wants to bring an stream event forward to the application layer ("output
     // stream"), this channel should be used.
-    let (to_output_tx, mut to_output_rx) = mpsc::channel::<StreamEvent<M>>(128);
+    let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<StreamEvent<M>>>(128);
 
     // FIXME: Both tasks need to be gracefully shut down when the tx / rx halves got dropped,
     // otherwise the sync session keeps running.
@@ -158,7 +162,7 @@ where
 
         tokio::spawn(async move {
             loop {
-                let stream_event = tokio::select! {
+                let stream_events = tokio::select! {
                     // We need to process pipeline output events _before_ any other system events.
                     // This is crucial to ensure correct ordering of events such as "replay started"
                     // being followed by "processed operations" and then finally by "replay ended",
@@ -168,7 +172,7 @@ where
                     // Handle resulting output events from the pipeline and forward them as stream
                     // events to application layer, when applicable.
                     from_pipeline_event = pipeline.next() => {
-                        if let Some(stream_event) =
+                        if let Some(stream_events) =
                             process_operation_out::<M>(
                                 from_pipeline_event,
                                 topic,
@@ -176,7 +180,7 @@ where
                                 &acked
                             ).await
                         {
-                            stream_event
+                            stream_events
                         } else {
                             continue;
                         }
@@ -184,8 +188,8 @@ where
 
                     // Any other process forwarding an event (like "replay ended", etc.) to the
                     // application layer.
-                    Some(stream_event) = to_output_rx.recv() => {
-                        stream_event
+                    Some(stream_events) = to_output_rx.recv() => {
+                        stream_events
                     }
                 };
 
@@ -193,7 +197,9 @@ where
                 //
                 // If channel stopped working because the subscriber got dropped, ignore it as
                 // we still might want to process locally published operations.
-                let _ = app_tx.send(stream_event).await;
+                for stream_event in stream_events {
+                    let _ = app_tx.send(stream_event).await;
+                }
             }
         });
     }
@@ -227,9 +233,9 @@ where
                     );
 
                     let _ = to_output_tx
-                        .send(StreamEvent::ReplayFailed {
+                        .send(vec![StreamEvent::ReplayFailed {
                             error: Arc::new(error),
-                        })
+                        }])
                         .await;
                 }
             }
@@ -240,7 +246,7 @@ where
 
             let mut aggregator = Aggregator::new();
             loop {
-                let stream_event = tokio::select! {
+                let stream_events = tokio::select! {
                     // Received incoming operation from remote source.
                     item = sync_stream.next() => {
                         let Some(result) = item else {
@@ -262,8 +268,8 @@ where
                         };
 
                         match event {
-                            sync_metrics::SyncEvent::SyncStarted { .. } => event.into(),
-                            sync_metrics::SyncEvent::SyncEnded { .. } => event.into(),
+                            sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
+                            sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
                                 process_operation_in(*operation, source, topic, &pipeline).await;
                                 continue;
@@ -276,6 +282,9 @@ where
                     // If the publishing channel gets closed, for example when the publisher handle
                     // got dropped, we still continue with this task, as we still might receive
                     // operations from the log sync stream.
+                    //
+                    // NOTE: Spaces messages do _not_ come through this route; they all come
+                    // through import (even ones published locally).
                     Some((operation, _message, processed_tx)) = publish_rx.recv() => {
                         let event = process_operation_in(
                             operation,
@@ -306,7 +315,7 @@ where
                         match event {
                             ExternalStreamEvent::Start {
                                 session_id
-                            } => StreamEvent::ImportStarted { session_id },
+                            } => vec![StreamEvent::ImportStarted { session_id }],
                             ExternalStreamEvent::Operation { session_id, operation } => {
                                 // Try pushing operation to other nodes if we have an active and
                                 // "live" sync session with them. This allows disseminating new
@@ -342,13 +351,13 @@ where
                             ExternalStreamEvent::End {
                                 session_id
                             } => {
-                                StreamEvent::ImportEnded { session_id }
+                                vec![StreamEvent::ImportEnded { session_id }]
                             },
                         }
                     },
                 };
 
-                let _ = to_output_tx.send(stream_event).await;
+                let _ = to_output_tx.send(stream_events).await;
             }
         });
     }
@@ -409,7 +418,7 @@ pub(crate) async fn process_operation_out<M>(
     topic: Topic,
     ack_policy: AckPolicy,
     acked: &Acked,
-) -> Option<StreamEvent<M>>
+) -> Option<Vec<StreamEvent<M>>>
 where
     M: for<'a> Deserialize<'a> + Send + 'static,
 {
@@ -422,86 +431,122 @@ where
             error,
         );
 
-        return Some(StreamEvent::ProcessingFailed {
+        let failure_event = vec![StreamEvent::ProcessingFailed {
             event,
             error,
             source,
-        });
+        }];
+
+        return Some(failure_event);
     }
 
-    // Handle message decoding for both unencrypted (from the body) and group encrypted (from the
-    // extensions) cases.
+    // Collection of events to be returned from this function.
     //
-    // TODO: this is a bit of a hack, we should properly convert all spaces events and expose them
-    // to the user.
-    let decode_result =
-        if let ProcessorStatus::Completed(SpacesResult::Processed { events }) = &event.spaces {
-            let mut events = events.iter();
-            loop {
-                let event = events.next();
+    // Processing of a spaces event may yield multiple events to be forwarded to the user, while
+    // processing any other event will only yield a single user event.
+    let mut forward_events = Vec::new();
 
-                event?;
+    // Process spaces events.
+    if let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces {
+        // Multiple events can be released at once.
+        for space_event in events {
+            match space_event {
+                p2panda_spaces::Event::Application { space_id: _, data } => {
+                    match decode_cbor::<M, _>(&data[..]) {
+                        Ok(message) => {
+                            // Only ack events automatically if processing or decoding did not fail.
+                            if ack_policy == AckPolicy::Automatic
+                                && let Err(error) = acked.ack(&event).await
+                            {
+                                forward_events.push(StreamEvent::AckFailed {
+                                    event: event.clone(),
+                                    error: Arc::new(error),
+                                });
+                            }
 
-                if let Some(p2panda_spaces::Event::Application { data, .. }) = event {
-                    break decode_cbor::<M, _>(&data[..]);
-                } else {
-                    continue;
-                };
-            }
-        } else {
-            // Do not forward operations to the application-layer if there's no body and _always_ ack
-            // system-level events, even if no automatic policy was configured.
-            let Some(body) = event.body() else {
-                if let Err(error) = acked.ack(&event).await {
-                    return Some(StreamEvent::AckFailed {
-                        event,
-                        error: Arc::new(error),
-                    });
+                            forward_events.push(StreamEvent::Processed {
+                                operation: ProcessedOperation {
+                                    event: event.clone(),
+                                    topic,
+                                    acked: acked.clone(),
+                                    message,
+                                },
+                                source: source.clone(),
+                            });
+                        }
+                        Err(error) => forward_events.push(StreamEvent::DecodeFailed {
+                            event: event.clone(),
+                            error,
+                        }),
+                    }
                 }
 
-                return None;
-            };
+                p2panda_spaces::Event::KeyBundle { author } => {
+                    forward_events.push(StreamEvent::KeyBundle(*author))
+                }
 
-            decode_cbor::<M, _>(body.as_bytes())
-        };
+                p2panda_spaces::Event::Group(group_event) => {
+                    forward_events.push(StreamEvent::Group(group_event.to_owned()))
+                }
 
-    // Attempt decoding application-layer message. This takes place _after_ system-level processing
-    // completed and the operation was ingested.
-    //
-    // In case decoding fails due to an application bug, users have the option to re-play this
-    // persisted operation and attempt decoding again.
-    //
-    // If application data is malformed users can choose to remove the payload of the operation or
-    // delete the whole log altogether.
-    //
-    // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users do
-    // decoding on application layer?
-    let event = match decode_result {
-        Ok(message) => {
-            // Do only ack events automatically if processing or decoding did not fail.
-            if ack_policy == AckPolicy::Automatic
-                && let Err(error) = acked.ack(&event).await
-            {
-                return Some(StreamEvent::AckFailed {
-                    event,
-                    error: Arc::new(error),
-                });
-            }
-
-            StreamEvent::Processed {
-                operation: ProcessedOperation {
-                    event,
-                    topic,
-                    acked: acked.clone(),
-                    message,
-                },
-                source,
+                p2panda_spaces::Event::Space(space_event) => {
+                    forward_events.push(StreamEvent::Space(space_event.to_owned()))
+                }
             }
         }
-        Err(error) => StreamEvent::DecodeFailed { event, error },
-    };
+    } else {
+        // Only forward non-spaces operations to the application-layer if they have a body.
+        let Some(body) = event.body() else {
+            // _Always_ ack system-level events, even if no automatic policy was configured.
+            if let Err(error) = acked.ack(&event).await {
+                return Some(vec![StreamEvent::AckFailed {
+                    event,
+                    error: Arc::new(error),
+                }]);
+            }
 
-    Some(event)
+            return None;
+        };
+
+        // Attempt decoding application-layer message. This takes place _after_ system-level
+        // processing completed and the operation was ingested.
+        //
+        // In case decoding fails due to an application bug, users have the option to re-play this
+        // persisted operation and attempt decoding again.
+        //
+        // If application data is malformed users can choose to remove the payload of the operation
+        // or delete the whole log altogether.
+        //
+        // TODO: Is this mixing up concerns? We can only handle bytes on our end and let the users
+        // do decoding on application layer?
+        debug!(id = %event.operation.hash(), "processing application message");
+        match decode_cbor::<M, _>(body.as_bytes()) {
+            Ok(message) => {
+                // Only ack events automatically if processing or decoding did not fail.
+                if ack_policy == AckPolicy::Automatic
+                    && let Err(error) = acked.ack(&event).await
+                {
+                    return Some(vec![StreamEvent::AckFailed {
+                        event,
+                        error: Arc::new(error),
+                    }]);
+                }
+
+                return Some(vec![StreamEvent::Processed {
+                    operation: ProcessedOperation {
+                        event,
+                        topic,
+                        acked: acked.clone(),
+                        message,
+                    },
+                    source,
+                }]);
+            }
+            Err(error) => return Some(vec![StreamEvent::DecodeFailed { event, error }]),
+        }
+    }
+
+    Some(forward_events)
 }
 
 /// Publish messages into a topic stream.
@@ -908,6 +953,15 @@ pub enum StreamEvent<M> {
         event: Event,
         error: Arc<AckedError>,
     },
+
+    /// Space has been created or modified.
+    Space(SpaceEvent),
+
+    /// Group has been created or modified.
+    Group(GroupEvent<AuthCapabilities>),
+
+    /// Key bundle has been processed.
+    KeyBundle(VerifyingKey),
 }
 
 /// Processed operation with application message coming from a topic stream.

@@ -45,7 +45,7 @@ impl From<Cursor<VerifyingKey, LogId>> for StreamFrom {
 pub(crate) async fn replay_log_ranges<M>(
     topic: Topic,
     store: &SqliteStore,
-    to_output_tx: &mpsc::Sender<StreamEvent<M>>,
+    to_output_tx: &mpsc::Sender<Vec<StreamEvent<M>>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     log_ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
@@ -60,7 +60,7 @@ where
     }
 
     to_output_tx
-        .send(StreamEvent::ReplayStarted { total_operations })
+        .send(vec![StreamEvent::ReplayStarted { total_operations }])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
@@ -83,7 +83,7 @@ where
     }
 
     to_output_tx
-        .send(StreamEvent::ReplayEnded)
+        .send(vec![StreamEvent::ReplayEnded])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 

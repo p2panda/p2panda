@@ -223,7 +223,12 @@ where
     }
 }
 
-#[derive(Debug)]
+// TODO: Can we remove this type in favour of `SpaceEvent` from p2panda-spaces?
+//
+// The only difference is that the `SpaceEvent` does not have a `Processed` variant. In the stream
+// we use `StreamEvent::Processed` for returning operations which came from spaces _and_ non-spaces
+// contexts.
+#[derive(Clone, Debug)]
 pub enum SpaceEvent<M> {
     Processed {
         operation: Box<ProcessedOperation<M>>,

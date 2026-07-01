@@ -21,6 +21,7 @@ Highlights are marked with a pancake 🥞
 - store: Introduce `ProcessorStore` for storing event metadata from p2panda pipeline [#1262](https://github.com/p2panda/p2panda/pull/1262)
 - node: Implement `Orderer` `Processor` for pipeline [#1262](https://github.com/p2panda/p2panda/pull/1262)
 - node: Associate key bundle, groups and spaces logs with log topic [#1264](https://github.com/p2panda/p2panda/pull/1264)
+- node: Handle spaces events when processing pipeline event [#1276](https://github.com/p2panda/p2panda/pull/1276)
 
 ### Changed
 
