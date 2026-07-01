@@ -4,6 +4,7 @@ mod forge;
 mod group;
 mod member;
 pub(crate) mod message;
+mod repair;
 mod space;
 pub(crate) mod types;
 
@@ -16,9 +17,10 @@ pub use p2panda_auth::AccessLevel;
 pub use p2panda_spaces::manager::ManagerError;
 pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext, SpaceId};
 
-pub(crate) use forge::KEY_BUNDLE_LOG_ID;
+pub(crate) use forge::{KEY_BUNDLE_LOG_ID, group_log_id};
 pub use group::{Group, GroupError, GroupEvent, GroupFuture};
 pub use member::{GroupActor, Member, MemberError};
+pub(crate) use repair::spawn_repair_task;
 pub(crate) use space::spaces_stream;
 pub use space::{Space, SpaceError, SpaceEvent, SpaceFuture, SpaceSubscription};
 pub use types::SpacesManagerError;
