@@ -124,6 +124,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
 
             trace!(
                 id = operation.hash.fmt_short(),
+                author = self.credentials.verifying_key().fmt_short(),
                 log_id = Hash::from(log_id.as_bytes()).fmt_short(),
                 seq = operation.header.seq_num,
                 "operation created"

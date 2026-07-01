@@ -407,8 +407,8 @@ where
     pub fn seen_groups(&self) -> Vec<ID> {
         self.inner
             .operations
-            .iter()
-            .filter_map(|(_, message)| {
+            .values()
+            .filter_map(|message| {
                 if let GroupAction::Create { .. } = message.action() {
                     Some(message.group_id())
                 } else {

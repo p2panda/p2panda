@@ -77,7 +77,7 @@ where
         // processor to handle our own operations. Not doing this has the benefit of allowing
         // application events to be emitted from the spaces processor already (otherwise the would
         // be ignored as already processed). This comment can be removed when we persist spaces
-        // state in the processor in all places. 
+        // state in the processor in all places.
         let processed = self
             .tx
             .import(futures_util::stream::once(async {
