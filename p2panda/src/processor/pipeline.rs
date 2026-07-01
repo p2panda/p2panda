@@ -2,6 +2,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
+use std::hash::Hash as StdHash;
 use std::sync::Arc;
 use std::thread;
 
@@ -149,10 +150,11 @@ const TO_PIPELINE_BUFFER_SIZE: usize = 128;
 // See related issue: https://github.com/p2panda/p2panda/issues/1275
 #[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
+    id: Hash,
     to_pipeline_tx: mpsc::Sender<Event<L, E, TP>>,
     from_pipeline_queue: Arc<Mutex<VecDeque<Event<L, E, TP>>>>,
     from_pipeline_notify: Arc<Notify>,
-    tasks: TaskTracker<Event<L, E, TP>, Hash>,
+    tasks: TaskTracker<Event<L, E, TP>, PipelineTaskId>,
 }
 
 impl<L, E, TP> Pipeline<L, E, TP>
@@ -170,10 +172,13 @@ where
     /// Users can run multiple pipelines parallely, a common task manager instance makes sure that
     /// processors do not work on the same event at the same time.
     pub fn new(
+        id: impl Into<Hash>,
         store: SqliteStore,
-        tasks: TaskTracker<Event<L, E, TP>, Hash>,
+        tasks: TaskTracker<Event<L, E, TP>, PipelineTaskId>,
         spaces_manager: SpacesManager,
     ) -> Self {
+        let pipeline_id = id.into();
+
         let (to_pipeline_tx, to_pipeline_rx) = mpsc::channel(TO_PIPELINE_BUFFER_SIZE);
         let from_pipeline_queue = Arc::new(Mutex::new(VecDeque::new()));
         let from_pipeline_notify = Arc::new(Notify::new());
@@ -316,10 +321,20 @@ where
                             // All dependencies have been visited, we can finally mark the "parent"
                             // input event  as done.
                             if let Some(pending) = pending.take() {
-                                tasks.mark_as_done(pending.hash(), pending).await;
+                                let task_id = PipelineTaskId {
+                                    event_id: pending.hash(),
+                                    pipeline_id,
+                                };
+
+                                tasks.mark_as_done(task_id, pending).await;
                             }
                         } else {
-                            tasks.mark_as_done(output_event.hash(), output_event).await;
+                            let task_id = PipelineTaskId {
+                                event_id: output_event.hash(),
+                                pipeline_id,
+                            };
+
+                            tasks.mark_as_done(task_id, output_event).await;
                         }
                     }
                 });
@@ -329,6 +344,7 @@ where
         }
 
         Self {
+            id: pipeline_id,
             to_pipeline_tx,
             from_pipeline_queue,
             from_pipeline_notify,
@@ -349,8 +365,13 @@ where
     /// This method does not return an error if a processor failed but instead users will need to
     /// check on the returned object itself if an error was observed.
     pub async fn process(&self, input: Event<L, E, TP>) -> Event<L, E, TP> {
+        let task_id = PipelineTaskId {
+            event_id: input.hash(),
+            pipeline_id: self.id,
+        };
+
         // Register task for this operation so the processor can mark it as *ready* later.
-        let task = self.tasks.track(input.hash()).await;
+        let task = self.tasks.track(task_id).await;
 
         // Send operation to processing pipeline, it will handle this operation eventually in a
         // concurrent "background" task.
@@ -376,6 +397,19 @@ where
     }
 }
 
+/// Identifier for a single task in the task tracker used by the pipeline.
+///
+/// Every task is grouped by the pipeline itself and then the regarding event id. Like this we can
+/// make sure that there will be no collisions across pipelines (different topic streams but same
+/// operations).
+///
+/// This is deliberately not using a hashing function to safe computing cost.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash)]
+pub struct PipelineTaskId {
+    pipeline_id: Hash,
+    event_id: Hash,
+}
+
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
@@ -383,7 +417,7 @@ mod tests {
 
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
-    use p2panda_core::{PruneFlag, SigningKey, Topic};
+    use p2panda_core::{Hash, PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::credentials::Credentials;
@@ -408,7 +442,8 @@ mod tests {
             .await
             .unwrap();
 
-        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
+        let pipeline_id = Hash::from([0; 32]);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
 
         let log = TestLog::new();
         let topic = Topic::random();
@@ -416,7 +451,7 @@ mod tests {
         let mut operation = log.operation(b"test", ());
 
         // Expect operation to be processed successfully.
-        let result = processor
+        let result = pipeline
             .process(Event::new(
                 operation.clone(),
                 Source::LocalStore,
@@ -434,7 +469,7 @@ mod tests {
         // Replace public key of operation to make it invalid. We expect the processor to fail.
         operation.header.verifying_key = SigningKey::generate().verifying_key();
 
-        let result = processor
+        let result = pipeline
             .process(Event::new(
                 operation.clone(),
                 Source::LocalStore,
@@ -462,7 +497,8 @@ mod tests {
             .await
             .unwrap();
 
-        let processor = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
+        let pipeline_id = Hash::from([0; 32]);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
 
         let mut events = Vec::new();
         let mut dependencies = Vec::new();
@@ -497,7 +533,7 @@ mod tests {
 
         for event in events {
             let event_hash = event.hash();
-            let result = processor.process(event).await;
+            let result = pipeline.process(event).await;
 
             assert_eq!(result.hash(), event_hash);
             assert!(result.is_completed());
@@ -517,7 +553,9 @@ mod tests {
             .await
             .unwrap();
 
-        let mut pipeline = Pipeline::<LogId, (), Topic>::new(store, tasks, spaces_manager);
+        let pipeline_id = Hash::from([0; 32]);
+        let mut pipeline =
+            Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
 
         let log_icebear = TestLog::new();
         let log_panda = TestLog::new();
