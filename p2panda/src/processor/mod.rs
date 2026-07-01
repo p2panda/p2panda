@@ -6,5 +6,5 @@ mod pipeline;
 mod tasks;
 
 pub use event::{Event, ProcessorError, ProcessorStatus};
-pub(crate) use pipeline::Pipeline;
+pub(crate) use pipeline::{Pipeline, PipelineTaskId};
 pub(crate) use tasks::TaskTracker;

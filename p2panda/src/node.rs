@@ -307,6 +307,7 @@ impl Node {
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
         let pipeline = Pipeline::new(
+            topic,
             self.store.clone(),
             self.tasks.clone(),
             self.spaces_manager.clone(),
