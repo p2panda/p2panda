@@ -52,23 +52,13 @@ extensible depending on your application requirements.
 ### Create and sign operation
 
 ```rust
-use p2panda_core::{Body, Header, SigningKey};
+use p2panda_core::{Header, SigningKey};
 
 let signing_key = SigningKey::generate();
 
-let body = Body::new("Hello, Panda!".as_bytes());
-let mut header = Header {
-    version: 1,
-    verifying_key: signing_key.verifying_key(),
-    signature: None,
-    payload_size: body.size(),
-    payload_hash: Some(body.hash()),
-    seq_num: 0,
-    backlink: None,
-    extensions: (),
-};
-
-header.sign(&signing_key);
+let header = Header::builder()
+    .body(b"Hello, Panda!")
+    .build(&signing_key, ());
 ```
 
 ### Custom extensions
