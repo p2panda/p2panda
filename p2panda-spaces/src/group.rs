@@ -65,7 +65,7 @@ where
     C: Conditions,
     RS: AuthResolver<C>,
 {
-    pub(crate) fn new(manager_ref: Manager<S, F, C, RS>, id: GroupId) -> Self {
+    pub fn new(manager_ref: Manager<S, F, C, RS>, id: GroupId) -> Self {
         Self {
             manager: manager_ref,
             id,
