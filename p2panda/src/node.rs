@@ -412,7 +412,7 @@ impl Node {
         let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
 
         let topic = actor_to_topic(group_id);
-        let (tx, rx) = self.stream::<NoBody>(topic).await?;
+        let (tx, _rx) = self.stream::<NoBody>(topic).await?;
 
         let processed = tx
             .import(futures_util::stream::once(async {
@@ -426,13 +426,12 @@ impl Node {
             panic!();
         }
 
-        let inner = self
-            .spaces_manager
+        let group = self
             .group(group_id)
             .await?
             .expect("materialised group after processing operations");
 
-        Ok(Group::new(inner, tx, rx))
+        Ok(group)
     }
 
     pub async fn space<M>(
