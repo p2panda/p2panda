@@ -543,3 +543,51 @@ async fn deduplicate_events() {
 
     assert_eq!(received.len(), 3);
 }
+
+#[tokio::test]
+async fn stop_sync_on_drop() {
+    setup_logging();
+
+    let chat_id = Topic::random();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda joins the chat and sends a message to icebear.
+    let (panda_tx, panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+
+    // Icebear joins the chat.
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    let mut sync_started = false;
+    let mut message_received = false;
+    let mut sync_ended = false;
+
+    // Wait for icebear to begin a sync session with panda.
+    if let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::SyncStarted { .. } = event {
+            sync_started = true;
+        }
+    }
+    // Wait for icebear to receive panda's message.
+    if let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::Processed { .. } = event {
+            message_received = true;
+        }
+    }
+
+    drop(panda_tx);
+    drop(panda_rx);
+
+    // Ensure that the sync session ends when panda's publisher and subscription are dropped.
+    if let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::SyncEnded { .. } = event {
+            sync_ended = true;
+        }
+    }
+
+    assert!(sync_started);
+    assert!(message_received);
+    assert!(sync_ended);
+}

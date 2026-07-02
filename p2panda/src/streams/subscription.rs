@@ -18,6 +18,7 @@ use crate::operation::{Extensions, Operation};
 use crate::streams::StreamEvent;
 use crate::streams::acked::{Acked, AckedError};
 
+// TODO: Make it clear in the documentation that a `StreamEvent` is returned from `next()`.
 /// Subscription to events arriving from a topic stream.
 ///
 /// A topic stream emits:
