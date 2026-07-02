@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::x25519::PublicKey;
+use crate::key_bundle::PreKeyId;
 
 /// Manages public identity keys of other members.
 pub trait IdentityRegistry<ID, Y> {
@@ -21,4 +22,10 @@ pub trait PreKeyRegistry<ID, KB> {
     type Error: Error;
 
     fn key_bundle(y: Self::State, id: &ID) -> Result<(Self::State, Option<KB>), Self::Error>;
+
+    fn key_bundle_by_prekey_id(
+        y: Self::State,
+        id: &ID,
+        prekey_id: &PreKeyId,
+    ) -> Result<(Self::State, Option<KB>), Self::Error>;
 }

@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - node: Associate key bundle, groups and spaces logs with log topic [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - node: Handle spaces events when processing pipeline event [#1276](https://github.com/p2panda/p2panda/pull/1276)
 - encryption: Get X3DH ciphertext from direct msgs [#1280](https://github.com/p2panda/p2panda/pull/1280)
+- encryption: Get bundle by prekey id in registry [#1280](https://github.com/p2panda/p2panda/pull/1280)
 
 ### Changed
 

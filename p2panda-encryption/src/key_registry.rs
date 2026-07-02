@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::crypto::x25519::PublicKey;
-use crate::key_bundle::{KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle, latest_key_bundle};
+use crate::key_bundle::{
+    KeyBundleError, LongTermKeyBundle, OneTimeKeyBundle, PreKeyId, latest_key_bundle,
+};
 use crate::traits::{IdentityHandle, IdentityRegistry, KeyBundle, PreKeyRegistry};
 
 /// Key registry to maintain public key material of other members we've collected.
@@ -149,6 +151,28 @@ where
             .and_then(|bundles| bundles.pop());
         Ok((y, bundle))
     }
+
+    fn key_bundle_by_prekey_id(
+        mut y: Self::State,
+        id: &ID,
+        prekey_id: &PreKeyId,
+    ) -> Result<(Self::State, Option<OneTimeKeyBundle>), Self::Error> {
+        let mut bundle = None;
+
+        let Some(bundles) = y.onetime_bundles.get_mut(id) else {
+            return Ok((y, None));
+        };
+
+        // Identify a one-time key using the same long-term pre-key and remove it from collection.
+        if let Some(pos) = bundles
+            .iter()
+            .position(|bundle| bundle.signed_prekey() == prekey_id)
+        {
+            bundle = Some(bundles.swap_remove(pos))
+        }
+
+        Ok((y, bundle))
+    }
 }
 
 impl<ID> PreKeyRegistry<ID, LongTermKeyBundle> for KeyRegistry<ID>
@@ -172,6 +196,30 @@ where
         // Even though key bundles are available we couldn't find any non-expired ones.
         if !bundles.is_empty() && valid_bundle.is_none() {
             return Err(KeyRegistryError::KeyBundlesExpired);
+        }
+
+        Ok((y, valid_bundle))
+    }
+
+    fn key_bundle_by_prekey_id(
+        y: Self::State,
+        id: &ID,
+        prekey_id: &PreKeyId,
+    ) -> Result<(Self::State, Option<LongTermKeyBundle>), Self::Error> {
+        let Some(bundles) = y.longterm_bundles.get(id) else {
+            return Ok((y, None));
+        };
+
+        let valid_bundle = bundles
+            .iter()
+            .find(|bundle| bundle.signed_prekey() == prekey_id)
+            .cloned();
+
+        if let Some(valid_bundle) = &valid_bundle {
+            valid_bundle
+                .lifetime()
+                .verify()
+                .map_err(|err| KeyBundleError::from(err))?;
         }
 
         Ok((y, valid_bundle))
