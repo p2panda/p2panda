@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use core::panic;
 use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -33,7 +32,8 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::AuthCapabilities;
+use crate::spaces::spawn_repair_task;
+use crate::spaces::types::{AuthCapabilities, SpacesManager};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
@@ -105,6 +105,7 @@ pub(crate) async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
     forge: OperationForge,
+    spaces_manager: SpacesManager,
     pipeline: Pipeline,
     from: StreamFrom,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
@@ -147,6 +148,14 @@ where
     // If any other process wants to bring an stream event forward to the application layer ("output
     // stream"), this channel should be used.
     let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<StreamEvent<M>>>(128);
+
+    // Task concerned with repairing a space.
+    let repair_task_handle = spawn_repair_task(
+        topic,
+        spaces_manager.clone(),
+        store.clone(),
+        import_tx.clone(),
+    );
 
     // FIXME: Both tasks need to be gracefully shut down when the tx / rx halves got dropped,
     // otherwise the sync session keeps running.
@@ -359,6 +368,9 @@ where
 
                 let _ = to_output_tx.send(stream_events).await;
             }
+
+            // Abort the repair task.
+            repair_task_handle.abort();
         });
     }
 

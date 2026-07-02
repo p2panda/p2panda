@@ -403,6 +403,21 @@ where
         self.inner.members(group_id)
     }
 
+    /// All groups which have ever been created on this groups state.
+    pub fn seen_groups(&self) -> Vec<ID> {
+        self.inner
+            .operations
+            .values()
+            .filter_map(|message| {
+                if let GroupAction::Create { .. } = message.action() {
+                    Some(message.group_id())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get all transitive groups inside a group.
     ///
     /// This method recurses into all sub-groups and returns a resolved list of nested group members

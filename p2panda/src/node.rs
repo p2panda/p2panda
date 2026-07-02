@@ -3,11 +3,12 @@
 use std::fmt::Debug;
 
 use futures_util::Stream;
+use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{GroupId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
@@ -15,16 +16,19 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{Transaction, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
-use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError};
+use crate::spaces::types::{
+    AuthCapabilities, InnerSpace, NoBody, SpacesManager, SpacesManagerError,
+};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
-    SpaceError, SpaceSubscription, actor_to_topic, spaces_manager, spaces_stream,
+    SpaceError, SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
     to_initial_members,
 };
 use crate::streams::{
@@ -319,6 +323,7 @@ impl Node {
             sync_handle,
             self.store.clone(),
             self.forge.clone(),
+            self.spaces_manager.clone(),
             pipeline,
             from,
         )
@@ -398,11 +403,16 @@ impl Node {
         &self,
         initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<Group, GroupError> {
+        // We don't persist the groups state here as we can rely on the spaces processor to do
+        // this. This is important because we rely on groups events being emitted from the
+        // pipeline so that we can react to them for eg. repairing spaces. If we persisted the
+        // state here, the processor would detect that we already processed this control message
+        // and therefore not emit any events.
         let initial_members = to_initial_members(initial_members);
         let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
 
         let topic = actor_to_topic(group_id);
-        let (tx, rx) = self.stream::<NoBody>(topic).await?;
+        let (tx, _rx) = self.stream::<NoBody>(topic).await?;
 
         let processed = tx
             .import(futures_util::stream::once(async {
@@ -416,13 +426,12 @@ impl Node {
             panic!();
         }
 
-        let inner = self
-            .spaces_manager
+        let group = self
             .group(group_id)
             .await?
             .expect("materialised group after processing operations");
 
-        Ok(Group::new(inner, tx, rx))
+        Ok(group)
     }
 
     pub async fn space<M>(
@@ -445,20 +454,45 @@ impl Node {
     {
         let space_id = space_id.into();
 
+        let permit = self.store.begin().await?;
+
+        // Associate all group logs we have with the space topic, this handles the "first time
+        // subscription" case where we want to sync all groups logs up-front.
+        //
+        // @TODO: This can be removed once we have a working orderer as then the repair task can
+        // be relied upon.
+        let y: AuthGroupState<AuthCapabilities> = self
+            .store
+            .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+            .await?
+            .unwrap_or_default();
+
+        for group_id in y.seen_groups() {
+            debug!(
+                group_id = group_id.fmt_short(),
+                space_id = space_id.fmt_short(),
+                "associate group log with space topic"
+            );
+            self.store
+                .associate(&Topic::from(space_id), &self.id(), &group_log_id(group_id))
+                .await?;
+        }
+
         // Associate the space topic with the key bundle logs.
         //
         // This does _not_ happen during ingest as at that point there is no topic which could be
         // used to perform this association. The same key bundle log can be associated with many
-        // spaces.
-        tx!(&self.store, {
-            self.store
-                .associate(
-                    &Topic::from(space_id),
-                    &self.id(),
-                    &Hash::digest(KEY_BUNDLE_LOG_ID),
-                )
-                .await
-        })?;
+        // spaces. And it can't happen in the forge as a user may never actually publish into a
+        // space.
+        self.store
+            .associate(
+                &Topic::from(space_id),
+                &self.id(),
+                &Hash::digest(KEY_BUNDLE_LOG_ID),
+            )
+            .await?;
+
+        self.store.commit(permit).await?;
 
         let topic = space_id;
         let inner = self
@@ -529,22 +563,9 @@ impl Node {
         //
         // @TODO: this is a rather naive approach, we likely want some service that periodically
         // publishes key bundles.
-        let message = self.spaces_manager.key_bundle_message().await?;
+        let key_bundle_message = self.spaces_manager.key_bundle_message().await?;
 
-        let operation = message.into_operation();
-        let processed = tx
-            .import(futures_util::stream::once(async { operation }))
-            .await?;
-
-        // Wait until processing the events has finished.
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
-
-        // Issue the event to create a space.
+        // Issue the events to create a space.
         //
         // We always create a space with only us as the initial members.
         //
@@ -552,25 +573,16 @@ impl Node {
         // members. I (sam) removed it from the API for now as without a manual member
         // registration flow a user likely doesn't have access to any member key bundles at the
         // point of space creation.
-        let (groups_y, space_y, messages) = self.spaces_manager.create_space(space_id, &[]).await?;
+        let (_, space_y, create_space_messages) =
+            self.spaces_manager.create_space(space_id, &[]).await?;
 
-        // Persist the computed groups and spaces state to the stores and make required group log
-        // associations.
-        //
-        // @TODO: This needs some thought. We're persisting state here, rather than expecting this
-        // to happen in the processor, because it's not possible to re-create locally performed
-        // state changes from the messages alone. _If_ we have to persist here, then transactions
-        // need to be considered more carefully, we would need to make this write part of the same
-        // transaction where the operations are forged.
-        //
-        // @TODO: We don't strictly need to persist the groups state here as this is re-creatable
-        // with only the operation in the processor.
+        // @TODO: We need to refactor the spaces API so that locally created operations can be
+        // handled via the call to Manager::process and then persisted in the spaces processor.
+        // Until we have this spaces events for our own locally created operations won't be
+        // emitted to users (as the processor thinks the operation was already processed and skips.
         let permit = self.store.begin().await?;
 
         let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-        spaces_store
-            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
-            .await?;
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
@@ -580,8 +592,11 @@ impl Node {
         // Process the -spaces events by importing them as an "external stream".
         //
         // @TODO: Related to above comment. Even though the state is already mutated & persisted
-        // locally we're still sending the messages to the pipeline. Revisit this if state does
+        // locally we're still sending the messages to the pipeline. Revisit this when state does
         // indeed need to be persisted here instead of in the pipeline.
+        let mut messages = vec![key_bundle_message];
+        messages.extend(create_space_messages);
+
         let processed = tx
             .import(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),

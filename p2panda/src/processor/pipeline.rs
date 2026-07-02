@@ -198,16 +198,17 @@ where
                 let local = LocalSet::new();
 
                 local.spawn_local(async move {
+                    let me = spaces_manager.id();
                     // Prepare event processing pipeline.
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
                     let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone());
                     let log_prune =
                         LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
-                    let spaces = SpacesProcessor::<Event<L, E, TP>>::new(
-                        SqliteSpacesStore::new(store),
-                        spaces_manager,
-                    );
+
+                    let spaces_store = SqliteSpacesStore::new(store);
+                    let spaces =
+                        SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager);
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(to_pipeline_rx)
@@ -274,6 +275,7 @@ where
                         // stuck here forever.
                         if let Some(err) = output_event.failure_reason() {
                             warn!(
+                                me = me.fmt_short(),
                                 id = %output_event.hash().fmt_short(),
                                 "failed processing event: {}",
                                 err

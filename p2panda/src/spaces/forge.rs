@@ -2,6 +2,7 @@
 
 use p2panda_auth::group::GroupAction;
 use p2panda_core::cbor::encode_cbor;
+use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic, VerifyingKey};
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -132,8 +133,6 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 space_id,
                 group_id,
                 auth_message_id,
-                // @TODO: add "related groups" here and then we don't need to do queries in the
-                // make_group_topic_associations.
                 ..
             } => {
                 // Every author maintains their own log of control messages _per_ space.
@@ -150,7 +149,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // @TODO: We want to create the operation and make the log associations in one transaction.
                 let permit = self.store.begin().await?;
 
-                make_group_topic_associations(
+                make_space_group_log_associations(
                     &self.store,
                     Forge::verifying_key(self),
                     space_id,
@@ -212,7 +211,7 @@ fn space_log_id(space_id: Hash) -> LogId {
     })
 }
 
-fn group_log_id(group_id: VerifyingKey) -> LogId {
+pub(crate) fn group_log_id(group_id: VerifyingKey) -> LogId {
     LogId::digest(&{
         let mut bytes = Vec::new();
         bytes.extend_from_slice(group_id.as_bytes());
@@ -224,39 +223,26 @@ fn group_log_id(group_id: VerifyingKey) -> LogId {
     })
 }
 
-#[derive(Debug, Error)]
-pub enum SpacesForgeError {
-    #[error(transparent)]
-    Sqlite(#[from] SqliteError),
-
-    #[error(transparent)]
-    Forge(#[from] ForgeError),
-
-    #[error("missing auth groups operation: {0}")]
-    MissingGroupsOperation(Hash),
-
-    #[error("missing args from groups operation: {0}")]
-    MissingGroupsArgs(Hash),
-}
-
-pub(crate) async fn make_group_topic_associations(
+pub(crate) async fn make_space_group_log_associations(
     store: &SqliteStore,
     me: VerifyingKey,
     space_id: Hash,
     space_group_id: VerifyingKey,
     groups_message_id: Hash,
 ) -> Result<(), SpacesForgeError> {
-    let Some(auth_operation): Option<Operation> = store.get_operation(&groups_message_id).await?
+    let Some(groups_operation): Option<Operation> = store.get_operation(&groups_message_id).await?
     else {
         return Err(SpacesForgeError::MissingGroupsOperation(groups_message_id));
     };
 
+    // Associate all group logs for members introduced by this operation.
     let Some(SpacesArgs::Auth { group_action, .. }) =
-        auth_operation.header.extensions.spaces_args()
+        groups_operation.header.extensions.spaces_args()
     else {
-        return Err(SpacesForgeError::MissingGroupsArgs(groups_message_id));
+        return Err(SpacesForgeError::MissingGroupsArgs(groups_operation.hash()));
     };
 
+    // @TODO: Maybe it's enough to only associate the group log on group creation?
     let sub_groups = match group_action {
         GroupAction::Create { initial_members } => initial_members
             .into_iter()
@@ -288,7 +274,7 @@ pub(crate) async fn make_group_topic_associations(
         debug!(
             topic = space_id.fmt_short(),
             group_id = group_id.fmt_short(),
-            log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+            log_id = Hash::from(log_id.as_bytes()).fmt_short(),
             "associate group log with space topic"
         );
 
@@ -304,10 +290,33 @@ pub(crate) async fn make_group_topic_associations(
             .await?;
     }
 
+    let log_id = group_log_id(space_group_id);
+    debug!(
+        topic = space_id.fmt_short(),
+        group_id = space_group_id.fmt_short(),
+        log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+        "associate space group log with space topic"
+    );
+
     // Also associate the spaces group itself.
     store
-        .associate(&Topic::from(space_id), &me, &group_log_id(space_group_id))
+        .associate(&Topic::from(space_id), &me, &log_id)
         .await?;
 
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum SpacesForgeError {
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Forge(#[from] ForgeError),
+
+    #[error("missing auth groups operation: {0}")]
+    MissingGroupsOperation(Hash),
+
+    #[error("missing args from groups operation: {0}")]
+    MissingGroupsArgs(Hash),
 }
