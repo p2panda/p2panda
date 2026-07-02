@@ -19,7 +19,7 @@ use crate::traits::{
     GroupMembership, IdentityHandle, IdentityManager, IdentityRegistry, OperationId, PreKeyManager,
     PreKeyRegistry,
 };
-use crate::two_party::{TwoParty, TwoPartyError, TwoPartyMessage, TwoPartyState};
+use crate::two_party::{TwoParty, TwoPartyError, TwoPartyMessage, TwoPartyState, X3dhCiphertext};
 
 /// A decentralized continuous group key agreement protocol (DCGKA) for p2panda's "data encryption"
 /// scheme with forward secrecy and post-compromise security.
@@ -602,6 +602,21 @@ where
         match self.content {
             DirectMessageContent::Welcome { .. } => DirectMessageType::Welcome,
             DirectMessageContent::TwoParty { .. } => DirectMessageType::TwoParty,
+        }
+    }
+
+    /// Returns the X3DH ciphertext with the used pre-key identifiers.
+    ///
+    /// Returns None if key-agreement between the two parties was not initial and HPKE was used.
+    pub fn x3dh_ciphertext(&self) -> Option<&X3dhCiphertext> {
+        let two_party = match &self.content {
+            DirectMessageContent::Welcome { ciphertext, .. } => &ciphertext.ciphertext,
+            DirectMessageContent::TwoParty { ciphertext } => &ciphertext.ciphertext,
+        };
+
+        match two_party {
+            crate::two_party::TwoPartyCiphertext::PreKey(x3dh) => Some(x3dh),
+            crate::two_party::TwoPartyCiphertext::Hpke(_) => None,
         }
     }
 }

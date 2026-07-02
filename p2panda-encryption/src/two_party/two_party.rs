@@ -213,8 +213,8 @@ pub enum KeyUsed {
 /// information needs to be added in applications.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TwoPartyMessage {
-    ciphertext: TwoPartyCiphertext,
-    key_used: KeyUsed,
+    pub ciphertext: TwoPartyCiphertext,
+    pub key_used: KeyUsed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
