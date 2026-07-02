@@ -15,7 +15,6 @@ use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use thiserror::Error;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
-use tokio::sync::oneshot::error::RecvError;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -28,19 +27,19 @@ use crate::streams::ExternalStreamFuture;
 
 const REPAIR_DELAY_SECS: u64 = 1;
 
-// Repairing a space involves incorporating missing groups operations observed on the global groups
-// context but not yet published into the space.
-//
-// There are 3 steps to this process:
-//
-// 1) re-publish missing groups operations into the space topic
-// 2) create and publish space membership operations for each missing groups operation (only read
-//    members can do this)
-// 3) associate missing groups logs with the space topic
-//
-// All new messages will be sent into the topic stream to be processed and forwarded to other peers.
+/// Repairing a space involves incorporating missing groups operations observed on the global groups
+/// context but not yet published into the space.
+///
+/// There are 3 steps to this process:
+///
+/// 1) re-publish missing groups operations into the space topic
+/// 2) create and publish space membership operations for each missing groups operation (only read
+///    members can do this)
+/// 3) associate missing groups logs with the space topic
+///
+/// All new messages will be sent into the topic stream to be processed and forwarded to other peers.
 pub(crate) async fn repair_space(
-    topic: Topic,
+    space_id: SpaceId,
     manager: &SpacesManager,
     store: &SqliteStore,
     import_tx: &mpsc::Sender<(
@@ -53,7 +52,6 @@ pub(crate) async fn repair_space(
     // Identify if this space needs repairing.
     //
     // @TODO: optimize this query by only checking the one space we're concerned with here.
-    let space_id = SpaceId::from(topic);
     let space_ids = match manager.spaces_repair_required().await {
         Ok(ids) => ids,
         Err(err) => {
@@ -141,9 +139,10 @@ pub(crate) async fn repair_space(
             .await?;
     }
 
+    store.commit(permit).await?;
+
     // If there are no messages to send then exit here.
     if spaces_messages.is_empty() && groups_operations.is_empty() {
-        store.commit(permit).await?;
         return Ok(false);
     }
 
@@ -163,7 +162,6 @@ pub(crate) async fn repair_space(
         .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
 
     // Don't await processing otherwise we'd block the stream.
-    store.commit(permit).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),
@@ -186,10 +184,10 @@ pub(crate) fn spawn_repair_task(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_secs(REPAIR_DELAY_SECS)).await;
-            if let Err(err) = repair_space(topic, &manager, &store, &import_tx).await {
+            if let Err(err) = repair_space(topic.into(), &manager, &store, &import_tx).await {
                 warn!("failed to repair spaces: {}", err);
             }
+            sleep(Duration::from_secs(REPAIR_DELAY_SECS)).await;
         }
     })
 }
@@ -205,7 +203,4 @@ pub enum RepairError {
 
     #[error("could not send to processor pipeline: {0}")]
     SendToProcessor(String),
-
-    #[error(transparent)]
-    Recv(#[from] RecvError),
 }

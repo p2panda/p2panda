@@ -66,8 +66,6 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
 
     sleep(Duration::from_secs(3)).await;
 
-    println!("assert space members");
-
     let members = panda_space.members().await?;
     assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
     assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
@@ -91,7 +89,6 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     let ready = panda_space.publish(message.clone()).await?;
     ready.await?;
 
-    println!("await panda message");
     // Panda receives the message they sent.
     loop {
         let Some(event) = panda_rx.next().await else {
@@ -172,7 +169,6 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     sleep(Duration::from_secs(1)).await;
 
     // Panda receives the message they sent.
-    println!("await panda receive");
     loop {
         let Some(event) = panda_rx.next().await else {
             panic!("unexpected stream closure");
@@ -186,7 +182,6 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
 
     // penguin also receives the message.
     // @TODO: currently fails because of operation decoding bug.
-    println!("await penguin receive");
     loop {
         let Some(event) = penguin_rx.next().await else {
             panic!("unexpected stream closure");
