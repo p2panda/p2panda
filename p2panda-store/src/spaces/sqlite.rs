@@ -35,6 +35,10 @@ impl<E> SqliteSpacesStore<E> {
             _phantom: PhantomData,
         }
     }
+
+    pub fn inner(&self) -> SqliteStore {
+        self.store.clone()
+    }
 }
 
 impl<ARG, E> SpacesMessageStore<ARG> for SqliteSpacesStore<E>

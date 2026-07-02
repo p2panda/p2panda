@@ -98,7 +98,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
         // TODO: Do we need to query graph tips here for causal ordering or is this taken care off
         // by -spaces? If yes, are declaring _all_ dependencies really it's concern or only the ones
         // which are relevant to the spaces protocol?
-        let operation = match args.clone() {
+        let operation = match args {
             // 1. Key Bundle logs.
             p2panda_spaces::SpacesArgs::KeyBundle { ref key_bundle } => {
                 // TODO: Check actual encoding format of key bundle. Will require versioning.
@@ -274,7 +274,7 @@ pub(crate) async fn make_space_group_log_associations(
         debug!(
             topic = space_id.fmt_short(),
             group_id = group_id.fmt_short(),
-            log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+            log_id = Hash::from(log_id.as_bytes()).fmt_short(),
             "associate group log with space topic"
         );
 
