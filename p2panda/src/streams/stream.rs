@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::forge::OperationForge;
@@ -151,12 +152,21 @@ where
     //
     // See related issue: https://github.com/p2panda/p2panda/issues/1272
 
+    let publisher_token = CancellationToken::new();
+    let subscription_token = CancellationToken::new();
+
     // Spawn first task which receives processed "output events" from the processing pipeline, the
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
     // forwarded to the application layer.
     {
         let mut pipeline = pipeline.clone();
         let acked = acked.clone();
+
+        let publisher_child_token = publisher_token.child_token();
+        let subscription_child_token = subscription_token.child_token();
+
+        let mut publisher_dropped = false;
+        let mut subscription_dropped = false;
 
         tokio::spawn(async move {
             loop {
@@ -189,6 +199,31 @@ where
                     Some(stream_events) = to_output_rx.recv() => {
                         stream_events
                     }
+
+                    // Cancellation happens when the `StreamPublisher` is dropped.
+                    _ = publisher_child_token.cancelled() => {
+                        publisher_dropped = true;
+                        if subscription_dropped {
+                            debug!(topic = %topic.to_hex(), "aborting output event processing task");
+                            // Both halves of the stream have been dropped so we abort this task.
+                            break
+                        } else {
+                            // One of the stream halves is still active.
+                            continue;
+                        }
+                    }
+
+                    // Cancellation happens when the `StreamSubscription` is dropped.
+                    _ = subscription_child_token.cancelled() => {
+                        subscription_dropped = true;
+                        if publisher_dropped {
+                            debug!(topic = %topic.to_hex(), "aborting output event processing task");
+                            break
+                        } else {
+                            continue;
+                        }
+                    }
+
                 };
 
                 // Send processing result to application layer.
@@ -199,6 +234,8 @@ where
                     let _ = app_tx.send(stream_event).await;
                 }
             }
+
+            debug!("aborted output event processing task");
         });
     }
 
@@ -210,6 +247,12 @@ where
     {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
+
+        let publisher_child_token = publisher_token.child_token();
+        let subscription_child_token = subscription_token.child_token();
+
+        let mut publisher_dropped = false;
+        let mut subscription_dropped = false;
 
         tokio::spawn(async move {
             // =======================
@@ -353,14 +396,47 @@ where
                             },
                         }
                     },
+
+                    // Cancellation happens when the `StreamPublisher` is dropped.
+                    _ = publisher_child_token.cancelled() => {
+                        publisher_dropped = true;
+                        if subscription_dropped {
+                            debug!(topic = %topic.to_hex(), "aborting input event processing task");
+                            break
+                        } else {
+                            // One of the stream halves is still active.
+                            continue;
+                        }
+                    }
+
+                    // Cancellation happens when the `StreamSubscription` is dropped.
+                    _ = subscription_child_token.cancelled() => {
+                        subscription_dropped = true;
+                        if publisher_dropped {
+                            debug!(topic = %topic.to_hex(), "aborting input event processing task");
+                            break
+                        } else {
+                            continue;
+                        }
+                    }
+
                 };
 
                 let _ = to_output_tx.send(stream_events).await;
             }
+
+            debug!("aborted input event processing task");
         });
     }
 
-    let tx = StreamPublisher::new(topic, sync_handle.clone(), forge, publish_tx, import_tx);
+    let tx = StreamPublisher::new(
+        topic,
+        sync_handle.clone(),
+        forge,
+        publish_tx,
+        import_tx,
+        publisher_token,
+    );
 
     let rx = StreamSubscription::new(
         topic,
@@ -368,6 +444,7 @@ where
         acked,
         sync_handle,
         ReceiverStream::new(app_rx),
+        subscription_token,
     );
 
     Ok((tx, rx))
