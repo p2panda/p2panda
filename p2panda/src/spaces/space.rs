@@ -171,7 +171,7 @@ where
         Ok(result)
     }
 
-    pub async fn repair(&self) -> Result<SpaceFuture, SpaceError> {
+    pub(crate) async fn repair(&self) -> Result<SpaceFuture, SpaceError> {
         let (space_y, messages) = self.inner.repair().await?;
 
         let permit = self.store.begin().await?;
