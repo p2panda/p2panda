@@ -494,6 +494,7 @@ where
                 // Only members with Read or greater access can repair spaces.
                 let space_y = space.state().await?;
                 results.push((space_y, vec![]));
+                continue;
             }
 
             let result = space.repair().await.map_err(ManagerError::Space)?;
