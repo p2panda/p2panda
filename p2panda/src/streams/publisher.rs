@@ -15,6 +15,8 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
@@ -95,6 +97,7 @@ pub struct StreamPublisher<M> {
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    cancellation_token: CancellationToken,
     _marker: PhantomData<M>,
 }
 
@@ -112,6 +115,7 @@ where
             BoxStream<'static, Operation>,
             oneshot::Sender<ExternalStreamFuture>,
         )>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             topic,
@@ -119,6 +123,7 @@ where
             forge,
             publish_tx,
             import_tx,
+            cancellation_token,
             _marker: PhantomData,
         }
     }
@@ -221,6 +226,15 @@ where
             .map_err(|err| PublishError::SyncHandle(err.to_string()))?;
 
         Ok(PublishFuture { hash, processed_rx })
+    }
+}
+
+impl<M> Drop for StreamPublisher<M> {
+    fn drop(&mut self) {
+        // TODO: Short formatting.
+        // TODO: Is it safe to write the topic to the logs?
+        debug!(topic = self.topic.to_hex(), "stream publisher dropped");
+        self.cancellation_token.cancel();
     }
 }
 

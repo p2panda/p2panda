@@ -13,6 +13,8 @@ use p2panda_store::operations::OperationStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
 use crate::operation::{Extensions, Operation};
 use crate::streams::StreamEvent;
@@ -54,6 +56,7 @@ pub struct StreamSubscription<M> {
     #[allow(unused)]
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     stream: ReceiverStream<StreamEvent<M>>,
+    cancellation_token: CancellationToken,
 }
 
 impl<M> StreamSubscription<M> {
@@ -64,6 +67,7 @@ impl<M> StreamSubscription<M> {
         acked: Acked,
         sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
         stream: ReceiverStream<StreamEvent<M>>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             topic,
@@ -71,6 +75,7 @@ impl<M> StreamSubscription<M> {
             acked,
             sync_handle,
             stream,
+            cancellation_token,
         }
     }
 
@@ -92,6 +97,15 @@ impl<M> StreamSubscription<M> {
         }
 
         Ok(())
+    }
+}
+
+impl<M> Drop for StreamSubscription<M> {
+    fn drop(&mut self) {
+        // TODO: Short formatting.
+        // TODO: Is it safe to write the topic to the logs?
+        debug!(topic = self.topic.to_hex(), "stream subscription dropped");
+        self.cancellation_token.cancel();
     }
 }
 
