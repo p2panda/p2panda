@@ -597,7 +597,6 @@ impl Node {
         let mut messages = vec![key_bundle_message];
         messages.extend(create_space_messages);
 
-        println!("import {} messages", messages.len());
         let processed = tx
             .import(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),
