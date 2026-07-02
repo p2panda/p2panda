@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -7,16 +8,18 @@ use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId, SpacesStoreState};
+use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
+use tracing::warn;
 
 use crate::node::CreateStreamError;
-use crate::operation::Extensions;
-use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesManagerError};
+use crate::operation::{Extensions, Operation};
+use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesArgs, SpacesManagerError};
 use crate::streams::{
     ExternalStreamFuture, ImportError, ProcessedOperation, Source, StreamEvent, StreamPublisher,
     StreamSubscription,
@@ -42,9 +45,6 @@ pub(crate) fn spaces_stream<M>(
 // TODO: We need a way to automatically publish key bundles (if configured, it should also be an
 // option to _not_ do that to only allow initial key agreement through side channels which is more
 // private).
-//
-// TODO: Automatically repair spaces (detect missing group changes and apply them to affected
-// spaces), ideally with a throttle logic.
 #[derive(Debug)]
 pub struct Space<M> {
     inner: InnerSpace,
@@ -97,7 +97,13 @@ where
         access: AccessLevel,
     ) -> Result<SpaceFuture, SpaceError> {
         // Before perfoming any further actions we "repair" the space, which incorporates any
-        // group changes it may be missing.
+        // group changes it may be missing. This is the same functionality as offered by the
+        // running repair task, however we do it here as well in order to avoid the case where the
+        // task hasn't picked up some recent groups changes.
+        //
+        // @TODO: We could instead signal the repair task to do it's work and await the response
+        // before continuing. That has the benefit of also pushing new groups messages into the
+        // spaces stream for live-mode peers.
         self.repair().await?.await?;
 
         let (_, space_y, auth_message, space_message) = self
@@ -141,7 +147,13 @@ where
 
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<SpaceFuture, SpaceError> {
         // Before perfoming any further actions we "repair" the space, which incorporates any
-        // group changes it may be missing.
+        // group changes it may be missing. This is the same functionality as offered by the
+        // running repair task, however we do it here as well in order to avoid the case where the
+        // task hasn't picked up some recent groups changes.
+        //
+        // @TODO: We could instead signal the repair task to do it's work and await the response
+        // before continuing. That has the benefit of also pushing new groups messages into the
+        // spaces stream for live-mode peers.
         self.repair().await?.await?;
 
         let (_, _, auth_message, space_message) = self.inner.remove(actor.into()).await?;
@@ -171,10 +183,37 @@ where
         Ok(result)
     }
 
+    /// Incorporate missing groups messages into the space, any resulting operations are
+    /// published live into the space topic.
     pub(crate) async fn repair(&self) -> Result<SpaceFuture, SpaceError> {
-        let (space_y, messages) = self.inner.repair().await?;
+        let (space_y, spaces_messages) = self.inner.repair().await?;
 
         let permit = self.store.begin().await?;
+
+        let mut operations = vec![];
+
+        // @TODO: Returning these groups messages from the Space::repair method p2panda-spaces
+        // would allow us to skip this step.
+        for message in spaces_messages.iter() {
+            // Ignore non-groups operations.
+            let SpacesArgs::SpaceMembership {
+                auth_message_id, ..
+            } = message.borrow()
+            else {
+                warn!("expected space membership operation");
+                continue;
+            };
+
+            let store = self.store.inner();
+            let Some(operation): Option<Operation> =
+                store.get_operation_tx(auth_message_id).await?
+            else {
+                warn!("missing expected auth groups operation");
+                continue;
+            };
+
+            operations.push(operation)
+        }
 
         // Persist the space state to the stores.
         //
@@ -188,11 +227,15 @@ where
 
         self.store.commit(permit).await?;
 
+        operations.extend(
+            spaces_messages
+                .into_iter()
+                .map(|message| message.into_operation()),
+        );
+
         let processed = self
             .tx
-            .import(futures_util::stream::iter(
-                messages.into_iter().map(|message| message.into_operation()),
-            ))
+            .import(futures_util::stream::iter(operations))
             .await?;
 
         Ok(SpaceFuture {
@@ -310,7 +353,7 @@ pub enum SpaceError {
     #[error(transparent)]
     Store(#[from] SqliteError),
 
-    #[error(transparent)]
+    #[error("couldn't process spaces change due to broken channel")]
     Recv(#[from] RecvError),
 }
 
