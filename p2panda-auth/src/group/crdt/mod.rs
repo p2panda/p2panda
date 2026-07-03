@@ -403,8 +403,11 @@ where
         self.inner.members(group_id)
     }
 
-    /// All groups which have ever been created on this groups state.
-    pub fn seen_groups(&self) -> Vec<ID> {
+    /// All groups which exist in the groups context.
+    /// 
+    /// This includes groups which have no parent -> child relation to each other, as opposed to
+    /// the groups() method which traverses all sub-groups of a single parent.
+    pub fn groups_global(&self) -> Vec<ID> {
         self.inner
             .operations
             .values()

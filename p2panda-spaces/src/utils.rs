@@ -13,7 +13,7 @@ pub(crate) fn typed_member<C: Conditions>(
     y: &AuthGroupState<C>,
     member: ActorId,
 ) -> GroupMember<ActorId> {
-    if !y.seen_groups().contains(&member) {
+    if !y.groups_global().contains(&member) {
         GroupMember::Individual(member)
     } else {
         GroupMember::Group(member)
