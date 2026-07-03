@@ -196,35 +196,10 @@ impl<M> Stream for SpaceSubscription<M>
 where
     M: std::fmt::Debug + Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    type Item = SpaceEvent<M>;
+    type Item = StreamEvent<M>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            let result = self.rx.poll_next_unpin(cx);
-
-            let event = match result {
-                Poll::Ready(Some(event)) => event,
-                Poll::Ready(None) => {
-                    return Poll::Ready(None);
-                }
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
-            };
-
-            // TODO: Properly convert to SpaceEvent.
-            match event {
-                StreamEvent::Processed { operation, source } => {
-                    return Poll::Ready(Some(SpaceEvent::Processed {
-                        operation: Box::new(operation),
-                        source,
-                    }));
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
+        self.rx.poll_next_unpin(cx)
     }
 }
 
