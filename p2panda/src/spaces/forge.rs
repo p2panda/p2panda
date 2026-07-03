@@ -2,7 +2,6 @@
 
 use p2panda_auth::group::GroupAction;
 use p2panda_core::cbor::encode_cbor;
-use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic, VerifyingKey};
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -236,38 +235,12 @@ pub(crate) async fn make_space_group_log_associations(
     };
 
     // Associate all group logs for members introduced by this operation.
-    let Some(SpacesArgs::Auth { group_action, .. }) =
-        groups_operation.header.extensions.spaces_args()
-    else {
-        return Err(SpacesForgeError::MissingGroupsArgs(groups_operation.hash()));
-    };
-
-    // @TODO: Maybe it's enough to only associate the group log on group creation?
-    let sub_groups = match group_action {
-        GroupAction::Create { initial_members } => initial_members
-            .into_iter()
-            .filter_map(|(member, _)| {
-                if member.is_group() {
-                    Some(member.id())
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        GroupAction::Add { member, .. } => {
-            if member.is_group() {
-                vec![member.id()]
-            } else {
-                vec![]
-            }
-        }
-        // We don't handle removals here, this is a concern of a higher layer which may even
-        // require consensus.
-        _ => vec![],
-    };
-
-    // For every new sub-group in a space group associate the logs with this space.
-    for group_id in sub_groups {
+    if let Some(SpacesArgs::Auth {
+        group_id,
+        group_action: GroupAction::Create { .. },
+        ..
+    }) = groups_operation.header.extensions.spaces_args()
+    {
         // Every author maintains their own log of control messages _per_ group.
         let log_id = group_log_id(group_id);
 
@@ -288,7 +261,7 @@ pub(crate) async fn make_space_group_log_associations(
         store
             .associate(&Topic::from(space_id), &me, &log_id)
             .await?;
-    }
+    };
 
     let log_id = group_log_id(space_group_id);
     debug!(
