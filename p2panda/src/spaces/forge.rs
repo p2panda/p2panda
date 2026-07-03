@@ -294,7 +294,7 @@ pub(crate) async fn make_space_group_log_associations(
     debug!(
         topic = space_id.fmt_short(),
         group_id = space_group_id.fmt_short(),
-        log_ig = Hash::from(log_id.as_bytes()).fmt_short(),
+        log_id = Hash::from(log_id.as_bytes()).fmt_short(),
         "associate space group log with space topic"
     );
 

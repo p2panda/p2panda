@@ -26,7 +26,7 @@ use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
 use crate::streams::ExternalStreamFuture;
 
-const REPAIR_DELAY_SECS: u64 = 1;
+const REPAIR_FREQUENCY_SECS: u64 = 1;
 
 /// Repairing a space involves incorporating missing groups operations observed on the global groups
 /// context but not yet published into the space.
@@ -212,17 +212,15 @@ pub(crate) fn spawn_repair_task(
                     }
                 }
                 // Scheduled repair triggered.
-                _ = sleep(Duration::from_secs(REPAIR_DELAY_SECS)) => None,
+                _ = sleep(Duration::from_secs(REPAIR_FREQUENCY_SECS)) => None,
             };
 
-            // Repair the space.
             let result = repair_space(topic.into(), &manager, &store, &import_tx).await;
 
             if let Err(ref err) = result {
                 warn!("failed to repair spaces: {}", err);
             }
 
-            // Return the result.
             if let Some(reply_tx) = reply_tx {
                 let _ = reply_tx.send(result);
             }
