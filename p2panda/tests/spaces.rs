@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::Duration;
+use std::collections::HashSet;
 
-use p2panda::{operation::Header, spaces::SpaceEvent};
+use p2panda::operation::Header;
+use p2panda::streams::StreamEvent;
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::{cbor::decode_cbor, test_utils::setup_logging};
+use p2panda_spaces::{GroupEvent, SpaceEvent};
 use serde::{Deserialize, Serialize};
-use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -33,38 +34,79 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     let penguin_laptop = p2panda::spawn().await?;
     let penguin_mobile = p2panda::spawn().await?;
 
-    {
-        // Penguin subscribes to the space in order to publish some key bundles.
-        let (_, _penguin_laptop_rx) = penguin_laptop.space::<SecretData>(topic).await.unwrap();
-        let (_, _penguin_mobile_rx) = penguin_mobile.space::<SecretData>(topic).await.unwrap();
+    // Penguin subscribes to the space in order to publish some key bundles.
+    let (penguin_laptop_space, mut penguin_laptop_rx) =
+        penguin_laptop.space::<SecretData>(topic).await.unwrap();
+    let (penguin_mobile_space, mut penguin_mobile_rx) =
+        penguin_mobile.space::<SecretData>(topic).await.unwrap();
 
-        // Wait some time for key bundle, groups and space logs to sync.
-        // @TODO: replace sleep when spaces events are watchable.
-        sleep(Duration::from_secs(4)).await;
+    // Panda receives both penguins key bundles.
+    let mut expected = HashSet::from([penguin_laptop.id(), penguin_mobile.id()]);
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::KeyBundle(verifying_key) = event {
+            expected.remove(&verifying_key);
+            if expected.is_empty() {
+                break;
+            }
+        };
     }
 
-    // @TODO: currently these group messages are _not_ sent via live-mode for the spaces topic.
-    // Need to consider how best to get access to the sync handle in the node API to make this
-    // possible.
-    let penguin = panda
+    // Penguin laptop receives space created event.
+    while let Some(event) = penguin_laptop_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // Penguin mobile receives space created event.
+    while let Some(event) = penguin_mobile_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // Penguin creates a device group (on their laptop).
+    let penguin = penguin_laptop
         .create_group(&[
             (penguin_laptop.id(), AccessLevel::Read),
             (penguin_mobile.id(), AccessLevel::Write),
         ])
         .await?;
 
-    // .. and add them to the space as well.
+    // Panda receives the group.
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Group(GroupEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // Penguin mobile receives the group.
+    while let Some(event) = penguin_mobile_rx.next().await {
+        if let StreamEvent::Group(GroupEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
     let ready = panda_space.add(penguin, AccessLevel::Read).await?;
     ready.await?;
 
-    // @TODO: Penguins subscribe to the space topic again in order to get the groups messages via
-    // sync.
-    let (penguin_laptop_space, mut penguin_laptop_rx) =
-        penguin_laptop.space::<SecretData>(topic).await.unwrap();
-    let (penguin_mobile_space, mut penguin_mobile_rx) =
-        penguin_mobile.space::<SecretData>(topic).await.unwrap();
+    while let Some(event) = penguin_laptop_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 2);
+            assert!(added.contains(&penguin_laptop.id()));
+            assert!(added.contains(&penguin_mobile.id()));
+            break;
+        };
+    }
 
-    sleep(Duration::from_secs(4)).await;
+    while let Some(event) = penguin_mobile_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 2);
+            assert!(added.contains(&penguin_laptop.id()));
+            assert!(added.contains(&penguin_mobile.id()));
+            break;
+        };
+    }
 
     let members = panda_space.members().await?;
     assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
@@ -94,7 +136,7 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         let Some(event) = panda_rx.next().await else {
             panic!("unexpected stream closure");
         };
-        let SpaceEvent::Processed { operation, .. } = event else {
+        let StreamEvent::Processed { operation, .. } = event else {
             continue;
         };
         assert_eq!(&message, operation.message());
@@ -106,7 +148,7 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         let Some(event) = penguin_laptop_rx.next().await else {
             panic!("unexpected stream closure");
         };
-        let SpaceEvent::Processed { operation, .. } = event else {
+        let StreamEvent::Processed { operation, .. } = event else {
             continue;
         };
         assert_eq!(&message, operation.message());
@@ -118,7 +160,7 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         let Some(event) = penguin_mobile_rx.next().await else {
             panic!("unexpected stream closure");
         };
-        let SpaceEvent::Processed { operation, .. } = event else {
+        let StreamEvent::Processed { operation, .. } = event else {
             continue;
         };
         assert_eq!(&message, operation.message());
@@ -146,9 +188,18 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     // Panda creates and subscribes to a space.
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
-    // Wait some time for key bundle, groups and space logs to sync.
-    // @TODO: replace sleep when spaces events are watchable.
-    sleep(Duration::from_secs(3)).await;
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // @TODO: Uncomment when own events are emitted on event stream.
+    // while let Some(event) = panda_rx.next().await {
+    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+    //         break;
+    //     };
+    // }
 
     // Panda adds penguin as a member of the space.
     //
@@ -162,18 +213,15 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         content: "Hello, everyone!".to_string(),
     };
 
-    sleep(Duration::from_secs(2)).await;
     let ready = panda_space.publish(message.clone()).await?;
     assert!(ready.await.is_ok());
-
-    sleep(Duration::from_secs(1)).await;
 
     // Panda receives the message they sent.
     loop {
         let Some(event) = panda_rx.next().await else {
             panic!("unexpected stream closure");
         };
-        let SpaceEvent::Processed { operation, .. } = event else {
+        let StreamEvent::Processed { operation, .. } = event else {
             continue;
         };
         assert_eq!(&message, operation.message());
@@ -185,7 +233,7 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         let Some(event) = penguin_rx.next().await else {
             panic!("unexpected stream closure");
         };
-        let SpaceEvent::Processed { operation, .. } = event else {
+        let StreamEvent::Processed { operation, .. } = event else {
             continue;
         };
         assert_eq!(&message, operation.message());
@@ -251,14 +299,27 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // They then subscribe, as does panda.
-    let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+    let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
     let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
-    sleep(Duration::from_secs(5)).await;
+
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // @TODO: Uncomment when own events are emitted on event stream.
+    // while let Some(event) = panda_rx.next().await {
+    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+    //         break;
+    //     };
+    // }
 
     // We expect panda to be able to add penguin group as a space member now.
     let ready = panda_space
         .add(penguin_group.id(), AccessLevel::Read)
         .await?;
+
     assert!(ready.await.is_ok());
 
     Ok(())
@@ -277,16 +338,43 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     let penguin = p2panda::spawn().await?;
 
     // Penguin subscribes to the space.
-    let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
-    let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
-    sleep(Duration::from_secs(3)).await;
+    let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+    let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // @TODO: Uncomment when own events are emitted on event stream.
+    // while let Some(event) = panda_rx.next().await {
+    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+    //         break;
+    //     };
+    // }
 
     // And then creates a group.
     let penguin_group = penguin
         .create_group(&[(penguin.id(), AccessLevel::Manage)])
         .await?;
 
-    sleep(Duration::from_secs(3)).await;
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Group(GroupEvent::Created { group_id, .. }) = event
+            && group_id == penguin_group.id()
+        {
+            break;
+        };
+    }
+
+    // @TODO: Uncomment when own events are emitted on event stream.
+    // while let Some(event) = penguin_rx.next().await {
+    //     if let StreamEvent::Group(GroupEvent::Created { group_id, .. }) = event
+    //         && group_id == penguin_group.id()
+    //     {
+    //         break;
+    //     };
+    // }
 
     // We expect panda to be able to add penguin group to the space.
     let ready = panda_space
