@@ -467,7 +467,7 @@ impl Node {
             .await?
             .unwrap_or_default();
 
-        for group_id in y.seen_groups() {
+        for group_id in y.groups_global() {
             debug!(
                 group_id = group_id.fmt_short(),
                 space_id = space_id.fmt_short(),
