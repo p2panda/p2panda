@@ -32,8 +32,8 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::spawn_repair_task;
 use crate::spaces::types::{AuthCapabilities, SpacesManager};
+use crate::spaces::{RepairError, spawn_repair_task};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
@@ -149,12 +149,15 @@ where
     // stream"), this channel should be used.
     let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<StreamEvent<M>>>(128);
 
+    let (repair_tx, repair_rx) = mpsc::channel(1);
+
     // Task concerned with repairing a space.
     let repair_task_handle = spawn_repair_task(
         topic,
         spaces_manager.clone(),
         store.clone(),
         import_tx.clone(),
+        repair_rx,
     );
 
     // FIXME: Both tasks need to be gracefully shut down when the tx / rx halves got dropped,
@@ -380,6 +383,7 @@ where
         forge,
         publish_tx,
         import_tx,
+        repair_tx,
         _marker: PhantomData,
     };
 
@@ -635,6 +639,7 @@ pub struct StreamPublisher<M> {
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    pub(crate) repair_tx: mpsc::Sender<oneshot::Sender<Result<bool, RepairError>>>,
     _marker: PhantomData<M>,
 }
 

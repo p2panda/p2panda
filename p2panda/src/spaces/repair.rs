@@ -9,19 +9,20 @@ use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
-use p2panda_store::spaces::{SpacesStore as SpacesStoreTrait, SqliteSpacesStore};
+use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use thiserror::Error;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::RecvError;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
-use crate::operation::{Extensions, Operation};
+use crate::operation::Operation;
 use crate::spaces::group_log_id;
-use crate::spaces::types::{AuthCapabilities, SpacesArgs};
+use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
 use crate::streams::ExternalStreamFuture;
 
@@ -47,7 +48,7 @@ pub(crate) async fn repair_space(
         oneshot::Sender<ExternalStreamFuture>,
     )>,
 ) -> Result<bool, RepairError> {
-    let spaces_store = SqliteSpacesStore::<Extensions>::new(store.clone());
+    let spaces_store = SpacesStore::new(store.clone());
 
     // Identify if this space needs repairing.
     //
@@ -64,29 +65,13 @@ pub(crate) async fn repair_space(
         return Ok(false);
     }
 
-    // Attempt to repair the space. As we pass in an array containing a single space id there will
-    // be only ever max one result returned.
-    //
-    // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
-    // everything part of one transaction on this level yet. It isn't a source of bugs though so
-    // for now this is ok.
-    let mut repaired = manager.repair_spaces(&[space_id]).await?;
-
-    // Forging these spaces messages will also associate any group logs with this space topic.
-    let Some((space_y, spaces_messages)) = repaired.pop() else {
-        // This can happen if we didn't receive any space messages yet, or we're not a member with
-        // read access.
-        debug!(
-            node_id = manager.id().fmt_short(),
-            space_id = space_id.fmt_short(),
-            "space not yet materialised"
-        );
-        return Ok(false);
-    };
-
+    // Collect all missing groups operations. These will be imported into the space and forwarded
+    // to live-mode peers.
     let permit = store.begin().await?;
 
-    // Collect all groups operations in our global context that the space is missing.
+    let space_y: Option<SpacesStoreState<AuthCapabilities>> =
+        spaces_store.get_space_state_tx(&space_id).await?;
+
     let groups_y: AuthGroupState<AuthCapabilities> = spaces_store
         .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
         .await?
@@ -94,7 +79,9 @@ pub(crate) async fn repair_space(
 
     let mut groups_operations = vec![];
     for id in groups_y.inner.operations.keys() {
-        if space_y.groups_y.inner.operations.contains_key(id) {
+        if let Some(ref y) = space_y
+            && y.groups_y.inner.operations.contains_key(id)
+        {
             continue;
         }
 
@@ -128,40 +115,66 @@ pub(crate) async fn repair_space(
         groups_operations.push(operation)
     }
 
-    // If no _space_ messages were returned from repairing then no state change occurred and we
+    store.commit(permit).await?;
+
+    // Attempt to repair the space. As we pass in an array containing a single space id there will
+    // be only ever max one result returned.
+    //
+    // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
+    // everything part of one transaction on this level yet. It isn't a source of bugs though so
+    // for now this is ok.
+    let mut repaired = manager.repair_spaces(&[space_id]).await?;
+
+    // Forging these spaces messages will also associate any group logs with this space topic.
+    let Some((space_y, spaces_messages)) = repaired.pop() else {
+        // This can happen if we didn't receive any space control messages yet.
+        debug!(
+            node_id = manager.id().fmt_short(),
+            space_id = space_id.fmt_short(),
+            "space not yet materialised"
+        );
+        return Ok(false);
+    };
+
+    // If no space messages were forged during repairing then no state change occurred and we
     // don't need to persist here. This occurs when we are not a _read_ member of the space (yet).
+    //
+    // @TODO: Once control messages are encrypted it will not be possible for non-read members to
+    // receives any control messages and so this logic can be refactored.
     if !spaces_messages.is_empty() {
-        // @TODO: Again, once we can process our own spaces messages then we no longer
+        let permit = store.begin().await?;
+
+        // @TODO: Once we can process our own spaces messages then we no longer
         // need to persist this state here.
         let space_id = space_y.space_id;
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
-    }
 
-    store.commit(permit).await?;
+        store.commit(permit).await?;
+    }
 
     // If there are no messages to send then exit here.
     if spaces_messages.is_empty() && groups_operations.is_empty() {
         return Ok(false);
     }
 
+    // Send all resulting operations into the stream.
     let op_count = groups_operations.len() + spaces_messages.len();
     let operations = groups_operations.into_iter().chain(
         spaces_messages
             .into_iter()
             .map(|message| message.into_operation()),
     );
-
-    // Send the resulting operations into the stream.
     let stream = Box::pin(futures_util::stream::iter(operations));
-    let (ready_tx, _ready_rx) = oneshot::channel::<ExternalStreamFuture>();
+    let (ready_tx, ready_rx) = oneshot::channel::<ExternalStreamFuture>();
     import_tx
         .send((stream, ready_tx))
         .await
         .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
 
-    // Don't await processing otherwise we'd block the stream.
+    // Await processing of operations to be complete.
+    ready_rx.await?;
 
     debug!(
         node_id = manager.id().fmt_short(),
@@ -173,6 +186,8 @@ pub(crate) async fn repair_space(
     Ok(true)
 }
 
+/// Spawn the repair task which triggers work on a schedule or from being signalled from elsewhere
+/// in the node API.
 pub(crate) fn spawn_repair_task(
     topic: Topic,
     manager: SpacesManager,
@@ -181,13 +196,36 @@ pub(crate) fn spawn_repair_task(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    mut repair_rx: mpsc::Receiver<oneshot::Sender<Result<bool, RepairError>>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            if let Err(err) = repair_space(topic.into(), &manager, &store, &import_tx).await {
+            let reply_tx = tokio::select! {
+                // We received a signal to repair the space.
+                msg = repair_rx.recv() => {
+                    match msg {
+                        Some(reply_tx) => Some(reply_tx),
+                        None => {
+                            // If the repair_tx is dropped then we can exit this task.
+                            return;
+                        }
+                    }
+                }
+                // Scheduled repair triggered.
+                _ = sleep(Duration::from_secs(REPAIR_DELAY_SECS)) => None,
+            };
+
+            // Repair the space.
+            let result = repair_space(topic.into(), &manager, &store, &import_tx).await;
+
+            if let Err(ref err) = result {
                 warn!("failed to repair spaces: {}", err);
             }
-            sleep(Duration::from_secs(REPAIR_DELAY_SECS)).await;
+
+            // Return the result.
+            if let Some(reply_tx) = reply_tx {
+                let _ = reply_tx.send(result);
+            }
         }
     })
 }
@@ -203,4 +241,7 @@ pub enum RepairError {
 
     #[error("could not send to processor pipeline: {0}")]
     SendToProcessor(String),
+
+    #[error("import ready channel broken")]
+    Recv(#[from] RecvError),
 }

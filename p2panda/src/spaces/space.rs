@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::borrow::Borrow;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -8,18 +7,18 @@ use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId, SpacesStoreState};
-use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::mpsc::error::SendError;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
-use tracing::warn;
 
 use crate::node::CreateStreamError;
-use crate::operation::{Extensions, Operation};
-use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesArgs, SpacesManagerError};
+use crate::operation::Extensions;
+use crate::spaces::RepairError;
+use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::streams::{
     ExternalStreamFuture, ImportError, ProcessedOperation, Source, StreamEvent, StreamPublisher,
     StreamSubscription,
@@ -62,6 +61,10 @@ where
 
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
+        // Before publishing messages we trigger and await return from a space repair which will
+        // ensure we have incorporated the latest groups changes into the space.
+        self.repair().await?;
+
         // TODO: We'll remove custom `M` types in the future, users will only provide bytes on this
         // level.
         let body_bytes = encode_cbor(&message)?;
@@ -96,15 +99,9 @@ where
         actor: impl Into<ActorId>,
         access: AccessLevel,
     ) -> Result<SpaceFuture, SpaceError> {
-        // Before perfoming any further actions we "repair" the space, which incorporates any
-        // group changes it may be missing. This is the same functionality as offered by the
-        // running repair task, however we do it here as well in order to avoid the case where the
-        // task hasn't picked up some recent groups changes.
-        //
-        // @TODO: We could instead signal the repair task to do it's work and await the response
-        // before continuing. That has the benefit of also pushing new groups messages into the
-        // spaces stream for live-mode peers.
-        self.repair().await?.await?;
+        // Before performing any action we trigger and await return from a space repair which will
+        // ensure we have incorporated the latest groups changes into the space.
+        self.repair().await?;
 
         let (_, space_y, auth_message, space_message) = self
             .inner
@@ -146,15 +143,9 @@ where
     }
 
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<SpaceFuture, SpaceError> {
-        // Before perfoming any further actions we "repair" the space, which incorporates any
-        // group changes it may be missing. This is the same functionality as offered by the
-        // running repair task, however we do it here as well in order to avoid the case where the
-        // task hasn't picked up some recent groups changes.
-        //
-        // @TODO: We could instead signal the repair task to do it's work and await the response
-        // before continuing. That has the benefit of also pushing new groups messages into the
-        // spaces stream for live-mode peers.
-        self.repair().await?.await?;
+        // Before performing any action we trigger and await return from a space repair which will
+        // ensure we have incorporated the latest groups changes into the space.
+        self.repair().await?;
 
         let (_, _, auth_message, space_message) = self.inner.remove(actor.into()).await?;
 
@@ -185,63 +176,11 @@ where
 
     /// Incorporate missing groups messages into the space, any resulting operations are
     /// published live into the space topic.
-    pub(crate) async fn repair(&self) -> Result<SpaceFuture, SpaceError> {
-        let (space_y, spaces_messages) = self.inner.repair().await?;
-
-        let permit = self.store.begin().await?;
-
-        let mut operations = vec![];
-
-        // @TODO: Returning these groups messages from the Space::repair method p2panda-spaces
-        // would allow us to skip this step.
-        for message in spaces_messages.iter() {
-            // Ignore non-groups operations.
-            let SpacesArgs::SpaceMembership {
-                auth_message_id, ..
-            } = message.borrow()
-            else {
-                warn!("expected space membership operation");
-                continue;
-            };
-
-            let store = self.store.inner();
-            let Some(operation): Option<Operation> =
-                store.get_operation_tx(auth_message_id).await?
-            else {
-                warn!("missing expected auth groups operation");
-                continue;
-            };
-
-            operations.push(operation)
-        }
-
-        // Persist the space state to the stores.
-        //
-        // @TODO: We need to refactor the spaces API so that locally created operations can be
-        // handled via the call to Manager::process and then persisted in the spaces processor.
-        // Until we have this spaces events for our own locally created operations won't be
-        // emitted to users (as the processor thinks the operation was already processed and skips.
-        self.store
-            .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
-            .await?;
-
-        self.store.commit(permit).await?;
-
-        operations.extend(
-            spaces_messages
-                .into_iter()
-                .map(|message| message.into_operation()),
-        );
-
-        let processed = self
-            .tx
-            .import(futures_util::stream::iter(operations))
-            .await?;
-
-        Ok(SpaceFuture {
-            processed,
-            space_id: self.inner.id(),
-        })
+    pub(crate) async fn repair(&self) -> Result<bool, RepairSpaceError> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.repair_tx.send(tx).await?;
+        let repaired = rx.await??;
+        Ok(repaired)
     }
 
     // TODO: "actors" method to return the _non-flattened_ actors in a group. This will help to
@@ -355,6 +294,9 @@ pub enum SpaceError {
 
     #[error("couldn't process spaces change due to broken channel")]
     Recv(#[from] RecvError),
+
+    #[error(transparent)]
+    RepairSpace(#[from] RepairSpaceError),
 }
 
 #[derive(Debug, Error)]
@@ -371,4 +313,20 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
+
+    #[error(transparent)]
+    RepairSpace(#[from] RepairSpaceError),
+}
+
+#[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
+pub enum RepairSpaceError {
+    #[error(transparent)]
+    Repair(#[from] RepairError),
+
+    #[error("failed to send on space repair task channel")]
+    Send(#[from] SendError<oneshot::Sender<Result<bool, RepairError>>>),
+
+    #[error("couldn't receive reply from repair task due to broken channel")]
+    Recv(#[from] RecvError),
 }

@@ -64,7 +64,7 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     let (penguin_mobile_space, mut penguin_mobile_rx) =
         penguin_mobile.space::<SecretData>(topic).await.unwrap();
 
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(4)).await;
 
     let members = panda_space.members().await?;
     assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
@@ -148,7 +148,7 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
 
     // Wait some time for key bundle, groups and space logs to sync.
     // @TODO: replace sleep when spaces events are watchable.
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(3)).await;
 
     // Panda adds penguin as a member of the space.
     //
@@ -181,7 +181,6 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // penguin also receives the message.
-    // @TODO: currently fails because of operation decoding bug.
     loop {
         let Some(event) = penguin_rx.next().await else {
             panic!("unexpected stream closure");
@@ -192,10 +191,6 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(&message, operation.message());
         break;
     }
-
-    // @TODO: assert that penguin has also successfully joined the space and can publish a
-    // message. This would often fail now due to ordering not yet being implemented.
-
     Ok(())
 }
 
