@@ -42,15 +42,17 @@ where
                     node_infos_v1 (
                         node_id,
                         node_info,
-                        bootstrap
+                        bootstrap,
+                        stale
                     )
                 VALUES
-                    (?, ?, ?)
+                    (?, ?, ?, ?)
                 ON CONFLICT(node_id)
                 DO UPDATE
                     SET
                         node_info = EXCLUDED.node_info,
-                        bootstrap = EXCLUDED.bootstrap
+                        bootstrap = EXCLUDED.bootstrap,
+                        stale = EXCLUDED.stale
                 ",
             )
             .bind(info.id().to_hex())
@@ -59,6 +61,7 @@ where
                     .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
             )
             .bind(info.is_bootstrap())
+            .bind(info.is_stale())
             .execute(&mut **tx)
             .await
             .map_err(SqliteError::Sqlite)
@@ -210,6 +213,8 @@ where
                         node_info
                     FROM
                         node_infos_v1
+                    WHERE
+                        stale = FALSE
                     ",
                 )
                 .fetch_all(pool)
@@ -230,6 +235,8 @@ where
                         COUNT(node_id)
                     FROM
                         node_infos_v1
+                    WHERE
+                        stale = FALSE
                     ",
                 )
                 .fetch_one(pool)
@@ -252,6 +259,7 @@ where
                         node_infos_v1
                     WHERE
                         bootstrap = TRUE
+                        AND stale = FALSE
                     ",
                 )
                 .fetch_one(pool)
@@ -348,6 +356,7 @@ where
                         ON node_infos_v1.node_id = topics2node_infos_v1.node_id
                     WHERE
                         topics2node_infos_v1.topic_id IN ({})
+                        AND node_infos_v1.stale = FALSE
                     GROUP BY
                         node_infos_v1.node_id
                     ",
@@ -371,6 +380,8 @@ where
                         node_info
                     FROM
                         node_infos_v1
+                    WHERE
+                        stale = FALSE
                     ORDER BY RANDOM()
                     LIMIT 1
                     ",
@@ -395,6 +406,7 @@ where
                         node_infos_v1
                     WHERE
                         bootstrap = TRUE
+                        AND stale = FALSE
                     ORDER BY RANDOM()
                     LIMIT 1
                     ",

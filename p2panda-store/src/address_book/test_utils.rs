@@ -16,6 +16,7 @@ pub type TestNodeId = VerifyingKey;
 pub struct TestNodeInfo {
     pub id: TestNodeId,
     pub bootstrap: bool,
+    pub stale: bool,
     pub transports: Option<TestTransportInfo>,
 }
 
@@ -39,6 +40,7 @@ impl TestNodeInfo {
         Self {
             id,
             bootstrap: false,
+            stale: false,
             transports: None,
         }
     }
@@ -47,8 +49,14 @@ impl TestNodeInfo {
         Self {
             id,
             bootstrap: true,
+            stale: false,
             transports: None,
         }
+    }
+
+    pub fn stale(mut self) -> Self {
+        self.stale = true;
+        self
     }
 
     pub fn with_random_address(mut self, rng: &mut ChaCha20Rng) -> Self {
@@ -94,7 +102,7 @@ impl NodeInfo<TestNodeId> for TestNodeInfo {
     }
 
     fn is_stale(&self) -> bool {
-        false
+        self.stale
     }
 
     fn transports(&self) -> Option<Self::Transports> {
