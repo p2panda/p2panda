@@ -47,6 +47,7 @@ Highlights are marked with a pancake 🥞
 - ci: Check for unused mut and async, fix affected methods [#1163](https://github.com/p2panda/p2panda/pull/1163)
 - net: Return existing rx on call to sync manager subscribe [#1269](https://github.com/p2panda/p2panda/pull/1269)
 - store: Faulty configuration for in-memory SQLite which caused dropped databases [#1258](https://github.com/p2panda/p2panda/pull/1258)
+- store: Do not return stale node infos in address book store [#1285](https://github.com/p2panda/p2panda/pull/1285)
 
 ## [0.6.1] - 22/05/2026
 
