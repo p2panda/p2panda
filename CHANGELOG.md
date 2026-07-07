@@ -39,6 +39,8 @@ Highlights are marked with a pancake 🥞
 - stream: Return input with error in orderer processor [#1249](https://github.com/p2panda/p2panda/pull/1249)
 - spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
 - chore: Set MSRV to `1.94` [#1191](https://github.com/p2panda/p2panda/pull/1191)
+- chore: Set MSRV to `1.96` [#1205](https://github.com/p2panda/p2panda/pull/1205)
+- chore: Use assert_matches!() instead of assert!(matches!()) [#1205](https://github.com/p2panda/p2panda/pull/1205)
 
 ### Fixed
 
@@ -135,14 +137,14 @@ Highlights are marked with a pancake 🥞
 
 ## [0.5.2] - 09/03/2026
 
+### Changed
+
+- `p2panda-auth` remove high-level API and orderer generic [#1030](https://github.com/p2panda/p2panda/pull/1030)A
+
 ### Fixed
 
 - Fix SQLite store handling of `previous` hashes [#1051](https://github.com/p2panda/p2panda/pull/1051)
 - Fix missing gossip events in sync manager [#988](https://github.com/p2panda/p2panda/pull/988)
-
-### Changed
-
-- `p2panda-auth` remove high-level API and orderer generic [#1030](https://github.com/p2panda/p2panda/pull/1030)
 
 ## [0.5.1] - 09/02/2026
 
