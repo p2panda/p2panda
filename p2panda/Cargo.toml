@@ -7,7 +7,7 @@ authors = [
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>",
 ]
-description = "Out-of-the-box p2panda Node API for application developers"
+description = "Out-of-the-box p2panda API for application developers"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
