@@ -263,11 +263,15 @@ pub mod streams;
 
 // Useful external types we want to re-export for convenience.
 #[doc(no_inline)]
+pub use p2panda_auth::AccessLevel;
+#[doc(no_inline)]
 pub use p2panda_core::{Cursor, Hash, SigningKey, Topic, VerifyingKey};
 #[doc(no_inline)]
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 #[doc(no_inline)]
 pub use p2panda_net::{NetworkId, NodeId};
+#[doc(no_inline)]
+pub use p2panda_spaces::SpaceEvent;
 
 pub use builder::NodeBuilder;
 pub use credentials::Credentials;
