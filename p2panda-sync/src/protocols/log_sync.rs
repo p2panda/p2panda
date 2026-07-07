@@ -628,15 +628,15 @@ mod tests {
             }
         );
 
-        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[4] else {
-            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[4]);
+        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[2] else {
+            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[2]);
         };
         let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_0);
         assert_eq!(Body::new(&body_inner), body);
 
-        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[4] else {
-            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[4]);
+        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[3] else {
+            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[3]);
         };
         let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_1);
@@ -685,7 +685,7 @@ mod tests {
             LogSyncEvent::MetricsExchanged { .. }
         );
 
-        let recv = peer_b_event_rx.recv().await.unwrap();
+        let recv = peer_a_event_rx.recv().await.unwrap();
         let LogSyncEvent::OperationReceived { operation, .. } = recv else {
             panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
         };
@@ -697,7 +697,7 @@ mod tests {
         assert_eq!(header, header_b0);
         assert_eq!(body_inner.unwrap(), body_b);
 
-        let recv = peer_b_event_rx.recv().await.unwrap();
+        let recv = peer_a_event_rx.recv().await.unwrap();
         let LogSyncEvent::OperationReceived { operation, .. } = recv else {
             panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
         };
