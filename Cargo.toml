@@ -38,13 +38,13 @@ tracing = { version = "0.1.44" }
 tracing-subscriber = { version = "0.3.23" }
 
 # p2panda workspace
-p2panda = { path = "p2panda", version = "0.6.1", default-features = false }
-p2panda-auth = { path = "p2panda-auth", version = "0.6.1", default-features = false }
-p2panda-core = { path = "p2panda-core", version = "0.6.1", default-features = false }
-p2panda-discovery = { path = "p2panda-discovery", version = "0.6.1", default-features = false }
-p2panda-encryption = { path = "p2panda-encryption", version = "0.6.1", default-features = false }
-p2panda-net = { path = "p2panda-net", version = "0.6.1", default-features = false }
-p2panda-spaces = { path = "p2panda-spaces", version = "0.6.1", default-features = false }
-p2panda-store = { path = "p2panda-store", version = "0.6.1", default-features = false }
-p2panda-stream = { path = "p2panda-stream", version = "0.6.1", default-features = false }
-p2panda-sync = { path = "p2panda-sync", version = "0.6.1", default-features = false }
+p2panda = { path = "p2panda", version = "0.7.0", default-features = false }
+p2panda-auth = { path = "p2panda-auth", version = "0.7.0", default-features = false }
+p2panda-core = { path = "p2panda-core", version = "0.7.0", default-features = false }
+p2panda-discovery = { path = "p2panda-discovery", version = "0.7.0", default-features = false }
+p2panda-encryption = { path = "p2panda-encryption", version = "0.7.0", default-features = false }
+p2panda-net = { path = "p2panda-net", version = "0.7.0", default-features = false }
+p2panda-spaces = { path = "p2panda-spaces", version = "0.7.0", default-features = false }
+p2panda-store = { path = "p2panda-store", version = "0.7.0", default-features = false }
+p2panda-stream = { path = "p2panda-stream", version = "0.7.0", default-features = false }
+p2panda-sync = { path = "p2panda-sync", version = "0.7.0", default-features = false }

@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+## [0.7.0] - 07/07/2026
+
 ### Added
 
 - auth: More methods (`traverse_members`, `groups`) to traverse and filter graph [#1242](https://github.com/p2panda/p2panda/pull/1242)
@@ -286,7 +288,8 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.6.1...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.1
 [0.6.1]: https://github.com/p2panda/p2panda/releases/tag/v0.6.1
 [0.6.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.0
 [0.5.2]: https://github.com/p2panda/p2panda/releases/tag/v0.5.2
