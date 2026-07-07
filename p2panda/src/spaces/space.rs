@@ -147,7 +147,21 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (_, _, auth_message, space_message) = self.inner.remove(actor.into()).await?;
+        let (_, space_y, auth_message, space_message) = self.inner.remove(actor.into()).await?;
+
+        let permit = self.store.begin().await?;
+
+        // Persist the computed groups and spaces state to the stores.
+        //
+        // @TODO: We need to refactor the spaces API so that locally created operations can be
+        // handled via the call to Manager::process and then persisted in the spaces processor.
+        // Until we have this spaces events for our own locally created operations won't be
+        // emitted to users (as the processor thinks the operation was already processed and skips.
+        self.store
+            .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
+            .await?;
+
+        self.store.commit(permit).await?;
 
         let processed = self
             .tx
