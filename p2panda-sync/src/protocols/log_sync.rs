@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
-use tracing::{debug, trace, warn};
+use tracing::{Instrument, debug, trace, warn};
 
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
@@ -110,34 +110,56 @@ where
         let mut sync_done_received = false;
         let mut sync_done_sent = false;
         let mut dedup = DeduplicationBuffer::new(self.buffer_capacity);
+        let state_machine_span = tracing::error_span!("log-sync");
 
         let metrics = loop {
             match self.state {
-                State::Start => self.state = State::SendHave,
+                State::Start => {
+                    self.state = State::SendHave;
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
+                }
                 State::SendHave => {
-                    let local = get_log_heights(&self.store, &self.logs).await?;
+                    let span = tracing::error_span!(parent: &state_machine_span, "send-have");
+                    let local = get_log_heights(&self.store, &self.logs)
+                        .instrument(span.clone())
+                        .await?;
 
                     sink.send(LogSyncMessage::<L>::Have(local.clone()))
+                        .instrument(span.clone())
                         .await
+                        .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send LogSyncMessage::Have"))
                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
 
                     self.state = State::ReceiveHave { local };
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
                 }
                 State::ReceiveHave { local } => {
-                    let Some(message) = stream.next().await else {
+                    let span = tracing::error_span!(parent: &state_machine_span, "receive-have");
+                    let Some(message) = stream.next().instrument(span.clone()).await else {
+                        debug!(parent: &span, "Stream unexpectedly closed");
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
-                    let message =
-                        message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                    let message = message
+                        .inspect_err(|error| debug!(parent: &span, ?error, "Message stream errored"))
+                        .map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+
                     let LogSyncMessage::Have(remote) = message else {
+                        debug!(parent: &span, ?message, "Unexpected message type");
                         return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                     };
 
                     let remote_needs = compare(&local, &remote);
 
                     self.state = State::SendPreSync { remote_needs };
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
                 }
                 State::SendPreSync { remote_needs } => {
+                    let span = tracing::error_span!(
+                        parent: &state_machine_span,
+                        "send-pre-sync",
+                        total_operations = tracing::field::Empty,
+                        total_bytes = tracing::field::Empty
+                    );
                     let mut outbound_operations = 0;
                     let mut outbound_bytes = 0;
                     for (verifying_key, log_range) in remote_needs.iter() {
@@ -145,7 +167,9 @@ where
                             if let Some((inner_outbound_operations, inner_outbound_bytes)) = self
                                 .store
                                 .get_log_size(verifying_key, log_id, *after, *until)
+                                .instrument(span.clone())
                                 .await
+                                .inspect_err(|error| debug!(parent: &span, ?error, "Log sync error"))
                                 .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
                             {
                                 outbound_operations += inner_outbound_operations;
@@ -154,36 +178,56 @@ where
                         }
                     }
 
-                    if outbound_bytes > 0 {
-                        sink.send(LogSyncMessage::PreSync {
+                    span.record("total_operations", outbound_operations);
+                    span.record("total_bytes", outbound_bytes);
+
+                    let message = if outbound_bytes > 0 {
+                        LogSyncMessage::PreSync {
                             total_operations: outbound_operations,
                             total_bytes: outbound_bytes,
-                        })
-                        .await
-                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+                        }
                     } else {
-                        sink.send(LogSyncMessage::Done)
-                            .await
-                            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                         sync_done_sent = true;
-                    }
+                        LogSyncMessage::Done
+                    };
+
+                    sink.send(message)
+                        .instrument(span.clone())
+                        .await
+                        .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send LogSyncMessage::PreSync"))
+                        .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
 
                     self.state = State::ReceivePreSyncOrDone {
                         remote_needs,
                         outbound_operations,
                         outbound_bytes,
                     };
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
                 }
                 State::ReceivePreSyncOrDone {
                     remote_needs,
                     outbound_operations,
                     outbound_bytes,
                 } => {
-                    let Some(message) = stream.next().await else {
+                    let span = tracing::error_span!(
+                        parent: &state_machine_span,
+                        "receive-pre-sync-or-done",
+                        outbound_operations,
+                        outbound_bytes,
+                        local_ops = tracing::field::Empty,
+                        remote_ops = tracing::field::Empty,
+                        local_bytes = tracing::field::Empty,
+                        remote_bytes = tracing::field::Empty,
+
+                    );
+                    let Some(message) = stream.next().instrument(span.clone()).await else {
+                        debug!(parent: &span, "Stream closed unexpectedly");
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
-                    let message =
-                        message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                    let entered = span.enter();
+                    let message = message
+                        .inspect_err(|error| debug!(?error, "Log sync error"))
+                        .map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                     let (inbound_operations, inbound_bytes) = match message {
                         LogSyncMessage::PreSync {
@@ -195,17 +239,16 @@ where
                             (0, 0)
                         }
                         message => {
+                            debug!(?message, "Unexpected message type");
                             return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                         }
                     };
 
-                    debug!(
-                        local_ops = outbound_operations,
-                        remote_ops = inbound_operations,
-                        local_bytes = outbound_bytes,
-                        remote_bytes = inbound_bytes,
-                        "sync metrics exchanged",
-                    );
+                    span.record("local_ops", outbound_operations);
+                    span.record("remote_ops", inbound_operations);
+                    span.record("local_bytes", outbound_bytes);
+                    span.record("remote_bytes", inbound_bytes);
+                    debug!("sync metrics exchanged");
 
                     let metrics = LogSyncMetrics {
                         outbound_operations,
@@ -225,27 +268,36 @@ where
                             }
                             .into(),
                         )
+                        .inspect_err(|error| {
+                            debug!(?error, "Failed to send LogSyncEvent::MetricsExchanged")
+                        })
                         .map_err(|_| LogSyncError::BroadcastSend)?;
 
                     self.state = State::Sync {
                         remote_needs,
                         metrics,
                     };
+                    drop(entered);
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
                 }
                 State::Sync {
                     remote_needs,
                     mut metrics,
                 } => {
                     let mut send_logs_len = remote_needs.len();
+                    let span =
+                        tracing::error_span!(parent: &state_machine_span, "sync", send_logs_len);
                     let mut remote_needs = stream::iter(remote_needs);
                     // We perform a loop awaiting futures on both the receiving stream and the list
                     // of log ranges we have to send. This means that processing of both streams is
                     // done concurrently.
                     loop {
                         select! {
-                            Some(message) = stream.next(), if !sync_done_received => {
+                            Some(message) = stream.next().instrument(span.clone()), if !sync_done_received => {
                                 let message =
-                                    message.map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
+                                    message
+                                    .inspect_err(|error| debug!(parent: &span, ?error, "Log sync error"))
+                                    .map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                                 match message {
                                     LogSyncMessage::Operation(header, body) => {
@@ -260,12 +312,12 @@ where
 
                                         // Insert message hash into deduplication buffer.
                                         if !dedup.insert(header.hash()) {
-                                            trace!(phase = "sync", operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
+                                            trace!(parent: &span, operation_id = ?header.hash().fmt_short(), "ignore duplicate operation sent from remote");
                                             continue;
                                         }
 
                                         trace!(
-                                            phase = "sync",
+                                            parent: &span,
                                             id = ?header.hash().fmt_short(),
                                             received_ops = metrics.received_operations,
                                             received_bytes = metrics.received_bytes,
@@ -275,17 +327,19 @@ where
                                         // Forward data received from the remote to the app layer.
                                         self.event_tx
                                             .send(
-                                                LogSyncEvent::OperationReceived{operation:Box::new(Operation{hash:header.hash(),header,body,}), metrics: metrics.clone() }
+                                                LogSyncEvent::OperationReceived {
+                                                    operation: Box::new(Operation {
+                                                        hash: header.hash(),header,body,
+                                                    }),
+                                                    metrics: metrics.clone()
+                                                }
                                                 .into(),
                                             )
+                                            .inspect_err(|error| debug!(parent: &span, ?error, "Sending Broadcast OperationReceived failed"))
                                             .map_err(|_| LogSyncError::BroadcastSend)?;
                                     }
                                     LogSyncMessage::Done => {
-                                        trace!(
-                                            phase = "sync",
-                                            "received done message"
-                                        );
-
+                                        trace!(parent: &span, "received done message");
                                         sync_done_received = true;
                                     }
                                     message => {
@@ -293,15 +347,17 @@ where
                                     }
                                 }
                             },
-                            Some((author, log_ranges)) = remote_needs.next() => {
+                            Some((author, log_ranges)) = remote_needs.next().instrument(span.clone()) => {
                                 for (log_id, (after, until)) in log_ranges {
                                     // Get all entries from the log we should send to the remote.
                                     let Some(result) = self
                                     .store
                                     .get_log_entries(&author, &log_id, after, until)
+                                    .instrument(span.clone())
                                     .await
                                     .map_err(|err| LogSyncError::OperationStore(format!("{err}")))? else {
                                         warn!(
+                                            parent: &span,
                                             author = author.fmt_short(),
                                             log_id = ?log_id,
                                             after = after,
@@ -322,7 +378,7 @@ where
                                         metrics.sent_operations += 1;
 
                                         trace!(
-                                            phase = "sync",
+                                            parent: &span,
                                             verifying_key = %author.fmt_short(),
                                             log_id = ?log_id,
                                             seq_num = header.seq_num,
@@ -334,9 +390,10 @@ where
 
                                         sink.send(LogSyncMessage::Operation(header_bytes, body.as_ref().map(|body|
                                             body.to_bytes())))
+                                            .instrument(span.clone())
                                             .await
-                                            .map_err(|err|
-                                            LogSyncError::MessageSink(format!("{err:?}")))?;
+                                            .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send operation"))
+                                            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
 
                                         dedup.insert(hash);
                                     }
@@ -345,12 +402,14 @@ where
                                 send_logs_len -= 1;
                                 if send_logs_len == 0 {
                                     trace!(
-                                        phase = "sync",
+                                        parent: &span,
                                         verifying_key = %author.fmt_short(),
                                         "send sync done message",
                                     );
                                     sink.send(LogSyncMessage::Done)
+                                        .instrument(span.clone())
                                         .await
+                                        .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send LogSyncMessage::Done"))
                                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                     sync_done_sent = true;
                                 }
@@ -360,15 +419,17 @@ where
                                 // sync done message and we sent all our pending operations, exit
                                 // the loop.
                                 if sync_done_received && sync_done_sent {
-                                    trace!("sync done sent and received");
+                                    trace!(parent: &span, "sync done sent and received");
                                     break;
                                 }
                             }
                         }
                     }
                     self.state = State::End { metrics };
+                    trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
                 }
                 State::End { metrics } => {
+                    trace!(parent: &state_machine_span, "End-state reached");
                     break metrics;
                 }
             }
