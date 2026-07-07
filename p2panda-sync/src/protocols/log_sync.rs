@@ -540,7 +540,10 @@ mod tests {
         .unwrap();
 
         let recv = event_rx.recv().await.unwrap();
-        let LogSyncEvent::MetricsExchanged { metrics: event_metrics } = recv else {
+        let LogSyncEvent::MetricsExchanged {
+            metrics: event_metrics,
+        } = recv
+        else {
             panic!("Not a LogSyncEvent::MetricsExchanged: {recv:?}");
         };
 
