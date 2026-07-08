@@ -84,7 +84,7 @@ where
         y: AuthGroupState<C>,
         group_id: GroupId,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
         let initial_members = typed_members(&y, initial_members);
 
         let auth_dependencies = y.inner.heads().into_iter().collect();
@@ -92,16 +92,8 @@ where
             initial_members: initial_members.clone(),
         };
 
-        let (y, message) = Self::process_local_control(
-            manager_ref.clone(),
-            y,
-            group_id,
-            auth_dependencies,
-            action,
-        )
-        .await?;
-
-        Ok((y, message))
+        Self::process_local_control(manager_ref.clone(), y, group_id, auth_dependencies, action)
+            .await
     }
 
     /// Add member to group with specified access level.
@@ -111,7 +103,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -127,7 +119,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -156,7 +148,6 @@ where
         }
 
         groups_y = AuthGroup::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
-
         let events = auth_message_to_group_event(&groups_y, auth_message);
         Ok(Some((groups_y, events)))
     }
@@ -168,7 +159,7 @@ where
         group_id: GroupId,
         auth_dependencies: Vec<OperationId>,
         group_action: GroupAction<ActorId, C>,
-    ) -> Result<(AuthGroupState<C>, F::Message), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
         let args = SpacesArgs::Auth {
             group_id,
             auth_dependencies,
@@ -180,10 +171,12 @@ where
             manager.identity.forge(args).await?
         };
 
-        let y =
-            AuthGroup::process(y, &SpacesMessage::auth(&message)).map_err(GroupError::AuthGroup)?;
+        let auth_message = SpacesMessage::auth(&message);
+        let y = AuthGroup::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
-        Ok((y, message))
+        let event = auth_message_to_group_event(&y, &auth_message);
+
+        Ok((y, message, event))
     }
 
     /// Id of this group.
@@ -222,7 +215,7 @@ where
         member: ActorId,
         access: Access<C>,
     ) -> Result<F::Message, GroupError<F, C, RS>> {
-        let (y, message) = self.add(member, access).await?;
+        let (y, message, _) = self.add(member, access).await?;
         self.manager.set_groups_state(&y).await?;
 
         Ok(message)
@@ -235,7 +228,7 @@ where
         &self,
         member: ActorId,
     ) -> Result<F::Message, GroupError<F, C, RS>> {
-        let (y, message) = self.remove(member).await?;
+        let (y, message, _) = self.remove(member).await?;
         self.manager.set_groups_state(&y).await?;
 
         Ok(message)

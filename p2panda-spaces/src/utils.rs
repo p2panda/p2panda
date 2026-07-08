@@ -50,8 +50,7 @@ pub(crate) fn added_members(
     next_members: Vec<MemberId>,
 ) -> Vec<MemberId> {
     let mut members = next_members
-        .iter()
-        .cloned()
+        .into_iter()
         .filter(|actor| !current_members.contains(actor))
         .collect::<Vec<_>>();
     members.sort();
@@ -63,8 +62,7 @@ pub(crate) fn removed_members(
     next_members: Vec<MemberId>,
 ) -> Vec<MemberId> {
     let mut members = current_members
-        .iter()
-        .cloned()
+        .into_iter()
         .filter(|actor| !next_members.contains(actor))
         .collect::<Vec<_>>();
     members.sort();
