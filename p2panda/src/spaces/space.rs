@@ -29,7 +29,7 @@ use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::{
-    ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
+    CloseError, ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
     to_stream_event, to_system_event,
 };
 
@@ -318,6 +318,11 @@ where
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
         })
+    }
+
+    /// Gracefully close the space and any associated sync sessions.
+    pub async fn close(self) -> Result<(), CloseError> {
+        self.tx.close().await
     }
 
     /// Incorporate missing groups messages into the space, any resulting operations are
