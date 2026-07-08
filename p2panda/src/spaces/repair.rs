@@ -12,6 +12,7 @@ use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
@@ -24,7 +25,7 @@ use crate::operation::Operation;
 use crate::spaces::group_log_id;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
-use crate::streams::ExternalStreamFuture;
+use crate::streams::{ExternalStreamFuture, StreamEvent};
 
 const REPAIR_FREQUENCY_SECS: u64 = 1;
 
@@ -39,7 +40,7 @@ const REPAIR_FREQUENCY_SECS: u64 = 1;
 /// 3) associate missing groups logs with the space topic
 ///
 /// All new messages will be sent into the topic stream to be processed and forwarded to other peers.
-pub(crate) async fn repair_space(
+pub(crate) async fn repair_space<M>(
     space_id: SpaceId,
     manager: &SpacesManager,
     store: &SqliteStore,
@@ -47,6 +48,7 @@ pub(crate) async fn repair_space(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    to_output_tx: &mpsc::Sender<Vec<StreamEvent<M>>>,
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
@@ -126,7 +128,7 @@ pub(crate) async fn repair_space(
     let mut repaired = manager.repair_spaces(&[space_id]).await?;
 
     // Forging these spaces messages will also associate any group logs with this space topic.
-    let Some((space_y, spaces_messages)) = repaired.pop() else {
+    let Some((space_y, spaces_messages, events)) = repaired.pop() else {
         // This can happen if we didn't receive any space control messages yet.
         debug!(
             node_id = manager.id().fmt_short(),
@@ -176,6 +178,19 @@ pub(crate) async fn repair_space(
     // Await processing of operations to be complete.
     ready_rx.await?;
 
+    let events = events
+        .into_iter()
+        .filter_map(|event| match event {
+            p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+            _ => None,
+        })
+        .collect();
+
+    to_output_tx
+        .send(events)
+        .await
+        .map_err(|_| RepairError::AppSend)?;
+
     debug!(
         node_id = manager.id().fmt_short(),
         space_id = space_id.fmt_short(),
@@ -188,7 +203,7 @@ pub(crate) async fn repair_space(
 
 /// Spawn the repair task which triggers work on a schedule or from being signalled from elsewhere
 /// in the node API.
-pub(crate) fn spawn_repair_task(
+pub(crate) fn spawn_repair_task<M>(
     topic: Topic,
     manager: SpacesManager,
     store: SqliteStore,
@@ -196,8 +211,12 @@ pub(crate) fn spawn_repair_task(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    to_output_tx: mpsc::Sender<Vec<StreamEvent<M>>>,
     mut repair_rx: mpsc::Receiver<oneshot::Sender<Result<bool, RepairError>>>,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+{
     tokio::spawn(async move {
         loop {
             let reply_tx = tokio::select! {
@@ -215,7 +234,8 @@ pub(crate) fn spawn_repair_task(
                 _ = sleep(Duration::from_secs(REPAIR_FREQUENCY_SECS)) => None,
             };
 
-            let result = repair_space(topic.into(), &manager, &store, &import_tx).await;
+            let result =
+                repair_space(topic.into(), &manager, &store, &import_tx, &to_output_tx).await;
 
             if let Err(ref err) = result {
                 warn!("failed to repair spaces: {}", err);
@@ -242,4 +262,7 @@ pub enum RepairError {
 
     #[error("import ready channel broken")]
     Recv(#[from] RecvError),
+
+    #[error("application send channel broken")]
+    AppSend,
 }

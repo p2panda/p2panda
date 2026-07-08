@@ -5,8 +5,11 @@ use std::task::{Context, Poll};
 
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_auth::{Access, AccessLevel};
+use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId, SpacesStoreState};
+use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
@@ -74,13 +77,12 @@ where
         //
         // We could also handle this outside of p2panda-spaces, simply by coming up with an argument
         // in the extensions for the spaces processor in p2panda-stream.
-        let (_, message) = self.inner.publish(&body_bytes).await?;
+        let (_, message, _event) = self.inner.publish(&body_bytes).await?;
 
         // @TODO: We don't need to persist the spaces state here as it's possible for the spaces
         // processor to handle our own operations. Not doing this has the benefit of allowing
-        // application events to be emitted from the spaces processor already (otherwise the would
-        // be ignored as already processed). This comment can be removed when we persist spaces
-        // state in the processor in all places.
+        // application events to be emitted from the spaces processor, rather than having to
+        // construct and send them here manually.
         let processed = self
             .tx
             .import(futures_util::stream::once(async {
@@ -98,12 +100,12 @@ where
         &self,
         actor: impl Into<ActorId>,
         access: AccessLevel,
-    ) -> Result<SpaceFuture, SpaceError> {
+    ) -> Result<(), SpaceError> {
         // Before performing any action we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (_, space_y, auth_message, space_message) = self
+        let (groups_y, space_y, auth_message, space_message, events) = self
             .inner
             .add(
                 actor.into(),
@@ -117,11 +119,9 @@ where
         let permit = self.store.begin().await?;
 
         // Persist the computed groups and spaces state to the stores.
-        //
-        // @TODO: We need to refactor the spaces API so that locally created operations can be
-        // handled via the call to Manager::process and then persisted in the spaces processor.
-        // Until we have this spaces events for our own locally created operations won't be
-        // emitted to users (as the processor thinks the operation was already processed and skips.
+        self.store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+            .await?;
         self.store
             .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
             .await?;
@@ -136,27 +136,40 @@ where
             ]))
             .await?;
 
-        Ok(SpaceFuture {
-            processed,
-            space_id: self.inner.id(),
-        })
+        processed.await?;
+
+        // Manually forward the resulting spaces events to the application layer.
+        let events = events
+            .into_iter()
+            .filter_map(|event| match event {
+                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                _ => None,
+            })
+            .collect();
+
+        self.tx
+            .to_output_tx
+            .send(events)
+            .await
+            .map_err(|_| SpaceError::AppSend)?;
+
+        Ok(())
     }
 
-    pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<SpaceFuture, SpaceError> {
+    pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), SpaceError> {
         // Before performing any action we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (_, space_y, auth_message, space_message) = self.inner.remove(actor.into()).await?;
+        let (groups_y, space_y, auth_message, space_message, events) =
+            self.inner.remove(actor.into()).await?;
 
         let permit = self.store.begin().await?;
 
         // Persist the computed groups and spaces state to the stores.
-        //
-        // @TODO: We need to refactor the spaces API so that locally created operations can be
-        // handled via the call to Manager::process and then persisted in the spaces processor.
-        // Until we have this spaces events for our own locally created operations won't be
-        // emitted to users (as the processor thinks the operation was already processed and skips.
+        self.store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+            .await?;
         self.store
             .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
             .await?;
@@ -171,10 +184,24 @@ where
             ]))
             .await?;
 
-        Ok(SpaceFuture {
-            processed,
-            space_id: self.inner.id(),
-        })
+        processed.await?;
+
+        // Manually forward the resulting spaces events to the application layer.
+        let events = events
+            .into_iter()
+            .filter_map(|event| match event {
+                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                _ => None,
+            })
+            .collect();
+
+        self.tx
+            .to_output_tx
+            .send(events)
+            .await
+            .map_err(|_| SpaceError::AppSend)?;
+
+        Ok(())
     }
 
     pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceError> {
@@ -283,6 +310,9 @@ pub enum SpaceError {
 
     #[error("couldn't process spaces change due to broken channel")]
     Recv(#[from] RecvError),
+
+    #[error("couldn't send event due to broken app channel")]
+    AppSend,
 
     #[error(transparent)]
     RepairSpace(#[from] RepairSpaceError),

@@ -91,7 +91,10 @@ impl Group {
         actor: impl Into<ActorId>,
         access: AccessLevel,
     ) -> Result<GroupFuture, GroupError> {
-        let (_, message) = self
+        // @TODO: Group events are currently not forwarded to the user. It's not clear which
+        // channel these should be sent on, the spaces stream, a stream for the specific group, or
+        // a global groups stream.
+        let (_, message, _events) = self
             .inner
             .add(
                 actor.into(),
@@ -116,7 +119,10 @@ impl Group {
     }
 
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<GroupFuture, GroupError> {
-        let (_, message) = self.inner.remove(actor.into()).await?;
+        // @TODO: Group events are currently not forwarded to the user. It's not clear which
+        // channel these should be sent on, the spaces stream, a stream for the specific group, or
+        // a global groups stream.
+        let (_, message, _events) = self.inner.remove(actor.into()).await?;
 
         let processed = self
             .tx
