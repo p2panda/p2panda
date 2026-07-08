@@ -82,6 +82,7 @@ mod operation;
 #[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 pub mod traits;
+pub mod validation;
 
 pub use access::{Access, AccessError, AccessLevel};
 pub use extension::GroupsExtensionArgs;
