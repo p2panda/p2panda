@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use p2panda::operation::Header;
 use p2panda::streams::StreamEvent;
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::{cbor::decode_cbor, test_utils::setup_logging};
-use p2panda_spaces::{GroupEvent, SpaceEvent};
+use p2panda_spaces::SpaceEvent;
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use tokio_stream::StreamExt;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -29,6 +30,13 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a space with only us inside.
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+
+    // Panda receives a space created event for their own action.
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
 
     // We can manage (nested) groups (useful for multi-device, etc.)
     let penguin_laptop = p2panda::spawn().await?;
@@ -74,21 +82,35 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     // Panda receives the group.
-    while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Group(GroupEvent::Created { .. }) = event {
+    // @TODO: Switch to observing groups events when this is implemented.
+    loop {
+        let group = panda.group(penguin.id()).await?;
+        if group.is_some() {
             break;
-        };
+        }
+        sleep(Duration::from_secs(1)).await;
     }
 
     // Penguin mobile receives the group.
-    while let Some(event) = penguin_mobile_rx.next().await {
-        if let StreamEvent::Group(GroupEvent::Created { .. }) = event {
+    // @TODO: Switch to observing groups events when this is implemented.
+    loop {
+        let group = penguin_mobile.group(penguin.id()).await?;
+        if group.is_some() {
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    panda_space.add(penguin, AccessLevel::Read).await?;
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 2);
+            assert!(added.contains(&penguin_laptop.id()));
+            assert!(added.contains(&penguin_mobile.id()));
             break;
         };
     }
-
-    let ready = panda_space.add(penguin, AccessLevel::Read).await?;
-    ready.await?;
 
     while let Some(event) = penguin_laptop_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
@@ -194,18 +216,32 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    // @TODO: Uncomment when own events are emitted on event stream.
-    // while let Some(event) = panda_rx.next().await {
-    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-    //         break;
-    //     };
-    // }
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
 
     // Panda adds penguin as a member of the space.
     //
     // They can do this because they received their key bundle by now.
-    let ready = panda_space.add(penguin.id(), AccessLevel::Read).await?;
-    assert!(ready.await.is_ok());
+    panda_space.add(penguin.id(), AccessLevel::Read).await?;
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
+            break;
+        };
+    }
+
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
+            break;
+        };
+    }
 
     // Panda publishes a message to all members.
     let message = SecretData {
@@ -267,7 +303,7 @@ async fn encode_decode() -> Result<(), Box<dyn std::error::Error>> {
     // Access the inner spaces manager so we can directly create and access an add message.
     let spaces_manager = panda.spaces_manager();
     let space = spaces_manager.space(space.id()).await?.unwrap();
-    let (_, _, _, space_message) = space.add(penguin.id(), Access::read()).await?;
+    let (_, _, _, space_message, _) = space.add(penguin.id(), Access::read()).await?;
 
     // Encode and decode the add operation.
     let operation = space_message.into_operation();
@@ -300,7 +336,7 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
 
     // They then subscribe, as does panda.
     let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
-    let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
+    let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
     while let Some(event) = penguin_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
@@ -308,19 +344,52 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    // @TODO: Uncomment when own events are emitted on event stream.
-    // while let Some(event) = panda_rx.next().await {
-    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-    //         break;
-    //     };
-    // }
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // Panda materialized the group.
+    // @TODO: Switch to observing groups events when this is implemented.
+    loop {
+        let group = panda.group(penguin_group.id()).await?;
+        if group.is_some() {
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    // Penguin mobile materialized the group.
+    // @TODO: Switch to observing groups events when this is implemented.
+    loop {
+        let group = penguin.group(penguin_group.id()).await?;
+        if group.is_some() {
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
 
     // We expect panda to be able to add penguin group as a space member now.
-    let ready = panda_space
+    panda_space
         .add(penguin_group.id(), AccessLevel::Read)
         .await?;
 
-    assert!(ready.await.is_ok());
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
+            break;
+        };
+    }
+
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
+            break;
+        };
+    }
 
     Ok(())
 }
@@ -347,40 +416,46 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    // @TODO: Uncomment when own events are emitted on event stream.
-    // while let Some(event) = panda_rx.next().await {
-    //     if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-    //         break;
-    //     };
-    // }
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
 
     // And then creates a group.
     let penguin_group = penguin
         .create_group(&[(penguin.id(), AccessLevel::Manage)])
         .await?;
 
+    // Panda materialized the group.
+    // @TODO: Switch to observing groups events when this is implemented.
+    loop {
+        let group = panda.group(penguin_group.id()).await?;
+        if group.is_some() {
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
+
+    // We expect panda to be able to add penguin group to the space.
+    panda_space
+        .add(penguin_group.id(), AccessLevel::Read)
+        .await?;
+
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Group(GroupEvent::Created { group_id, .. }) = event
-            && group_id == penguin_group.id()
-        {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
             break;
         };
     }
 
-    // @TODO: Uncomment when own events are emitted on event stream.
-    // while let Some(event) = penguin_rx.next().await {
-    //     if let StreamEvent::Group(GroupEvent::Created { group_id, .. }) = event
-    //         && group_id == penguin_group.id()
-    //     {
-    //         break;
-    //     };
-    // }
-
-    // We expect panda to be able to add penguin group to the space.
-    let ready = panda_space
-        .add(penguin_group.id(), AccessLevel::Read)
-        .await?;
-    assert!(ready.await.is_ok());
-
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
+            assert_eq!(added.len(), 1);
+            assert!(added.contains(&penguin.id()));
+            break;
+        };
+    }
     Ok(())
 }

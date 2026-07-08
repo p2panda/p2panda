@@ -17,7 +17,7 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
-use p2panda_spaces::{GroupEvent, SpaceEvent};
+use p2panda_spaces::SpaceEvent;
 use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_stream::spaces::SpacesResult;
@@ -32,7 +32,7 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, LogId, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::{AuthCapabilities, SpacesManager};
+use crate::spaces::types::SpacesManager;
 use crate::spaces::{RepairError, spawn_repair_task};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
@@ -157,6 +157,7 @@ where
         spaces_manager.clone(),
         store.clone(),
         import_tx.clone(),
+        to_output_tx.clone(),
         repair_rx,
     );
 
@@ -224,6 +225,7 @@ where
     {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
+        let to_output_tx = to_output_tx.clone();
 
         tokio::spawn(async move {
             // =======================
@@ -384,6 +386,7 @@ where
         publish_tx,
         import_tx,
         repair_tx,
+        to_output_tx,
         _marker: PhantomData,
     };
 
@@ -501,8 +504,10 @@ where
                     forward_events.push(StreamEvent::KeyBundle(*author))
                 }
 
-                p2panda_spaces::Event::Group(group_event) => {
-                    forward_events.push(StreamEvent::Group(group_event.to_owned()))
+                p2panda_spaces::Event::Group(_) => {
+                    // @TODO: It's not clear if group events should be forwarded on the spaces
+                    // stream, so for now we don't forward any.
+                    // forward_events.push(StreamEvent::Group(group_event.to_owned()))
                 }
 
                 p2panda_spaces::Event::Space(space_event) => {
@@ -639,6 +644,7 @@ pub struct StreamPublisher<M> {
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>,
+    pub(crate) to_output_tx: mpsc::Sender<Vec<StreamEvent<M>>>,
     pub(crate) repair_tx: mpsc::Sender<oneshot::Sender<Result<bool, RepairError>>>,
     _marker: PhantomData<M>,
 }
@@ -974,8 +980,11 @@ pub enum StreamEvent<M> {
     /// Space has been created or modified.
     Space(SpaceEvent),
 
+    // @TODO: It's not clear where group events should be forwarded so we don't send any for now
+    // and therefore this variant is commented out.
+    //
     /// Group has been created or modified.
-    Group(GroupEvent<AuthCapabilities>),
+    // Group(GroupEvent<AuthCapabilities>),
 
     /// Key bundle has been processed.
     KeyBundle(VerifyingKey),

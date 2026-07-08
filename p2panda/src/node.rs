@@ -32,8 +32,9 @@ use crate::spaces::{
     to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Pipeline, StreamFrom, StreamPublisher,
-    StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream, processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Pipeline, StreamEvent, StreamFrom,
+    StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
+    processed_stream,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -409,7 +410,12 @@ impl Node {
         // state here, the processor would detect that we already processed this control message
         // and therefore not emit any events.
         let initial_members = to_initial_members(initial_members);
-        let (_, group_id, message) = self.spaces_manager.create_group(&initial_members).await?;
+
+        // @TODO: Group events are currently not forwarded to the user. It's not clear which
+        // channel these should be sent on, the spaces stream, a stream for the specific group, or
+        // a global groups stream.
+        let (_, group_id, message, _events) =
+            self.spaces_manager.create_group(&initial_members).await?;
 
         let topic = actor_to_topic(group_id);
         let (tx, _rx) = self.stream::<NoBody>(topic).await?;
@@ -573,16 +579,16 @@ impl Node {
         // members. I (sam) removed it from the API for now as without a manual member
         // registration flow a user likely doesn't have access to any member key bundles at the
         // point of space creation.
-        let (_, space_y, create_space_messages) =
+        let (groups_y, space_y, create_space_messages, events) =
             self.spaces_manager.create_space(space_id, &[]).await?;
 
-        // @TODO: We need to refactor the spaces API so that locally created operations can be
-        // handled via the call to Manager::process and then persisted in the spaces processor.
-        // Until we have this spaces events for our own locally created operations won't be
-        // emitted to users (as the processor thinks the operation was already processed and skips.
         let permit = self.store.begin().await?;
 
+        // Persist the computed groups and spaces state to the stores.
         let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
+        spaces_store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+            .await?;
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
@@ -590,10 +596,6 @@ impl Node {
         self.store.commit(permit).await?;
 
         // Process the -spaces events by importing them as an "external stream".
-        //
-        // @TODO: Related to above comment. Even though the state is already mutated & persisted
-        // locally we're still sending the messages to the pipeline. Revisit this when state does
-        // indeed need to be persisted here instead of in the pipeline.
         let mut messages = vec![key_bundle_message];
         messages.extend(create_space_messages);
 
@@ -611,6 +613,20 @@ impl Node {
         if processed.await.is_err() {
             panic!();
         }
+
+        // Manually forward the resulting spaces events to the application layer.
+        let events = events
+            .into_iter()
+            .filter_map(|event| match event {
+                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                _ => None,
+            })
+            .collect();
+
+        tx.to_output_tx
+            .send(events)
+            .await
+            .map_err(|_| SpaceError::AppSend)?;
 
         let inner = self
             .spaces_manager
