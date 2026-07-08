@@ -66,7 +66,7 @@ where
 
         let result = if let SpacesProcessorArgs::Process { msg } = input_args {
             // Process incoming event.
-            let (groups_y, space_y, events) = match self.manager.process(msg).await {
+            let (groups_y, space_y, mut events) = match self.manager.process(msg).await {
                 Ok(result) => result,
                 Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
             };
@@ -92,6 +92,29 @@ where
 
             if let Some(y) = space_y {
                 let space_id = y.space_id;
+
+                // Filter out application events from removed members who previously had write or
+                // manage access.
+                //
+                // Messages authored by removed members are still applied to the local state by
+                // this processor; all we are doing is ensuring that the application-related events
+                // are not forwarded up to the user.
+                //
+                // This check serves to catch any messages which were already being processed after
+                // a member lost their write or manage access.
+                if msg.is_application_message() {
+                    let mut is_member = false;
+
+                    for (member, access) in y.groups_y.members(y.group_id) {
+                        if member == msg.author && (access.is_write() || access.is_manage()) {
+                            is_member = true;
+                        }
+                    }
+
+                    if !is_member {
+                        events.retain(|event| !matches!(event, Event::Application { .. }));
+                    };
+                }
 
                 if let Err(err) = self
                     .store
