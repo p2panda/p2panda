@@ -2,8 +2,9 @@
 
 use std::{collections::HashSet, time::Duration};
 
-use p2panda::operation::Header;
+use p2panda::Topic;
 use p2panda::streams::StreamEvent;
+use p2panda::{SigningKey, operation::Header};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::{cbor::decode_cbor, test_utils::setup_logging};
 use p2panda_spaces::SpaceEvent;
@@ -196,9 +197,6 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
 async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging();
 
-    use p2panda::Topic;
-    use p2panda_auth::AccessLevel;
-
     let topic = Topic::random();
 
     let panda = p2panda::spawn().await?;
@@ -321,9 +319,6 @@ async fn encode_decode() -> Result<(), Box<dyn std::error::Error>> {
 async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging();
 
-    use p2panda::Topic;
-    use p2panda_auth::AccessLevel;
-
     let topic = Topic::random();
 
     let panda = p2panda::spawn().await?;
@@ -398,9 +393,6 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
 async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging();
 
-    use p2panda::Topic;
-    use p2panda_auth::AccessLevel;
-
     let topic = Topic::random();
 
     let panda = p2panda::spawn().await?;
@@ -457,5 +449,31 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
             break;
         };
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn api_validation() -> Result<(), Box<dyn std::error::Error>> {
+    setup_logging();
+
+    let topic = Topic::random();
+
+    let panda = p2panda::spawn().await?;
+
+    let (panda_space, _panda_rx) = panda.create_space::<String>(topic).await?;
+    let result = panda_space.add(panda.id(), AccessLevel::Write).await;
+    assert!(result.is_err());
+
+    let result = panda_space
+        .remove(SigningKey::generate().verifying_key())
+        .await;
+    assert!(result.is_err());
+
+    // Panda removes themselves.
+    panda_space.remove(panda.id()).await?;
+
+    let result = panda_space.publish("I'm a bit naughty".to_string()).await;
+    assert!(result.is_err());
+
     Ok(())
 }

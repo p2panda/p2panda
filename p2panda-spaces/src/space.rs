@@ -85,6 +85,11 @@ where
         }
     }
 
+    /// Verifying key of the local actor.
+    pub fn me(&self) -> VerifyingKey {
+        self.manager.id()
+    }
+
     /// Create a space containing initial members and access levels.
     ///
     /// If not already included, then the local actor (creator of this space) will be added to the

@@ -4,9 +4,13 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use futures_util::{FutureExt, Stream, StreamExt};
+use p2panda_auth::validation::{
+    AddMemberError, RemoveMemberError, WriteError, can_add_member, can_remove_member, can_write,
+};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
+use p2panda_core::traits::ShortFormat;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{ActorId, MemberId, SpaceContext, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
@@ -64,6 +68,12 @@ where
 
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
+        let members = self.members().await?;
+        can_write(self.inner.me(), &members).map_err(|err| PublishSpaceError::Validation {
+            space_id: self.id(),
+            err,
+        })?;
+
         // Before publishing messages we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
@@ -100,7 +110,16 @@ where
         &self,
         actor: impl Into<ActorId>,
         access: AccessLevel,
-    ) -> Result<(), SpaceError> {
+    ) -> Result<(), AddSpaceMemberError> {
+        let me = self.inner.me();
+        let actor = actor.into();
+        let members = self.members().await?;
+        can_add_member(me, actor, &members).map_err(|err| AddSpaceMemberError::Validation {
+            actor,
+            space_id: self.id(),
+            err,
+        })?;
+
         // Before performing any action we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
@@ -108,7 +127,7 @@ where
         let (groups_y, space_y, auth_message, space_message, events) = self
             .inner
             .add(
-                actor.into(),
+                actor,
                 Access {
                     conditions: None,
                     level: access,
@@ -151,18 +170,29 @@ where
             .to_output_tx
             .send(events)
             .await
-            .map_err(|_| SpaceError::AppSend)?;
+            .map_err(|_| AddSpaceMemberError::AppSend)?;
 
         Ok(())
     }
 
-    pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), SpaceError> {
+    pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveSpaceMemberError> {
+        let me = self.inner.me();
+        let actor = actor.into();
+        let members = self.members().await?;
+        can_remove_member(me, actor, &members).map_err(|err| {
+            RemoveSpaceMemberError::Validation {
+                actor,
+                space_id: self.id(),
+                err,
+            }
+        })?;
+
         // Before performing any action we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
         let (groups_y, space_y, auth_message, space_message, events) =
-            self.inner.remove(actor.into()).await?;
+            self.inner.remove(actor).await?;
 
         let permit = self.store.begin().await?;
 
@@ -199,20 +229,18 @@ where
             .to_output_tx
             .send(events)
             .await
-            .map_err(|_| SpaceError::AppSend)?;
+            .map_err(|_| RemoveSpaceMemberError::AppSend)?;
 
         Ok(())
     }
 
-    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceError> {
-        let result = self.inner.members().await.map(|members| {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerSpaceError> {
+        self.inner.members().await.map(|members| {
             members
                 .iter()
                 .map(|(actor, access)| (*actor, access.level.clone()))
                 .collect()
-        })?;
-
-        Ok(result)
+        })
     }
 
     /// Incorporate missing groups messages into the space, any resulting operations are
@@ -291,6 +319,62 @@ impl Future for SpaceFuture {
 }
 
 #[derive(Debug, Error)]
+pub enum AddSpaceMemberError {
+    #[error("failed validation adding {actor} to space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    Validation {
+        actor: ActorId,
+        space_id: SpaceId,
+        err: AddMemberError,
+    },
+
+    #[error(transparent)]
+    Space(#[from] InnerSpaceError),
+
+    #[error(transparent)]
+    Import(#[from] ImportError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
+
+    #[error("couldn't process spaces change due to broken channel")]
+    Recv(#[from] RecvError),
+
+    #[error("couldn't send event due to broken app channel")]
+    AppSend,
+
+    #[error(transparent)]
+    RepairSpace(#[from] RepairSpaceError),
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveSpaceMemberError {
+    #[error("failed validation removing {actor} to space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    Validation {
+        actor: ActorId,
+        space_id: SpaceId,
+        err: RemoveMemberError,
+    },
+
+    #[error(transparent)]
+    Space(#[from] InnerSpaceError),
+
+    #[error(transparent)]
+    Import(#[from] ImportError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
+
+    #[error("couldn't process spaces change due to broken channel")]
+    Recv(#[from] RecvError),
+
+    #[error("couldn't send event due to broken app channel")]
+    AppSend,
+
+    #[error(transparent)]
+    RepairSpace(#[from] RepairSpaceError),
+}
+
+#[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpaceError {
     #[error(transparent)]
@@ -319,8 +403,10 @@ pub enum SpaceError {
 }
 
 #[derive(Debug, Error)]
-#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum PublishSpaceError {
+    #[error("failed validation to space {space_id}: {err}", space_id = space_id.fmt_short())]
+    Validation { space_id: SpaceId, err: WriteError },
+
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
 
