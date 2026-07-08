@@ -48,6 +48,8 @@ Highlights are marked with a pancake 🥞
 - stream: Return input with error in orderer processor [#1249](https://github.com/p2panda/p2panda/pull/1249)
 - spaces: Use new traits and SQLite stores in spaces [#1245](https://github.com/p2panda/p2panda/pull/1245)
 - ci: Improve GitHub actions: Use cargo-deny and cargo-hack, adjust schedule [#1233](https://github.com/p2panda/p2panda/pull/1233)
+- spaces: Compute and return events from local methods [#1290](https://github.com/p2panda/p2panda/pull/1290)
+- node: Forward events resulting from local actions to app layer [#1290](https://github.com/p2panda/p2panda/pull/1290)
 
 ### Fixed
 
