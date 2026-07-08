@@ -30,6 +30,7 @@ Highlights are marked with a pancake 🥞
 - stream: Hooks processor to register event callbacks in streaming pipeline [#1339](https://github.com/p2panda/p2panda/pull/1339)
 - spaces: Safe key bundle registration by cross-signing X3DH identity- and verifying-keys [#1332](https://github.com/p2panda/p2panda/pull/1332)
 - node: Membership change validation in Group API [#1336](https://github.com/p2panda/p2panda/pull/1336)
+- stream: Filter out spaces application messages from concurrently removed members [#1291](https://github.com/p2panda/p2panda/pull/1291)
 
 ### Changed
 
