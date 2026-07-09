@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Validation methods for group membership actions.
+
 use std::fmt::Debug;
 
 use thiserror::Error;
@@ -58,6 +60,10 @@ where
     Ok(())
 }
 
+/// Validate if a member can be added to a group.
+///
+/// The actor performing the action must be a member with manager rights and the to-be-added
+/// member must not already be a member.
 pub fn can_add_member<ID>(
     actor: ID,
     added: ID,
@@ -81,6 +87,10 @@ where
     Ok(())
 }
 
+/// Validate if a member can be removed from a group.
+///
+/// The actor performing the action must be a member with manager rights and the to-be-removed
+/// member must be an existing member.
 pub fn can_remove_member<ID>(
     actor: ID,
     removed: ID,
