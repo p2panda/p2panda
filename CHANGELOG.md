@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - node: Associate key bundle, groups and spaces logs with log topic [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - node: Handle spaces events when processing pipeline event [#1276](https://github.com/p2panda/p2panda/pull/1276)
 - node: Task for repairing spaces [#1277](https://github.com/p2panda/p2panda/pull/1277)
+- node: Membership change validation in Space API [#1292](https://github.com/p2panda/p2panda/pull/1292)
 
 ### Changed
 
