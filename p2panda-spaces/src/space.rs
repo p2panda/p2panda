@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! API for managing members of a space and sending/receiving messages.
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_auth::validation::{VerifyClaimedWriteError, verify_claimed_write_access};
 use p2panda_core::traits::{Digest, ShortFormat};
 use p2panda_core::{SigningKey, VerifyingKey};
 use p2panda_encryption::key_manager::KeyManagerState;
@@ -557,6 +559,14 @@ where
     ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C>> {
         let mut y = self.state().await?;
 
+        // Check that the publisher of this application message has write access.
+        verify_claimed_write_access::<_, _, _, _, RS>(
+            &y.groups_y,
+            message.author,
+            y.group_id,
+            HashSet::from_iter(message.proof.clone()),
+        )?;
+
         // Process encryption message.
         let encryption_message = EncryptionMessage::from_application(message);
         let (encryption_y, encryption_output) =
@@ -753,6 +763,7 @@ where
             let args = SpacesArgs::Application {
                 space_id: y.space_id,
                 space_dependencies: dependencies.clone(),
+                proof: y.groups_y.heads(),
                 group_secret_id,
                 nonce,
                 ciphertext,
@@ -913,4 +924,7 @@ where
 
     #[error("tried to publish when not a member of space {0}")]
     NotWelcomed(SpaceId),
+
+    #[error(transparent)]
+    UnauthorizedWrite(#[from] VerifyClaimedWriteError),
 }

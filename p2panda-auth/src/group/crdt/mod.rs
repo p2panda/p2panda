@@ -49,7 +49,7 @@ where
     #[error("group cycle detected adding {0} to {1} operation={2}")]
     GroupCycle(ID, ID, OP),
 
-    #[error("state change error processing operation {0}: {1:?}")]
+    #[error("state change error processing operation {0}: {1}")]
     StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 
     #[error("attempted to add group {0} with manage access")]
@@ -63,8 +63,7 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 
 /// Inner state object for `GroupCrdt` which contains the actual groups state,
 /// including operation graph and membership snapshots.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+#[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct GroupCrdtInnerState<ID, OP, M, C>
 where
@@ -538,7 +537,7 @@ where
         // about) mean that they have lost that access level. This case is dealt with later, here
         // we want to catch malicious or invalid operations which should _never_ be attached to
         // the graph.
-        y = Self::validate(y, operation)?;
+        Self::validate(&y, operation)?;
         y = Self::add_operation(y, operation);
 
         if rebuild_required {
@@ -566,7 +565,8 @@ where
         Ok(y)
     }
 
-    /// Validate an action by applying it to the group state build to it's previous pointers.
+    /// Validate an action by applying it to the group state built to it's previous pointers if
+    /// they don't match the current heads.
     ///
     /// When processing a new operation we need to validate that the contained action is valid
     /// before including it in the graph. By valid we mean that the author who composed the action
@@ -574,14 +574,11 @@ where
     /// requirements. To check this we need to re-build the group state to the operations claimed
     /// previous state. This process involves pruning any operations which are not predecessors of
     /// the new operation resolving the group state again.
-    ///
-    /// This is a relatively expensive computation and should only be used when a re-build is
-    /// actually required.
     #[allow(clippy::type_complexity)]
     pub(crate) fn validate(
-        y: GroupCrdtState<ID, OP, M, C>,
+        y: &GroupCrdtState<ID, OP, M, C>,
         operation: &M,
-    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+    ) -> Result<(), GroupCrdtError<ID, OP>> {
         // Detect already processed operations.
         if y.inner.operations.contains_key(&operation.id()) {
             // The operation has already been processed.
@@ -606,49 +603,13 @@ where
             _ => (),
         };
 
-        let last_graph = y.inner.graph.clone();
-        let last_ignore = y.inner.ignore.clone();
-        let last_mutual_removes = y.inner.mutual_removes.clone();
-        let last_states = y.inner.states.clone();
-
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
 
-        // If this operation is concurrent to our current local state we need to rebuild the graph
-        // to the operations' claimed dependencies in order to validate it correctly.
-        let temp_y = if y.inner.heads() != dependencies {
-            let mut temp_y = y;
-
-            // Collect predecessors of the new operation.
-            let mut predecessors = HashSet::new();
-            for dependency in operation.dependencies() {
-                let reversed = Reversed(&temp_y.inner.graph);
-                let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
-                while let Some(id) = dfs_rev.next(&reversed) {
-                    predecessors.insert(id);
-                }
-            }
-
-            // Remove all other nodes from the graph.
-            let to_remove: Vec<_> = temp_y
-                .inner
-                .graph
-                .node_identifiers()
-                .filter(|n| !predecessors.contains(n))
-                .collect();
-
-            for node in &to_remove {
-                temp_y.inner.graph.remove_node(*node);
-            }
-
-            temp_y.inner = RS::process(temp_y.inner)
-                .map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
-            temp_y
-        } else {
-            y
-        };
+        // Rebuild the graph to the state referred to in the operations' dependencies..
+        let temp_inner_y = Self::rebuild_at(y.inner.clone(), dependencies)?;
 
         // Detect if this operation would cause a nested group cycle.
-        if temp_y.inner.would_create_cycle(operation) {
+        if temp_inner_y.would_create_cycle(operation) {
             let parent_group = operation.group_id();
 
             // Only adds cause a cycle, we just access the member id here.
@@ -668,12 +629,12 @@ where
 
         // Apply the operation onto the temporary state.
         let result = apply_action(
-            temp_y.inner.current_state(),
+            temp_inner_y.current_state(),
             operation.group_id(),
             operation.id(),
             operation.author(),
             &operation.action(),
-            &temp_y.inner.ignore,
+            &temp_inner_y.ignore,
         );
 
         match result {
@@ -689,13 +650,58 @@ where
             }
         };
 
-        let mut y = temp_y;
-        y.inner.graph = last_graph;
-        y.inner.ignore = last_ignore;
-        y.inner.mutual_removes = last_mutual_removes;
-        y.inner.states = last_states;
+        Ok(())
+    }
 
-        Ok(y)
+    /// Rebuild the auth groups graph to a specific point in it's history.
+    ///
+    /// This is required for validating an operation which doesn't point at the current graph
+    /// heads. This method is optimized to only actually perform the rebuild if the request
+    /// rebuild point (heads) is not equal to the current graph heads.
+    pub(crate) fn rebuild_at(
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+    ) -> Result<GroupCrdtInnerState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+        // If this operation is concurrent to our current local state we need to rebuild the graph
+        // to the operations' claimed dependencies in order to validate it correctly.
+        if y.heads() != heads {
+            // Collect predecessors of the new operation.
+            let mut predecessors = HashSet::new();
+            for dependency in heads {
+                let reversed = Reversed(&y.graph);
+                let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
+                while let Some(id) = dfs_rev.next(&reversed) {
+                    predecessors.insert(id);
+                }
+            }
+
+            // Remove all other nodes from the graph.
+            let to_remove: Vec<_> = y
+                .graph
+                .node_identifiers()
+                .filter(|n| !predecessors.contains(n))
+                .collect();
+
+            for node in &to_remove {
+                y.graph.remove_node(*node);
+            }
+
+            y = RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
+            Ok(y)
+        } else {
+            Ok(y)
+        }
+    }
+
+    /// Get group members and access levels at a specific point in a groups history.
+    #[allow(clippy::type_complexity)]
+    pub fn members_at(
+        y: &GroupCrdtState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+        group_id: ID,
+    ) -> Result<Vec<(ID, Access<C>)>, GroupCrdtError<ID, OP>> {
+        let y = Self::rebuild_at(y.inner.clone(), heads)?;
+        Ok(y.members(group_id))
     }
 
     /// Add an operation to the auth graph and operation map.

@@ -17,9 +17,10 @@ use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 
 use crate::SpaceId;
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
+use crate::manager::ManagerError;
 use crate::member::Member;
 use crate::message::SpacesArgs;
-use crate::space::Space;
+use crate::space::{Space, SpaceError};
 use crate::test_utils::{TestPeer, TestSpaceError};
 use crate::types::AuthGroupAction;
 
@@ -1937,4 +1938,48 @@ async fn ejected_event() {
     // The last event is an "ejected".
     let ejected_event = events.last().unwrap();
     assert_matches!(ejected_event, Event::Space(SpaceEvent::Ejected { .. }))
+}
+
+#[tokio::test]
+async fn write_access_error() {
+    let alice = TestPeer::new(0).await;
+    let alice_manager = alice.manager.clone();
+
+    let bob = TestPeer::new(1).await;
+    let bob_manager = bob.manager.clone();
+    let bob_id = bob_manager.id();
+
+    alice_manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Create Space where Bob has only Read access.
+    // ~~~~~~~~~~~~
+
+    let space_id = SpaceId::digest(b"0");
+    let (_space, messages, _events) = alice_manager
+        .create_space_persisted(space_id, &[(bob_id, Access::read())])
+        .await
+        .unwrap();
+
+    for message in messages {
+        bob.persist_operation(&message).await.unwrap();
+        bob_manager.process_persisted(&message).await.unwrap();
+    }
+
+    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
+
+    // Bob publishes an application into a space where he doesn't have write access.
+    let (_space_y, message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
+
+    assert_matches!(
+        alice_manager.process(&message).await.err().unwrap(),
+        ManagerError::Space(SpaceError::UnauthorizedWrite(_))
+    )
 }

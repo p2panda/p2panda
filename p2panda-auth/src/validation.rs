@@ -2,11 +2,13 @@
 
 //! Validation methods for group membership actions.
 
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug};
 
 use thiserror::Error;
 
 use crate::AccessLevel;
+use crate::group::{GroupCrdt, GroupCrdtInnerState, GroupCrdtState};
+use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
 
 pub(crate) fn is_manager<ID>(actor: ID, members: &[(ID, AccessLevel)]) -> bool
 where
@@ -36,6 +38,27 @@ where
     }
 
     true
+}
+
+pub(crate) fn members_at<ID, OP, M, C, RS>(
+    y: &GroupCrdtState<ID, OP, M, C>,
+    group_id: ID,
+    heads: HashSet<OP>,
+) -> Result<Vec<(ID, AccessLevel)>, MembersAtError>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    M: Operation<ID, OP, C> + Clone,
+    C: Conditions,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
+{
+    let members: Vec<_> = GroupCrdt::<ID, OP, M, C, RS>::members_at(y, heads, group_id)
+        .map_err(|err| MembersAtError::RebuildFailure(err.to_string()))?
+        .into_iter()
+        .map(|(id, access)| (id, access.level))
+        .collect();
+
+    Ok(members)
 }
 
 pub(crate) fn is_member<ID>(member: ID, members: &[(ID, AccessLevel)]) -> bool
@@ -112,6 +135,47 @@ where
     }
 
     Ok(())
+}
+
+/// Verify that a member had write access at a specific point in the auth graphs history.
+///
+/// This is required when processing application messages which refer to a specific set of graph
+/// heads. These can be considered as the authors claimed "proof" that they have write access. If
+/// this validation passes it does not mean the author _still_ has write access. Their access
+/// could have since, or concurrently, been removed.
+///
+/// Checks for these cases should be performed in further validation steps.  
+pub fn verify_claimed_write_access<ID, OP, M, C, RS>(
+    y: &GroupCrdtState<ID, OP, M, C>,
+    actor: ID,
+    group_id: ID,
+    heads: HashSet<OP>,
+) -> Result<(), VerifyClaimedWriteError>
+where
+    ID: IdentityHandle,
+    OP: OperationId + Ord,
+    M: Operation<ID, OP, C> + Clone,
+    C: Conditions,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
+{
+    let members = members_at::<ID, OP, M, C, RS>(y, group_id, heads)?;
+    can_write(actor, &members)?;
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum VerifyClaimedWriteError {
+    #[error("error computing members at claimed state: {0}")]
+    MembersAt(#[from] MembersAtError),
+
+    #[error("invalid claimed write access: {0}")]
+    InvalidWrite(#[from] WriteError),
+}
+
+#[derive(Debug, Error)]
+pub enum MembersAtError {
+    #[error("error occurred rebuilding auth groups graph: {0}")]
+    RebuildFailure(String),
 }
 
 #[derive(Debug, Error)]

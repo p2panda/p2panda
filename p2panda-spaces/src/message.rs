@@ -64,6 +64,7 @@ pub(crate) struct ApplicationMessage {
     pub id: Hash,
     pub author: VerifyingKey,
     pub space_dependencies: Vec<Hash>,
+    pub proof: Vec<Hash>,
     pub group_secret_id: GroupSecretId,
     pub nonce: XAeadNonce,
     pub ciphertext: Vec<u8>,
@@ -126,6 +127,7 @@ where
     {
         let SpacesArgs::Application {
             space_dependencies,
+            proof,
             group_secret_id,
             nonce,
             ciphertext,
@@ -139,6 +141,7 @@ where
             id: message.hash(),
             author: message.author(),
             space_dependencies,
+            proof,
             group_secret_id,
             nonce,
             ciphertext,
@@ -208,6 +211,10 @@ pub enum SpacesArgs<C> {
 
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
+
+        /// Current heads of the space's auth graph. For this message to be considered valid the
+        /// author must have the required write access at this point.
+        proof: Vec<OperationId>,
 
         /// Used key id for AEAD.
         group_secret_id: GroupSecretId,
