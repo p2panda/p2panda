@@ -23,7 +23,7 @@ use crate::spaces::SpacesProcessorArgs;
 
 pub type SpacesManager<S, F, C> = Manager<S, F, C, StrongRemoveResolver<C>>;
 
-pub type SpacesManagerError<F, C> = ManagerError<F, C, StrongRemoveResolver<C>>;
+pub type SpacesManagerError<F, C> = ManagerError<F, C>;
 
 /// Processor for spaces operations.
 pub struct Spaces<T, S, F, C> {

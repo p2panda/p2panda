@@ -32,11 +32,10 @@ pub enum GroupCrdtInnerError<OP> {
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
-pub enum GroupCrdtError<ID, OP, M, C, RS>
+pub enum GroupCrdtError<ID, OP>
 where
     ID: IdentityHandle,
     OP: OperationId + Ord,
-    RS: Resolver<ID, OP, M, C>,
 {
     #[error(transparent)]
     Inner(#[from] GroupCrdtInnerError<OP>),
@@ -57,7 +56,7 @@ where
     ManagerGroupsNotAllowed(ID),
 
     #[error("resolver error: {0}")]
-    Resolver(RS::Error),
+    Resolver(String),
 }
 
 pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<ID>, C>>;
@@ -517,7 +516,7 @@ where
     pub fn process(
         mut y: GroupCrdtState<ID, OP, M, C>,
         operation: &M,
-    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
+    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
         for dependency in operation.dependencies() {
             if !y.inner.operations.contains_key(&dependency) {
                 return Err(GroupCrdtError::MissingDependencies(
@@ -530,8 +529,8 @@ where
         let actor = operation.author();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = operation.group_id();
-        let rebuild_required =
-            RS::rebuild_required(&y.inner, operation).map_err(GroupCrdtError::Resolver)?;
+        let rebuild_required = RS::rebuild_required(&y.inner, operation)
+            .map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
 
         // Validate that the author of this operation had the required access rights at the point
         // in the auth graph which they claim as their last state (the state at "dependencies").
@@ -539,11 +538,12 @@ where
         // about) mean that they have lost that access level. This case is dealt with later, here
         // we want to catch malicious or invalid operations which should _never_ be attached to
         // the graph.
-        y = GroupCrdt::validate(y, operation)?;
+        y = Self::validate(y, operation)?;
         y = Self::add_operation(y, operation);
 
         if rebuild_required {
-            y.inner = RS::process(y.inner).map_err(GroupCrdtError::Resolver)?;
+            y.inner =
+                RS::process(y.inner).map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
             return Ok(y);
         }
 
@@ -581,7 +581,7 @@ where
     pub(crate) fn validate(
         y: GroupCrdtState<ID, OP, M, C>,
         operation: &M,
-    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
+    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
         // Detect already processed operations.
         if y.inner.operations.contains_key(&operation.id()) {
             // The operation has already been processed.
@@ -640,7 +640,8 @@ where
                 temp_y.inner.graph.remove_node(*node);
             }
 
-            temp_y.inner = RS::process(temp_y.inner).map_err(GroupCrdtError::Resolver)?;
+            temp_y.inner = RS::process(temp_y.inner)
+                .map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
             temp_y
         } else {
             y

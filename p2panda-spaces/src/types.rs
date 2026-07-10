@@ -20,8 +20,7 @@ pub type AuthGroup<C, RS> =
 pub type AuthGroupState<C> =
     p2panda_auth::group::GroupCrdtState<ActorId, OperationId, AuthMessage<C>, C>;
 
-pub type AuthGroupError<C, RS> =
-    p2panda_auth::group::GroupCrdtError<ActorId, OperationId, AuthMessage<C>, C, RS>;
+pub type AuthGroupError = p2panda_auth::group::GroupCrdtError<ActorId, OperationId>;
 
 pub type AuthGroupAction<C> = p2panda_auth::group::GroupAction<ActorId, C>;
 

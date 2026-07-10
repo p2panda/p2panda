@@ -93,7 +93,7 @@ where
         forge: F,
         credentials: Credentials,
         rng: Rng,
-    ) -> Result<Self, ManagerError<F, C, RS>> {
+    ) -> Result<Self, ManagerError<F, C>> {
         Self::new_with_config(store, forge, credentials, &Config::default(), rng).await
     }
 
@@ -105,7 +105,7 @@ where
         credentials: Credentials,
         config: &Config,
         rng: Rng,
-    ) -> Result<Self, ManagerError<F, C, RS>> {
+    ) -> Result<Self, ManagerError<F, C>> {
         let actor_id: ActorId = credentials.verifying_key();
         let identity =
             IdentityManager::new(store.clone(), forge, credentials, config.clone(), &rng).await?;
@@ -128,7 +128,7 @@ where
     pub async fn space(
         &self,
         id: impl Into<Hash>,
-    ) -> Result<Option<Space<S, F, C, RS>>, ManagerError<F, C, RS>> {
+    ) -> Result<Option<Space<S, F, C, RS>>, ManagerError<F, C>> {
         let id = id.into();
 
         let has_space = {
@@ -154,7 +154,7 @@ where
     pub async fn group(
         &self,
         id: impl Into<GroupId>,
-    ) -> Result<Option<Group<S, F, C, RS>>, ManagerError<F, C, RS>> {
+    ) -> Result<Option<Group<S, F, C, RS>>, ManagerError<F, C>> {
         let id = id.into();
         let groups_y = self.get_groups_state().await?;
 
@@ -183,7 +183,7 @@ where
             Vec<F::Message>,
             Vec<Event<C>>,
         ),
-        ManagerError<F, C, RS>,
+        ManagerError<F, C>,
     > {
         let id = id.into();
 
@@ -205,7 +205,7 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(AuthGroupState<C>, GroupId, F::Message, Event<C>), ManagerError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, GroupId, F::Message, Event<C>), ManagerError<F, C>> {
         let groups_y = self.get_groups_state().await?;
 
         // Generate random group id.
@@ -237,7 +237,7 @@ where
             Option<SpacesState<C>>,
             Vec<Event<C>>,
         ),
-        ManagerError<F, C, RS>,
+        ManagerError<F, C>,
     >
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
@@ -321,7 +321,7 @@ where
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn me(&self) -> Result<Member, ManagerError<F, C, RS>> {
+    pub async fn me(&self) -> Result<Member, ManagerError<F, C>> {
         let mut manager = self.inner.write().await;
         manager
             .identity
@@ -332,7 +332,7 @@ where
 
     /// Register a member with long-term key bundle material which was provided through another
     /// channel (QR code scan etc.).
-    pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C, RS>> {
+    pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C>> {
         let mut manager = self.inner.write().await;
         manager
             .identity
@@ -345,7 +345,7 @@ where
     ///
     /// If `true` then users should rotate their pre-key and generate a new bundle message (which
     /// should then be published) by calling `key_bundle_message`.
-    pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<F, C, RS>> {
+    pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<F, C>> {
         let manager = self.inner.read().await;
         Ok(manager.identity.key_bundle_expired().await?)
     }
@@ -353,7 +353,7 @@ where
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&self) -> Result<F::Message, ManagerError<F, C, RS>> {
+    pub async fn key_bundle_message(&self) -> Result<F::Message, ManagerError<F, C>> {
         let mut manager = self.inner.write().await;
         manager
             .identity
@@ -415,7 +415,7 @@ where
     }
 
     /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
-    pub async fn spaces_repair_required(&self) -> Result<Vec<SpaceId>, ManagerError<F, C, RS>> {
+    pub async fn spaces_repair_required(&self) -> Result<Vec<SpaceId>, ManagerError<F, C>> {
         let groups_y = self.get_groups_state().await?;
 
         let space_ids = {
@@ -485,7 +485,7 @@ where
     pub async fn repair_spaces(
         &self,
         space_ids: &[SpaceId],
-    ) -> Result<Vec<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>)>, ManagerError<F, C, RS>> {
+    ) -> Result<Vec<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>)>, ManagerError<F, C>> {
         let mut results = vec![];
 
         for id in space_ids {
@@ -516,7 +516,7 @@ where
         &self,
         space_id: SpaceId,
         message: &SpaceMembershipMessage,
-    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, ManagerError<F, C, RS>> {
+    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, ManagerError<F, C>> {
         // Get auth message.
         let auth_message = {
             let inner = self.inner.read().await;
@@ -585,7 +585,7 @@ where
     pub async fn create_group_persisted(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<S, F, C, RS>, F::Message, Event<C>), ManagerError<F, C, RS>> {
+    ) -> Result<(Group<S, F, C, RS>, F::Message, Event<C>), ManagerError<F, C>> {
         let (groups_y, group_id, message, events) = self.create_group(initial_members).await?;
         self.set_groups_state(&groups_y).await?;
         let group = Group::new(self.clone(), group_id);
@@ -602,7 +602,7 @@ where
         &self,
         id: SpaceId,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<S, F, C, RS>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C, RS>> {
+    ) -> Result<(Space<S, F, C, RS>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
         let (groups_y, space_y, messages, events) = self.create_space(id, initial_members).await?;
         let space_id = space_y.space_id;
 
@@ -672,7 +672,7 @@ where
     pub async fn process_persisted<M>(
         &self,
         message: &M,
-    ) -> Result<Vec<Event<C>>, ManagerError<F, C, RS>>
+    ) -> Result<Vec<Event<C>>, ManagerError<F, C>>
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>> + Debug,
     {
@@ -693,7 +693,7 @@ where
     pub async fn repair_spaces_persisted(
         &self,
         space_ids: &[SpaceId],
-    ) -> Result<Vec<F::Message>, ManagerError<F, C, RS>> {
+    ) -> Result<Vec<F::Message>, ManagerError<F, C>> {
         let results = self.repair_spaces(space_ids).await?;
 
         let mut messages = vec![];
@@ -742,17 +742,16 @@ pub enum StoreError {
 
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
-pub enum ManagerError<F, C, RS>
+pub enum ManagerError<F, C>
 where
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     #[error(transparent)]
-    Space(#[from] SpaceError<F, C, RS>),
+    Space(#[from] SpaceError<F, C>),
 
     #[error(transparent)]
-    Group(#[from] GroupError<F, C, RS>),
+    Group(#[from] GroupError<F, C>),
 
     #[error(transparent)]
     Store(#[from] StoreError),
