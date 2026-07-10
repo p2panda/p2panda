@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::{collections::HashSet, time::Duration};
+use std::assert_matches;
+use std::collections::HashSet;
+use std::time::Duration;
 
 use p2panda::Topic;
+use p2panda::spaces::{AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError};
 use p2panda::streams::StreamEvent;
 use p2panda::{SigningKey, operation::Header};
+use p2panda_auth::validation::{AddMemberError, RemoveMemberError, WriteError};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::{cbor::decode_cbor, test_utils::setup_logging};
 use p2panda_spaces::SpaceEvent;
@@ -460,20 +464,74 @@ async fn api_validation() -> Result<(), Box<dyn std::error::Error>> {
 
     let panda = p2panda::spawn().await?;
 
-    let (panda_space, _panda_rx) = panda.create_space::<String>(topic).await?;
-    let result = panda_space.add(panda.id(), AccessLevel::Write).await;
-    assert!(result.is_err());
+    let (panda_space, mut panda_rx) = panda.create_space::<String>(topic).await?;
 
+    // Panda can't re-add themselves.
+    let result = panda_space.add(panda.id(), AccessLevel::Write).await;
+    assert_matches!(
+        result.err().unwrap(),
+        AddSpaceMemberError::Validation {
+            err: AddMemberError::AlreadyAdded,
+            ..
+        }
+    );
+
+    // Panda can't remove a non-member.
     let result = panda_space
         .remove(SigningKey::generate().verifying_key())
         .await;
-    assert!(result.is_err());
+    assert_matches!(
+        result.err().unwrap(),
+        RemoveSpaceMemberError::Validation {
+            err: RemoveMemberError::NonMember,
+            ..
+        }
+    );
+
+    // Tiger subscribes to the space.
+    let tiger = p2panda::spawn().await?;
+    let (tiger_space, mut tiger_rx) = tiger.space::<String>(topic).await?;
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::KeyBundle(verifying_key) = event {
+            if verifying_key == tiger.id() {
+                break;
+            }
+        };
+    }
+
+    // Panda adds tiger with read-only access.
+    panda_space.add(tiger.id(), AccessLevel::Read).await?;
+
+    while let Some(event) = tiger_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Added { .. }) = event {
+            break;
+        };
+    }
+
+    // Tiger can't publish into the space.
+    let result = tiger_space.publish("I'm a bit naughty.".to_string()).await;
+    assert_matches!(
+        result.err().unwrap(),
+        PublishSpaceError::Validation {
+            err: WriteError::InsufficientAccess,
+            ..
+        }
+    );
 
     // Panda removes themselves.
     panda_space.remove(panda.id()).await?;
 
-    let result = panda_space.publish("I'm a bit naughty".to_string()).await;
-    assert!(result.is_err());
+    let result = panda_space
+        .publish("I'm a bit naughty too.".to_string())
+        .await;
+    assert_matches!(
+        result.err().unwrap(),
+        PublishSpaceError::Validation {
+            err: WriteError::UnrecognisedActor,
+            ..
+        }
+    );
 
     Ok(())
 }
