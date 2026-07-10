@@ -108,7 +108,7 @@ where
     }
 
     if !is_member(removed, members) {
-        return Err(RemoveMemberError::NonMemberRemove);
+        return Err(RemoveMemberError::NonMember);
     }
 
     Ok(())
@@ -144,7 +144,7 @@ pub enum RemoveMemberError {
     InsufficientAccess,
 
     #[error("attempted to remove non-member actor")]
-    NonMemberRemove,
+    NonMember,
 }
 
 #[cfg(test)]
@@ -209,6 +209,6 @@ mod tests {
         let err = can_remove_member(2, 3, &members()).unwrap_err();
         assert!(matches!(err, RemoveMemberError::InsufficientAccess));
         let err = can_remove_member(1, 99, &members()).unwrap_err();
-        assert!(matches!(err, RemoveMemberError::NonMemberRemove));
+        assert!(matches!(err, RemoveMemberError::NonMember));
     }
 }
