@@ -22,7 +22,10 @@ pub use group::{Group, GroupError, GroupEvent, GroupFuture};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use repair::{RepairError, spawn_repair_task};
 pub(crate) use space::spaces_stream;
-pub use space::{Space, SpaceError, SpaceEvent, SpaceFuture, SpaceSubscription};
+pub use space::{
+    AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceError, SpaceEvent,
+    SpaceFuture, SpaceSubscription,
+};
 pub use types::SpacesManagerError;
 
 use crate::Credentials;
