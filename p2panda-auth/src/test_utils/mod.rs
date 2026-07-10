@@ -20,8 +20,7 @@ pub type Conditions = ();
 pub type TestGroupState = GroupCrdtState<MemberId, MessageId, TestOperation, Conditions>;
 pub type TestGroup = GroupCrdt<MemberId, MessageId, TestOperation, Conditions, TestResolver>;
 pub type TestResolver = StrongRemove<MemberId, MessageId, TestOperation, Conditions>;
-pub type TestGroupError =
-    GroupCrdtError<MemberId, MessageId, TestOperation, Conditions, TestResolver>;
+pub type TestGroupError = GroupCrdtError<MemberId, MessageId>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TestOperation {

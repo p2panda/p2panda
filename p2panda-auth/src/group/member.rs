@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
+
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +41,18 @@ where
     /// Return true if this group member is an individual.
     pub fn is_individual(&self) -> bool {
         !self.is_group()
+    }
+}
+
+impl<ID> Display for GroupMember<ID>
+where
+    ID: IdentityHandle,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GroupMember::Individual(id) => write!(f, "Individual({id})",),
+            GroupMember::Group(id) => write!(f, "Group({id})",),
+        }
     }
 }
 

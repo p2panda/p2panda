@@ -21,8 +21,7 @@ use crate::groups::{GroupsArgs, GroupsOperation};
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
 
-type GroupsCrdtError<C> =
-    group::GroupCrdtError<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+type GroupsCrdtError = group::GroupCrdtError<VerifyingKey, Hash>;
 
 type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
 
@@ -74,7 +73,7 @@ where
 {
     type Output = (T, GroupsResult);
 
-    type Error = (T, GroupsError<C>);
+    type Error = (T, GroupsError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let input_args: &GroupsArgs<E> = input.borrow();
@@ -174,15 +173,12 @@ where
 /// Error types which can occur in the groups processor.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error)]
-pub enum GroupsError<C>
-where
-    C: Conditions,
-{
+pub enum GroupsError {
     #[error(transparent)]
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    Groups(#[from] GroupsCrdtError<C>),
+    Groups(#[from] GroupsCrdtError),
 
     #[error("missing operation: {0}")]
     MissingOperation(Hash),

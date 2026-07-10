@@ -40,8 +40,7 @@ pub type TestManager = Manager<
     StrongRemoveResolver<TestConditions>,
 >;
 
-pub type TestSpaceError =
-    SpaceError<TestForge, TestConditions, StrongRemoveResolver<TestConditions>>;
+pub type TestSpaceError = SpaceError<TestForge, TestConditions>;
 
 pub struct TestPeer {
     pub id: TestPeerId,

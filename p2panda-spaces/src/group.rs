@@ -84,7 +84,7 @@ where
         y: AuthGroupState<C>,
         group_id: GroupId,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let initial_members = typed_members(&y, initial_members);
 
         let auth_dependencies = y.inner.heads().into_iter().collect();
@@ -103,7 +103,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -119,7 +119,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
 
         let member = typed_member(&y, member);
@@ -135,7 +135,7 @@ where
     pub(crate) async fn process(
         manager_ref: Manager<S, F, C, RS>,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(AuthGroupState<C>, Event<C>)>, GroupError<F, C, RS>> {
+    ) -> Result<Option<(AuthGroupState<C>, Event<C>)>, GroupError<F, C>> {
         let mut groups_y = manager_ref.get_groups_state().await?;
 
         // If we already processed this auth message then return now.
@@ -147,7 +147,8 @@ where
             return Ok(None);
         }
 
-        groups_y = AuthGroup::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
+        groups_y =
+            AuthGroup::<C, RS>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
         let events = auth_message_to_group_event(&groups_y, auth_message);
         Ok(Some((groups_y, events)))
     }
@@ -159,7 +160,7 @@ where
         group_id: GroupId,
         auth_dependencies: Vec<OperationId>,
         group_action: GroupAction<ActorId, C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C, RS>> {
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let args = SpacesArgs::Auth {
             group_id,
             auth_dependencies,
@@ -172,7 +173,7 @@ where
         };
 
         let auth_message = SpacesMessage::auth(&message);
-        let y = AuthGroup::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
+        let y = AuthGroup::<C, RS>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
         let event = auth_message_to_group_event(&y, &auth_message);
 
@@ -185,7 +186,7 @@ where
     }
 
     /// Current group members and access levels.
-    pub async fn members(&self) -> Result<Vec<(MemberId, Access<C>)>, GroupError<F, C, RS>> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, Access<C>)>, GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
         let mut group_members = y.members(self.id);
         sort_members(&mut group_members);
@@ -214,7 +215,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<F::Message, GroupError<F, C, RS>> {
+    ) -> Result<F::Message, GroupError<F, C>> {
         let (y, message, _) = self.add(member, access).await?;
         self.manager.set_groups_state(&y).await?;
 
@@ -224,10 +225,7 @@ where
     /// Remove member from group.
     ///
     /// Persists resulting state and returns forged message.
-    pub async fn remove_persisted(
-        &self,
-        member: ActorId,
-    ) -> Result<F::Message, GroupError<F, C, RS>> {
+    pub async fn remove_persisted(&self, member: ActorId) -> Result<F::Message, GroupError<F, C>> {
         let (y, message, _) = self.remove(member).await?;
         self.manager.set_groups_state(&y).await?;
 
@@ -237,14 +235,13 @@ where
 
 /// Group error type.
 #[derive(Debug, Error)]
-pub enum GroupError<F, C, RS>
+pub enum GroupError<F, C>
 where
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     #[error("{0}")]
-    AuthGroup(AuthGroupError<C, RS>),
+    AuthGroup(AuthGroupError),
 
     #[error(transparent)]
     IdentityManager(#[from] IdentityError<F, C>),

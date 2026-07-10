@@ -19,23 +19,12 @@ pub type SpacesStore = p2panda_store::spaces::SqliteSpacesStore<Extensions>;
 pub type SpacesProcessor<T> =
     p2panda_stream::spaces::Spaces<T, SpacesStore, OperationForge, AuthCapabilities>;
 
-pub type SpacesManagerError = p2panda_spaces::manager::ManagerError<
-    OperationForge,
-    AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
->;
+pub type SpacesManagerError =
+    p2panda_spaces::manager::ManagerError<OperationForge, AuthCapabilities>;
 
-pub type InnerGroupError = p2panda_spaces::group::GroupError<
-    OperationForge,
-    AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
->;
+pub type InnerGroupError = p2panda_spaces::group::GroupError<OperationForge, AuthCapabilities>;
 
-pub type InnerSpaceError = p2panda_spaces::space::SpaceError<
-    OperationForge,
-    AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
->;
+pub type InnerSpaceError = p2panda_spaces::space::SpaceError<OperationForge, AuthCapabilities>;
 
 pub type SpacesManager = p2panda_spaces::manager::Manager<
     SqliteSpacesStore<Extensions>,

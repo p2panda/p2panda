@@ -107,7 +107,7 @@ where
             Vec<F::Message>,
             Vec<Event<C>>,
         ),
-        SpaceError<F, C, RS>,
+        SpaceError<F, C>,
     > {
         let my_id = manager_ref.id();
 
@@ -131,9 +131,7 @@ where
         let groups_y = manager_ref.get_groups_state().await?;
 
         let (groups_y, create_group, auth_event) =
-            Group::create(manager_ref.clone(), groups_y, group_id, initial_members)
-                .await
-                .map_err(SpaceError::Group)?;
+            Group::create(manager_ref.clone(), groups_y, group_id, initial_members).await?;
 
         // Apply the "create" auth message to the space state.
         let (space_y, create_space, space_events) = Space::process_auth_message(
@@ -168,15 +166,14 @@ where
             F::Message,
             Vec<Event<C>>,
         ),
-        SpaceError<F, C, RS>,
+        SpaceError<F, C>,
     > {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) =
-            group.add(member, access).await.map_err(SpaceError::Group)?;
+        let (groups_y, auth_message, auth_event) = group.add(member, access).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
@@ -205,15 +202,14 @@ where
             F::Message,
             Vec<Event<C>>,
         ),
-        SpaceError<F, C, RS>,
+        SpaceError<F, C>,
     > {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) =
-            group.remove(member).await.map_err(SpaceError::Group)?;
+        let (groups_y, auth_message, auth_event) = group.remove(member).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
@@ -235,12 +231,12 @@ where
         manager_ref: Manager<S, F, C, RS>,
         mut y: SpacesState<C>,
         auth_message: &AuthMessage<C>,
-    ) -> Result<(SpacesState<C>, F::Message, Vec<Event<C>>), SpaceError<F, C, RS>> {
+    ) -> Result<(SpacesState<C>, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
         // Get current space members.
         let current_members = secret_members(y.groups_y.members(y.group_id));
 
         // Process auth message on local auth state.
-        y.groups_y = AuthGroup::process(y.groups_y, auth_message).map_err(SpaceError::AuthGroup)?;
+        y.groups_y = AuthGroup::<C, RS>::process(y.groups_y, auth_message)?;
 
         // Get next space members.
         let next_members = secret_members(y.groups_y.members(y.group_id));
@@ -322,7 +318,7 @@ where
         manager_ref: Manager<S, F, C, RS>,
         space_id: SpaceId,
         group_id: GroupId,
-    ) -> Result<(SpacesState<C>, Vec<F::Message>), SpaceError<F, C, RS>> {
+    ) -> Result<(SpacesState<C>, Vec<F::Message>), SpaceError<F, C>> {
         // Instantiate empty space state.
         let mut y = { Self::get_or_init_state(space_id, group_id, manager_ref.clone()).await? };
         let mut messages = vec![];
@@ -371,7 +367,7 @@ where
         &self,
         space_message: &SpaceMembershipMessage,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C, RS>> {
+    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C>> {
         let SpaceMembershipMessage {
             id,
             group_id,
@@ -410,8 +406,7 @@ where
         // Skip processing if this auth message has already been processed. This can happen when
         // multiple peers concurrently publish pointers to some auth message into the space.
         let next_members = if !duplicate_pointer {
-            y.groups_y =
-                AuthGroup::process(y.groups_y, auth_message).map_err(SpaceError::AuthGroup)?;
+            y.groups_y = AuthGroup::<C, RS>::process(y.groups_y, auth_message)?;
             // Get next space members.
             secret_members(y.groups_y.members(y.group_id))
         } else {
@@ -451,8 +446,7 @@ where
 
         // Process encryption message.
         let (encryption_y, encryption_output) =
-            EncryptionGroup::receive(y.encryption_y, &encryption_message)
-                .map_err(SpaceError::EncryptionGroup)?;
+            EncryptionGroup::receive(y.encryption_y, &encryption_message)?;
 
         y.encryption_y = encryption_y;
 
@@ -503,7 +497,7 @@ where
         current_members: Vec<ActorId>,
         next_members: Vec<ActorId>,
         rng: &Rng,
-    ) -> Result<(EncryptionGroupState, Vec<EncryptionDirectMessage>), SpaceError<F, C, RS>> {
+    ) -> Result<(EncryptionGroupState, Vec<EncryptionDirectMessage>), SpaceError<F, C>> {
         // Make the DGM aware of group members after this group membership change has been
         // processed.
         encryption_y.dcgka.dgm = EncryptionMembershipState {
@@ -515,8 +509,7 @@ where
             match &auth_message.action() {
                 AuthGroupAction::Create { .. } => {
                     let (encryption_y, message) =
-                        EncryptionGroup::create(encryption_y, next_members.clone(), rng)
-                            .map_err(SpaceError::EncryptionGroup)?;
+                        EncryptionGroup::create(encryption_y, next_members.clone(), rng)?;
                     direct_messages.extend(message.direct_messages());
                     encryption_y
                 }
@@ -529,8 +522,7 @@ where
 
                     for added in all_added {
                         let (encryption_y_inner, message) =
-                            EncryptionGroup::add(encryption_y, added, rng)
-                                .map_err(SpaceError::EncryptionGroup)?;
+                            EncryptionGroup::add(encryption_y, added, rng)?;
                         encryption_y = encryption_y_inner;
                         direct_messages.extend(message.direct_messages());
                     }
@@ -545,8 +537,7 @@ where
 
                     for removed in all_removed {
                         let (encryption_y_inner, message) =
-                            EncryptionGroup::remove(encryption_y, removed, rng)
-                                .map_err(SpaceError::EncryptionGroup)?;
+                            EncryptionGroup::remove(encryption_y, removed, rng)?;
                         encryption_y = encryption_y_inner;
                         direct_messages.extend(message.direct_messages());
                     }
@@ -563,15 +554,13 @@ where
     pub(crate) async fn handle_application_message(
         &self,
         message: &ApplicationMessage,
-    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C, RS>> {
+    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C>> {
         let mut y = self.state().await?;
 
         // Process encryption message.
         let encryption_message = EncryptionMessage::from_application(message);
-        let (encryption_y, encryption_output) = {
-            EncryptionGroup::receive(y.encryption_y, &encryption_message)
-                .map_err(SpaceError::EncryptionGroup)?
-        };
+        let (encryption_y, encryption_output) =
+            { EncryptionGroup::receive(y.encryption_y, &encryption_message)? };
 
         y.encryption_y = encryption_y;
 
@@ -588,7 +577,7 @@ where
 
     pub async fn repair(
         &self,
-    ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C, RS>> {
+    ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
         let groups_y = self.manager.get_groups_state().await?;
         let mut space_y = self.state().await?;
 
@@ -635,7 +624,7 @@ where
     }
 
     /// Get the space state.
-    pub(crate) async fn state(&self) -> Result<SpacesState<C>, SpaceError<F, C, RS>> {
+    pub(crate) async fn state(&self) -> Result<SpacesState<C>, SpaceError<F, C>> {
         let space_y = self
             .manager
             .get_space_state(&self.id)
@@ -661,7 +650,7 @@ where
         space_id: SpaceId,
         group_id: GroupId,
         manager_ref: Manager<S, F, C, RS>,
-    ) -> Result<SpacesState<C>, SpaceError<F, C, RS>> {
+    ) -> Result<SpacesState<C>, SpaceError<F, C>> {
         let (key_manager_y, key_registry_y) = {
             let manager = manager_ref.inner.read().await;
             let key_manager_y = manager.identity.key_manager().await?;
@@ -715,13 +704,13 @@ where
     }
 
     /// Id of the group associated with this space.
-    pub async fn group_id(&self) -> Result<GroupId, SpaceError<F, C, RS>> {
+    pub async fn group_id(&self) -> Result<GroupId, SpaceError<F, C>> {
         let y = self.state().await?;
         Ok(y.group_id)
     }
 
     /// The members of this space.
-    pub async fn members(&self) -> Result<Vec<(MemberId, Access<C>)>, SpaceError<F, C, RS>> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, Access<C>)>, SpaceError<F, C>> {
         let y = self.state().await?;
         let mut group_members = y.groups_y.members(y.group_id);
         sort_members(&mut group_members);
@@ -732,7 +721,7 @@ where
     pub async fn publish(
         &self,
         plaintext: &[u8],
-    ) -> Result<(SpacesState<C>, F::Message, Event<C>), SpaceError<F, C, RS>> {
+    ) -> Result<(SpacesState<C>, F::Message, Event<C>), SpaceError<F, C>> {
         let mut y = self.state().await?;
 
         if !y.encryption_y.orderer.is_welcomed() {
@@ -743,8 +732,7 @@ where
 
         // Encrypt plaintext towards encryption group members.
         let (encryption_y, encryption_args) =
-            EncryptionGroup::send(y.encryption_y, plaintext, &manager.rng)
-                .map_err(SpaceError::EncryptionGroup)?;
+            EncryptionGroup::send(y.encryption_y, plaintext, &manager.rng)?;
         y.encryption_y = encryption_y;
 
         // Construct space args.
@@ -810,7 +798,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C, RS>> {
+    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
         let (groups_y, space_y, auth_message, space_message, events) =
             self.add(member, access).await?;
 
@@ -828,7 +816,7 @@ where
     pub async fn remove_persisted(
         &self,
         member: ActorId,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C, RS>> {
+    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
         let (groups_y, space_y, auth_message, space_message, events) = self.remove(member).await?;
 
         self.manager.set_groups_state(&groups_y).await?;
@@ -843,7 +831,7 @@ where
     pub async fn publish_persisted(
         &self,
         plaintext: &[u8],
-    ) -> Result<(F::Message, Event<C>), SpaceError<F, C, RS>> {
+    ) -> Result<(F::Message, Event<C>), SpaceError<F, C>> {
         let (space_y, message, event) = self.publish(plaintext).await?;
         self.manager
             .set_space_state(&self.id(), &space_y.into())
@@ -853,7 +841,7 @@ where
 
     pub async fn repair_persisted(
         &self,
-    ) -> Result<(Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C, RS>> {
+    ) -> Result<(Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
         let (space_y, messages, events) = self.repair().await?;
         self.manager
             .set_space_state(&self.id(), &space_y.into())
@@ -897,23 +885,22 @@ where
 
 /// Space error type.
 #[derive(Debug, Error)]
-pub enum SpaceError<F, C, RS>
+pub enum SpaceError<F, C>
 where
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     #[error(transparent)]
     Rng(#[from] RngError),
 
-    #[error("{0}")]
-    AuthGroup(AuthGroupError<C, RS>),
+    #[error(transparent)]
+    AuthGroup(#[from] AuthGroupError),
+
+    #[error(transparent)]
+    Group(#[from] GroupError<F, C>),
 
     #[error("{0}")]
-    Group(GroupError<F, C, RS>),
-
-    #[error("{0}")]
-    EncryptionGroup(EncryptionGroupError),
+    EncryptionGroup(#[from] EncryptionGroupError),
 
     #[error(transparent)]
     IdentityManager(#[from] IdentityError<F, C>),
