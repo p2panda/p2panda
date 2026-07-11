@@ -4,6 +4,7 @@ mod acked;
 mod ephemeral_stream;
 mod event_stream;
 mod external_stream;
+mod local_stream;
 mod replay;
 mod stream;
 mod sync_metrics;
@@ -24,6 +25,7 @@ pub use ephemeral_stream::{
 pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
 pub use external_stream::ExternalStreamFuture;
+pub(crate) use local_stream::LocalStreamFuture;
 pub use replay::{ReplayError, StreamFrom};
 pub(crate) use stream::processed_stream;
 pub use stream::{

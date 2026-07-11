@@ -38,6 +38,7 @@ use crate::streams::acked::{Acked, AckedError};
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
+use crate::streams::local_stream::{LocalStream, LocalStreamEvent, LocalStreamFuture};
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 use crate::streams::{Event, Pipeline};
@@ -131,13 +132,22 @@ where
         mpsc::channel::<(Operation, Option<M>, oneshot::Sender<Event>)>(PUBLISH_BUFFER_SIZE);
 
     // Channel for importing external operation streams.
-    let (import_tx, mut import_rx) = mpsc::channel::<(
+    let (import_external_tx, mut import_external_rx) = mpsc::channel::<(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
     )>(IMPORT_BUFFER_SIZE);
 
     // Set of currently active external streams.
     let mut external_stream = ExternalStream::default();
+
+    // Channel for importing local operation streams.
+    let (import_local_tx, mut import_local_rx) = mpsc::channel::<(
+        BoxStream<'static, Operation>,
+        oneshot::Sender<LocalStreamFuture>,
+    )>(IMPORT_BUFFER_SIZE);
+
+    // Set of currently active local streams.
+    let mut local_stream = LocalStream::default();
 
     // Determine from which point on we re-play locally stored operations.
     let nacked_log_ranges = acked
@@ -156,7 +166,7 @@ where
         topic,
         spaces_manager.clone(),
         store.clone(),
-        import_tx.clone(),
+        import_local_tx.clone(),
         to_output_tx.clone(),
         repair_rx,
     );
@@ -235,9 +245,15 @@ where
             {
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
-                let replay_result =
-                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
-                        .await;
+                let replay_result = replay_log_ranges(
+                    topic,
+                    &store,
+                    &to_output_tx,
+                    &pipeline,
+                    &sync_handle,
+                    nacked_log_ranges,
+                )
+                .await;
 
                 // Errors occurring in the replay task which be returned to the user.
                 if let Err(error) = replay_result {
@@ -285,7 +301,7 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                process_operation_in(*operation, source, topic, &pipeline).await;
+                                process_operation_in(*operation, source, topic, &pipeline, &sync_handle).await;
                                 continue;
                             },
                         }
@@ -305,6 +321,7 @@ where
                             Source::LocalStore,
                             topic,
                             &pipeline,
+                            &sync_handle
                         ).await;
 
                         // Inform publisher optionally about result of processor and that we're
@@ -315,7 +332,7 @@ where
                     }
 
                     // Receive imported external source of operations.
-                    Some((stream, ready_tx)) = import_rx.recv() => {
+                    Some((stream, ready_tx)) = import_external_rx.recv() => {
                         let external_stream_future = external_stream.insert(stream);
                         let session_id = external_stream_future.session_id();
                         if ready_tx.send(external_stream_future).is_err() {
@@ -331,33 +348,12 @@ where
                                 session_id
                             } => vec![StreamEvent::ImportStarted { session_id }],
                             ExternalStreamEvent::Operation { session_id, operation } => {
-                                // Try pushing operation to other nodes if we have an active and
-                                // "live" sync session with them. This allows disseminating new
-                                // messages quickly in the network.
-                                //
-                                // If no active live session exists, nodes will pick up the
-                                // operation later when running the sync protocol.
-                                //
-                                // TODO: There are two paths for operations to be published into
-                                // live-mode channels now (here and when one directly publishes new
-                                // messages). Consider if these should be unified into one path
-                                // somehow so as to avoid the chance of introducing inconsistency
-                                // later on.
-                                if sync_handle
-                                    .publish(*operation.clone())
-                                    .await.is_err() {
-                                        warn!(
-                                            session_id,
-                                            operation_id = %operation.hash(),
-                                            "failed sending imported operation on sync channel"
-                                        )
-                                    };
-
                                 process_operation_in(
                                     *operation,
                                     Source::ExternalStream { session_id },
                                     topic,
                                     &pipeline,
+                                    &sync_handle
                                 ).await;
 
                                 continue;
@@ -367,6 +363,35 @@ where
                             } => {
                                 vec![StreamEvent::ImportEnded { session_id }]
                             },
+                        }
+                    },
+
+                    // Receive imported local source of operations.
+                    Some((stream, ready_tx)) = import_local_rx.recv() => {
+                        let local_stream_future = local_stream.insert(stream);
+                        if ready_tx.send(local_stream_future).is_err() {
+                            warn!("failed sending on local import ready channel")
+                        };
+                        continue;
+                    }
+
+                    // Receive the next ready event from any imported local source.
+                    Some(event) = local_stream.next() => {
+                        match event {
+                            LocalStreamEvent::Operation(operation) => {
+                                process_operation_in(
+                                    *operation,
+                                    Source::LocalStore,
+                                    topic,
+                                    &pipeline,
+                                    &sync_handle
+                                ).await;
+
+                                continue;
+                            },
+                            LocalStreamEvent::End =>
+                                vec![]
+                            ,
                         }
                     },
                 };
@@ -381,10 +406,10 @@ where
 
     let tx = StreamPublisher {
         topic,
-        sync_handle: sync_handle.clone(),
         forge,
         publish_tx,
-        import_tx,
+        import_external_tx,
+        import_local_tx,
         repair_tx,
         to_output_tx,
         _marker: PhantomData,
@@ -393,7 +418,6 @@ where
     let rx = StreamSubscription {
         topic,
         store,
-        sync_handle,
         acked,
         stream: ReceiverStream::new(app_rx),
     };
@@ -407,10 +431,28 @@ pub(crate) async fn process_operation_in(
     source: Source,
     topic: Topic,
     pipeline: &Pipeline,
+    sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
 ) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
+
+    match source {
+        Source::ExternalStream { .. } | Source::LocalStore
+            // Try pushing operation to other nodes if we have an active and
+            // "live" sync session with them. This allows disseminating new
+            // messages quickly in the network.
+            //
+            // If no active live session exists, nodes will pick up the
+            // operation later when running the sync protocol.
+            if sync_handle.publish(operation.clone()).await.is_err() => {
+                warn!(
+                    operation_id = %operation.hash(),
+                    "failed sending operation on sync handle"
+                )
+            }
+        _ => (),
+    };
 
     // Send operation to processor task. This blocks any parent stream and makes sure that all
     // events are handled in same order.
@@ -636,13 +678,17 @@ where
 #[derive(Clone, Debug)]
 pub struct StreamPublisher<M> {
     topic: Topic,
-    sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     forge: OperationForge,
     #[allow(clippy::type_complexity)]
     pub(crate) publish_tx: mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>,
-    import_tx: mpsc::Sender<(
+    import_external_tx: mpsc::Sender<(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
+    )>,
+    #[allow(clippy::type_complexity)]
+    import_local_tx: mpsc::Sender<(
+        BoxStream<'static, Operation>,
+        oneshot::Sender<LocalStreamFuture>,
     )>,
     pub(crate) to_output_tx: mpsc::Sender<Vec<StreamEvent<M>>>,
     pub(crate) repair_tx: mpsc::Sender<oneshot::Sender<Result<bool, RepairError>>>,
@@ -694,12 +740,36 @@ where
         // Send stream to processor.
         let stream = Box::pin(stream);
         let (ready_tx, ready_rx) = oneshot::channel::<ExternalStreamFuture>();
-        self.import_tx
+        self.import_external_tx
             .send((stream, ready_tx))
             .await
             .map_err(|err| ImportError::SendToProcessor(err.to_string()))?;
 
         // Await receiving the session id and future which will complete when the external stream
+        // closes and all operations have been processed.
+        ready_rx
+            .await
+            .map_err(|err| ImportError::ReceiveFromProcessor(err.to_string()))
+    }
+
+    /// Import a local source of operations.
+    ///
+    /// This method can be used for importing some locally forged operations in a batch. The user
+    /// will receive no "import" events on the stream, only events resulting from publishing the
+    /// operations themselves.
+    pub(crate) async fn import_local(
+        &self,
+        stream: impl Stream<Item = Operation> + Send + 'static,
+    ) -> Result<LocalStreamFuture, ImportError> {
+        // Send stream to processor.
+        let stream = Box::pin(stream);
+        let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
+        self.import_local_tx
+            .send((stream, ready_tx))
+            .await
+            .map_err(|err| ImportError::SendToProcessor(err.to_string()))?;
+
+        // Await receiving the future which will complete when the stream
         // closes and all operations have been processed.
         ready_rx
             .await
@@ -739,16 +809,6 @@ where
             .send((operation.clone(), message, processed_tx))
             .await
             .map_err(|err| PublishError::SendToProcessor(err.to_string()))?;
-
-        // Try pushing operation to other nodes if we have an active and "live" sync session with
-        // them. This allows disseminating new messages fastly in the network.
-        //
-        // If no active live session exists, nodes will pick up the operation later when running the
-        // sync protocol.
-        self.sync_handle
-            .publish(operation)
-            .await
-            .map_err(|err| PublishError::SyncHandle(err.to_string()))?;
 
         Ok(PublishFuture { hash, processed_rx })
     }
@@ -809,8 +869,6 @@ pub struct StreamSubscription<M> {
     topic: Topic,
     store: SqliteStore,
     acked: Acked,
-    #[allow(unused)]
-    sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     stream: ReceiverStream<StreamEvent<M>>,
 }
 

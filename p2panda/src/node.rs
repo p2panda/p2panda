@@ -421,7 +421,7 @@ impl Node {
         let (tx, _rx) = self.stream::<NoBody>(topic).await?;
 
         let processed = tx
-            .import(futures_util::stream::once(async {
+            .import_local(futures_util::stream::once(async {
                 message.into_operation()
             }))
             .await?;
@@ -522,7 +522,7 @@ impl Node {
 
         let operation = message.into_operation();
         let processed = tx
-            .import(futures_util::stream::once(async { operation }))
+            .import_local(futures_util::stream::once(async { operation }))
             .await?;
 
         // Wait until processing the events has finished.
@@ -600,7 +600,7 @@ impl Node {
         messages.extend(create_space_messages);
 
         let processed = tx
-            .import(futures_util::stream::iter(
+            .import_local(futures_util::stream::iter(
                 messages.into_iter().map(|message| message.into_operation()),
             ))
             .await?;

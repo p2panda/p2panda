@@ -25,6 +25,7 @@ Highlights are marked with a pancake 🥞
 - node: Task for repairing spaces [#1277](https://github.com/p2panda/p2panda/pull/1277)
 - node: Membership change validation in Space API [#1292](https://github.com/p2panda/p2panda/pull/1292)
 - spaces: Validate write authority when processing application messages [#1295](https://github.com/p2panda/p2panda/pull/1295)
+- spaces: Introduce local stream import [#1296](https://github.com/p2panda/p2panda/pull/1296)
 
 ### Changed
 
