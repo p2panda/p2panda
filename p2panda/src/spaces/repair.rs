@@ -25,7 +25,7 @@ use crate::operation::Operation;
 use crate::spaces::group_log_id;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
-use crate::streams::{ExternalStreamFuture, StreamEvent};
+use crate::streams::{LocalStreamFuture, StreamEvent};
 
 const REPAIR_FREQUENCY_SECS: u64 = 1;
 
@@ -44,9 +44,9 @@ pub(crate) async fn repair_space<M>(
     space_id: SpaceId,
     manager: &SpacesManager,
     store: &SqliteStore,
-    import_tx: &mpsc::Sender<(
+    import_local_tx: &mpsc::Sender<(
         BoxStream<'static, Operation>,
-        oneshot::Sender<ExternalStreamFuture>,
+        oneshot::Sender<LocalStreamFuture>,
     )>,
     to_output_tx: &mpsc::Sender<Vec<StreamEvent<M>>>,
 ) -> Result<bool, RepairError> {
@@ -169,8 +169,8 @@ pub(crate) async fn repair_space<M>(
             .map(|message| message.into_operation()),
     );
     let stream = Box::pin(futures_util::stream::iter(operations));
-    let (ready_tx, ready_rx) = oneshot::channel::<ExternalStreamFuture>();
-    import_tx
+    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
+    import_local_tx
         .send((stream, ready_tx))
         .await
         .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
@@ -207,9 +207,9 @@ pub(crate) fn spawn_repair_task<M>(
     topic: Topic,
     manager: SpacesManager,
     store: SqliteStore,
-    import_tx: mpsc::Sender<(
+    import_local_tx: mpsc::Sender<(
         BoxStream<'static, Operation>,
-        oneshot::Sender<ExternalStreamFuture>,
+        oneshot::Sender<LocalStreamFuture>,
     )>,
     to_output_tx: mpsc::Sender<Vec<StreamEvent<M>>>,
     mut repair_rx: mpsc::Receiver<oneshot::Sender<Result<bool, RepairError>>>,
@@ -234,8 +234,14 @@ where
                 _ = sleep(Duration::from_secs(REPAIR_FREQUENCY_SECS)) => None,
             };
 
-            let result =
-                repair_space(topic.into(), &manager, &store, &import_tx, &to_output_tx).await;
+            let result = repair_space(
+                topic.into(),
+                &manager,
+                &store,
+                &import_local_tx,
+                &to_output_tx,
+            )
+            .await;
 
             if let Err(ref err) = result {
                 warn!("failed to repair spaces: {}", err);

@@ -27,7 +27,7 @@ use crate::operation::Extensions;
 use crate::spaces::RepairError;
 use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::streams::{
-    ExternalStreamFuture, ImportError, ProcessedOperation, Source, StreamEvent, StreamPublisher,
+    ImportError, LocalStreamFuture, ProcessedOperation, Source, StreamEvent, StreamPublisher,
     StreamSubscription,
 };
 
@@ -95,7 +95,7 @@ where
         // construct and send them here manually.
         let processed = self
             .tx
-            .import(futures_util::stream::once(async {
+            .import_local(futures_util::stream::once(async {
                 message.into_operation()
             }))
             .await?;
@@ -149,7 +149,7 @@ where
 
         let processed = self
             .tx
-            .import(futures_util::stream::iter([
+            .import_local(futures_util::stream::iter([
                 auth_message.into_operation(),
                 space_message.into_operation(),
             ]))
@@ -208,7 +208,7 @@ where
 
         let processed = self
             .tx
-            .import(futures_util::stream::iter([
+            .import_local(futures_util::stream::iter([
                 auth_message.into_operation(),
                 space_message.into_operation(),
             ]))
@@ -300,7 +300,7 @@ pub enum SpaceEvent<M> {
 
 pub struct SpaceFuture {
     pub(crate) space_id: SpaceId,
-    pub(crate) processed: ExternalStreamFuture,
+    pub(crate) processed: LocalStreamFuture,
 }
 
 impl SpaceFuture {

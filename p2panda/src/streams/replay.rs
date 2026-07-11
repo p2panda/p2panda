@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::sync::Arc;
+
 use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, Topic, VerifyingKey};
+use p2panda_net::sync::SyncHandle;
 use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -47,6 +51,7 @@ pub(crate) async fn replay_log_ranges<M>(
     store: &SqliteStore,
     to_output_tx: &mpsc::Sender<Vec<StreamEvent<M>>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
+    sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     log_ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
 where
@@ -77,7 +82,8 @@ where
             };
 
             for (operation, _) in operations {
-                process_operation_in(operation, Source::LocalStore, topic, pipeline).await;
+                process_operation_in(operation, Source::LocalStore, topic, pipeline, sync_handle)
+                    .await;
             }
         }
     }
