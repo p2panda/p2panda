@@ -6,7 +6,7 @@ use futures_util::stream::BoxStream;
 use p2panda_core::traits::{Provenance, ShortFormat};
 use p2panda_core::{Hash, Topic};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, SpaceId, SpacesStoreState};
+use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
@@ -19,7 +19,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
 use crate::spaces::group_log_id;
@@ -29,8 +29,38 @@ use crate::streams::{LocalStreamFuture, StreamEvent};
 
 const REPAIR_FREQUENCY_SECS: u64 = 1;
 
-/// Repairing a space involves incorporating missing groups operations observed on the global groups
-/// context but not yet published into the space.
+/// Strategy by which a space should be repaired.
+///
+/// When merging operations from the shared groups state into a space there are two possible
+/// approaches.
+///
+/// ## Global
+///
+/// Operations for all known groups are merged into the space, even if they are not used in the
+/// space yet. This results in improved discoverability (new groups are "automatically"
+/// discovered) at the expense of privacy (even if a group is not added to a space it is
+/// replicated on the space topic).
+///
+/// ## Partial
+///
+/// Only operations for groups added to a space (via a local action or by explicit association)
+/// are merged into the space. This results in improved privacy as there is no group "leakage"
+/// from the shared state into the space, however it means the initial "discovery" of a new
+/// to-be-added group must be solved via another channel (side-channel, dedicated topic, etc..).
+///
+/// @TODO: This initial discovery mechanism is not yet implemented, it may be solved via invite
+/// tokens, or manually exporting and then registering a member group. Therefore all spaces use
+/// the "Global" strategy for now.
+#[derive(Debug)]
+pub enum RepairStrategy {
+    Global,
+    Partial(Vec<GroupId>),
+}
+
+/// Repairing a space is the process of merging missing auth operations from the shared groups
+/// state into a space. This keeps the space membership up-to-date with concurrent changes and
+/// ensures that all required auth operations are encrypted and sent to other nodes subscribed the
+/// space.
 ///
 /// There are 3 steps to this process:
 ///
@@ -39,9 +69,11 @@ const REPAIR_FREQUENCY_SECS: u64 = 1;
 ///    members can do this)
 /// 3) associate missing groups logs with the space topic
 ///
-/// All new messages will be sent into the topic stream to be processed and forwarded to other peers.
+/// All new messages will be sent into the topic stream to be processed and forwarded to other
+/// peers.
 pub(crate) async fn repair_space<M>(
     space_id: SpaceId,
+    scope: RepairStrategy,
     manager: &SpacesManager,
     store: &SqliteStore,
     import_local_tx: &mpsc::Sender<(
@@ -52,10 +84,37 @@ pub(crate) async fn repair_space<M>(
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
+    // Collect all missing groups operations. These will be imported into the space and forwarded
+    // to live-mode peers.
+    let permit = store.begin().await?;
+
+    let Some(space_y): Option<SpacesStoreState<AuthCapabilities>> =
+        spaces_store.get_space_state_tx(&space_id).await?
+    else {
+        // This can happen if we didn't receive any space control messages yet.
+        trace!(
+            node_id = manager.id().fmt_short(),
+            space_id = space_id.fmt_short(),
+            "space not yet materialised"
+        );
+        store.commit(permit).await?;
+        return Ok(false);
+    };
+
+    let groups_y: AuthGroupState<AuthCapabilities> = spaces_store
+        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .await?
+        .unwrap_or_default();
+
+    store.commit(permit).await?;
+
+    let include = match scope {
+        RepairStrategy::Global => groups_y.groups_global(),
+        RepairStrategy::Partial(group_ids) => group_ids,
+    };
+
     // Identify if this space needs repairing.
-    //
-    // @TODO: optimize this query by only checking the one space we're concerned with here.
-    let space_ids = match manager.spaces_repair_required().await {
+    let repair = match manager.space_repair_required(space_id, &include).await {
         Ok(ids) => ids,
         Err(err) => {
             return Err(err.into());
@@ -63,7 +122,7 @@ pub(crate) async fn repair_space<M>(
     };
 
     // If not return now already.
-    if space_ids.is_empty() || !space_ids.contains(&space_id) {
+    if !repair {
         return Ok(false);
     }
 
@@ -71,23 +130,13 @@ pub(crate) async fn repair_space<M>(
     // to live-mode peers.
     let permit = store.begin().await?;
 
-    let space_y: Option<SpacesStoreState<AuthCapabilities>> =
-        spaces_store.get_space_state_tx(&space_id).await?;
-
-    let groups_y: AuthGroupState<AuthCapabilities> = spaces_store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-        .await?
-        .unwrap_or_default();
-
     let mut groups_operations = vec![];
-    for id in groups_y.inner.operations.keys() {
-        if let Some(ref y) = space_y
-            && y.groups_y.inner.operations.contains_key(id)
-        {
+    for id in groups_y.inner.toposort(&include) {
+        if space_y.groups_y.inner.operations.contains_key(&id) {
             continue;
         }
 
-        let Some(operation): Option<Operation> = store.get_operation_tx(id).await? else {
+        let Some(operation): Option<Operation> = store.get_operation_tx(&id).await? else {
             warn!("missing expected auth groups operation");
             continue;
         };
@@ -122,21 +171,12 @@ pub(crate) async fn repair_space<M>(
     // Attempt to repair the space. As we pass in an array containing a single space id there will
     // be only ever max one result returned.
     //
+    // Forging these spaces messages will also associate any group logs with this space topic.
+    //
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let mut repaired = manager.repair_spaces(&[space_id]).await?;
-
-    // Forging these spaces messages will also associate any group logs with this space topic.
-    let Some((space_y, spaces_messages, events)) = repaired.pop() else {
-        // This can happen if we didn't receive any space control messages yet.
-        debug!(
-            node_id = manager.id().fmt_short(),
-            space_id = space_id.fmt_short(),
-            "space not yet materialised"
-        );
-        return Ok(false);
-    };
+    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &include).await?;
 
     // If no space messages were forged during repairing then no state change occurred and we
     // don't need to persist here. This occurs when we are not a _read_ member of the space (yet).
@@ -146,8 +186,6 @@ pub(crate) async fn repair_space<M>(
     if !spaces_messages.is_empty() {
         let permit = store.begin().await?;
 
-        // @TODO: Once we can process our own spaces messages then we no longer
-        // need to persist this state here.
         let space_id = space_y.space_id;
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
@@ -203,6 +241,7 @@ pub(crate) async fn repair_space<M>(
 
 /// Spawn the repair task which triggers work on a schedule or from being signalled from elsewhere
 /// in the node API.
+#[allow(clippy::type_complexity)]
 pub(crate) fn spawn_repair_task<M>(
     topic: Topic,
     manager: SpacesManager,
@@ -212,18 +251,18 @@ pub(crate) fn spawn_repair_task<M>(
         oneshot::Sender<LocalStreamFuture>,
     )>,
     to_output_tx: mpsc::Sender<Vec<StreamEvent<M>>>,
-    mut repair_rx: mpsc::Receiver<oneshot::Sender<Result<bool, RepairError>>>,
+    mut repair_rx: mpsc::Receiver<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>,
 ) -> JoinHandle<()>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
     tokio::spawn(async move {
         loop {
-            let reply_tx = tokio::select! {
+            let args = tokio::select! {
                 // We received a signal to repair the space.
                 msg = repair_rx.recv() => {
                     match msg {
-                        Some(reply_tx) => Some(reply_tx),
+                        Some(args) => Some(args),
                         None => {
                             // If the repair_tx is dropped then we can exit this task.
                             return;
@@ -234,21 +273,39 @@ where
                 _ = sleep(Duration::from_secs(REPAIR_FREQUENCY_SECS)) => None,
             };
 
-            let result = repair_space(
-                topic.into(),
-                &manager,
-                &store,
-                &import_local_tx,
-                &to_output_tx,
-            )
-            .await;
+            match args {
+                Some((scope, reply_tx)) => {
+                    let result = repair_space(
+                        topic.into(),
+                        scope,
+                        &manager,
+                        &store,
+                        &import_local_tx,
+                        &to_output_tx,
+                    )
+                    .await;
 
-            if let Err(ref err) = result {
-                warn!("failed to repair spaces: {}", err);
-            }
+                    if let Err(ref err) = result {
+                        warn!("failed to repair spaces: {}", err);
+                    }
 
-            if let Some(reply_tx) = reply_tx {
-                let _ = reply_tx.send(result);
+                    let _ = reply_tx.send(result);
+                }
+                None => {
+                    let result = repair_space(
+                        topic.into(),
+                        RepairStrategy::Global,
+                        &manager,
+                        &store,
+                        &import_local_tx,
+                        &to_output_tx,
+                    )
+                    .await;
+
+                    if let Err(ref err) = result {
+                        warn!("failed to repair spaces: {}", err);
+                    }
+                }
             }
         }
     })

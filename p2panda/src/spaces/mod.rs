@@ -20,7 +20,7 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 pub(crate) use forge::{KEY_BUNDLE_LOG_ID, group_log_id};
 pub use group::{Group, GroupError, GroupEvent, GroupFuture};
 pub use member::{GroupActor, Member, MemberError};
-pub(crate) use repair::{RepairError, spawn_repair_task};
+pub(crate) use repair::{RepairError, RepairStrategy, spawn_repair_task};
 pub(crate) use space::spaces_stream;
 pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceError, SpaceEvent,

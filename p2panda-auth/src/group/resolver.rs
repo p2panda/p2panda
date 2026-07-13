@@ -63,7 +63,7 @@ where
     /// Identify if an operation should trigger a group state rebuild.
     fn rebuild_required(y: &Self::State, operation: &M) -> Result<bool, Self::Error> {
         let dependencies = operation.dependencies().into_iter().collect();
-        Ok(y.heads() != dependencies)
+        Ok(y.heads(&operation.required_groups()) != dependencies)
     }
 
     /// Process the group operation graph, producing a new filter and re-building all state

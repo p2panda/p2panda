@@ -6,8 +6,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use petgraph::algo::toposort;
 use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
+use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,6 +47,9 @@ where
     #[error("missing dependency {0} for operation {1}")]
     MissingDependencies(OP, OP),
 
+    #[error("non-create operation received for unknown group: {0}")]
+    UnknownGroup(ID),
+
     #[error("group cycle detected adding {0} to {1} operation={2}")]
     GroupCycle(ID, ID, OP),
 
@@ -63,6 +67,9 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
 
 /// Inner state object for `GroupCrdt` which contains the actual groups state,
 /// including operation graph and membership snapshots.
+///
+/// @TODO: We no longer need a separation between the inner and outer state objects, they can be
+/// merged into one.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub struct GroupCrdtInnerState<ID, OP, M, C>
@@ -109,8 +116,8 @@ where
     M: Operation<ID, OP, C>,
     C: Conditions,
 {
-    /// Current tips for the groups operation graph.
-    pub fn heads(&self) -> HashSet<OP> {
+    /// Current tips for all groups in the operation graph.
+    pub(crate) fn heads_global(&self) -> HashSet<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
             // because the GraphMap api does not include the "externals" method, where as the
@@ -126,35 +133,78 @@ where
             .collect::<HashSet<_>>()
     }
 
-    /// Get graph tips filtered to only those which included "create" operation for passed group
-    /// ids in their causal history.
-    pub fn heads_filtered(&self, groups: &[ID]) -> HashSet<OP> {
-        let global_heads = self.heads();
-        global_heads
-            .into_iter()
-            .filter(|id| {
-                let reversed = Reversed(&self.graph);
-                let mut bfs = Bfs::new(&reversed, *id);
-                while let Some(inner_id) = bfs.next(&reversed) {
-                    let operation = self
-                        .operations
-                        .get(&inner_id)
-                        .expect("operation in graph is present in store");
-                    if operation.action().is_create() && groups.contains(&operation.group_id()) {
-                        return true;
-                    }
-                }
-                false
-            })
-            .collect()
+    /// Returns graph tips for a section of the operation graph covering only the passed groups
+    /// (and their dependencies).
+    pub fn heads(&self, groups: &[ID]) -> HashSet<OP> {
+        let graph = self.filtered_graph(groups);
+        graph
+            .clone()
+            .into_graph::<usize>()
+            .externals(petgraph::Direction::Outgoing)
+            .map(|idx| graph.from_index(idx.index()))
+            .collect::<HashSet<_>>()
+    }
+
+    /// Returns a vector of operation ids in their topologically sorted order where only
+    /// operations relating to the passed groups (and their dependencies) are included.
+    pub fn toposort(&self, groups: &[ID]) -> Vec<OP> {
+        let graph = self.filtered_graph(groups);
+        toposort(&graph, None).expect("graph has a cycle")
+    }
+
+    /// Returns a graph filtered to only the operations which contain actions effecting the passed
+    /// groups (and their dependencies). This is required when selectively merging changes from
+    /// one groups graph into another.  
+    pub(crate) fn filtered_graph(&self, groups: &[ID]) -> DiGraphMap<OP, ()> {
+        let mut group_dependencies = HashSet::new();
+        for group_id in groups {
+            group_dependencies.insert(*group_id);
+            group_dependencies.extend(self.groups(*group_id).into_iter().map(|(id, _)| id));
+        }
+
+        let mut graph = self.graph.clone();
+        for (id, operation) in self.operations.iter() {
+            if !group_dependencies.contains(&operation.group_id()) {
+                graph.remove_node(*id);
+            }
+        }
+        graph
+    }
+
+    /// Return a graph with only predecessor nodes of the passed heads included. This is required
+    /// when wanting to validate an operation against a specific point in the groups graph
+    /// history.
+    pub(crate) fn trimmed_graph(&self, heads: &HashSet<OP>) -> DiGraphMap<OP, ()> {
+        // Collect predecessors of the given heads.
+        let mut graph = self.graph.clone();
+        let mut predecessors = HashSet::new();
+        for dependency in heads {
+            let reversed = Reversed(&graph);
+            let mut dfs_rev = DfsPostOrder::new(&reversed, *dependency);
+            while let Some(id) = dfs_rev.next(&reversed) {
+                predecessors.insert(id);
+            }
+        }
+
+        // Remove all other nodes from the graph.
+        let to_remove: Vec<_> = graph
+            .node_identifiers()
+            .filter(|n| !predecessors.contains(n))
+            .collect();
+
+        for node in &to_remove {
+            graph.remove_node(*node);
+        }
+
+        graph
     }
 
     /// Current group states.
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
-    /// state which represents the current state of the groups.
+    /// state which represents the current membership of all groups.
     pub fn current_state(&self) -> GroupStates<ID, C> {
-        self.merge_states(&self.heads())
+        self.merge_states(&self.heads_global())
             .expect("states exist for processed operations")
     }
 
@@ -325,8 +375,7 @@ where
     }
 }
 
-/// State object for `GroupCrdt` containing an orderer state and the inner
-/// state.
+/// State object for `GroupCrdt`.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 #[cfg_attr(
@@ -440,15 +489,10 @@ where
         self.inner.current_state().contains_key(&group_id)
     }
 
-    /// Current tips for the groups operation graph.
-    pub fn heads(&self) -> Vec<OP> {
-        self.inner.heads().into_iter().collect()
-    }
-
-    /// Get graph tips filtered to only those which included "create" operation for passed group
-    /// ids in their causal history.
-    pub fn heads_filtered(&self, groups: &[ID]) -> Vec<OP> {
-        self.inner.heads_filtered(groups).into_iter().collect()
+    /// Returns graph tips for a section of the operation graph covering only the passed groups
+    /// (and their dependencies).
+    pub fn heads(&self, groups: &[ID]) -> Vec<OP> {
+        self.inner.heads(groups).into_iter().collect()
     }
 }
 
@@ -489,8 +533,6 @@ where
 /// - RS : generic resolver which contains logic for deciding when group state
 ///   rebuilds are required, and how concurrent actions are handled. See the
 ///   `resolver` module for different implementations.
-/// - ORD: orderer which exposes an API for creating and processing operations
-///   with meta-data which allow them to be processed in partial order.
 #[derive(Clone, Debug, Default)]
 pub struct GroupCrdt<ID, OP, M, C, RS> {
     _phantom: PhantomData<(ID, OP, M, C, RS)>,
@@ -508,6 +550,24 @@ where
         GroupCrdtState {
             inner: GroupCrdtInnerState::default(),
         }
+    }
+
+    /// Calculate the graph heads which are required dependencies of a group action.
+    ///
+    /// This looks at the groups which are effected by the passed action, filters the global graph
+    /// to only operations for these groups, and then calculates the heads. This is required when
+    /// constructing a new operation to be processed and appended to the graph.
+    pub fn heads(
+        y: &GroupCrdtState<ID, OP, M, C>,
+        group_id: ID,
+        action: &GroupAction<ID, C>,
+    ) -> Vec<OP> {
+        // Compute the auth graph heads to include as dependencies based on the groups included in
+        // this action. This means any groups being added / removed in the action, plus the id of
+        // the parent group itself.
+        let mut include = action.required_groups();
+        include.push(group_id);
+        y.inner.heads(&include).into_iter().collect()
     }
 
     /// Process an operation created locally or received from a remote peer.
@@ -549,6 +609,10 @@ where
         // We don't need to check the state change result as validation was already performed
         // above.
         let mut groups_y = y.inner.state_at(&dependencies)?;
+        if !operation.action().is_create() && !groups_y.contains_key(&group_id) {
+            return Err(GroupCrdtError::UnknownGroup(group_id));
+        }
+
         groups_y = apply_action(
             groups_y,
             group_id,
@@ -603,13 +667,8 @@ where
             _ => (),
         };
 
-        let dependencies = HashSet::from_iter(operation.dependencies().clone());
-
-        // Rebuild the graph to the state referred to in the operations' dependencies..
-        let temp_inner_y = Self::rebuild_at(y.inner.clone(), dependencies)?;
-
         // Detect if this operation would cause a nested group cycle.
-        if temp_inner_y.would_create_cycle(operation) {
+        if y.inner.would_create_cycle(operation) {
             let parent_group = operation.group_id();
 
             // Only adds cause a cycle, we just access the member id here.
@@ -627,14 +686,27 @@ where
             ));
         }
 
+        let heads = HashSet::from_iter(operation.dependencies().clone());
+
+        // If this operation is not being appended directly to our current local state we need to
+        // remove any operations from the graph which are concurrent or sequentially later to the
+        // operations' claimed dependencies.
+        let (groups_y, ignore) = if y.inner.heads(&operation.required_groups()) != heads {
+            // @TODO: Can we avoid cloning here?
+            let inner = Self::rebuild_at(y.inner.clone(), heads)?;
+            (inner.current_state(), inner.ignore)
+        } else {
+            (y.inner.current_state(), y.inner.ignore.clone())
+        };
+
         // Apply the operation onto the temporary state.
         let result = apply_action(
-            temp_inner_y.current_state(),
+            groups_y,
             operation.group_id(),
             operation.id(),
             operation.author(),
             &operation.action(),
-            &temp_inner_y.ignore,
+            &ignore,
         );
 
         match result {
@@ -662,35 +734,8 @@ where
         mut y: GroupCrdtInnerState<ID, OP, M, C>,
         heads: HashSet<OP>,
     ) -> Result<GroupCrdtInnerState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
-        // If this operation is concurrent to our current local state we need to rebuild the graph
-        // to the operations' claimed dependencies in order to validate it correctly.
-        if y.heads() != heads {
-            // Collect predecessors of the new operation.
-            let mut predecessors = HashSet::new();
-            for dependency in heads {
-                let reversed = Reversed(&y.graph);
-                let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
-                while let Some(id) = dfs_rev.next(&reversed) {
-                    predecessors.insert(id);
-                }
-            }
-
-            // Remove all other nodes from the graph.
-            let to_remove: Vec<_> = y
-                .graph
-                .node_identifiers()
-                .filter(|n| !predecessors.contains(n))
-                .collect();
-
-            for node in &to_remove {
-                y.graph.remove_node(*node);
-            }
-
-            y = RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
-            Ok(y)
-        } else {
-            Ok(y)
-        }
+        y.graph = y.trimmed_graph(&heads);
+        RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))
     }
 
     /// Get group members and access levels at a specific point in a groups history.
@@ -700,8 +745,12 @@ where
         heads: HashSet<OP>,
         group_id: ID,
     ) -> Result<Vec<(ID, Access<C>)>, GroupCrdtError<ID, OP>> {
-        let y = Self::rebuild_at(y.inner.clone(), heads)?;
-        Ok(y.members(group_id))
+        if y.inner.heads(&[group_id]) != heads {
+            let inner = Self::rebuild_at(y.inner.clone(), heads)?;
+            Ok(inner.members(group_id))
+        } else {
+            Ok(y.members(group_id))
+        }
     }
 
     /// Add an operation to the auth graph and operation map.
@@ -1832,5 +1881,90 @@ pub(crate) mod tests {
         // Assert members are the same.
         let members = y_i_de.members(G1);
         assert_eq!(members, vec![(ALICE, Access::manage())]);
+    }
+
+    #[test]
+    fn partitioned_group_graphs() {
+        let y = TestGroupState::new();
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        let op2 = create_group(
+            BOB,
+            1,
+            G2,
+            vec![(GroupMember::Individual(BOB), Access::manage())],
+            vec![],
+        );
+
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_ii.members(G2);
+        members.sort();
+        assert_eq!(members, vec![(BOB, Access::manage())]);
+
+        let op3 = add_member(
+            ALICE,
+            2,
+            G1,
+            GroupMember::Group(G2),
+            Access::read(),
+            vec![op1.id(), op2.id()],
+        );
+
+        let y_iii = TestGroup::process(y_ii, &op3).unwrap();
+        let mut individuals = y_iii.members(G1);
+        individuals.sort();
+        assert_eq!(
+            individuals,
+            vec![(ALICE, Access::manage()), (BOB, Access::read())]
+        );
+
+        let mut groups = y_iii.groups(G1);
+        groups.sort();
+        assert_eq!(groups, vec![(G2, Access::read())]);
+
+        let heads = y_iii.heads(&[G1, G2]);
+        assert_eq!(heads, vec![op3.id()]);
+
+        let op4 = create_group(
+            BOB,
+            3,
+            G3,
+            vec![(GroupMember::Individual(BOB), Access::manage())],
+            vec![],
+        );
+
+        // Heads and sorted operations for group 1 & 2
+        let y_iv = TestGroup::process(y_iii, &op4).unwrap();
+        let heads = y_iv.heads(&[G1, G2]);
+        assert_eq!(heads, vec![op3.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G1, G2]);
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2]);
+
+        // Heads and sorted operations for group 1 & 2
+        let heads = y_iv.heads(&[G3]);
+        assert_eq!(heads, vec![op4.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G3]);
+        sorted.sort();
+        assert_eq!(sorted, vec![3]);
+
+        let mut heads = y_iv.heads(&[G1, G2, G3]);
+        heads.sort();
+        assert_eq!(heads, vec![op3.id(), op4.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G1, G2, G3]);
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2, 3]);
     }
 }

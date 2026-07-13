@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
+use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_auth::validation::{VerifyClaimedWriteError, verify_claimed_write_access};
 use p2panda_core::traits::{Digest, ShortFormat};
@@ -18,7 +19,6 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
-use petgraph::algo::toposort;
 use thiserror::Error;
 use tracing::debug;
 
@@ -37,7 +37,7 @@ use crate::types::{
     AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, EncryptionDirectMessage,
     EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
-use crate::utils::{added_members, removed_members, secret_members, sort_members};
+use crate::utils::{added_members, removed_members, secret_members, sort_members, typed_members};
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId, StrongRemoveResolver};
 
 /// A single encryption context with associated group of actors who will participate in the key
@@ -124,13 +124,22 @@ where
             signing_key.verifying_key()
         };
 
-        // Instantiate new space state from existing global auth state.
-        let (space_y, space_history) =
-            Self::from_group(manager_ref.clone(), space_id, group_id).await?;
-
-        // Create the space group.
         let groups_y = manager_ref.get_groups_state().await?;
 
+        // Compute the groups to include in the space history based on initial group members.
+        let include = typed_members(&groups_y, initial_members.clone())
+            .iter()
+            .filter_map(|(member, _)| match member {
+                GroupMember::Individual(_) => None,
+                GroupMember::Group(id) => Some(*id),
+            })
+            .collect::<Vec<_>>();
+
+        // Instantiate new space state from existing global auth state.
+        let (space_y, space_history) =
+            Self::from_group(manager_ref.clone(), space_id, group_id, &include).await?;
+
+        // Create the space group.
         let (groups_y, create_group, auth_event) =
             Group::create(manager_ref.clone(), groups_y, group_id, initial_members).await?;
 
@@ -318,6 +327,7 @@ where
         manager_ref: Manager<S, F, C>,
         space_id: SpaceId,
         group_id: GroupId,
+        include: &[GroupId],
     ) -> Result<(SpacesState<C>, Vec<F::Message>), SpaceError<F, C>> {
         // Instantiate empty space state.
         let mut y = { Self::get_or_init_state(space_id, group_id, manager_ref.clone()).await? };
@@ -331,9 +341,7 @@ where
         let groups_y = manager_ref.get_groups_state().await?;
         let mut manager = manager_ref.inner.write().await;
         let mut space_dependencies = vec![];
-        let operations =
-            toposort(&groups_y.inner.graph, None).expect("auth graph does not contain cycles");
-        for id in operations {
+        for id in groups_y.inner.toposort(include) {
             let operation = groups_y
                 .inner
                 .operations
@@ -586,42 +594,26 @@ where
 
     pub async fn repair(
         &self,
+        groups: &[GroupId],
     ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
         let groups_y = self.manager.get_groups_state().await?;
         let mut space_y = self.state().await?;
 
-        // @TODO: here we need to account for the new Groups::heads_filtered(..) approach to
-        // calculating dependencies and only include the ones strictly necessary for this space.
-        let operation_ids =
-            toposort(&groups_y.inner.graph, None).expect("auth graph does not contain cycles");
-
         let mut messages = vec![];
         let mut events = vec![];
         // @TODO: we can optimize here by calculating the diff between the current space auth
-        // graph tips and the global auth graph tips. Then we could apply only the missing
-        // operations rather than applying all operations as we do here.
-        for id in operation_ids {
+        // graph tips and the global auth graph tips. Then we could apply only the diff, rather
+        // than processing all operations as we do here.
+        let sorted = groups_y.inner.toposort(groups);
+        for id in sorted {
             // This auth message has already been processed by the space.
             if space_y.groups_y.inner.operations.contains_key(&id) {
                 continue;
             };
 
-            let message = {
-                let manager = self.manager.inner.read().await;
-                manager
-                    .store
-                    .get_spaces_message(&id)
-                    .await
-                    .map_err(|err| StoreError::MessageStore(err.to_string()))?
-                    .expect("message present in store")
-            };
-
-            let (space_y_i, space_message, space_events) = Space::process_auth_message(
-                self.manager.clone(),
-                space_y,
-                &SpacesMessage::auth(&message),
-            )
-            .await?;
+            let operation = groups_y.inner.operations.get(&id).unwrap();
+            let (space_y_i, space_message, space_events) =
+                Space::process_auth_message(self.manager.clone(), space_y, operation).await?;
 
             space_y = space_y_i;
 
@@ -721,9 +713,24 @@ where
     /// The members of this space.
     pub async fn members(&self) -> Result<Vec<(MemberId, Access<C>)>, SpaceError<F, C>> {
         let y = self.state().await?;
-        let mut group_members = y.groups_y.members(y.group_id);
-        sort_members(&mut group_members);
-        Ok(group_members)
+        let mut members = y.groups_y.members(y.group_id);
+        sort_members(&mut members);
+        Ok(members)
+    }
+
+    pub async fn root_groups(&self) -> Result<Vec<(MemberId, Access<C>)>, SpaceError<F, C>> {
+        let y = self.state().await?;
+        let mut members: Vec<(VerifyingKey, Access<C>)> = y
+            .groups_y
+            .root_members(y.group_id)
+            .into_iter()
+            .filter_map(|(member, access)| match member {
+                p2panda_auth::group::GroupMember::Individual(_) => None,
+                p2panda_auth::group::GroupMember::Group(id) => Some((id, access)),
+            })
+            .collect();
+        sort_members(&mut members);
+        Ok(members)
     }
 
     /// Publish a message encrypted towards all current group members.
@@ -762,7 +769,7 @@ where
             let args = SpacesArgs::Application {
                 space_id: y.space_id,
                 space_dependencies: dependencies.clone(),
-                proof: y.groups_y.heads(),
+                proof: y.groups_y.heads(&[y.group_id]),
                 group_secret_id,
                 nonce,
                 ciphertext,
@@ -850,8 +857,9 @@ where
 
     pub async fn repair_persisted(
         &self,
+        groups: &[GroupId],
     ) -> Result<(Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
-        let (space_y, messages, events) = self.repair().await?;
+        let (space_y, messages, events) = self.repair(groups).await?;
         self.manager
             .set_space_state(&self.id(), &space_y.into())
             .await?;
