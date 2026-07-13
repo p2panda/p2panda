@@ -108,9 +108,6 @@ pub struct TwoPartyState<KB: KeyBundle> {
     /// Which key we use to decrypt the next incoming message.
     their_next_key_used: KeyUsed,
 
-    /// Public identity key of the other peer. We use it to verify the signature of their prekey.
-    their_identity_key: PublicKey,
-
     /// Key-material we need to encrypt the first message with the help of X3DH and prekeys.
     their_prekey_bundle: Option<KB>,
 
@@ -125,17 +122,30 @@ where
     KMG: IdentityManager<KMG::State> + PreKeyManager,
     KB: KeyBundle,
 {
-    /// Initialise new 2SM state using the other party's pre-key bundle.
-    pub fn init(their_prekey_bundle: KB) -> TwoPartyState<KB> {
+    /// Initialise new 2SM state to send a message to this receiver for the first time using the
+    /// other party's pre-key bundle.
+    pub fn init_to_send(their_prekey_bundle: KB) -> TwoPartyState<KB> {
         TwoPartyState {
             our_next_key_index: 1,
             our_min_key_index: 1,
             our_secret_keys: HashMap::new(),
             our_received_secret_key: None,
-            their_identity_key: *their_prekey_bundle.identity_key(),
             their_verifying_key: None,
             their_next_key_used: KeyUsed::PreKey,
             their_prekey_bundle: Some(their_prekey_bundle),
+        }
+    }
+
+    /// Initialise new 2SM state to receive a message from any sender for the first time.
+    pub fn init_to_receive() -> TwoPartyState<KB> {
+        TwoPartyState {
+            our_next_key_index: 1,
+            our_min_key_index: 1,
+            our_secret_keys: HashMap::new(),
+            our_received_secret_key: None,
+            their_verifying_key: None,
+            their_next_key_used: KeyUsed::PreKey,
+            their_prekey_bundle: None,
         }
     }
 
@@ -455,9 +465,6 @@ mod tests {
             KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
-        let (alice_manager, alice_prekey_bundle) =
-            KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
-
         // Bob generates their key material.
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
@@ -470,7 +477,7 @@ mod tests {
 
         // Alice and Bob set up the 2SM protocol handlers for each other.
 
-        let alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle);
+        let alice_2sm = OneTimeTwoParty::init_to_send(bob_prekey_bundle);
 
         // Alice doesn't have any secret HPKE keys yet and will use Bob's pre-keys for X3DH.
         assert_eq!(alice_2sm.our_secret_keys.len(), 0);
@@ -478,9 +485,9 @@ mod tests {
         assert_eq!(alice_2sm.our_next_key_index, 1);
         assert_eq!(alice_2sm.their_next_key_used, KeyUsed::PreKey);
 
-        let bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle);
+        let bob_2sm = OneTimeTwoParty::init_to_receive();
 
-        // Bob doesn't have any secret HPKE keys yet and will use Alice's pre-keys for X3DH.
+        // Bob doesn't have any secret HPKE keys yet and will wait for Alice reaching out.
         assert_eq!(bob_2sm.our_secret_keys.len(), 0);
         assert_eq!(bob_2sm.our_min_key_index, 1);
         assert_eq!(bob_2sm.our_next_key_index, 1);
@@ -538,8 +545,8 @@ mod tests {
         // Bob would use Alice's new secret key for decrypting future messages.
         assert_eq!(bob_2sm.their_next_key_used, KeyUsed::OwnKey(1));
 
-        // Bob still has Alice's pre-key bundle.
-        assert!(bob_2sm.their_prekey_bundle.is_some());
+        // Bob still doesn't have Alice's pre-key bundle.
+        assert!(bob_2sm.their_prekey_bundle.is_none());
 
         // 3. Alice sends another message to Bob and they receive it.
         let (alice_2sm, message_2) =
@@ -644,8 +651,6 @@ mod tests {
             KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
-        let alice_prekey_bundle = KeyManager::prekey_bundle(&alice_manager).unwrap();
-
         // Bob generates their long-term key material.
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
@@ -657,8 +662,8 @@ mod tests {
 
         // Alice and Bob set up the 2SM protocol handlers for each other.
 
-        let alice_2sm_a = LongTermTwoParty::init(bob_prekey_bundle.clone());
-        let bob_2sm_a = LongTermTwoParty::init(alice_prekey_bundle.clone());
+        let alice_2sm_a = LongTermTwoParty::init_to_send(bob_prekey_bundle.clone());
+        let bob_2sm_a = LongTermTwoParty::init_to_receive();
 
         // They start exchanging "secret messages" to each other in Group A.
 
@@ -681,8 +686,8 @@ mod tests {
 
         // Sometime later they start another group B with the same long-term pre-keys.
 
-        let alice_2sm_b = LongTermTwoParty::init(bob_prekey_bundle);
-        let bob_2sm_b = LongTermTwoParty::init(alice_prekey_bundle);
+        let alice_2sm_b = LongTermTwoParty::init_to_send(bob_prekey_bundle);
+        let bob_2sm_b = LongTermTwoParty::init_to_receive();
 
         // They start exchanging "secret messages" to each other.
 
@@ -720,9 +725,6 @@ mod tests {
             KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
                 .unwrap();
 
-        let (alice_manager, alice_prekey_bundle) =
-            KeyManager::generate_onetime_bundle(alice_manager, &rng).unwrap();
-
         // Bob generates their key material.
 
         let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
@@ -735,8 +737,8 @@ mod tests {
 
         // Alice and Bob set up the 2SM protocol handlers for each other.
 
-        let alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle);
-        let bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle);
+        let alice_2sm = OneTimeTwoParty::init_to_send(bob_prekey_bundle);
+        let bob_2sm = OneTimeTwoParty::init_to_receive();
 
         // Alice sends a message to Bob.
 

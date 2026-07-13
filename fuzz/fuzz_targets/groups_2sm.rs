@@ -53,8 +53,8 @@ fuzz_target!(|args: ([u8; 32], &[u8])| {
 
     // Alice and Bob set up the 2SM protocol handlers for each other.
 
-    let mut alice_2sm = OneTimeTwoParty::init(bob_prekey_bundle.clone());
-    let mut bob_2sm = OneTimeTwoParty::init(alice_prekey_bundle.clone());
+    let mut alice_2sm = OneTimeTwoParty::init_to_send(bob_prekey_bundle.clone());
+    let mut bob_2sm = OneTimeTwoParty::init_to_send(alice_prekey_bundle.clone());
 
     let mut to_alice_inbox = VecDeque::<Message>::with_capacity(INBOX_CAPACITY);
     let mut to_bob_inbox = VecDeque::<Message>::with_capacity(INBOX_CAPACITY);
