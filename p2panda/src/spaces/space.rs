@@ -24,8 +24,8 @@ use tokio::sync::oneshot::error::RecvError;
 
 use crate::node::CreateStreamError;
 use crate::operation::Extensions;
-use crate::spaces::RepairError;
 use crate::spaces::types::{InnerSpace, InnerSpaceError, SpacesManagerError};
+use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::{
     ImportError, LocalStreamFuture, ProcessedOperation, Source, StreamEvent, StreamPublisher,
     StreamSubscription,
@@ -247,7 +247,11 @@ where
     /// published live into the space topic.
     pub(crate) async fn repair(&self) -> Result<bool, RepairSpaceError> {
         let (tx, rx) = oneshot::channel();
-        self.tx.repair_tx.send(tx).await?;
+
+        // @TODO: Currently we default to merging all groups into the space state, once we do this
+        // selectively we can specify the groups to be included (root group + added / removed)
+        // using the RepairStrategy::Partial variant.
+        self.tx.repair_tx.send((RepairStrategy::Global, tx)).await?;
         let repaired = rx.await??;
         Ok(repaired)
     }
@@ -427,10 +431,14 @@ pub enum PublishSpaceError {
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum RepairSpaceError {
     #[error(transparent)]
+    Space(#[from] InnerSpaceError),
+
+    #[error(transparent)]
     Repair(#[from] RepairError),
 
+    #[allow(clippy::type_complexity)]
     #[error("failed to send on space repair task channel")]
-    Send(#[from] SendError<oneshot::Sender<Result<bool, RepairError>>>),
+    Send(#[from] SendError<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>),
 
     #[error("couldn't receive reply from repair task due to broken channel")]
     Recv(#[from] RecvError),

@@ -386,6 +386,7 @@ where
         Ok(y.unwrap_or_default())
     }
 
+    /// Get space state.
     pub(crate) async fn get_space_state(
         &self,
         id: &SpaceId,
@@ -413,34 +414,25 @@ where
         Ok(y)
     }
 
-    /// Returns a list of all spaces which are "out-of-sync" with the global shared auth state.
-    pub async fn spaces_repair_required(&self) -> Result<Vec<SpaceId>, ManagerError<F, C>> {
+    /// Return `true` if the space is missing operations from the passed groups.
+    pub async fn space_repair_required(
+        &self,
+        space_id: SpaceId,
+        groups: &[GroupId],
+    ) -> Result<bool, ManagerError<F, C>> {
         let groups_y = self.get_groups_state().await?;
 
-        let space_ids = {
-            let manager = self.inner.read().await;
-            manager
-                .store
-                .space_ids()
-                .await
-                .map_err(|err| StoreError::SpacesStore(err.to_string()))?
+        let Some(space_y) = self.get_space_state(&space_id).await? else {
+            return Err(ManagerError::SpaceNotFound(space_id));
         };
 
-        let mut in_need_of_repair = vec![];
-        for id in space_ids {
-            let space_y = self
-                .get_space_state(&id)
-                .await?
-                .expect("space present in store");
-            if space_y.groups_y.inner.heads() != groups_y.inner.heads() {
-                in_need_of_repair.push(id);
-            }
-        }
+        let space_heads = space_y.groups_y.inner.heads(groups);
+        let global_heads = groups_y.inner.heads(groups);
 
-        Ok(in_need_of_repair)
+        Ok(space_heads != global_heads)
     }
 
-    /// Publish a reference to any auth messages missing from the passed spaces.
+    /// Publish a reference to any auth messages missing from a space.
     ///
     /// Each space holds a copy of the shared auth state by publishing a reference to each auth
     /// control message it witnesses. A space can get out-of-sync with this shared state if auth
@@ -458,7 +450,7 @@ where
     ///       [x] <-------------- [z]
     /// ```
     ///
-    /// On identifying that a space needs "repairing" by calling spaces_repair_required(), _any_
+    /// On identifying that a space needs "repairing" by calling space_repair_required(), _any_
     /// current space member can publish a message into the space referencing the missing auth
     /// message.
     ///
@@ -481,34 +473,29 @@ where
     /// A sensible approach to detecting and repairing spaces will involve processing messages in
     /// logical batches and only detecting and repairing any out-of-sync spaces after a batch has
     /// been processed. Alternatively some scheduling or throttling logic could be employed.
-    pub async fn repair_spaces(
+    pub async fn repair_space(
         &self,
-        space_ids: &[SpaceId],
-    ) -> Result<Vec<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>)>, ManagerError<F, C>> {
-        let mut results = vec![];
+        space_id: SpaceId,
+        groups: &[GroupId],
+    ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
+        let Some(space) = self.space(space_id).await? else {
+            return Err(ManagerError::SpaceNotFound(space_id));
+        };
 
-        for id in space_ids {
-            let Some(space) = self.space(*id).await? else {
-                continue;
-            };
-
-            if !space
-                .members()
-                .await?
-                .iter()
-                .any(|(id, access)| *id == self.id() && *access >= Access::<C>::read())
-            {
-                // Only members with Read or greater access can repair spaces.
-                let space_y = space.state().await?;
-                results.push((space_y, vec![], vec![]));
-                continue;
-            }
-
-            let result = space.repair().await.map_err(ManagerError::Space)?;
-            results.push(result);
+        if !space
+            .members()
+            .await?
+            .iter()
+            .any(|(id, access)| *id == self.id() && *access >= Access::<C>::read())
+        {
+            // Only members with Read or greater access can repair spaces.
+            let space_y = space.state().await?;
+            return Ok((space_y, vec![], vec![]));
         }
 
-        Ok(results)
+        let result = space.repair(groups).await.map_err(ManagerError::Space)?;
+
+        Ok(result)
     }
 
     async fn handle_space_membership_message(
@@ -688,6 +675,39 @@ where
         Ok(events)
     }
 
+    pub async fn repair_spaces(
+        &self,
+        space_ids: &[SpaceId],
+    ) -> Result<Vec<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>)>, ManagerError<F, C>> {
+        let mut results = vec![];
+
+        for id in space_ids {
+            let Some(space) = self.space(*id).await? else {
+                continue;
+            };
+
+            if !space
+                .members()
+                .await?
+                .iter()
+                .any(|(id, access)| *id == self.id() && *access >= Access::<C>::read())
+            {
+                // Only members with Read or greater access can repair spaces.
+                let space_y = space.state().await?;
+                results.push((space_y, vec![], vec![]));
+                continue;
+            }
+
+            let result = space
+                .repair(&[space.group_id().await?])
+                .await
+                .map_err(ManagerError::Space)?;
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
     pub async fn repair_spaces_persisted(
         &self,
         space_ids: &[SpaceId],
@@ -764,6 +784,9 @@ where
         "received space message with id {0} before auth message {1}, maybe it arrived out-of-order"
     )]
     MissingAuthMessage(Hash, Hash),
+
+    #[error("space not found {0}")]
+    SpaceNotFound(SpaceId),
 
     #[error("unexpected message variant, expected auth {0}")]
     IncorrectMessageVariant(Hash),

@@ -15,7 +15,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
-use crate::spaces::RepairError;
+use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
 use crate::streams::local_stream::LocalStreamFuture;
@@ -31,7 +31,7 @@ type ImportLocalTx = mpsc::Sender<(
     oneshot::Sender<LocalStreamFuture>,
 )>;
 type ToOutputTx<M> = mpsc::Sender<Vec<StreamEvent<M>>>;
-type RepairTx = mpsc::Sender<oneshot::Sender<Result<bool, RepairError>>>;
+type RepairTx = mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
 
 /// Publish messages into a topic stream.
 ///

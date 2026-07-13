@@ -617,7 +617,7 @@ mod tests {
                     (GroupMember::Group(bobby_device_group), Access::write()),
                 ],
             },
-            dependencies: y.heads_filtered(&[alice_device_group, bobby_device_group]),
+            dependencies: y.heads(&[alice_device_group, bobby_device_group]),
         };
         let create_alice_bobby_chat_03: Operation<TestExtensions> =
             alice_log.operation(&[], TestExtensions::from(args));
@@ -716,7 +716,7 @@ mod tests {
                     (GroupMember::Group(cathy_device_group), Access::write()),
                 ],
             },
-            dependencies: y.heads_filtered(&[bobby_device_group, cathy_device_group]),
+            dependencies: y.heads(&[bobby_device_group, cathy_device_group]),
         };
         let create_bobby_cathy_chat_04: Operation<TestExtensions> =
             cathy_log.operation(&[], TestExtensions::from(args));

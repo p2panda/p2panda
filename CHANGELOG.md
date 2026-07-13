@@ -23,6 +23,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Compute and return events from local methods [#1290](https://github.com/p2panda/p2panda/pull/1290)
 - node: Forward events resulting from local actions to app layer [#1290](https://github.com/p2panda/p2panda/pull/1290)
 - node: Cancel processed stream tasks on drop of stream handles [#1300](https://github.com/p2panda/p2panda/pull/1300)
+- spaces: Support partial merge of auth state into a space [#1299](https://github.com/p2panda/p2panda/pull/1299)
 
 ### Changed
 

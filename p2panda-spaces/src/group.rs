@@ -26,7 +26,7 @@ use crate::message::{SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState};
 use crate::utils::{sort_members, typed_member, typed_members};
-use crate::{ActorId, GroupId, MemberId, OperationId};
+use crate::{ActorId, GroupId, MemberId};
 
 /// A single group which exists in the global auth context.
 ///
@@ -85,14 +85,10 @@ where
         initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let initial_members = typed_members(&y, initial_members);
-
-        let auth_dependencies = y.inner.heads().into_iter().collect();
         let action = AuthGroupAction::Create {
             initial_members: initial_members.clone(),
         };
-
-        Self::process_local_control(manager_ref.clone(), y, group_id, auth_dependencies, action)
-            .await
+        Self::process_local_control(manager_ref.clone(), y, group_id, action).await
     }
 
     /// Add member to group with specified access level.
@@ -104,12 +100,9 @@ where
         access: Access<C>,
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
-
         let member = typed_member(&y, member);
-        let dependencies = y.inner.heads().into_iter().collect();
         let action = AuthGroupAction::Add { member, access };
-
-        Self::process_local_control(self.manager.clone(), y, self.id, dependencies, action).await
+        Self::process_local_control(self.manager.clone(), y, self.id, action).await
     }
 
     /// Remove member from group.
@@ -120,12 +113,9 @@ where
         member: ActorId,
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
-
         let member = typed_member(&y, member);
-        let dependencies = y.inner.heads().into_iter().collect();
         let action = AuthGroupAction::Remove { member };
-
-        Self::process_local_control(self.manager.clone(), y, self.id, dependencies, action).await
+        Self::process_local_control(self.manager.clone(), y, self.id, action).await
     }
 
     /// Process a remote message.
@@ -157,13 +147,17 @@ where
         manager_ref: Manager<S, F, C>,
         y: AuthGroupState<C>,
         group_id: GroupId,
-        auth_dependencies: Vec<OperationId>,
-        group_action: GroupAction<ActorId, C>,
+        action: GroupAction<ActorId, C>,
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+        // Compute the auth graph heads to include as dependencies based on the groups included in
+        // this action. This means any groups being added / removed in the action, plus the id of
+        // the parent group itself.
+        let dependencies = AuthGroup::heads(&y, group_id, &action);
+
         let args = SpacesArgs::Auth {
             group_id,
-            auth_dependencies,
-            group_action,
+            auth_dependencies: dependencies,
+            group_action: action,
         };
 
         let message = {
