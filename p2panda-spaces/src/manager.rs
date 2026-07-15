@@ -29,7 +29,7 @@ use crate::member::Member;
 use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::{Space, SpaceError, SpacesState};
 use crate::store::SpacesStoreState;
-use crate::types::{AuthGroupState, AuthResolver};
+use crate::types::AuthGroupState;
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 
 /// Identifier used to store groups state into database.
@@ -59,21 +59,21 @@ pub const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
 /// on the manager. All messages created within p2panda-spaces express their dependencies; these
 /// should be used to perform partial ordering of all incoming messages.
 #[derive(Debug)]
-pub struct Manager<S, F, C, RS> {
+pub struct Manager<S, F, C> {
     pub(crate) actor_id: ActorId,
     #[allow(clippy::type_complexity)]
-    pub(crate) inner: Arc<RwLock<ManagerInner<S, F, C, RS>>>,
+    pub(crate) inner: Arc<RwLock<ManagerInner<S, F, C>>>,
 }
 
 #[derive(Debug)]
-pub(crate) struct ManagerInner<S, F, C, RS> {
+pub(crate) struct ManagerInner<S, F, C> {
     pub store: S,
     pub(crate) identity: IdentityManager<S, F, C>,
     pub(crate) rng: Rng,
-    _marker: PhantomData<(F, RS)>,
+    _marker: PhantomData<F>,
 }
 
-impl<S, F, C, RS> Manager<S, F, C, RS>
+impl<S, F, C> Manager<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -84,7 +84,6 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
@@ -128,7 +127,7 @@ where
     pub async fn space(
         &self,
         id: impl Into<Hash>,
-    ) -> Result<Option<Space<S, F, C, RS>>, ManagerError<F, C>> {
+    ) -> Result<Option<Space<S, F, C>>, ManagerError<F, C>> {
         let id = id.into();
 
         let has_space = {
@@ -154,7 +153,7 @@ where
     pub async fn group(
         &self,
         id: impl Into<GroupId>,
-    ) -> Result<Option<Group<S, F, C, RS>>, ManagerError<F, C>> {
+    ) -> Result<Option<Group<S, F, C>>, ManagerError<F, C>> {
         let id = id.into();
         let groups_y = self.get_groups_state().await?;
 
@@ -566,7 +565,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<S, F, C, RS> Manager<S, F, C, RS>
+impl<S, F, C> Manager<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -577,7 +576,6 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     /// Create a new group containing initial members with associated access levels.
     ///
@@ -585,7 +583,7 @@ where
     pub async fn create_group_persisted(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<S, F, C, RS>, F::Message, Event<C>), ManagerError<F, C>> {
+    ) -> Result<(Group<S, F, C>, F::Message, Event<C>), ManagerError<F, C>> {
         let (groups_y, group_id, message, events) = self.create_group(initial_members).await?;
         self.set_groups_state(&groups_y).await?;
         let group = Group::new(self.clone(), group_id);
@@ -602,7 +600,7 @@ where
         &self,
         id: SpaceId,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<S, F, C, RS>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
+    ) -> Result<(Space<S, F, C>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
         let (groups_y, space_y, messages, events) = self.create_space(id, initial_members).await?;
         let space_id = space_y.space_id;
 
@@ -709,7 +707,7 @@ where
 
 // Deriving clone on Manager will enforce generics to also impl Clone even though we are wrapping
 // them in an Arc. Related: https://stackoverflow.com/questions/72150623
-impl<S, F, C, RS> Clone for Manager<S, F, C, RS> {
+impl<S, F, C> Clone for Manager<S, F, C> {
     fn clone(&self) -> Self {
         Self {
             actor_id: self.actor_id,

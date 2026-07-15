@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use p2panda_auth::traits::Conditions;
 use p2panda_core::Hash;
 use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError};
-use p2panda_spaces::{AuthMessage, Event, SpacesStoreState, StrongRemoveResolver};
+use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_spaces::{Forge, SpacesArgs};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -21,7 +21,7 @@ use tokio::sync::Notify;
 use crate::Processor;
 use crate::spaces::SpacesProcessorArgs;
 
-pub type SpacesManager<S, F, C> = Manager<S, F, C, StrongRemoveResolver<C>>;
+pub type SpacesManager<S, F, C> = Manager<S, F, C>;
 
 pub type SpacesManagerError<F, C> = ManagerError<F, C>;
 

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_spaces::StrongRemoveResolver;
 use p2panda_store::spaces::SqliteSpacesStore;
 
 use crate::forge::OperationForge;
@@ -30,21 +29,12 @@ pub type SpacesManager = p2panda_spaces::manager::Manager<
     SqliteSpacesStore<Extensions>,
     OperationForge,
     AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
 >;
 
 pub type InnerMember = p2panda_spaces::member::Member;
 
-pub type InnerGroup = p2panda_spaces::group::Group<
-    SqliteSpacesStore<Extensions>,
-    OperationForge,
-    AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
->;
+pub type InnerGroup =
+    p2panda_spaces::group::Group<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;
 
-pub type InnerSpace = p2panda_spaces::space::Space<
-    SqliteSpacesStore<Extensions>,
-    OperationForge,
-    AuthCapabilities,
-    StrongRemoveResolver<AuthCapabilities>,
->;
+pub type InnerSpace =
+    p2panda_spaces::space::Space<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;

@@ -24,7 +24,7 @@ use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
 use crate::message::{SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
-use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver};
+use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState};
 use crate::utils::{sort_members, typed_member, typed_members};
 use crate::{ActorId, GroupId, MemberId, OperationId};
 
@@ -39,12 +39,12 @@ use crate::{ActorId, GroupId, MemberId, OperationId};
 ///
 /// Only members with Manage access level are allowed to manage the groups members.
 #[derive(Debug)]
-pub struct Group<S, F, C, RS> {
+pub struct Group<S, F, C> {
     /// Reference to the manager.
     ///
     /// This allows us to build an API where users can treat "group" instances independently from the
     /// manager API, even though internally it has a reference to it.
-    manager: Manager<S, F, C, RS>,
+    manager: Manager<S, F, C>,
 
     /// Id of the group.
     ///
@@ -52,7 +52,7 @@ pub struct Group<S, F, C, RS> {
     id: GroupId,
 }
 
-impl<S, F, C, RS> Group<S, F, C, RS>
+impl<S, F, C> Group<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -63,9 +63,8 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
-    pub(crate) fn new(manager_ref: Manager<S, F, C, RS>, id: GroupId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: GroupId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -80,7 +79,7 @@ where
     ///
     /// Returns resulting state and message for processing.
     pub(crate) async fn create(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         y: AuthGroupState<C>,
         group_id: GroupId,
         initial_members: Vec<(ActorId, Access<C>)>,
@@ -133,7 +132,7 @@ where
     ///
     /// Returns events which inform users of any state changes which occurred.
     pub(crate) async fn process(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         auth_message: &AuthMessage<C>,
     ) -> Result<Option<(AuthGroupState<C>, Event<C>)>, GroupError<F, C>> {
         let mut groups_y = manager_ref.get_groups_state().await?;
@@ -148,14 +147,14 @@ where
         }
 
         groups_y =
-            AuthGroup::<C, RS>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
+            AuthGroup::<C>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
         let events = auth_message_to_group_event(&groups_y, auth_message);
         Ok(Some((groups_y, events)))
     }
 
     /// Process a local control message.
     pub async fn process_local_control(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         y: AuthGroupState<C>,
         group_id: GroupId,
         auth_dependencies: Vec<OperationId>,
@@ -173,7 +172,7 @@ where
         };
 
         let auth_message = SpacesMessage::auth(&message);
-        let y = AuthGroup::<C, RS>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
+        let y = AuthGroup::<C>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
         let event = auth_message_to_group_event(&y, &auth_message);
 
@@ -195,7 +194,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<S, F, C, RS> Group<S, F, C, RS>
+impl<S, F, C> Group<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -206,7 +205,6 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     /// Add member to group with specified access level.
     ///

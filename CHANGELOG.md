@@ -26,6 +26,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - Use `Signer` trait instead of `SigningKey` in `p2panda-core` [#1202](https://github.com/p2panda/p2panda/pull/1202)
+- spaces: Remove auth resolver generic parameter [#1298](https://github.com/p2panda/p2panda/pull/1298)
 
 ### Fixed
 
