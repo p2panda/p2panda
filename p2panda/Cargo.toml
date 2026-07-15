@@ -1,18 +1,18 @@
 [package]
 name = "p2panda"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>",
 ]
-description = "Out-of-the-box p2panda Node API for application developers"
+description = "Out-of-the-box p2panda API for application developers"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "local-first", "sync", "event-sourcing"]
-rust-version = "1.94"
+rust-version = "1.96"
 
 [package.metadata.docs.rs]
 all-features = true

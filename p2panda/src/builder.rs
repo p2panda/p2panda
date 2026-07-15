@@ -218,7 +218,7 @@ impl NodeBuilder {
     pub async fn spawn(self) -> Result<Node, SpawnError> {
         let credentials = self.credentials.unwrap_or_default();
         let store = match self.store_options {
-            StoreBuilderOptions::Memory => SqliteStoreBuilder::new().build().await?,
+            StoreBuilderOptions::Memory => SqliteStoreBuilder::memory().build().await?,
             StoreBuilderOptions::Url(url) => {
                 SqliteStoreBuilder::new().database_url(&url).build().await?
             }

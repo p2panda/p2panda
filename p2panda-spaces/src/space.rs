@@ -252,8 +252,7 @@ where
                 current_members.clone(),
                 next_members.clone(),
                 &manager.rng,
-            )
-            .await?
+            )?
         } else {
             (y.encryption_y, vec![])
         };
@@ -491,9 +490,10 @@ where
     /// Apply a group membership change to the group encryption state.
     ///
     /// For "add" and "remove" actions, the difference between the current and next secret group
-    /// members (those with "read" access) is computed and only the diff processed on the
-    /// encryption group.
-    async fn apply_secret_member_change(
+    /// members (those with "read" access) is computed and only the diff processed on the encryption
+    /// group.
+    #[allow(clippy::result_large_err)]
+    fn apply_secret_member_change(
         mut encryption_y: EncryptionGroupState,
         auth_message: &AuthMessage<C>,
         current_members: Vec<ActorId>,

@@ -49,7 +49,8 @@ where
     F: Forge<C>,
     C: Conditions,
 {
-    pub async fn new(
+    #[allow(clippy::result_large_err)]
+    pub fn new(
         key_store: S,
         forge: F,
         credentials: Credentials,
@@ -74,14 +75,14 @@ where
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub(crate) async fn me(&mut self) -> Result<Member, IdentityError<F, C>> {
+    pub(crate) async fn me(&self) -> Result<Member, IdentityError<F, C>> {
         Ok(Member::new(self.id(), self.key_bundle().await?))
     }
 
     /// Returns "latest", publishable key bundle of us or automatically generates a new one if
     /// either nothing was generated yet, if previous bundles expired or are about to be expired
     /// (given an additional "pessimistic" rotation window).
-    async fn key_bundle(&mut self) -> Result<LongTermKeyBundle, IdentityError<F, C>> {
+    async fn key_bundle(&self) -> Result<LongTermKeyBundle, IdentityError<F, C>> {
         let key_manager_y = self.key_manager().await?;
 
         let valid_bundle = match KeyManager::prekey_bundle(&key_manager_y) {
@@ -303,10 +304,8 @@ mod tests {
         let store = SqliteStore::temporary().await;
         let forge = TestForge::new(store.clone(), credentials.signing_key());
 
-        let mut identity_manager =
-            IdentityManager::new(store, forge, credentials.clone(), config, &rng)
-                .await
-                .unwrap();
+        let identity_manager =
+            IdentityManager::new(store, forge, credentials.clone(), config, &rng).unwrap();
 
         let me = identity_manager.me().await.unwrap();
         let bundle: &LongTermKeyBundle = me.key_bundle();
@@ -327,9 +326,7 @@ mod tests {
         let forge = TestForge::new(store.clone(), credentials.signing_key());
 
         let mut identity_manager =
-            IdentityManager::new(store, forge, credentials.clone(), config, &rng)
-                .await
-                .unwrap();
+            IdentityManager::new(store, forge, credentials.clone(), config, &rng).unwrap();
 
         let msg = identity_manager.key_bundle_message().await.unwrap();
 
@@ -359,7 +356,6 @@ mod tests {
             alice_config,
             &alice_rng,
         )
-        .await
         .unwrap();
 
         let bob_rng = Rng::from_seed([2; 32]);
@@ -369,14 +365,13 @@ mod tests {
         let bob_store = SqliteStore::temporary().await;
         let bob_forge = TestForge::new(bob_store.clone(), bob_credentials.signing_key());
 
-        let mut bob_identity_manager = IdentityManager::new(
+        let bob_identity_manager = IdentityManager::new(
             bob_store,
             bob_forge,
             bob_credentials.clone(),
             bob_config,
             &bob_rng,
         )
-        .await
         .unwrap();
         let bob_id = bob_credentials.verifying_key().into();
 
@@ -409,9 +404,7 @@ mod tests {
         let forge = TestForge::new(store.clone(), credentials.signing_key());
 
         let mut alice_identity_manager =
-            IdentityManager::new(store, forge, credentials, config, &rng)
-                .await
-                .unwrap();
+            IdentityManager::new(store, forge, credentials, config, &rng).unwrap();
 
         let alice_1 = alice_identity_manager.me().await.unwrap();
         let bundle_1 = alice_1.key_bundle().clone();

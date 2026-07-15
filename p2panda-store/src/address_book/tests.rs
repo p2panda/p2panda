@@ -32,6 +32,28 @@ async fn insert_node_info() {
 }
 
 #[tokio::test]
+async fn ignore_stale_entries() {
+    let store = SqliteStore::temporary().await;
+
+    let permit = store.begin().await.unwrap();
+
+    let node_id = SigningKey::generate().verifying_key();
+    let node_info = TestNodeInfo::new(node_id).stale();
+
+    let result = store.insert_node_info(node_info.clone()).await.unwrap();
+    assert!(result);
+
+    store.commit(permit).await.unwrap();
+
+    assert_eq!(
+        <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::all_nodes_len(&store,)
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn set_and_query_topics() {
     let store = SqliteStore::temporary().await;
 

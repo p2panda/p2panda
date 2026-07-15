@@ -2,8 +2,8 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-//! p2panda's high-level Node API is an opinionated, out-of-the-box peer-to-peer stack which
-//! orchestrates all individual [p2panda] modules.
+//! p2panda's high-level API is an opinionated, out-of-the-box peer-to-peer stack which orchestrates
+//! all individual [p2panda] modules.
 //!
 //! ```rust
 //! # #[tokio::main]
@@ -21,7 +21,7 @@
 //!
 //! ## Features
 //!
-//! - High-level p2panda Node API for building decentralised p2p and [local-first] applications with
+//! - High-level p2panda API for building decentralised p2p and [local-first] applications with
 //!   minimal setup
 //! - Unified orchestration of p2p networking, node discovery, mDNS, bootstrap, [eventually
 //!   consistent] sync, event streaming, causal ordering, pruning and persistence
@@ -41,15 +41,15 @@
 //!
 //! ## Walkaway Stack
 //!
-//! The Node API is designed around a separation between the event delivery and event processing
-//! layers. Applications built with p2panda should not need to care abot _where_ messages originate
-//! from, but rather _how_ they are processed.
+//! The high-level API is designed around a separation between the event delivery and event
+//! processing layers. Applications built with p2panda should not need to care abot _where_ messages
+//! originate from, but rather _how_ they are processed.
 //!
 //! The stack confidentially discovers nodes interested in the same topic, synchronises missed
 //! messages and delivers them to the processing layer.
 //!
-//! Today this is implemented over the Internet using [iroh] for direct peer-to-peer connections
-//! but the abstraction is designed to support additional transports such as LoRa or BLE, including
+//! Today this is implemented over the Internet using [iroh] for direct peer-to-peer connections but
+//! the abstraction is designed to support additional transports such as LoRa or BLE, including
 //! delay-tolerant and store-and-forward mesh network topologies in the future.
 //!
 //! Application developers primarily interact with the API to monitor networking and sync activity,
@@ -93,7 +93,7 @@
 //!
 //! ### SQLite database
 //!
-//! The Node API persists synchronised Operations in a local SQLite database, together with
+//! The high-level API persists synchronised Operations in a local SQLite database, together with
 //! additional state such as address books, causal ordering buffers, topic mappings and stream
 //! cursors.
 //!

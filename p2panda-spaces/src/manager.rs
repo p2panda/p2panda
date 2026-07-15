@@ -88,18 +88,18 @@ where
 {
     /// Instantiate a new manager.
     #[allow(clippy::result_large_err)]
-    pub async fn new(
+    pub fn new(
         store: S,
         forge: F,
         credentials: Credentials,
         rng: Rng,
     ) -> Result<Self, ManagerError<F, C>> {
-        Self::new_with_config(store, forge, credentials, &Config::default(), rng).await
+        Self::new_with_config(store, forge, credentials, &Config::default(), rng)
     }
 
     /// Instantiate a new manager with custom configuration.
     #[allow(clippy::result_large_err)]
-    pub async fn new_with_config(
+    pub fn new_with_config(
         store: S,
         forge: F,
         credentials: Credentials,
@@ -108,7 +108,7 @@ where
     ) -> Result<Self, ManagerError<F, C>> {
         let actor_id: ActorId = credentials.verifying_key();
         let identity =
-            IdentityManager::new(store.clone(), forge, credentials, config.clone(), &rng).await?;
+            IdentityManager::new(store.clone(), forge, credentials, config.clone(), &rng)?;
         let inner = ManagerInner {
             store,
             identity,
@@ -322,7 +322,7 @@ where
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn me(&self) -> Result<Member, ManagerError<F, C>> {
-        let mut manager = self.inner.write().await;
+        let manager = self.inner.write().await;
         manager
             .identity
             .me()

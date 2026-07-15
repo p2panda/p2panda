@@ -32,6 +32,7 @@ use crate::Credentials;
 use crate::forge::OperationForge;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
 
+// @TODO: This method doesn't need to be async.
 pub async fn spaces_manager(
     forge: OperationForge,
     credentials: Credentials,
@@ -44,7 +45,7 @@ pub async fn spaces_manager(
     let rng = Rng::default();
     let spaces_store = SpacesStore::new(store.clone());
 
-    SpacesManager::new(spaces_store, forge, (&credentials).into(), rng).await
+    SpacesManager::new(spaces_store, forge, (&credentials).into(), rng)
 }
 
 pub(crate) fn actor_to_topic(actor_id: impl Into<ActorId>) -> Topic {

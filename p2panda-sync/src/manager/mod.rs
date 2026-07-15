@@ -240,7 +240,6 @@ mod tests {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
-    use assert_matches::assert_matches;
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
@@ -320,35 +319,35 @@ mod tests {
             let event = event_stream_a.next().await.unwrap();
             assert_eq!(event.session_id(), 0);
             match index {
-                0 => assert_matches!(
+                0 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::SyncStarted { .. },
                         ..
                     }
                 ),
-                1 => assert_matches!(
+                1 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::OperationReceived { .. },
                         ..
                     }
                 ),
-                2 => assert_matches!(
+                2 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::SyncFinished { .. },
                         ..
                     }
                 ),
-                3 => assert_matches!(
+                3 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
-                4 => assert_matches!(
+                4 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::SessionFinished { .. },
@@ -363,7 +362,7 @@ mod tests {
         for index in 0..=5 {
             let event = event_stream_b.next().await.unwrap();
             match index {
-                0 => assert_matches!(
+                0 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -371,7 +370,7 @@ mod tests {
                         ..
                     }
                 ),
-                1 => assert_matches!(
+                1 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -379,7 +378,7 @@ mod tests {
                         ..
                     }
                 ),
-                2 => assert_matches!(
+                2 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -387,14 +386,14 @@ mod tests {
                         ..
                     }
                 ),
-                3 => assert_matches!(
+                3 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
-                4 => assert_matches!(
+                4 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -402,7 +401,7 @@ mod tests {
                         ..
                     }
                 ),
-                5 => assert_matches!(
+                5 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::SessionFinished { .. },
@@ -658,11 +657,11 @@ mod tests {
         run_protocol(peer_a_session, peer_b_session).await.unwrap();
 
         // Assert Peer B's events.
-        let events = drain_stream(event_stream).await;
+        let events = drain_stream(event_stream);
         assert_eq!(events.len(), 6);
         for (index, event) in events.into_iter().enumerate() {
             match index {
-                0 => assert_matches!(
+                0 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -670,7 +669,7 @@ mod tests {
                         ..
                     }
                 ),
-                1 => assert_matches!(
+                1 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -678,7 +677,7 @@ mod tests {
                         ..
                     }
                 ),
-                2 => assert_matches!(
+                2 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -686,14 +685,14 @@ mod tests {
                         ..
                     }
                 ),
-                3 => assert_matches!(
+                3 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::LiveModeStarted,
                         ..
                     }
                 ),
-                4 => assert_matches!(
+                4 => std::assert_matches!(
                     event,
                     FromSync {
                         session_id: 0,
@@ -701,7 +700,7 @@ mod tests {
                         ..
                     }
                 ),
-                5 => assert_matches!(
+                5 => std::assert_matches!(
                     event,
                     FromSync {
                         event: TopicLogSyncEvent::SessionFinished { .. },

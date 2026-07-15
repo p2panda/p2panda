@@ -608,7 +608,7 @@ impl ThreadLocalActor for DiscoveryManager {
 /// Populates the address book with results from discovery session and returns number of newly
 /// learned transport infos.
 async fn insert_address_book(
-    state: &mut DiscoveryManagerState,
+    state: &DiscoveryManagerState,
     discovery_result: DiscoveryResult<NodeId, NodeInfo>,
 ) -> usize {
     // Populate address book with hopefully new transport info.

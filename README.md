@@ -78,6 +78,8 @@ languages and flavours:
 
 📦 [`p2panda-stream`](https://crates.io/crates/p2panda-stream) - Collection of various methods to process your p2panda data streams before they reach your application.
 
+📦 [`p2panda-spaces`](https://crates.io/crates/p2panda-spaces) - Data encryption for multi-device groups.
+
 📦 [`p2panda-encryption`](https://crates.io/crates/p2panda-encryption) - Decentralised data- and message encryption for groups with post-compromise security and optional forward secrecy.
 
 📦 [`p2panda-auth`](https://crates.io/crates/p2panda-auth) - Decentralised group management with fine-grained, per-member permissions.

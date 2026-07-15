@@ -319,7 +319,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap();
             store.commit(permit).await.unwrap();
 
-            sync_tx.publish(operation).await.unwrap();
+            sync_tx.publish(operation).unwrap();
 
             seq_num += 1;
             backlink = Some(hash);

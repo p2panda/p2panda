@@ -222,10 +222,7 @@ mod tests {
 
         // Subscriber doesn't receive an item right at the beginning as they are only interested in
         // "updates".
-        assert!(matches!(
-            updates_only_rx.try_recv(),
-            Err(TryRecvError::Empty)
-        ));
+        std::assert_matches!(updates_only_rx.try_recv(), Err(TryRecvError::Empty));
 
         // Second subscriber was interested in the current value and directly receives it.
         let result = rx.try_recv().expect("should return Ok");
@@ -238,11 +235,8 @@ mod tests {
         watcher.update(HashSet::from_iter([1, 2, 3]));
 
         // Subscribers do not get notified.
-        assert!(matches!(
-            updates_only_rx.try_recv(),
-            Err(TryRecvError::Empty)
-        ));
-        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+        std::assert_matches!(updates_only_rx.try_recv(), Err(TryRecvError::Empty));
+        std::assert_matches!(rx.try_recv(), Err(TryRecvError::Empty));
 
         // Value gets updated, this time with a real change.
         watcher.update(HashSet::from_iter([1, 2, 3, 4]));

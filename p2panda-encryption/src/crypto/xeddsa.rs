@@ -218,17 +218,17 @@ mod tests {
         assert_ne!(verifying_key, invalid_verifying_key);
         assert_ne!(signature, invalid_signature);
 
-        assert!(matches!(
+        std::assert_matches!(
             xeddsa_verify(b"Invalid Data", &verifying_key, &signature),
             Err(XEdDSAError::VerificationFailed)
-        ));
-        assert!(matches!(
+        );
+        std::assert_matches!(
             xeddsa_verify(b"Hello, Panda!", &invalid_verifying_key, &signature),
             Err(XEdDSAError::VerificationFailed)
-        ));
-        assert!(matches!(
+        );
+        std::assert_matches!(
             xeddsa_verify(b"Hello, Panda!", &verifying_key, &invalid_signature),
             Err(XEdDSAError::VerificationFailed)
-        ));
+        );
     }
 }

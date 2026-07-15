@@ -513,7 +513,6 @@ impl ShortFormat for Hash {
 mod tests {
     use std::collections::BTreeMap;
 
-    use assert_matches::assert_matches;
     use futures_channel::mpsc;
     use futures_util::StreamExt;
     use p2panda_core::test_utils::setup_logging;
@@ -540,10 +539,13 @@ mod tests {
         .await
         .unwrap();
 
-        let event_metrics = assert_matches!(
-            event_rx.recv().await.unwrap(),
-            LogSyncEvent::MetricsExchanged { metrics } => metrics
-        );
+        let recv = event_rx.recv().await.unwrap();
+        let LogSyncEvent::MetricsExchanged {
+            metrics: event_metrics,
+        } = recv
+        else {
+            panic!("Not a LogSyncEvent::MetricsExchanged: {recv:?}");
+        };
 
         assert_eq!(metrics.outbound_operations, 0);
         assert_eq!(metrics.outbound_bytes, 0);
@@ -594,10 +596,10 @@ mod tests {
             + header_2.payload_size
             + header_bytes_2.len() as u32;
 
-        let metrics = assert_matches!(
-            event_rx.recv().await.unwrap(),
-            LogSyncEvent::MetricsExchanged { metrics } => metrics
-        );
+        let recv = event_rx.recv().await.unwrap();
+        let LogSyncEvent::MetricsExchanged { metrics } = recv else {
+            panic!("Not a LogSyncEvent::MetricsExchanged: {recv:?}");
+        };
 
         assert_eq!(metrics.outbound_operations, 3);
         assert_eq!(metrics.outbound_bytes, expected_bytes);
@@ -626,24 +628,24 @@ mod tests {
             }
         );
 
-        let (header, body_inner) = assert_matches!(
-            &messages[2],
-            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
-        );
+        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[2] else {
+            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[2]);
+        };
+        let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_0);
         assert_eq!(Body::new(&body_inner), body);
 
-        let (header, body_inner) = assert_matches!(
-            &messages[3],
-            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
-        );
+        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[3] else {
+            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[3]);
+        };
+        let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_1);
         assert_eq!(Body::new(&body_inner), body);
 
-        let (header, body_inner) = assert_matches!(
-            &messages[4],
-            TestLogSyncMessage::Operation(header, Some(body)) => (header.clone(), body.clone())
-        );
+        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[4] else {
+            panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[4]);
+        };
+        let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_2);
         assert_eq!(Body::new(&body_inner), body);
 
@@ -678,53 +680,61 @@ mod tests {
         let ((_, local_metrics), (_, remote_metrics)) =
             run_protocol(a_session, b_session).await.unwrap();
 
-        assert_matches!(
+        std::assert_matches!(
             peer_a_event_rx.recv().await.unwrap(),
             LogSyncEvent::MetricsExchanged { .. }
         );
 
-        let (header, body_inner) = assert_matches!(
-            peer_a_event_rx.recv().await.unwrap(),
-            LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_a_event_rx.recv().await.unwrap();
+        let LogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_b0);
         assert_eq!(body_inner.unwrap(), body_b);
 
-        let (header, body_inner) = assert_matches!(
-            peer_a_event_rx.recv().await.unwrap(),
-            LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_a_event_rx.recv().await.unwrap();
+        let LogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_b1);
         assert_eq!(body_inner.unwrap(), body_b);
 
-        assert_matches!(
+        std::assert_matches!(
             peer_b_event_rx.recv().await.unwrap(),
             LogSyncEvent::MetricsExchanged { .. }
         );
 
-        let (header, body_inner) = assert_matches!(
-            peer_b_event_rx.recv().await.unwrap(),
-            LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_b_event_rx.recv().await.unwrap();
+        let LogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_a0);
         assert_eq!(body_inner.unwrap(), body_a);
 
-        let (header, body_inner) = assert_matches!(
-            peer_b_event_rx.recv().await.unwrap(),
-            LogSyncEvent::OperationReceived { operation, .. } => {
-                let Operation { header, body, .. } = *operation;
-                (header, body)
-            }
-        );
+        let recv = peer_b_event_rx.recv().await.unwrap();
+        let LogSyncEvent::OperationReceived { operation, .. } = recv else {
+            panic!("Not a LogSyncEvent::OperationReceived: {recv:?}");
+        };
+        let Operation {
+            header,
+            body: body_inner,
+            ..
+        } = *operation;
         assert_eq!(header, header_a1);
         assert_eq!(body_inner.unwrap(), body_a);
 
@@ -770,7 +780,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        std::assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_)));
     }
 
     #[tokio::test]
@@ -801,7 +811,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        std::assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_)));
     }
 
     #[tokio::test]
@@ -814,7 +824,7 @@ mod tests {
         let messages = vec![TestLogSyncMessage::Done];
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        std::assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_)));
     }
 
     #[tokio::test]
@@ -845,7 +855,7 @@ mod tests {
 
         let result = run_protocol_uni(session, &messages).await;
 
-        assert!(matches!(result, Err(LogSyncError::UnexpectedMessage(_))));
+        std::assert_matches!(result, Err(LogSyncError::UnexpectedMessage(_)));
     }
 
     #[tokio::test]

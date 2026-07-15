@@ -45,7 +45,7 @@ where
     }
 
     /// Publishes a message to the stream.
-    pub async fn publish(&self, data: M) -> Result<(), SyncHandleError<M, E>> {
+    pub fn publish(&self, data: M) -> Result<(), SyncHandleError<M, E>> {
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.topic_manager_ref

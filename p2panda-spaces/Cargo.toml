@@ -1,12 +1,13 @@
 [package]
 name = "p2panda-spaces"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
   "sandreae <contact@samandreae.com>",
   "glyph <glyph@mycelial.technology>",
 ]
+description = "Data encryption for multi-device groups"
 repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"

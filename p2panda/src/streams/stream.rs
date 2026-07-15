@@ -445,7 +445,7 @@ pub(crate) async fn process_operation_in(
             //
             // If no active live session exists, nodes will pick up the
             // operation later when running the sync protocol.
-            if sync_handle.publish(operation.clone()).await.is_err() => {
+            if sync_handle.publish(operation.clone()).is_err() => {
                 warn!(
                     operation_id = %operation.hash(),
                     "failed sending operation on sync handle"

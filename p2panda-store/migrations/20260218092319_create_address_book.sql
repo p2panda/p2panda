@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS node_infos_v1 (
     node_id                 VARCHAR(64)     NOT NULL    PRIMARY KEY,
     node_info               BLOB            NOT NULL,
     bootstrap               BOOLEAN         NOT NULL    DEFAULT 0,
+    stale                   BOOLEAN         NOT NULL    DEFAULT 0,
     created_at              INTEGER         NOT NULL    DEFAULT(UNIXEPOCH()),
     updated_at              INTEGER         NOT NULL    DEFAULT(UNIXEPOCH())
 );

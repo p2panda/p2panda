@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-encryption"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -12,7 +12,7 @@ repository = "https://github.com/p2panda/p2panda"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["p2p", "encryption", "groups", "double-ratchet"]
-rust-version = "1.94"
+rust-version = "1.96"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -74,7 +74,6 @@ impl TestPeer {
             config,
             rng,
         )
-        .await
         .unwrap();
 
         Self {

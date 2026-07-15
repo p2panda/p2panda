@@ -601,9 +601,9 @@ mod tests {
         assert_payload(&bob_output, b"Ich lieb dich nicht / Du liebst mich nicht");
 
         // Charlie can not decrypt the latest message anymore.
-        assert!(matches!(
+        std::assert_matches!(
             EncryptionGroup::receive(y_charlie, &alice_message_2),
             Err(GroupError::UnknownGroupSecret(_))
-        ));
+        );
     }
 }
