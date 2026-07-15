@@ -387,7 +387,7 @@ where
         task.ready().await
     }
 
-    pub async fn next(&mut self) -> Event<L, E, TP> {
+    pub async fn next(&self) -> Event<L, E, TP> {
         loop {
             if let Some(output) = self.from_pipeline_queue.lock().await.pop_front() {
                 return output;
@@ -440,9 +440,7 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone())
-            .await
-            .unwrap();
+        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
         let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
@@ -495,9 +493,7 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone())
-            .await
-            .unwrap();
+        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
         let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
@@ -551,13 +547,10 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone())
-            .await
-            .unwrap();
+        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
-        let mut pipeline =
-            Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
 
         let log_icebear = TestLog::new();
         let log_panda = TestLog::new();

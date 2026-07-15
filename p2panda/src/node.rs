@@ -88,8 +88,7 @@ impl Node {
         .await?;
 
         // TODO: Expose -spaces configuration to public API.
-        let spaces_manager =
-            spaces_manager(forge.clone(), credentials.clone(), store.clone()).await?;
+        let spaces_manager = spaces_manager(forge.clone(), credentials.clone(), store.clone())?;
 
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();

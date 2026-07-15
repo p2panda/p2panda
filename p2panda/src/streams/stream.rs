@@ -180,7 +180,7 @@ where
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
     // forwarded to the application layer.
     {
-        let mut pipeline = pipeline.clone();
+        let pipeline = pipeline.clone();
         let acked = acked.clone();
 
         tokio::spawn(async move {

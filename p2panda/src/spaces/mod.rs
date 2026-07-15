@@ -32,8 +32,8 @@ use crate::Credentials;
 use crate::forge::OperationForge;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
 
-// @TODO: This method doesn't need to be async.
-pub async fn spaces_manager(
+#[allow(clippy::result_large_err)]
+pub fn spaces_manager(
     forge: OperationForge,
     credentials: Credentials,
     store: SqliteStore,
