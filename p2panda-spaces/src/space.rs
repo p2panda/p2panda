@@ -34,11 +34,11 @@ use crate::manager::{Manager, StoreError};
 use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
 use crate::types::{
-    AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, AuthResolver,
-    EncryptionDirectMessage, EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
+    AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, EncryptionDirectMessage,
+    EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
 use crate::utils::{added_members, removed_members, secret_members, sort_members};
-use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId};
+use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId, StrongRemoveResolver};
 
 /// A single encryption context with associated group of actors who will participate in the key
 /// agreement protocol.
@@ -54,12 +54,12 @@ use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId};
 /// Members with only Pull access are not included in the encryption context and won't receive any
 /// group secrets. Only members with Manage access level are allowed to manage the groups members.
 #[derive(Debug)]
-pub struct Space<S, F, C, RS> {
+pub struct Space<S, F, C> {
     /// Reference to the manager.
     ///
     /// This allows us build an API where users can treat "space" instances independently from the
     /// manager API, even though internally it has a reference to it.
-    manager: Manager<S, F, C, RS>,
+    manager: Manager<S, F, C>,
 
     /// Id of the space.
     ///
@@ -67,7 +67,7 @@ pub struct Space<S, F, C, RS> {
     id: SpaceId,
 }
 
-impl<S, F, C, RS> Space<S, F, C, RS>
+impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -78,9 +78,8 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
-    pub fn new(manager_ref: Manager<S, F, C, RS>, id: SpaceId) -> Self {
+    pub fn new(manager_ref: Manager<S, F, C>, id: SpaceId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -99,7 +98,7 @@ where
     ///
     /// Returns resulting auth and space state and messages for processing.
     pub(crate) async fn create(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         space_id: SpaceId,
         mut initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<
@@ -230,7 +229,7 @@ where
     /// resulting group membership changes. Any resulting encryption direct messages are included
     /// in the space message alongside a reference to the auth message.
     pub(crate) async fn process_auth_message(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         mut y: SpacesState<C>,
         auth_message: &AuthMessage<C>,
     ) -> Result<(SpacesState<C>, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
@@ -238,7 +237,7 @@ where
         let current_members = secret_members(y.groups_y.members(y.group_id));
 
         // Process auth message on local auth state.
-        y.groups_y = AuthGroup::<C, RS>::process(y.groups_y, auth_message)?;
+        y.groups_y = AuthGroup::<C>::process(y.groups_y, auth_message)?;
 
         // Get next space members.
         let next_members = secret_members(y.groups_y.members(y.group_id));
@@ -316,7 +315,7 @@ where
     /// space. None of the messages will contain encryption control messages as they were
     /// published before the space existed.
     async fn from_group(
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
         space_id: SpaceId,
         group_id: GroupId,
     ) -> Result<(SpacesState<C>, Vec<F::Message>), SpaceError<F, C>> {
@@ -407,7 +406,7 @@ where
         // Skip processing if this auth message has already been processed. This can happen when
         // multiple peers concurrently publish pointers to some auth message into the space.
         let next_members = if !duplicate_pointer {
-            y.groups_y = AuthGroup::<C, RS>::process(y.groups_y, auth_message)?;
+            y.groups_y = AuthGroup::<C>::process(y.groups_y, auth_message)?;
             // Get next space members.
             secret_members(y.groups_y.members(y.group_id))
         } else {
@@ -560,7 +559,7 @@ where
         let mut y = self.state().await?;
 
         // Check that the publisher of this application message has write access.
-        verify_claimed_write_access::<_, _, _, _, RS>(
+        verify_claimed_write_access::<_, _, _, _, StrongRemoveResolver<C>>(
             &y.groups_y,
             message.author,
             y.group_id,
@@ -659,7 +658,7 @@ where
     async fn get_or_init_state(
         space_id: SpaceId,
         group_id: GroupId,
-        manager_ref: Manager<S, F, C, RS>,
+        manager_ref: Manager<S, F, C>,
     ) -> Result<SpacesState<C>, SpaceError<F, C>> {
         let (key_manager_y, key_registry_y) = {
             let manager = manager_ref.inner.read().await;
@@ -789,7 +788,7 @@ where
 }
 
 #[cfg(any(test, feature = "test_utils"))]
-impl<S, F, C, RS> Space<S, F, C, RS>
+impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
@@ -800,7 +799,6 @@ where
         + Transaction,
     F: Forge<C>,
     C: Conditions,
-    RS: AuthResolver<C>,
 {
     /// Add a member to the space with assigned access level.
     ///

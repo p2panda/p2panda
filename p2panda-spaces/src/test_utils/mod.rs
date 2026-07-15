@@ -12,7 +12,6 @@ use p2panda_store::{SqliteError, SqliteStore, tx_unwrap};
 use crate::manager::Manager;
 use crate::space::SpaceError;
 use crate::test_utils::forge::DEFAULT_LOG_ID;
-use crate::types::StrongRemoveResolver;
 use crate::{Config, Credentials, SpacesArgs};
 
 pub use forge::TestForge;
@@ -33,12 +32,7 @@ impl Borrow<SpacesArgs<TestConditions>> for TestOperation {
     }
 }
 
-pub type TestManager = Manager<
-    SqliteSpacesStore<TestExtensions>,
-    TestForge,
-    TestConditions,
-    StrongRemoveResolver<TestConditions>,
->;
+pub type TestManager = Manager<SqliteSpacesStore<TestExtensions>, TestForge, TestConditions>;
 
 pub type TestSpaceError = SpaceError<TestForge, TestConditions>;
 
