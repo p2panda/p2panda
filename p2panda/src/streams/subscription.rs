@@ -13,6 +13,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::streams::StreamEvent;
 use crate::streams::acked::{Acked, AckedError};
+use crate::streams::drop_guard::StreamDropGuard;
 
 /// Subscription to events arriving from a topic stream.
 ///
@@ -47,6 +48,7 @@ pub struct StreamSubscription<M> {
     store: SqliteStore,
     acked: Acked,
     stream: ReceiverStream<StreamEvent<M>>,
+    _guard: StreamDropGuard,
 }
 
 impl<M> StreamSubscription<M> {
@@ -56,12 +58,14 @@ impl<M> StreamSubscription<M> {
         store: SqliteStore,
         acked: Acked,
         stream: ReceiverStream<StreamEvent<M>>,
+        _guard: StreamDropGuard,
     ) -> Self {
         Self {
             topic,
             store,
             acked,
             stream,
+            _guard,
         }
     }
 
