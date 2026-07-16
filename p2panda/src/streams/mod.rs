@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 mod acked;
+mod drop_guard;
 mod ephemeral_stream;
 mod event_stream;
 mod external_stream;

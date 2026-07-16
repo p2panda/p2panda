@@ -16,6 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
 use crate::spaces::RepairError;
+use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
 use crate::streams::local_stream::LocalStreamFuture;
 use crate::streams::{Event, StreamEvent};
@@ -106,6 +107,7 @@ pub struct StreamPublisher<M> {
     import_local_tx: ImportLocalTx,
     pub(crate) to_output_tx: ToOutputTx<M>,
     pub(crate) repair_tx: RepairTx,
+    _guard: StreamDropGuard,
     _marker: PhantomData<M>,
 }
 
@@ -123,6 +125,7 @@ where
         import_local_tx: ImportLocalTx,
         repair_tx: RepairTx,
         to_output_tx: ToOutputTx<M>,
+        _guard: StreamDropGuard,
     ) -> Self {
         Self {
             topic,
@@ -132,6 +135,7 @@ where
             import_local_tx,
             repair_tx,
             to_output_tx,
+            _guard,
             _marker: PhantomData,
         }
     }
