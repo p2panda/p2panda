@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 
 - Use `Signer` trait instead of `SigningKey` in `p2panda-core` [#1202](https://github.com/p2panda/p2panda/pull/1202)
 - spaces: Remove auth resolver generic parameter [#1298](https://github.com/p2panda/p2panda/pull/1298)
+- spaces: Only emit membership change events if local user is space member [#1304](https://github.com/p2panda/p2panda/pull/1304)
 
 ### Fixed
 

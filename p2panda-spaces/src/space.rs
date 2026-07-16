@@ -467,6 +467,12 @@ where
                 return Ok(Some((y, events)));
             };
 
+            // If we are not a member of the space anymore/yet, then don't forward any membership
+            // change events.
+            if !next_members.contains(&self.manager.id()) {
+                return Ok(Some((y, events)));
+            }
+
             // Construct space membership event.
             let membership_event = space_message_to_space_event(
                 self.id(),
