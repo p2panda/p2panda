@@ -218,7 +218,14 @@ impl NodeBuilder {
     pub async fn spawn(self) -> Result<Node, SpawnError> {
         let credentials = self.credentials.unwrap_or_default();
         let store = match self.store_options {
-            StoreBuilderOptions::Memory => SqliteStoreBuilder::memory().build().await?,
+            StoreBuilderOptions::Memory => {
+                SqliteStoreBuilder::memory()
+                    // @TODO: Temp fix required due to this issue
+                    // https://github.com/p2panda/p2panda/issues/1302
+                    .max_connections(16)
+                    .build()
+                    .await?
+            }
             StoreBuilderOptions::Url(url) => {
                 SqliteStoreBuilder::new().database_url(&url).build().await?
             }
