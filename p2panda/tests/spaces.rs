@@ -64,20 +64,6 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    // Penguin laptop receives space created event.
-    while let Some(event) = penguin_laptop_rx.next().await {
-        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-            break;
-        };
-    }
-
-    // Penguin mobile receives space created event.
-    while let Some(event) = penguin_mobile_rx.next().await {
-        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-            break;
-        };
-    }
-
     // Penguin creates a device group (on their laptop).
     let penguin = penguin_laptop
         .create_group(&[
@@ -212,14 +198,14 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     // Panda creates and subscribes to a space.
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
-    while let Some(event) = penguin_rx.next().await {
+    while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
             break;
         };
     }
 
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+        if let StreamEvent::KeyBundle(..) = event {
             break;
         };
     }
@@ -337,12 +323,6 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
-    while let Some(event) = penguin_rx.next().await {
-        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-            break;
-        };
-    }
-
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
             break;
@@ -405,12 +385,6 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     // Penguin subscribes to the space.
     let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
     let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
-
-    while let Some(event) = penguin_rx.next().await {
-        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
-            break;
-        };
-    }
 
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {

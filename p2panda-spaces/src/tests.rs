@@ -683,9 +683,9 @@ async fn remove_member() {
     assert_eq!(events.len(), 1);
     bob.persist_operation(&message_04).await.unwrap();
     let events = bob_manager.process_persisted(&message_04).await.unwrap();
-    assert_eq!(events.len(), 2);
+    assert_eq!(events.len(), 1);
     assert!(matches!(
-        events[1],
+        events[0],
         Event::Space(SpaceEvent::Ejected { .. })
     ));
 }
@@ -1414,11 +1414,9 @@ async fn events() {
                 std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Removed { context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             11 => {
-                assert_eq!(bob_events.len(), 2);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == vec![bob_id, claire_id]);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { context: SpaceContext{ auth_author, spaces_author, ..}, .. }) if auth_author == alice_id && spaces_author == alice_id);
+                assert_eq!(bob_events.len(), 1);
                 std::assert_matches!(
-                    bob_events[1].clone(),
+                    bob_events[0].clone(),
                     Event::Space(SpaceEvent::Ejected { .. })
                 );
             }
@@ -1426,7 +1424,7 @@ async fn events() {
         }
     }
 
-    assert_eq!(all_bob_events.len(), 11);
+    assert_eq!(all_bob_events.len(), 10);
 }
 
 #[tokio::test]
