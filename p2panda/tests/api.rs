@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::time::Duration;
-
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::Credentials;
@@ -17,6 +15,7 @@ use p2panda_core::{Cursor, Hash, Topic};
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
+use tokio::time::{Duration, sleep};
 
 fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32) {
     let StreamEvent::ReplayStarted { total_operations } = event else {
@@ -248,10 +247,15 @@ async fn automatic_acking() {
     assert_message_id(&rx.next().await.unwrap(), message_id_1);
     assert_message_id(&rx.next().await.unwrap(), message_id_2);
 
-    // Create a new subscription.
     drop(tx);
     drop(rx);
 
+    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
+    //
+    // Sleep briefly to wait for sync session clean-up to complete.
+    sleep(Duration::from_millis(50)).await;
+
+    // Create a new subscription.
     let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
 
     // Publish one more message.
@@ -298,10 +302,15 @@ async fn explicit_acking() {
     // Acknowledge first message.
     rx.ack(message_id_1).await.unwrap();
 
-    // Create a new subscription, streaming from "acked frontier".
     drop(tx);
     drop(rx);
 
+    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
+    //
+    // Sleep briefly to wait for sync session clean-up to complete.
+    sleep(Duration::from_millis(50)).await;
+
+    // Create a new subscription, streaming from "acked frontier".
     let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
 
     // We except to receive only the un-acked messages from the subscription stream.
@@ -324,6 +333,11 @@ async fn replay_stream_from_start() {
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
     }
+
+    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
+    //
+    // Sleep briefly to wait for sync session clean-up to complete.
+    sleep(Duration::from_millis(50)).await;
 
     // Panda subscribes again, this time asking to replay all messages from start.
     let (_panda_tx, mut panda_rx) = panda
@@ -383,13 +397,18 @@ async fn replay_stream_from_cursor() {
         id
     };
 
-    // Force re-playing from custom cursor position with new stream subscription.
     drop(tx);
     drop(rx);
+
+    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
+    //
+    // Sleep briefly to wait for sync session clean-up to complete.
+    sleep(Duration::from_millis(50)).await;
 
     let mut cursor = Cursor::new(topic.to_string(), LogHeights::default());
     cursor.advance(node.id(), LogId::from_topic(topic), 0); // seq_num = 0, the first message
 
+    // Force re-playing from custom cursor position with new stream subscription.
     let (_tx, mut rx) = node
         .stream_from::<String>(topic, StreamFrom::Cursor(cursor))
         .await
@@ -535,11 +554,62 @@ async fn deduplicate_events() {
                     received.push(operation);
                 }
             }
-            _ = tokio::time::sleep(Duration::from_secs(2)) => {
+            _ = sleep(Duration::from_secs(2)) => {
                 break;
             }
         }
     }
 
     assert_eq!(received.len(), 3);
+}
+
+#[tokio::test]
+async fn sync_is_closed_on_drop() {
+    setup_logging();
+
+    let chat_id = Topic::random();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    let mut sync_started = false;
+
+    while let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::SyncStarted { .. } = event {
+            sync_started = true;
+            break;
+        }
+    }
+    assert!(sync_started);
+
+    // Sync session should be terminated once both stream handles have been dropped.
+    drop(_icebear_tx);
+    drop(icebear_rx);
+
+    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
+    //
+    // Sleep briefly to wait for sync session clean-up to complete.
+    sleep(Duration::from_millis(50)).await;
+
+    // Resubscribe to the same topic.
+    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    let mut sync_started_again = false;
+
+    // Assert that a new sync session has started.
+    //
+    // This serves to ensure that the initial sync session for this topic was terminated once
+    // icebear's stream handles were dropped.
+    while let Some(event) = icebear_rx.next().await {
+        if let StreamEvent::SyncStarted { .. } = event {
+            sync_started_again = true;
+            break;
+        }
+    }
+    assert!(sync_started_again);
 }

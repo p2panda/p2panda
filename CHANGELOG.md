@@ -22,6 +22,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Introduce local stream import [#1296](https://github.com/p2panda/p2panda/pull/1296)
 - spaces: Compute and return events from local methods [#1290](https://github.com/p2panda/p2panda/pull/1290)
 - node: Forward events resulting from local actions to app layer [#1290](https://github.com/p2panda/p2panda/pull/1290)
+- node: Cancel processed stream tasks on drop of stream handles [#1300](https://github.com/p2panda/p2panda/pull/1300)
 
 ### Changed
 

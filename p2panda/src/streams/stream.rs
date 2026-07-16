@@ -21,6 +21,7 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::forge::OperationForge;
@@ -30,6 +31,7 @@ use crate::processor::{ProcessorError, ProcessorStatus};
 use crate::spaces::spawn_repair_task;
 use crate::spaces::types::SpacesManager;
 use crate::streams::acked::{Acked, AckedError};
+use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
@@ -168,10 +170,13 @@ where
         repair_rx,
     );
 
-    // FIXME: Both tasks need to be gracefully shut down when the tx / rx halves got dropped,
-    // otherwise the sync session keeps running.
+    // Create a cancellation token which is used to break out of the input and output event
+    // processing tasks once all instances of the `StreamPublisher` and `StreamSubscription` have
+    // been dropped.
     //
-    // See related issue: https://github.com/p2panda/p2panda/issues/1272
+    // The spawn repair task doesn't require a cancellation token; it is aborted via the handle
+    // during the wind-down of the input event task.
+    let cancellation_token = CancellationToken::new();
 
     // Spawn first task which receives processed "output events" from the processing pipeline, the
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
@@ -179,6 +184,8 @@ where
     {
         let pipeline = pipeline.clone();
         let acked = acked.clone();
+
+        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             loop {
@@ -211,6 +218,13 @@ where
                     Some(stream_events) = to_output_rx.recv() => {
                         stream_events
                     }
+
+                    // Break out of the loop, thereby ending the task, when both the
+                    // `StreamPublisher` and `StreamSubscription` have been dropped.
+                    _ = cancellation_token_child.cancelled() => {
+                            debug!(topic = %topic.to_hex(), "aborting output event processing task");
+                        break
+                    }
                 };
 
                 // Send processing result to application layer.
@@ -233,6 +247,8 @@ where
         let store = store.clone();
         let sync_handle = sync_handle.clone();
         let to_output_tx = to_output_tx.clone();
+
+        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             // =======================
@@ -391,6 +407,13 @@ where
                             ,
                         }
                     },
+
+                    // Break out of the loop, thereby ending the task, when both the
+                    // `StreamPublisher` and `StreamSubscription` have been dropped.
+                    _ = cancellation_token_child.cancelled() => {
+                            debug!(topic = %topic.to_hex(), "aborting input event processing task");
+                        break
+                    }
                 };
 
                 let _ = to_output_tx.send(stream_events).await;
@@ -401,6 +424,7 @@ where
         });
     }
 
+    let drop_guard = StreamDropGuard::new(topic, cancellation_token.clone());
     let tx = StreamPublisher::new(
         topic,
         forge,
@@ -409,9 +433,9 @@ where
         import_local_tx,
         repair_tx,
         to_output_tx,
+        drop_guard.clone(),
     );
-
-    let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx));
+    let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx), drop_guard);
 
     Ok((tx, rx))
 }
