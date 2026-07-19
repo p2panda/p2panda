@@ -28,6 +28,8 @@ pub struct Group {
     event_stream_handle: AbortHandle,
 }
 
+static_assertions::assert_impl_all!(Group: Send, Sync);
+
 impl Drop for Group {
     fn drop(&mut self) {
         self.event_stream_handle.abort();
