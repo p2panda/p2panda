@@ -3,12 +3,16 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::stream::BoxStream;
 use futures_util::{FutureExt, Stream};
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::{Hash, Topic};
+use p2panda_net::sync::SyncHandle;
+use p2panda_net::utils::ShortFormat;
+use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -100,6 +104,7 @@ type RepairTx = mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, Repai
 pub struct StreamPublisher<M> {
     topic: Topic,
     forge: OperationForge,
+    sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     #[allow(clippy::type_complexity)]
     pub(crate) publish_tx: PublishTx<M>,
     import_external_tx: ImportExternalTx,
@@ -120,6 +125,7 @@ where
     pub fn new(
         topic: Topic,
         forge: OperationForge,
+        sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
         publish_tx: PublishTx<M>,
         import_external_tx: ImportExternalTx,
         import_local_tx: ImportLocalTx,
@@ -130,6 +136,7 @@ where
         Self {
             topic,
             forge,
+            sync_handle,
             publish_tx,
             import_external_tx,
             import_local_tx,
@@ -152,6 +159,43 @@ where
     /// applications if they want to block UI components etc.
     pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
         self.publish_inner(Some(message), false).await
+    }
+
+    async fn publish_inner(
+        &self,
+        message: Option<M>,
+        prune_flag: bool,
+    ) -> Result<PublishFuture, PublishError> {
+        // Create, sign and persist operation with given payload.
+        let extensions = Extensions::builder(LogId::from_topic(self.topic()))
+            .prune_flag(prune_flag)
+            .build();
+
+        let body_bytes = match message {
+            Some(ref message) => Some(encode_cbor(&message)?),
+            None => None,
+        };
+
+        let operation = self
+            .forge
+            .create_operation(
+                Some(self.topic()),
+                extensions.log_id(),
+                body_bytes,
+                extensions,
+            )
+            .await?;
+        let hash = operation.hash;
+
+        // Start processing operation in pipeline. Keep a oneshot receiver around to allow users to
+        // optionally await & get informed when processing has finished.
+        let (processed_tx, processed_rx) = oneshot::channel();
+        self.publish_tx
+            .send((operation.clone(), message, processed_tx))
+            .await
+            .map_err(|err| PublishError::SendToProcessor(err.to_string()))?;
+
+        Ok(PublishFuture { hash, processed_rx })
     }
 
     /// Deletes all our previously published messages in this topic stream.
@@ -217,43 +261,26 @@ where
             .map_err(|err| ImportError::ReceiveFromProcessor(err.to_string()))
     }
 
-    async fn publish_inner(
-        &self,
-        message: Option<M>,
-        prune_flag: bool,
-    ) -> Result<PublishFuture, PublishError> {
-        // Create, sign and persist operation with given payload.
-        let extensions = Extensions::builder(LogId::from_topic(self.topic()))
-            .prune_flag(prune_flag)
-            .build();
-
-        let body_bytes = match message {
-            Some(ref message) => Some(encode_cbor(&message)?),
-            None => None,
-        };
-
-        let operation = self
-            .forge
-            .create_operation(
-                Some(self.topic()),
-                extensions.log_id(),
-                body_bytes,
-                extensions,
-            )
-            .await?;
-        let hash = operation.hash;
-
-        // Start processing operation in pipeline. Keep a oneshot receiver around to allow users to
-        // optionally await & get informed when processing has finished.
-        let (processed_tx, processed_rx) = oneshot::channel();
-        self.publish_tx
-            .send((operation.clone(), message, processed_tx))
+    /// Close the associated sync session gracefully.
+    ///
+    /// This method can be awaited to ensure that all sync-related state has been cleaned up
+    /// internally.
+    ///
+    /// Call `close()` if you wish to drop a `StreamPublisher` and then immediately create a new
+    /// stream for the same topic.
+    pub async fn close(&self) -> Result<(), CloseError> {
+        self.sync_handle
+            .close()
             .await
-            .map_err(|err| PublishError::SendToProcessor(err.to_string()))?;
+            .map_err(|_| CloseError(self.topic.fmt_short()))?;
 
-        Ok(PublishFuture { hash, processed_rx })
+        Ok(())
     }
 }
+
+#[derive(Debug, Error)]
+#[error("an error occurred while closing a stream publisher sync handle for topic {0}")]
+pub struct CloseError(String);
 
 /// Future which can be awaited to find out when a locally published operation has finished
 /// processing.
