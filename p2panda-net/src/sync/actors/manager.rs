@@ -16,7 +16,7 @@ use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, Topic
 use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
@@ -55,7 +55,10 @@ pub enum ToSyncManager<M, E> {
     ),
 
     /// Close all streams for the given topic.
-    Close(Topic),
+    ///
+    /// A response can be awaited on the receiver of the provided oneshot channel to ensure that
+    /// state cleanup has been completed for any relevant sync sessions.
+    Close(Topic, oneshot::Sender<()>),
 
     /// Initiate sync session.
     InitiateSync(Topic, NodeId),
@@ -269,7 +272,9 @@ where
     ) -> Result<(), ActorProcessingErr> {
         // Close all active sync sessions.
         for (_, (actor, _)) in state.topic_managers.topic_manager_map.drain() {
-            actor.send_message(ToTopicManager::CloseAll)?;
+            let (reply, reply_rx) = oneshot::channel();
+            actor.send_message(ToTopicManager::CloseAll(reply))?;
+            let _ = reply_rx.await;
         }
 
         Ok(())
@@ -361,10 +366,14 @@ where
                     let _ = reply.send(None);
                 }
             }
-            ToSyncManager::Close(topic) => {
+            ToSyncManager::Close(topic, reply) => {
+                debug!(topic = topic.fmt_short(), "close sync in manager");
+
                 // Close all sync sessions running over this topic.
                 if let Some((actor, _)) = state.topic_managers.topic_manager_map.get(&topic) {
-                    actor.send_message(ToTopicManager::CloseAll)?;
+                    let (reply, reply_rx) = oneshot::channel();
+                    actor.send_message(ToTopicManager::CloseAll(reply))?;
+                    let _ = reply_rx.await;
                 }
 
                 // Drop the sync manager state for this topic.
@@ -384,7 +393,9 @@ where
                 // overlay will automatically remove the entry from the address book.
                 state.drop_topic_state(&topic);
 
-                debug!(topic = topic.fmt_short(), "close sync manager");
+                // Inform the caller that termination is complete for sync sessions over this
+                // topic.
+                let _ = reply.send(());
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
                 if let Some((sync_manager_actor, live_mode)) =
@@ -431,7 +442,9 @@ where
                         "end sync session",
                     );
 
-                    sync_manager_actor.send_message(ToTopicManager::Close { node_id })?;
+                    // We don't wish to await termination so we ignore / drop the receiver.
+                    let (reply, _reply_rx) = oneshot::channel();
+                    sync_manager_actor.send_message(ToTopicManager::Close { node_id, reply })?;
                 }
             }
         }
@@ -481,7 +494,9 @@ where
                         "sync manager failed: {panic_msg:#?}",
                     );
 
-                    myself.send_message(ToSyncManager::Close(topic))?;
+                    let (reply, reply_rx) = oneshot::channel();
+                    myself.send_message(ToSyncManager::Close(topic, reply))?;
+                    let _ = reply_rx.await;
                 }
             }
             _ => (),
