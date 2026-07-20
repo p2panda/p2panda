@@ -428,6 +428,7 @@ where
     let tx = StreamPublisher::new(
         topic,
         forge,
+        sync_handle,
         publish_tx,
         import_external_tx,
         import_local_tx,

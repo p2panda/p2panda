@@ -247,13 +247,11 @@ async fn automatic_acking() {
     assert_message_id(&rx.next().await.unwrap(), message_id_1);
     assert_message_id(&rx.next().await.unwrap(), message_id_2);
 
+    // Await graceful termination of the sync session.
+    let _ = tx.close().await;
+
     drop(tx);
     drop(rx);
-
-    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
-    //
-    // Sleep briefly to wait for sync session clean-up to complete.
-    sleep(Duration::from_millis(50)).await;
 
     // Create a new subscription.
     let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
@@ -302,13 +300,11 @@ async fn explicit_acking() {
     // Acknowledge first message.
     rx.ack(message_id_1).await.unwrap();
 
+    // Await graceful termination of the sync session.
+    let _ = tx.close().await;
+
     drop(tx);
     drop(rx);
-
-    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
-    //
-    // Sleep briefly to wait for sync session clean-up to complete.
-    sleep(Duration::from_millis(50)).await;
 
     // Create a new subscription, streaming from "acked frontier".
     let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
@@ -332,12 +328,8 @@ async fn replay_stream_from_start() {
     {
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+        let _ = panda_tx.close().await;
     }
-
-    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
-    //
-    // Sleep briefly to wait for sync session clean-up to complete.
-    sleep(Duration::from_millis(50)).await;
 
     // Panda subscribes again, this time asking to replay all messages from start.
     let (_panda_tx, mut panda_rx) = panda
@@ -397,13 +389,11 @@ async fn replay_stream_from_cursor() {
         id
     };
 
+    // Await graceful termination of the sync session.
+    let _ = tx.close().await;
+
     drop(tx);
     drop(rx);
-
-    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
-    //
-    // Sleep briefly to wait for sync session clean-up to complete.
-    sleep(Duration::from_millis(50)).await;
 
     let mut cursor = Cursor::new(topic.to_string(), LogHeights::default());
     cursor.advance(node.id(), LogId::from_topic(topic), 0); // seq_num = 0, the first message
@@ -587,14 +577,12 @@ async fn sync_is_closed_on_drop() {
     }
     assert!(sync_started);
 
+    // Await graceful termination of the sync session.
+    let _ = _icebear_tx.close().await;
+
     // Sync session should be terminated once both stream handles have been dropped.
     drop(_icebear_tx);
     drop(icebear_rx);
-
-    // TODO: Remove this once we're able to close the (tx, rx) gracefully.
-    //
-    // Sleep briefly to wait for sync session clean-up to complete.
-    sleep(Duration::from_millis(50)).await;
 
     // Resubscribe to the same topic.
     let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
@@ -612,4 +600,54 @@ async fn sync_is_closed_on_drop() {
         }
     }
     assert!(sync_started_again);
+}
+
+#[tokio::test]
+async fn graceful_closure_of_publisher() {
+    setup_logging();
+
+    let chat_id = Topic::random();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+
+    let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    // Sync session should be terminated once both stream handles have been dropped.
+    drop(icebear_tx);
+    drop(icebear_rx);
+
+    // Attempting to create a new stream for the same topic will return an error because the
+    // cleanup initated by dropping the publisher and subscriber has not yet completed.
+    assert!(icebear.stream::<String>(chat_id).await.is_err());
+
+    // Briefly sleep to await cleanup.
+    sleep(Duration::from_millis(50)).await;
+
+    let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    // Gracefully close the publisher, awaiting termination.
+    let _ = icebear_tx.close().await;
+
+    drop(icebear_tx);
+    drop(icebear_rx);
+
+    // The stream can now be successfully created immediately after drop.
+    //
+    // This serves to illustrate that there is nothing problematic about explicitly closing the
+    // publisher and then dropping the stream; the underlying sync handle implementation
+    // deduplicates the `Close` message that is sent to the sync session actor.
+    let stream_result = icebear.stream::<String>(chat_id).await;
+    assert!(stream_result.is_ok());
+
+    let (icebear_tx, _icebear_rx) = stream_result.unwrap();
+
+    // Gracefully close the publisher, awaiting termination.
+    let _ = icebear_tx.close().await;
+
+    // The stream can now be successfully created immediately after calling close.
+    assert!(icebear.stream::<String>(chat_id).await.is_ok());
 }

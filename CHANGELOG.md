@@ -24,6 +24,7 @@ Highlights are marked with a pancake 🥞
 - node: Forward events resulting from local actions to app layer [#1290](https://github.com/p2panda/p2panda/pull/1290)
 - node: Cancel processed stream tasks on drop of stream handles [#1300](https://github.com/p2panda/p2panda/pull/1300)
 - spaces: Support partial merge of auth state into a space [#1299](https://github.com/p2panda/p2panda/pull/1299)
+- node: Allow graceful closure of sync sessions [#1307](https://github.com/p2panda/p2panda/pull/1307)
 
 ### Changed
 
