@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - encryption: Do not require pre-key bundle when initialising TwoParty state as a recipient [#1297](https://github.com/p2panda/p2panda/pull/1297)
+- encryption: Update hpke-rs to v0.7.0 [#1309](https://github.com/p2panda/p2panda/pull/1309)
 
 ## [0.7.0] - 07/07/2026
 
