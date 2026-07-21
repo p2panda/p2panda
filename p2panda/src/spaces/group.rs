@@ -8,7 +8,7 @@ use futures_util::stream::StreamExt;
 use futures_util::{FutureExt, Stream};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::VerifyingKey;
-use p2panda_spaces::{ActorId, GroupContext, MemberId};
+use p2panda_spaces::{ActorId, GroupsContext, MemberId};
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
 use tokio::task::AbortHandle;
@@ -50,7 +50,7 @@ impl Group {
                         id: ActorId::from(VerifyingKey::default()),
                         group: false,
                     },
-                    context: GroupContext {
+                    context: GroupsContext {
                         author: VerifyingKey::default(),
                         group_actors: vec![],
                         members: vec![],
@@ -141,7 +141,7 @@ impl Group {
         let result = self.inner.members().await.map(|members| {
             members
                 .iter()
-                .map(|(actor, access)| (*actor, access.level.clone()))
+                .map(|(actor, access)| (*actor, access.level))
                 .collect()
         })?;
 
@@ -163,15 +163,15 @@ impl Into<ActorId> for Group {
 pub enum GroupEvent {
     Created {
         initial_members: Vec<(GroupActor, AccessLevel)>,
-        context: GroupContext<()>,
+        context: GroupsContext<()>,
     },
     Added {
         added: GroupActor,
-        context: GroupContext<()>,
+        context: GroupsContext<()>,
     },
     Removed {
         removed: GroupActor,
-        context: GroupContext<()>,
+        context: GroupsContext<()>,
     },
 }
 

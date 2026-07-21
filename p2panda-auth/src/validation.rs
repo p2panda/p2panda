@@ -83,6 +83,34 @@ where
     Ok(())
 }
 
+/// Check if the member has greater than or equal access to passed level.
+pub(crate) fn has_gte_access<ID>(
+    member: ID,
+    access: AccessLevel,
+    members: &[(ID, AccessLevel)],
+) -> bool
+where
+    ID: Copy + Debug + PartialEq,
+{
+    members
+        .iter()
+        .any(|(id, inner_access)| *id == member && *inner_access >= access)
+}
+
+/// Check if the member has less than or equal access to passed level.
+pub(crate) fn has_lte_access<ID>(
+    member: ID,
+    access: AccessLevel,
+    members: &[(ID, AccessLevel)],
+) -> bool
+where
+    ID: Copy + Debug + PartialEq,
+{
+    members
+        .iter()
+        .any(|(id, inner_access)| *id == member && *inner_access <= access)
+}
+
 /// Validate if a member can be added to a group.
 ///
 /// The actor performing the action must be a member with manager rights and the to-be-added
@@ -132,6 +160,70 @@ where
 
     if !is_member(removed, members) {
         return Err(RemoveMemberError::NonMember);
+    }
+
+    Ok(())
+}
+
+/// Validate if an existing group member can be promoted to a higher access level.
+///
+/// The actor performing the action must be a member with manager rights and the to-be-promoted
+/// member must already be a member with lower access level than the promotion gives.
+pub fn can_promote_member<ID>(
+    actor: ID,
+    promoted: ID,
+    access: AccessLevel,
+    members: &[(ID, AccessLevel)],
+) -> Result<(), PromoteMemberError>
+where
+    ID: Copy + Debug + PartialEq,
+{
+    if !is_member(actor, members) {
+        return Err(PromoteMemberError::UnrecognisedActor);
+    };
+
+    if !is_manager(actor, members) {
+        return Err(PromoteMemberError::InsufficientAccess);
+    }
+
+    if !is_member(promoted, members) {
+        return Err(PromoteMemberError::NonMember);
+    }
+
+    if has_gte_access(promoted, access, members) {
+        return Err(PromoteMemberError::HasGreaterOrEqualAccess);
+    }
+
+    Ok(())
+}
+
+/// Validate if an existing group member can be demoted to a lower access level.
+///
+/// The actor performing the action must be a member with manager rights and the to-be-demoted
+/// member must already be a member with higher access level than the demotion allows.
+pub fn can_demote_member<ID>(
+    actor: ID,
+    demoted: ID,
+    access: AccessLevel,
+    members: &[(ID, AccessLevel)],
+) -> Result<(), DemoteMemberError>
+where
+    ID: Copy + Debug + PartialEq,
+{
+    if !is_member(actor, members) {
+        return Err(DemoteMemberError::UnrecognisedActor);
+    };
+
+    if !is_manager(actor, members) {
+        return Err(DemoteMemberError::InsufficientAccess);
+    }
+
+    if !is_member(demoted, members) {
+        return Err(DemoteMemberError::NonMember);
+    }
+
+    if has_lte_access(demoted, access, members) {
+        return Err(DemoteMemberError::HasLowerOrEqualAccess);
     }
 
     Ok(())
@@ -211,6 +303,36 @@ pub enum RemoveMemberError {
     NonMember,
 }
 
+#[derive(Debug, Error)]
+pub enum PromoteMemberError {
+    #[error("actor is not a member")]
+    UnrecognisedActor,
+
+    #[error("actor lacks sufficient access to add a member")]
+    InsufficientAccess,
+
+    #[error("member already holds greater or equal access")]
+    HasGreaterOrEqualAccess,
+
+    #[error("attempted to promote non-member actor")]
+    NonMember,
+}
+
+#[derive(Debug, Error)]
+pub enum DemoteMemberError {
+    #[error("actor is not a member")]
+    UnrecognisedActor,
+
+    #[error("actor lacks sufficient access to add a member")]
+    InsufficientAccess,
+
+    #[error("member already holds lower or equal access")]
+    HasLowerOrEqualAccess,
+
+    #[error("attempted to demote non-member actor")]
+    NonMember,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,5 +396,31 @@ mod tests {
         assert!(matches!(err, RemoveMemberError::InsufficientAccess));
         let err = can_remove_member(1, 99, &members()).unwrap_err();
         assert!(matches!(err, RemoveMemberError::NonMember));
+
+        // Can promote member errors
+        assert!(can_promote_member(1, 2, AccessLevel::Manage, &members()).is_ok());
+        let err = can_promote_member(99, 2, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, PromoteMemberError::UnrecognisedActor));
+        let err = can_promote_member(2, 3, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, PromoteMemberError::InsufficientAccess));
+        let err = can_promote_member(1, 99, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, PromoteMemberError::NonMember));
+        let err = can_promote_member(1, 2, AccessLevel::Read, &members()).unwrap_err();
+        assert!(matches!(err, PromoteMemberError::HasGreaterOrEqualAccess));
+        let err = can_promote_member(1, 2, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, PromoteMemberError::HasGreaterOrEqualAccess));
+
+        // Can demote member errors
+        assert!(can_demote_member(1, 2, AccessLevel::Read, &members()).is_ok());
+        let err = can_demote_member(99, 2, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, DemoteMemberError::UnrecognisedActor));
+        let err = can_demote_member(2, 3, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, DemoteMemberError::InsufficientAccess));
+        let err = can_demote_member(1, 99, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, DemoteMemberError::NonMember));
+        let err = can_demote_member(1, 2, AccessLevel::Manage, &members()).unwrap_err();
+        assert!(matches!(err, DemoteMemberError::HasLowerOrEqualAccess));
+        let err = can_demote_member(1, 2, AccessLevel::Write, &members()).unwrap_err();
+        assert!(matches!(err, DemoteMemberError::HasLowerOrEqualAccess));
     }
 }

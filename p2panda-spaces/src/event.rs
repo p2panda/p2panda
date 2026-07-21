@@ -5,12 +5,13 @@ use serde::{Deserialize, Serialize};
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_encryption::data_scheme::GroupOutput;
 
 use crate::auth::message::AuthMessage;
 use crate::message::SpaceMembershipMessage;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
-use crate::utils::{added_members, removed_members, sort_members};
+use crate::utils::{
+    added_members, demoted_members, promoted_members, removed_members, sort_members,
+};
 use crate::{ActorId, GroupId, MemberId, SpaceId};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -51,16 +52,16 @@ impl GroupActor {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
+    Group(GroupEvent<C>),
     Application { space_id: SpaceId, data: Vec<u8> },
     // @TODO: Could maybe add field to show when the bundle is valid until?
     KeyBundle { author: MemberId },
-    Group(GroupEvent<C>),
-    Space(SpaceEvent),
+    Space(SpaceEvent<C>),
 }
 
 /// Additional context attached to group events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GroupContext<C> {
+pub struct GroupsContext<C> {
     /// The actor who authored this action.
     pub author: ActorId,
 
@@ -73,21 +74,21 @@ pub struct GroupContext<C> {
 
 /// Additional context attached to space events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpaceContext {
-    /// The actor who authored this group change action.
-    pub auth_author: MemberId,
-
+pub struct SpaceContext<C> {
     /// The actor who applied this action to the spaces state.
     ///
-    /// Note: this can be different to the auth_actor in cases where concurrent auth changes which
-    /// effect a space are applied later.
-    pub spaces_author: MemberId,
+    /// Note: this can be different to the author of the groups action in cases where concurrent
+    /// auth changes which effect a space are applied later by other members.
+    pub author: MemberId,
 
     /// Id of the group associated with this space.
     pub group_id: GroupId,
 
-    /// Members in the spaces' encryption context.
-    pub members: Vec<MemberId>,
+    /// Members in the spaces' space.
+    pub members: Vec<(MemberId, Access<C>)>,
+
+    /// Members in the spaces' space.
+    pub actors: Vec<(GroupActor, Access<C>)>,
 }
 
 /// Events emitted when global auth state changes.
@@ -102,7 +103,7 @@ pub enum GroupEvent<C> {
         initial_members: Vec<(GroupActor, Access<C>)>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupContext<C>,
+        context: GroupsContext<C>,
     },
 
     /// A member was added to a group.
@@ -117,7 +118,7 @@ pub enum GroupEvent<C> {
         access: Access<C>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupContext<C>,
+        context: GroupsContext<C>,
     },
 
     /// A member was removed from a group.
@@ -129,23 +130,68 @@ pub enum GroupEvent<C> {
         removed: GroupActor,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupContext<C>,
+        context: GroupsContext<C>,
     },
+
+    /// An existing group member was promoted.
+    Promoted {
+        /// Group id.
+        group_id: GroupId,
+
+        /// Group actor that was promoted, can be individual or group.
+        promoted: GroupActor,
+
+        /// Access level assigned to the promoted members.
+        access: Access<C>,
+
+        /// Additional event context and group state after any change occurred.
+        context: GroupsContext<C>,
+    },
+
+    /// An existing group member was demoted.
+    Demoted {
+        /// Group id.
+        group_id: GroupId,
+
+        /// Group actor that was demoted, can be individual or group.
+        demoted: GroupActor,
+
+        /// Access level assigned to the demoted members.
+        access: Access<C>,
+
+        /// Additional event context and group state after any change occurred.
+        context: GroupsContext<C>,
+    },
+}
+
+impl<C> GroupEvent<C> {
+    pub fn group_id(&self) -> GroupId {
+        match self {
+            GroupEvent::Created { group_id, .. } => *group_id,
+            GroupEvent::Added { group_id, .. } => *group_id,
+            GroupEvent::Removed { group_id, .. } => *group_id,
+            GroupEvent::Promoted { group_id, .. } => *group_id,
+            GroupEvent::Demoted { group_id, .. } => *group_id,
+        }
+    }
 }
 
 /// Events emitted when space encryption group membership changes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SpaceEvent {
+pub enum SpaceEvent<C> {
     /// A space was created.
     Created {
         /// Space id.
         space_id: SpaceId,
 
-        /// Initial members in the encryption context.
-        initial_members: Vec<MemberId>,
+        /// Initial members in the space.
+        initial_members: Vec<(MemberId, Access<C>)>,
 
         /// Additional event context and space state after any change occurred.
-        context: SpaceContext,
+        context: SpaceContext<C>,
+
+        /// Additional event context and group state after any change occurred.
+        groups_context: GroupsContext<C>,
     },
 
     /// One or many individuals were added to the space.
@@ -153,11 +199,14 @@ pub enum SpaceEvent {
         /// Space id.
         space_id: SpaceId,
 
-        /// Members added to the encryption context.
-        added: Vec<MemberId>,
+        /// Members added to the space.
+        added: Vec<(MemberId, Access<C>)>,
 
         /// Additional event context and space state after any change occurred.
-        context: SpaceContext,
+        context: SpaceContext<C>,
+
+        /// Additional event context and group state after any change occurred.
+        groups_context: GroupsContext<C>,
     },
 
     /// One or many individuals were removed from the space.
@@ -165,11 +214,44 @@ pub enum SpaceEvent {
         /// Space id.
         space_id: SpaceId,
 
-        /// Members removed from the encryption context.
-        removed: Vec<MemberId>,
+        /// Members removed from the space.
+        removed: Vec<(MemberId, Access<C>)>,
 
         /// Additional event context and space state after any change occurred.
-        context: SpaceContext,
+        context: SpaceContext<C>,
+
+        /// Additional event context and group state after any change occurred.
+        groups_context: GroupsContext<C>,
+    },
+
+    /// One or many individuals were promoted in the space.
+    Promoted {
+        /// Space id.
+        space_id: SpaceId,
+
+        /// Promoted members.
+        promoted: Vec<(MemberId, Access<C>)>,
+
+        /// Additional event context and space state after any change occurred.
+        context: SpaceContext<C>,
+
+        /// Additional event context and group state after any change occurred.
+        groups_context: GroupsContext<C>,
+    },
+
+    /// One or many individuals were demoted in the space.
+    Demoted {
+        /// Space id.
+        space_id: SpaceId,
+
+        /// Demoted members.
+        demoted: Vec<(MemberId, Access<C>)>,
+
+        /// Additional event context and space state after any change occurred.
+        context: SpaceContext<C>,
+
+        /// Additional event context and group state after any change occurred.
+        groups_context: GroupsContext<C>,
     },
 
     /// Local actor was removed from the space.
@@ -193,15 +275,7 @@ where
                 space_id: *space_id,
                 data: plaintext,
             }),
-            GroupOutput::Control(_control_message) => {
-                unreachable!()
-            }
-            // A removal of the local actor from a space could also be detected from observing
-            // changes to the auth group state, we hook into the encryption output here though to
-            // improve observability of the internal encryption state.
-            GroupOutput::Removed => Some(Event::Space(SpaceEvent::Ejected {
-                space_id: *space_id,
-            })),
+            _ => None,
         })
         .collect()
 }
@@ -209,27 +283,13 @@ where
 pub(crate) fn auth_message_to_group_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
-) -> Event<C>
+) -> GroupEvent<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
-    let mut group_actors: Vec<_> = auth_y
-        .root_members(group_id)
-        .into_iter()
-        .map(|(member, access)| (GroupActor::from_group_member(member), access))
-        .collect();
-    sort_members(&mut group_actors);
-    let mut members = auth_y.members(group_id);
-    sort_members(&mut members);
-
-    let context = GroupContext {
-        author: auth_message.author(),
-        members,
-        group_actors,
-    };
-
-    let group_event = match auth_message.action() {
+    let context = groups_context(auth_y, auth_message);
+    match auth_message.action() {
         AuthGroupAction::Create { .. } => GroupEvent::Created {
             group_id,
             initial_members: context.group_actors.clone(),
@@ -246,57 +306,124 @@ where
             removed: GroupActor::from_group_member(member),
             context,
         },
-        AuthGroupAction::Promote { .. } => unimplemented!(),
-        AuthGroupAction::Demote { .. } => unimplemented!(),
-    };
+        AuthGroupAction::Promote { member, access } => GroupEvent::Promoted {
+            group_id,
+            promoted: GroupActor::from_group_member(member),
+            access,
+            context,
+        },
+        AuthGroupAction::Demote { member, access } => GroupEvent::Demoted {
+            group_id,
+            demoted: GroupActor::from_group_member(member),
+            access,
+            context,
+        },
+    }
+}
 
+pub(crate) fn group_message_to_auth_event<C>(
+    auth_y: &AuthGroupState<C>,
+    auth_message: &AuthMessage<C>,
+) -> Event<C>
+where
+    C: Conditions,
+{
+    let group_event = auth_message_to_group_event(auth_y, auth_message);
     Event::Group(group_event)
 }
 
 pub(crate) fn space_message_to_space_event<C>(
     space_id: SpaceId,
+    group_id: GroupId,
+    auth_y: &AuthGroupState<C>,
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
-    current_members: Vec<MemberId>,
-    next_members: Vec<MemberId>,
+    previous_members: &[(MemberId, Access<C>)],
 ) -> Event<C>
+where
+    C: Conditions,
+{
+    let next_members = &auth_y.members(group_id);
+    let next_actors: Vec<_> = auth_y
+        .root_members(group_id)
+        .into_iter()
+        .map(|(member, access)| (GroupActor::from_group_member(member), access))
+        .collect();
+    let context = SpaceContext {
+        author: space_message.author,
+        group_id,
+        members: next_members.to_vec(),
+        actors: next_actors,
+    };
+    let groups_context = groups_context(auth_y, auth_message);
+
+    let space_event = match auth_message.action() {
+        AuthGroupAction::Create { .. } => SpaceEvent::Created {
+            space_id,
+            initial_members: next_members.to_vec(),
+            context,
+            groups_context,
+        },
+        AuthGroupAction::Add { .. } => {
+            let added = added_members(previous_members, next_members);
+            SpaceEvent::Added {
+                space_id,
+                added,
+                context,
+                groups_context,
+            }
+        }
+        AuthGroupAction::Remove { .. } => {
+            let removed = removed_members(previous_members, next_members);
+            SpaceEvent::Removed {
+                space_id,
+                removed,
+                context,
+                groups_context,
+            }
+        }
+        AuthGroupAction::Promote { .. } => {
+            let promoted = promoted_members(previous_members, next_members);
+            SpaceEvent::Promoted {
+                space_id,
+                promoted,
+                context,
+                groups_context,
+            }
+        }
+        AuthGroupAction::Demote { .. } => {
+            let demoted = demoted_members(previous_members, next_members);
+            SpaceEvent::Demoted {
+                space_id,
+                demoted,
+                context,
+                groups_context,
+            }
+        }
+    };
+
+    Event::Space(space_event)
+}
+
+fn groups_context<C>(auth_y: &AuthGroupState<C>, auth_message: &AuthMessage<C>) -> GroupsContext<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
 
-    let context = SpaceContext {
-        auth_author: auth_message.author(),
-        spaces_author: space_message.author,
-        group_id,
-        members: next_members.clone(),
-    };
+    let mut group_actors: Vec<_> = auth_y
+        .root_members(group_id)
+        .into_iter()
+        .map(|(member, access)| (GroupActor::from_group_member(member), access))
+        .collect();
+    sort_members(&mut group_actors);
 
-    let space_event = match auth_message.action() {
-        AuthGroupAction::Create { .. } => SpaceEvent::Created {
-            space_id,
-            initial_members: next_members,
-            context,
-        },
-        AuthGroupAction::Add { .. } => {
-            let added = added_members(current_members, next_members.clone());
-            SpaceEvent::Added {
-                space_id,
-                added,
-                context,
-            }
-        }
-        AuthGroupAction::Remove { .. } => {
-            let removed = removed_members(current_members, next_members.clone());
-            SpaceEvent::Removed {
-                space_id,
-                removed,
-                context,
-            }
-        }
-        AuthGroupAction::Promote { .. } => unimplemented!(),
-        AuthGroupAction::Demote { .. } => unimplemented!(),
-    };
+    let mut members = auth_y.members(group_id);
+    sort_members(&mut members);
 
-    Event::Space(space_event)
+    GroupsContext {
+        author: auth_message.author(),
+        members,
+        group_actors,
+    }
 }

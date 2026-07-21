@@ -67,8 +67,8 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     // Penguin creates a device group (on their laptop).
     let penguin = penguin_laptop
         .create_group(&[
-            (penguin_laptop.id(), AccessLevel::Read),
-            (penguin_mobile.id(), AccessLevel::Write),
+            (penguin_laptop.id(), AccessLevel::Write),
+            (penguin_mobile.id(), AccessLevel::Read),
         ])
         .await?;
 
@@ -92,13 +92,13 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         sleep(Duration::from_secs(1)).await;
     }
 
-    panda_space.add(penguin, AccessLevel::Read).await?;
+    panda_space.add(penguin.id(), AccessLevel::Read).await?;
 
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 2);
-            assert!(added.contains(&penguin_laptop.id()));
-            assert!(added.contains(&penguin_mobile.id()));
+            assert!(added.contains(&(penguin_laptop.id(), Access::read())));
+            assert!(added.contains(&(penguin_mobile.id(), Access::read())));
             break;
         };
     }
@@ -106,8 +106,8 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = penguin_laptop_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 2);
-            assert!(added.contains(&penguin_laptop.id()));
-            assert!(added.contains(&penguin_mobile.id()));
+            assert!(added.contains(&(penguin_laptop.id(), Access::read())));
+            assert!(added.contains(&(penguin_mobile.id(), Access::read())));
             break;
         };
     }
@@ -115,8 +115,8 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = penguin_mobile_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 2);
-            assert!(added.contains(&penguin_laptop.id()));
-            assert!(added.contains(&penguin_mobile.id()));
+            assert!(added.contains(&(penguin_laptop.id(), Access::read())));
+            assert!(added.contains(&(penguin_mobile.id(), Access::read())));
             break;
         };
     }
@@ -180,6 +180,70 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
         break;
     }
 
+    // Panda promotes penguin to have "write" access.
+    assert!(
+        panda_space
+            .promote(penguin.id(), AccessLevel::Write)
+            .await
+            .is_ok()
+    );
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Promoted { promoted, .. }) = event {
+            assert_eq!(promoted.len(), 1);
+            // NOTE: Penguin mobile is not promoted as they don't hold "write" access in the sub-group.
+            assert!(promoted.contains(&(penguin_laptop.id(), Access::write())));
+            break;
+        };
+    }
+
+    assert!(
+        panda_space
+            .actors()
+            .await?
+            .contains(&(penguin.id(), AccessLevel::Write))
+    );
+
+    // Panda demotes penguin to have "read" access.
+    assert!(
+        panda_space
+            .demote(penguin.id(), AccessLevel::Read)
+            .await
+            .is_ok()
+    );
+
+    while let Some(event) = panda_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Demoted { demoted, .. }) = event {
+            assert_eq!(demoted.len(), 1);
+            assert!(demoted.contains(&(penguin_laptop.id(), Access::read())));
+            break;
+        };
+    }
+
+    assert!(
+        panda_space
+            .actors()
+            .await?
+            .contains(&(penguin.id(), AccessLevel::Read))
+    );
+
+    // Penguin laptop also receives the promote and demote.
+    while let Some(event) = penguin_laptop_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Promoted { promoted, .. }) = event {
+            assert_eq!(promoted.len(), 1);
+            assert!(promoted.contains(&(penguin_laptop.id(), Access::write())));
+            break;
+        };
+    }
+
+    while let Some(event) = penguin_laptop_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Demoted { demoted, .. }) = event {
+            assert_eq!(demoted.len(), 1);
+            assert!(demoted.contains(&(penguin_laptop.id(), Access::read())));
+            break;
+        };
+    }
+
     Ok(())
 }
 
@@ -218,7 +282,7 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }
@@ -226,7 +290,7 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = penguin_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }
@@ -357,7 +421,7 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }
@@ -365,7 +429,7 @@ async fn sync_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = penguin_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }
@@ -415,7 +479,7 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = panda_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }
@@ -423,7 +487,7 @@ async fn live_repair_space() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = penguin_rx.next().await {
         if let StreamEvent::Space(SpaceEvent::Added { added, .. }) = event {
             assert_eq!(added.len(), 1);
-            assert!(added.contains(&penguin.id()));
+            assert!(added.contains(&(penguin.id(), Access::read())));
             break;
         };
     }

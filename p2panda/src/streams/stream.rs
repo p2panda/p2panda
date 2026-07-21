@@ -14,7 +14,6 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
-use p2panda_spaces::SpaceEvent;
 use p2panda_store::SqliteStore;
 use p2panda_stream::spaces::SpacesResult;
 use p2panda_sync::protocols::TopicLogSyncEvent;
@@ -29,7 +28,7 @@ use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
 use crate::spaces::spawn_repair_task;
-use crate::spaces::types::SpacesManager;
+use crate::spaces::types::{SpaceEvent, SpacesManager};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
