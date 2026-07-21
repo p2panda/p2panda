@@ -16,7 +16,7 @@ use p2panda_encryption::data_scheme::DirectMessage;
 use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 
 use crate::SpaceId;
-use crate::event::{Event, GroupActor, GroupEvent, GroupsContext, SpaceContext, SpaceEvent};
+use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 use crate::manager::ManagerError;
 use crate::member::Member;
 use crate::message::SpacesArgs;
@@ -686,11 +686,11 @@ async fn remove_member() {
     assert_eq!(events.len(), 2);
     assert!(matches!(
         events[0],
-        Event::Space(SpaceEvent::Removed { .. })
+        Event::Spaces(SpaceEvent::Removed { .. })
     ));
     assert!(matches!(
         events[1],
-        Event::Space(SpaceEvent::Ejected { .. })
+        Event::Spaces(SpaceEvent::Ejected { .. })
     ));
 }
 
@@ -1367,76 +1367,76 @@ async fn events() {
             // Member auth group created.
             0 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { group_id, .. }) if group_id == group.id());
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { context: GroupsContext{ members, .. }, .. }) if members.len() == 2);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { group_id, .. }) if group_id == group.id());
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ members, .. }, .. }) if members.len() == 2);
             }
             // Space auth group created.
             1 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { group_id, .. }) if group_id == space_group_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Created { context: GroupsContext{ members, .. }, .. }) if members.len() == 3);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { group_id, .. }) if group_id == space_group_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ members, .. }, .. }) if members.len() == 3);
             }
             // Both previous auth messages published to newly created space, initial members added
             // to encryption context.
             2 => assert_eq!(bob_events.len(), 0),
             3 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Created { space_id, context: SpaceContext{group_id, ..}, .. }) if space_id == space.id() && group_id == space_group_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Created { initial_members, ..}) if initial_members.len() == 3);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Created { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Created { context: SpaceContext{ members, ..}, .. }) if members.len() == 3);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Created { groups_context: GroupsContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { space_id, context: SpaceContext{group_id, ..}, .. }) if space_id == space.id() && group_id == space_group_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { initial_members, ..}) if initial_members.len() == 3);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { context: SpaceContext{ members, ..}, .. }) if members.len() == 3);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { groups_context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             // Dave added to space auth group and encryption context.
             4 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Added { added, group_id, .. }) if added == GroupActor::individual(dave_id) && group_id == space_group_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Added { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Added { context: GroupsContext{ members, .. }, .. }) if members.len() == 4);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Added { added, group_id, .. }) if added == GroupActor::individual(dave_id) && group_id == space_group_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Added { context: GroupContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Added { context: GroupContext{ members, .. }, .. }) if members.len() == 4);
             }
             5 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Added { groups_context: GroupsContext{ author, .. }, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Added { added, .. }) if added == vec![(dave_id, Access::read())]);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Added { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Added { groups_context: GroupContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Added { added, .. }) if added == vec![(dave_id, Access::read())]);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Added { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
             }
             // Dave removed from space auth group and encryption context.
             6 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Removed { removed, .. }) if removed == GroupActor::individual(dave_id));
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Removed { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Removed { removed, .. }) if removed == GroupActor::individual(dave_id));
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Removed { context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             7 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { groups_context: GroupsContext{ author, .. }, .. }) if author == alice_id);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed == vec![(dave_id, Access::read())]);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Removed { groups_context: GroupContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Removed { removed, .. }) if removed == vec![(dave_id, Access::read())]);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Removed { context: SpaceContext{ author, ..}, .. }) if author == alice_id);
             }
             // Dave added to auth group with pull access.
             8 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Added { added, .. }) if added == GroupActor::individual(dave_id));
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Added { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Added { added, .. }) if added == GroupActor::individual(dave_id));
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Added { context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             9 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Added { added, .. }) if added == vec![(dave_id, Access::pull())]);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Added { groups_context: GroupsContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Added { added, .. }) if added == vec![(dave_id, Access::pull())]);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Added { groups_context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             // Remove member group from space auth group, both bob and claire removed..
             10 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Removed { removed, .. }) if removed == GroupActor::group(group.id()));
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Removed { context: GroupsContext{ author, .. }, .. }) if author == alice_id);
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Removed { removed, .. }) if removed == GroupActor::group(group.id()));
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Removed { context: GroupContext{ author, .. }, .. }) if author == alice_id);
             }
             11 => {
                 assert_eq!(bob_events.len(), 2);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Removed { removed, .. }) if removed.len() == 2);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Removed { removed, .. }) if removed.len() == 2);
                 std::assert_matches!(
                     bob_events[1].clone(),
-                    Event::Space(SpaceEvent::Ejected { .. })
+                    Event::Spaces(SpaceEvent::Ejected { .. })
                 );
             }
             _ => panic!(),
@@ -1956,7 +1956,7 @@ async fn ejected_event() {
 
     // The last event is an "ejected".
     let ejected_event = events.last().unwrap();
-    assert_matches!(ejected_event, Event::Space(SpaceEvent::Ejected { .. }))
+    assert_matches!(ejected_event, Event::Spaces(SpaceEvent::Ejected { .. }))
 }
 
 #[tokio::test]
@@ -2034,8 +2034,8 @@ async fn promote_demote() {
     assert_eq!(events.len(), 2);
 
     // Expect create group and create space events to be emitted.
-    std::assert_matches!(events.remove(0), Event::Group(GroupEvent::Created { .. }));
-    std::assert_matches!(events.remove(0), Event::Space(SpaceEvent::Created { .. }));
+    std::assert_matches!(events.remove(0), Event::Groups(GroupEvent::Created { .. }));
+    std::assert_matches!(events.remove(0), Event::Spaces(SpaceEvent::Created { .. }));
 
     // Promote bob to "manage" access
     let (auth_operation, space_operation, mut events) = space
@@ -2046,8 +2046,8 @@ async fn promote_demote() {
 
     // One group event and no space events emitted, bob was already a member of the space so no event required.
     assert_eq!(events.len(), 2);
-    std::assert_matches!(events.remove(0), Event::Group(GroupEvent::Promoted { promoted, access, .. }) if promoted.id() == bob_id && access.is_manage());
-    std::assert_matches!(events.remove(0), Event::Space(SpaceEvent::Promoted { promoted, .. }) if promoted == vec![(bob_id, Access::manage())]);
+    std::assert_matches!(events.remove(0), Event::Groups(GroupEvent::Promoted { promoted, access, .. }) if promoted.id() == bob_id && access.is_manage());
+    std::assert_matches!(events.remove(0), Event::Spaces(SpaceEvent::Promoted { promoted, .. }) if promoted == vec![(bob_id, Access::manage())]);
 
     // Demote bob to "pull" access.
     let (auth_operation, space_operation, mut events) = space
@@ -2056,14 +2056,12 @@ async fn promote_demote() {
         .unwrap();
     alice_messages.extend([auth_operation, space_operation]);
 
-    // Expect a "demoted" group event and "removed" space event as losing "read" access means bob
-    // has effectively been removed from the space.
+    // Expect a "demoted" group and space event.
     assert_eq!(events.len(), 2);
-    std::assert_matches!(events.remove(0), Event::Group(GroupEvent::Demoted { demoted, access, .. }) if demoted.id() == bob_id && access.is_pull());
-    std::assert_matches!(events.remove(0), Event::Space(SpaceEvent::Demoted { demoted, .. }) if demoted[0] == (bob_id, Access::pull()));
+    std::assert_matches!(events.remove(0), Event::Groups(GroupEvent::Demoted { demoted, access, .. }) if demoted.id() == bob_id && access.is_pull());
+    std::assert_matches!(events.remove(0), Event::Spaces(SpaceEvent::Demoted { demoted, .. }) if demoted[0] == (bob_id, Access::pull()));
 
-    // Bob receives the same events (with the addition of the "ejected" when they got demoted to
-    // "pull" access).
+    // Bob receives the same events.
     let mut all_bob_events = vec![];
     for (idx, message) in alice_messages.iter().enumerate() {
         bob.persist_operation(&message).await.unwrap();
@@ -2072,27 +2070,27 @@ async fn promote_demote() {
         match idx {
             0 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0], Event::Group(GroupEvent::Created { .. }));
+                std::assert_matches!(bob_events[0], Event::Groups(GroupEvent::Created { .. }));
             }
             1 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0], Event::Space(SpaceEvent::Created { .. }));
+                std::assert_matches!(bob_events[0], Event::Spaces(SpaceEvent::Created { .. }));
             }
             2 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Promoted { promoted, access, .. }) if promoted.id() == bob_id && access.is_manage());
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Promoted { promoted, access, .. }) if promoted.id() == bob_id && access.is_manage());
             }
             3 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Promoted { promoted, .. }) if promoted == vec![(bob_id, Access::manage())]);
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Promoted { promoted, .. }) if promoted == vec![(bob_id, Access::manage())]);
             }
             4 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Group(GroupEvent::Demoted { demoted, access, .. }) if demoted.id() == bob_id && access.is_pull());
+                std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Demoted { demoted, access, .. }) if demoted.id() == bob_id && access.is_pull());
             }
             5 => {
                 assert_eq!(bob_events.len(), 1);
-                std::assert_matches!(bob_events[0].clone(), Event::Space(SpaceEvent::Demoted { demoted, .. }) if demoted[0] == (bob_id, Access::pull()));
+                std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Demoted { demoted, .. }) if demoted[0] == (bob_id, Access::pull()));
             }
             _ => panic!(),
         }

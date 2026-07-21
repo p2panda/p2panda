@@ -18,7 +18,7 @@ use thiserror::Error;
 use tracing::debug;
 
 use crate::auth::message::AuthMessage;
-use crate::event::{Event, group_message_to_auth_event};
+use crate::event::{Event, to_groups_event};
 use crate::forge::Forge;
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
@@ -35,7 +35,7 @@ use crate::{ActorId, GroupId, MemberId};
 /// layers outside of p2panda-spaces to enforce access control rules.
 ///
 /// A group can be a member of many spaces, or indeed other groups, and any changes effect all
-/// parents.
+/// ancestors.
 ///
 /// Only members with Manage access level are allowed to manage the groups members.
 #[derive(Debug)]
@@ -164,9 +164,10 @@ where
             return Ok(None);
         }
 
+        let previous_ancestors = groups_y.inner.ancestors(auth_message.group_id());
         groups_y =
             AuthGroup::<C>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
-        let events = group_message_to_auth_event(&groups_y, auth_message);
+        let events = to_groups_event(&groups_y, auth_message, &previous_ancestors);
         Ok(Some((groups_y, events)))
     }
 
@@ -179,7 +180,7 @@ where
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
         // Compute the auth graph heads to include as dependencies based on the groups included in
         // this action. This means any groups being added / removed in the action, plus the id of
-        // the parent group itself.
+        // the ancestor group itself.
         let dependencies = AuthGroup::heads(&y, group_id, &action);
 
         let args = SpacesArgs::Auth {
@@ -194,9 +195,10 @@ where
         };
 
         let auth_message = SpacesMessage::auth(&message);
+        let previous_ancestors = y.inner.ancestors(auth_message.group_id());
         let y = AuthGroup::<C>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
-        let event = group_message_to_auth_event(&y, &auth_message);
+        let event = to_groups_event(&y, &auth_message, &previous_ancestors);
 
         Ok((y, message, event))
     }

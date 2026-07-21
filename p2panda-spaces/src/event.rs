@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::{HashMap, HashSet};
+
+use p2panda_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::Access;
@@ -52,24 +55,50 @@ impl GroupActor {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
-    Group(GroupEvent<C>),
+    /// A group membership change occurred in the shared groups state.
+    ///
+    /// This event does _not_ signify that any space has incorporated this change yet. The
+    /// Event::Spaces variant is emitted on space membership changes.
+    Groups(GroupEvent<C>),
+
+    /// An application message was decrypted.
+    ///
+    /// Encrypted application messages are buffered until the local member is welcomed into a
+    /// space with a "create" or "add" message.
     Application { space_id: SpaceId, data: Vec<u8> },
+
     // @TODO: Could maybe add field to show when the bundle is valid until?
+    /// An actors' pre-key bundle has been received.
     KeyBundle { author: MemberId },
-    Space(SpaceEvent<C>),
+
+    /// A membership change occurred on a space.
+    ///
+    /// This event is emitted every time the membership of a space changes. Events are silently
+    /// dropped if the local member is not (yet) a member of the space. For every Event::Groups
+    /// event a Event::Spaces event will be emitted for every effected space.
+    Spaces(SpaceEvent<C>),
 }
 
 /// Additional context attached to group events.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GroupsContext<C> {
-    /// The actor who authored this action.
+pub struct GroupContext<C> {
+    /// The actor who authored the associated group action.
     pub author: ActorId,
 
     /// Root group actors, can be individuals or groups.
-    pub group_actors: Vec<(GroupActor, Access<C>)>,
+    pub actors: Vec<(GroupActor, Access<C>)>,
 
-    /// Members of this group.
+    /// Members of the group.
     pub members: Vec<(ActorId, Access<C>)>,
+
+    /// All groups for which the group is a child (direct or transitive).
+    pub ancestors: Vec<ActorId>,
+
+    /// All groups effected by the associated group change and their members.
+    pub effected_group_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>>,
+
+    /// All groups effected by the associated group change and their direct actor members.
+    pub effected_group_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>>,
 }
 
 /// Additional context attached to space events.
@@ -81,13 +110,13 @@ pub struct SpaceContext<C> {
     /// auth changes which effect a space are applied later by other members.
     pub author: MemberId,
 
-    /// Id of the group associated with this space.
+    /// Id of the group associated with the space.
     pub group_id: GroupId,
 
-    /// Members in the spaces' space.
+    /// Current members of the space.
     pub members: Vec<(MemberId, Access<C>)>,
 
-    /// Members in the spaces' space.
+    /// Current direct actor members of the space.
     pub actors: Vec<(GroupActor, Access<C>)>,
 }
 
@@ -103,7 +132,7 @@ pub enum GroupEvent<C> {
         initial_members: Vec<(GroupActor, Access<C>)>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupsContext<C>,
+        context: GroupContext<C>,
     },
 
     /// A member was added to a group.
@@ -118,7 +147,7 @@ pub enum GroupEvent<C> {
         access: Access<C>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupsContext<C>,
+        context: GroupContext<C>,
     },
 
     /// A member was removed from a group.
@@ -130,7 +159,7 @@ pub enum GroupEvent<C> {
         removed: GroupActor,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupsContext<C>,
+        context: GroupContext<C>,
     },
 
     /// An existing group member was promoted.
@@ -145,7 +174,7 @@ pub enum GroupEvent<C> {
         access: Access<C>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupsContext<C>,
+        context: GroupContext<C>,
     },
 
     /// An existing group member was demoted.
@@ -160,11 +189,12 @@ pub enum GroupEvent<C> {
         access: Access<C>,
 
         /// Additional event context and group state after any change occurred.
-        context: GroupsContext<C>,
+        context: GroupContext<C>,
     },
 }
 
 impl<C> GroupEvent<C> {
+    /// The target group of this event.
     pub fn group_id(&self) -> GroupId {
         match self {
             GroupEvent::Created { group_id, .. } => *group_id,
@@ -174,9 +204,45 @@ impl<C> GroupEvent<C> {
             GroupEvent::Demoted { group_id, .. } => *group_id,
         }
     }
+
+    /// The groups context attached to this event.
+    pub fn context(&self) -> &GroupContext<C> {
+        match self {
+            GroupEvent::Created { context, .. }
+            | GroupEvent::Added { context, .. }
+            | GroupEvent::Removed { context, .. }
+            | GroupEvent::Promoted { context, .. }
+            | GroupEvent::Demoted { context, .. } => context,
+        }
+    }
+
+    /// Returns true if the passed group was effected by the action which triggered this event.
+    ///
+    /// An effected group is one whose membership changes as a result of the events' action,
+    /// including ancestor groups who transitively contain the actions target group as member. A
+    /// change could be if a member was added, removed, promoted or demoted.
+    ///
+    ///
+    /// ```text
+    ///    [group A]   [group B]   [group C]
+    ///           |     |
+    ///           v     v
+    ///          [group D]
+    /// ```
+    ///
+    /// In the above example, group D is effected by events for group A & B but not C.
+    pub fn effected_group(&self, group_id: GroupId) -> bool {
+        let mut effected_group = self.context().effected_group_actors.keys();
+
+        if effected_group.any(|id| *id == group_id) {
+            return true;
+        }
+
+        false
+    }
 }
 
-/// Events emitted when space encryption group membership changes.
+/// Events emitted when space membership changes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpaceEvent<C> {
     /// A space was created.
@@ -191,7 +257,7 @@ pub enum SpaceEvent<C> {
         context: SpaceContext<C>,
 
         /// Additional event context and group state after any change occurred.
-        groups_context: GroupsContext<C>,
+        groups_context: GroupContext<C>,
     },
 
     /// One or many individuals were added to the space.
@@ -206,7 +272,7 @@ pub enum SpaceEvent<C> {
         context: SpaceContext<C>,
 
         /// Additional event context and group state after any change occurred.
-        groups_context: GroupsContext<C>,
+        groups_context: GroupContext<C>,
     },
 
     /// One or many individuals were removed from the space.
@@ -221,7 +287,7 @@ pub enum SpaceEvent<C> {
         context: SpaceContext<C>,
 
         /// Additional event context and group state after any change occurred.
-        groups_context: GroupsContext<C>,
+        groups_context: GroupContext<C>,
     },
 
     /// One or many individuals were promoted in the space.
@@ -236,7 +302,7 @@ pub enum SpaceEvent<C> {
         context: SpaceContext<C>,
 
         /// Additional event context and group state after any change occurred.
-        groups_context: GroupsContext<C>,
+        groups_context: GroupContext<C>,
     },
 
     /// One or many individuals were demoted in the space.
@@ -251,7 +317,7 @@ pub enum SpaceEvent<C> {
         context: SpaceContext<C>,
 
         /// Additional event context and group state after any change occurred.
-        groups_context: GroupsContext<C>,
+        groups_context: GroupContext<C>,
     },
 
     /// Local actor was removed from the space.
@@ -280,19 +346,20 @@ where
         .collect()
 }
 
-pub(crate) fn auth_message_to_group_event<C>(
+pub(crate) fn to_groups_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
-) -> GroupEvent<C>
+    previous_ancestors: &[MemberId],
+) -> Event<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
-    let context = groups_context(auth_y, auth_message);
-    match auth_message.action() {
+    let context = groups_context(auth_y, auth_message, previous_ancestors);
+    let group_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => GroupEvent::Created {
             group_id,
-            initial_members: context.group_actors.clone(),
+            initial_members: context.actors.clone(),
             context,
         },
         AuthGroupAction::Add { member, access } => GroupEvent::Added {
@@ -318,27 +385,18 @@ where
             access,
             context,
         },
-    }
+    };
+    Event::Groups(group_event)
 }
 
-pub(crate) fn group_message_to_auth_event<C>(
-    auth_y: &AuthGroupState<C>,
-    auth_message: &AuthMessage<C>,
-) -> Event<C>
-where
-    C: Conditions,
-{
-    let group_event = auth_message_to_group_event(auth_y, auth_message);
-    Event::Group(group_event)
-}
-
-pub(crate) fn space_message_to_space_event<C>(
+pub(crate) fn to_space_event<C>(
     space_id: SpaceId,
     group_id: GroupId,
     auth_y: &AuthGroupState<C>,
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
     previous_members: &[(MemberId, Access<C>)],
+    previous_ancestors: &[MemberId],
 ) -> Event<C>
 where
     C: Conditions,
@@ -355,7 +413,7 @@ where
         members: next_members.to_vec(),
         actors: next_actors,
     };
-    let groups_context = groups_context(auth_y, auth_message);
+    let groups_context = groups_context(auth_y, auth_message, previous_ancestors);
 
     let space_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
@@ -402,28 +460,60 @@ where
         }
     };
 
-    Event::Space(space_event)
+    Event::Spaces(space_event)
 }
 
-fn groups_context<C>(auth_y: &AuthGroupState<C>, auth_message: &AuthMessage<C>) -> GroupsContext<C>
+/// Compute groups context.
+fn groups_context<C>(
+    auth_y: &AuthGroupState<C>,
+    auth_message: &AuthMessage<C>,
+    previous_ancestors: &[MemberId],
+) -> GroupContext<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
 
-    let mut group_actors: Vec<_> = auth_y
+    let mut actors: Vec<_> = auth_y
         .root_members(group_id)
         .into_iter()
         .map(|(member, access)| (GroupActor::from_group_member(member), access))
         .collect();
-    sort_members(&mut group_actors);
+    sort_members(&mut actors);
 
     let mut members = auth_y.members(group_id);
     sort_members(&mut members);
 
-    GroupsContext {
+    let mut ancestors = auth_y.inner.ancestors(group_id);
+    ancestors.sort();
+
+    // Retrieve members of all effected groups.
+    let effected: HashSet<&VerifyingKey> =
+        HashSet::from_iter(ancestors.iter().chain(previous_ancestors.iter()));
+    let effected_group_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>> = effected
+        .iter()
+        .map(|id| (**id, auth_y.members(**id)))
+        .collect();
+    let effected_group_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>> = effected
+        .into_iter()
+        .map(|id| {
+            (
+                *id,
+                auth_y
+                    .root_members(*id)
+                    .into_iter()
+                    .map(|(member, access)| (GroupActor::from_group_member(member), access))
+                    .collect(),
+            )
+        })
+        .collect();
+
+    GroupContext {
         author: auth_message.author(),
         members,
-        group_actors,
+        actors,
+        effected_group_members,
+        effected_group_actors,
+        ancestors,
     }
 }

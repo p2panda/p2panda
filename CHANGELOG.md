@@ -26,7 +26,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Support partial merge of auth state into a space [#1299](https://github.com/p2panda/p2panda/pull/1299)
 - node: Allow graceful closure of sync sessions [#1307](https://github.com/p2panda/p2panda/pull/1307)
 - node: API for promoting and demoting space members [#1311](https://github.com/p2panda/p2panda/pull/1311)
-- net: Register hooks on Endpoint [#1319](https://github.com/p2panda/p2panda/pull/1319)
+- node: Emit per-group and global groups events [#1313](https://github.com/p2panda/p2panda/pull/1313)
 
 ### Changed
 

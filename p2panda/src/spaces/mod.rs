@@ -15,7 +15,7 @@ use p2panda_store::SqliteStore;
 // Re-export useful types.
 pub use p2panda_auth::AccessLevel;
 pub use p2panda_spaces::manager::ManagerError;
-pub use p2panda_spaces::{ActorId, GroupId, GroupsContext, MemberId, SpaceContext, SpaceId};
+pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext, SpaceId};
 
 pub(crate) use forge::{KEY_BUNDLE_LOG_ID, group_log_id};
 pub use group::{Group, GroupError, GroupEvent, GroupFuture};
@@ -26,7 +26,7 @@ pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceFuture,
     SpaceSubscription,
 };
-pub use types::SpacesManagerError;
+pub use types::{InnerGroupEvent, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
@@ -66,5 +66,23 @@ pub(crate) fn to_initial_members(
                 },
             )
         })
+        .collect()
+}
+
+pub(crate) fn to_members(
+    members: &[(ActorId, Access<AuthCapabilities>)],
+) -> Vec<(ActorId, AccessLevel)> {
+    members
+        .iter()
+        .map(|(actor, access)| (*actor, access.level))
+        .collect()
+}
+
+pub(crate) fn to_actors(
+    actors: &[(p2panda_spaces::GroupActor, Access<AuthCapabilities>)],
+) -> Vec<(GroupActor, AccessLevel)> {
+    actors
+        .iter()
+        .map(|(actor, access)| (actor.clone().into(), access.level))
         .collect()
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
+use std::sync::RwLock;
 
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
@@ -16,6 +17,7 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{Transaction, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::broadcast;
 use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
@@ -32,9 +34,9 @@ use crate::spaces::{
     to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamEvent,
-    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
-    event_stream, processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamFrom,
+    StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
+    processed_stream, to_stream_event, to_system_event,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -47,6 +49,8 @@ pub struct Node {
     tasks: TaskTracker,
     network: Network,
     spaces_manager: SpacesManager,
+    events_tx: broadcast::Sender<SystemEvent>,
+    events_rx: RwLock<broadcast::Receiver<SystemEvent>>,
 }
 
 impl Node {
@@ -93,6 +97,8 @@ impl Node {
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
 
+        let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
+
         Ok(Node {
             config,
             store,
@@ -101,6 +107,8 @@ impl Node {
             tasks,
             network,
             spaces_manager,
+            events_tx,
+            events_rx: RwLock::new(events_rx),
         })
     }
 
@@ -325,6 +333,7 @@ impl Node {
             self.forge.clone(),
             self.spaces_manager.clone(),
             pipeline,
+            self.events_tx.clone(),
             from,
         )
         .await
@@ -361,8 +370,8 @@ impl Node {
 
     /// Returns a stream of system events.
     ///
-    /// System events include all network-related events, such as discovery events, which are not
-    /// associated with a specific topic.
+    /// System events include all system or network-related events, such as space membership
+    /// changes or discovery events, which are not associated with a specific topic.
     ///
     /// Any events generated before this method is called will _not_ be emitted. Therefore, it's
     /// recommended to call `event_stream()` right after the `Node` is spawned if you wish to
@@ -377,7 +386,15 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        Ok(event_stream(discovery_events))
+        let events_rx = {
+            let write = self.events_rx.write().unwrap();
+            let resubscribed = write.resubscribe();
+
+            let mut write = write;
+            std::mem::replace(&mut *write, resubscribed)
+        };
+
+        Ok(event_stream(events_rx, discovery_events))
     }
 
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
@@ -392,8 +409,15 @@ impl Node {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
+                let events_rx = {
+                    let write = self.events_rx.write().unwrap();
+                    let resubscribed = write.resubscribe();
 
-                Ok(Some(Group::new(inner, tx, rx)))
+                    let mut write = write;
+                    std::mem::replace(&mut *write, resubscribed)
+                };
+
+                Ok(Some(Group::new(inner, tx, rx, events_rx)))
             }
             None => Ok(None),
         }
@@ -410,14 +434,11 @@ impl Node {
         // and therefore not emit any events.
         let initial_members = to_initial_members(initial_members);
 
-        // @TODO: Group events are currently not forwarded to the user. It's not clear which
-        // channel these should be sent on, the spaces stream, a stream for the specific group, or
-        // a global groups stream.
         let (_, group_id, message, _events) =
             self.spaces_manager.create_group(&initial_members).await?;
 
         let topic = actor_to_topic(group_id);
-        let (tx, _rx) = self.stream::<NoBody>(topic).await?;
+        let (tx, rx) = self.stream::<NoBody>(topic).await?;
 
         let processed = tx
             .import_local(futures_util::stream::once(async {
@@ -431,12 +452,20 @@ impl Node {
             panic!();
         }
 
-        let group = self
+        let events_rx = {
+            let write = self.events_rx.write().unwrap();
+            let resubscribed = write.resubscribe();
+
+            let mut write = write;
+            std::mem::replace(&mut *write, resubscribed)
+        };
+
+        let inner = self
+            .spaces_manager
             .group(group_id)
             .await?
-            .expect("materialised group after processing operations");
-
-        Ok(group)
+            .expect("newly created group exists");
+        Ok(Group::new(inner, tx, rx, events_rx))
     }
 
     pub async fn space<M>(
@@ -617,7 +646,12 @@ impl Node {
         let events = events
             .into_iter()
             .filter_map(|event| match event {
-                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                p2panda_spaces::Event::Spaces(space_event) => {
+                    Some(to_stream_event(space_event).into())
+                }
+                p2panda_spaces::Event::Groups(group_event) => {
+                    Some(to_system_event(group_event).into())
+                }
                 _ => None,
             })
             .collect();

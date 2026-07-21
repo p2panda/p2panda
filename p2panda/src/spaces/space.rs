@@ -30,6 +30,7 @@ use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, Spaces
 use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::{
     ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
+    to_stream_event, to_system_event,
 };
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
@@ -277,7 +278,12 @@ where
         let events = events
             .into_iter()
             .filter_map(|event| match event {
-                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                p2panda_spaces::Event::Spaces(space_event) => {
+                    Some(to_stream_event(space_event).into())
+                }
+                p2panda_spaces::Event::Groups(group_event) => {
+                    Some(to_system_event(group_event).into())
+                }
                 _ => None,
             })
             .collect();

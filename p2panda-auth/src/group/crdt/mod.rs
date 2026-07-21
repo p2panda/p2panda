@@ -303,6 +303,22 @@ where
         }
     }
 
+    /// Get all ancestor groups of the passed target group.
+    ///
+    /// A ancestor group is any group that the target group is a transitive child of. Said another
+    /// way, if the membership of the target group changed, a ancestor is any group which would be
+    /// effected by this change.
+    pub fn ancestors(&self, target: ID) -> Vec<ID> {
+        let mut ancestors = vec![];
+        for (id, _) in self.current_state() {
+            let children = self.groups(id);
+            if children.iter().any(|(id, _)| id == &target) {
+                ancestors.push(id)
+            }
+        }
+        ancestors
+    }
+
     /// Get all current individual members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.traverse_members(group_id, 0)

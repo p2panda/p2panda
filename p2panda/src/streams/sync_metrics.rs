@@ -9,8 +9,8 @@ use p2panda_sync::protocols::{Metrics, TopicLogSyncEvent};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::streams::StreamEvent;
 use crate::streams::stream::Source;
+use crate::streams::{ForwardEvent, StreamEvent};
 
 type SessionId = u64;
 
@@ -246,6 +246,12 @@ impl<E, M> From<SyncEvent<E>> for StreamEvent<M> {
             // decoded first so this branch is never called.
             SyncEvent::OperationReceived { .. } => unreachable!(),
         }
+    }
+}
+
+impl<E, M> From<SyncEvent<E>> for ForwardEvent<M> {
+    fn from(value: SyncEvent<E>) -> Self {
+        StreamEvent::from(value).into()
     }
 }
 

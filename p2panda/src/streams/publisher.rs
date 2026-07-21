@@ -23,7 +23,7 @@ use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
 use crate::streams::local_stream::LocalStreamFuture;
-use crate::streams::{Event, StreamEvent};
+use crate::streams::{Event, ForwardEvent};
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
 type ImportExternalTx = mpsc::Sender<(
@@ -34,7 +34,7 @@ type ImportLocalTx = mpsc::Sender<(
     BoxStream<'static, Operation>,
     oneshot::Sender<LocalStreamFuture>,
 )>;
-type ToOutputTx<M> = mpsc::Sender<Vec<StreamEvent<M>>>;
+type ToOutputTx<M> = mpsc::Sender<Vec<ForwardEvent<M>>>;
 type RepairTx = mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
 
 /// Publish messages into a topic stream.
