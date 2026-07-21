@@ -407,3 +407,255 @@ fn group_operations() {
     assert_ne!(alice_bundle.latest(), bob_bundle.latest());
     assert_ne!(alice_bundle.latest(), charlie_bundle.latest());
 }
+
+#[test]
+fn not_required_key_bundle_on_process_create() {
+    let rng = Rng::from_seed([1; 32]);
+
+    let alice = 0;
+    let bob = 1;
+
+    // Alice initialises their key material.
+
+    let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+    let alice_dgm = TestDgm::init(alice);
+    let alice_pki = KeyRegistry::init();
+    let alice_keys =
+        KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
+
+    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys).unwrap();
+
+    // Bob initialises their key material.
+
+    let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+    let bob_dgm = TestDgm::init(bob);
+    let bob_pki = KeyRegistry::init();
+    let bob_keys =
+        KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
+
+    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys).unwrap();
+
+    // Register key bundles.
+
+    // Alice registers their own and Bob's pre-key bundles.
+    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, alice, alice_prekeys).unwrap();
+    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, bob, bob_prekeys.clone()).unwrap();
+
+    // Bob registers their own, but not Alice's pre-key bundle.
+    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, bob, bob_prekeys).unwrap();
+
+    // Initialise DCGKA states.
+
+    let alice_bundle = SecretBundle::init();
+    let alice_dcgka: TestDcgkaState = Dcgka::init(alice, alice_keys, alice_pki, alice_dgm);
+
+    let bob_bundle = SecretBundle::init();
+    let bob_dcgka: TestDcgkaState = Dcgka::init(bob, bob_keys, bob_pki, bob_dgm);
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Alice creates a group with Bob
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    let alice_group_secret_0 = SecretBundle::generate(&alice_bundle, &rng).unwrap();
+    let (alice_dcgka, output) =
+        Dcgka::create(alice_dcgka, vec![alice, bob], &alice_group_secret_0, &rng).unwrap();
+    let (_alice_dcgka, _) = Dcgka::process(
+        alice_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: None,
+        },
+    )
+    .unwrap();
+    let alice_bundle = SecretBundle::insert(alice_bundle, alice_group_secret_0.clone());
+    assert_eq!(alice_bundle.len(), 1);
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Bob processes Alice's "create" message
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    assert_eq!(output.control_message.to_string(), "create");
+
+    let direct_message = output
+        .direct_messages
+        .into_iter()
+        .find(|dm| dm.recipient == bob)
+        .expect("direct message for bob");
+
+    let (_bob_dcgka, output) = Dcgka::process(
+        bob_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: Some(direct_message),
+        },
+    )
+    .unwrap();
+
+    let GroupSecretOutput::Secret(bob_group_secret_0) = output else {
+        panic!("expected group secret");
+    };
+    let bob_bundle = SecretBundle::insert(bob_bundle, bob_group_secret_0.clone());
+    assert_eq!(bob_bundle.len(), 1);
+
+    // Alice and bob share the same group secret.
+    assert_eq!(alice_group_secret_0, bob_group_secret_0);
+    assert_eq!(alice_bundle, bob_bundle);
+}
+
+#[test]
+fn not_required_key_bundle_on_process_add() {
+    let rng = Rng::from_seed([1; 32]);
+
+    let alice = 0;
+    let bob = 1;
+
+    // Alice initialises their key material.
+
+    let alice_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+    let alice_dgm = TestDgm::init(alice);
+    let alice_pki = KeyRegistry::init();
+    let alice_keys =
+        KeyManager::init_and_generate_prekey(&alice_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
+
+    let alice_prekeys = KeyManager::prekey_bundle(&alice_keys).unwrap();
+
+    // Bob initialises their key material.
+
+    let bob_identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+
+    let bob_dgm = TestDgm::init(bob);
+    let bob_pki = KeyRegistry::init();
+    let bob_keys =
+        KeyManager::init_and_generate_prekey(&bob_identity_secret, Lifetime::default(), &rng)
+            .unwrap();
+
+    let bob_prekeys = KeyManager::prekey_bundle(&bob_keys).unwrap();
+
+    // Register key bundles.
+
+    // Alice registers their own and Bob's pre-key bundles.
+    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, alice, alice_prekeys).unwrap();
+    let alice_pki = KeyRegistry::add_longterm_bundle(alice_pki, bob, bob_prekeys.clone()).unwrap();
+
+    // Bob registers their own, but not Alice's pre-key bundle.
+    let bob_pki = KeyRegistry::add_longterm_bundle(bob_pki, bob, bob_prekeys).unwrap();
+
+    // Initialise DCGKA states.
+
+    let alice_bundle = SecretBundle::init();
+    let alice_dcgka: TestDcgkaState = Dcgka::init(alice, alice_keys, alice_pki, alice_dgm);
+
+    let bob_bundle = SecretBundle::init();
+    let bob_dcgka: TestDcgkaState = Dcgka::init(bob, bob_keys, bob_pki, bob_dgm);
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Alice creates a group
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    let alice_group_secret_0 = SecretBundle::generate(&alice_bundle, &rng).unwrap();
+    let (alice_dcgka, output) =
+        Dcgka::create(alice_dcgka, vec![alice], &alice_group_secret_0, &rng).unwrap();
+    let (alice_dcgka, _) = Dcgka::process(
+        alice_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: None,
+        },
+    )
+    .unwrap();
+    let alice_bundle = SecretBundle::insert(alice_bundle, alice_group_secret_0.clone());
+    assert_eq!(alice_bundle.len(), 1);
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Bob processes Alice's "create" message
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    assert_eq!(output.control_message.to_string(), "create");
+
+    let (bob_dcgka, _output) = Dcgka::process(
+        bob_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 0,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: None,
+        },
+    )
+    .unwrap();
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Alice adds Bob to the group
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    let _ = SecretBundle::generate(&alice_bundle, &rng).unwrap();
+    let (alice_dcgka, output) = Dcgka::add(alice_dcgka, bob, &alice_bundle, &rng).unwrap();
+    let (_alice_dcgka, _) = Dcgka::process(
+        alice_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: None,
+        },
+    )
+    .unwrap();
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Bob processes Alice's "add" message
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    assert_eq!(output.control_message.to_string(), "add");
+
+    let direct_message = output
+        .direct_messages
+        .into_iter()
+        .find(|dm| dm.recipient == bob)
+        .expect("direct message for bob");
+
+    let (_bob_dcgka, output) = Dcgka::process(
+        bob_dcgka,
+        ProcessInput {
+            seq: MessageId {
+                sender: alice,
+                seq: 1,
+            },
+            sender: alice,
+            control_message: output.control_message.clone(),
+            direct_message: Some(direct_message),
+        },
+    )
+    .unwrap();
+
+    let GroupSecretOutput::Bundle(bob_secret_bundle_0) = output else {
+        panic!("expected group secret bundle");
+    };
+    let bob_bundle = SecretBundle::extend(bob_bundle, bob_secret_bundle_0.clone());
+    assert_eq!(bob_bundle.len(), 1);
+}

@@ -1111,7 +1111,7 @@ where
                     .map_err(|err| DcgkaError::PreKeyRegistry(err))?;
                 y.pki = pki_i;
                 let prekey_bundle = prekey_bundle.ok_or(DcgkaError::MissingPreKeys(*recipient))?;
-                TwoParty::<KMG, OneTimeKeyBundle>::init(prekey_bundle)
+                TwoParty::<KMG, OneTimeKeyBundle>::init_to_send(prekey_bundle)
             }
         };
         let (y_2sm_i, ciphertext) =
@@ -1135,7 +1135,7 @@ where
                     .map_err(|err| DcgkaError::PreKeyRegistry(err))?;
                 y.pki = pki_i;
                 let prekey_bundle = prekey_bundle.ok_or(DcgkaError::MissingPreKeys(*sender))?;
-                TwoParty::<KMG, OneTimeKeyBundle>::init(prekey_bundle)
+                TwoParty::<KMG, OneTimeKeyBundle>::init_to_send(prekey_bundle)
             }
         };
         let (y_2sm_i, y_my_keys_i, plaintext) =

@@ -37,6 +37,8 @@ Highlights are marked with a pancake 🥞
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
 - node: Allow event processing to handle out-of-order buffering by separating i/o streams and preserve input ordering [#1271](https://github.com/p2panda/)
+- encryption: Do not require pre-key bundle when initialising TwoParty state as a recipient [#1297](https://github.com/p2panda/p2panda/pull/1297)
+- encryption: Update hpke-rs to v0.7.0 [#1309](https://github.com/p2panda/p2panda/pull/1309)
 
 ## [0.7.0] - 07/07/2026
 
