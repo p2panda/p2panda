@@ -18,7 +18,7 @@ use thiserror::Error;
 use tracing::debug;
 
 use crate::auth::message::AuthMessage;
-use crate::event::{Event, auth_message_to_group_event};
+use crate::event::{Event, group_message_to_auth_event};
 use crate::forge::Forge;
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
@@ -84,7 +84,7 @@ where
         group_id: GroupId,
         initial_members: Vec<(ActorId, Access<C>)>,
     ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
-        let initial_members = typed_members(&y, initial_members);
+        let initial_members = typed_members(&y, &initial_members);
         let action = AuthGroupAction::Create {
             initial_members: initial_members.clone(),
         };
@@ -118,6 +118,34 @@ where
         Self::process_local_control(self.manager.clone(), y, self.id, action).await
     }
 
+    /// Promote an existing group member to specified access level.
+    ///
+    /// Returns resulting state and message for processing.
+    pub async fn promote(
+        &self,
+        member: ActorId,
+        access: Access<C>,
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+        let y = self.manager.get_groups_state().await?;
+        let member = typed_member(&y, member);
+        let action = AuthGroupAction::Promote { member, access };
+        Self::process_local_control(self.manager.clone(), y, self.id, action).await
+    }
+
+    /// Demote an existing group member to specified access level.
+    ///
+    /// Returns resulting state and message for processing.
+    pub async fn demote(
+        &self,
+        member: ActorId,
+        access: Access<C>,
+    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+        let y = self.manager.get_groups_state().await?;
+        let member = typed_member(&y, member);
+        let action = AuthGroupAction::Demote { member, access };
+        Self::process_local_control(self.manager.clone(), y, self.id, action).await
+    }
+
     /// Process a remote message.
     ///
     /// Returns events which inform users of any state changes which occurred.
@@ -138,7 +166,7 @@ where
 
         groups_y =
             AuthGroup::<C>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
-        let events = auth_message_to_group_event(&groups_y, auth_message);
+        let events = group_message_to_auth_event(&groups_y, auth_message);
         Ok(Some((groups_y, events)))
     }
 
@@ -168,7 +196,7 @@ where
         let auth_message = SpacesMessage::auth(&message);
         let y = AuthGroup::<C>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
 
-        let event = auth_message_to_group_event(&y, &auth_message);
+        let event = group_message_to_auth_event(&y, &auth_message);
 
         Ok((y, message, event))
     }

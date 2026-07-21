@@ -11,6 +11,8 @@ pub type NoBody = ();
 /// In the high-level API we don't do anything with auth capabilities (yet).
 pub type AuthCapabilities = ();
 
+pub type SpaceEvent = p2panda_spaces::SpaceEvent<AuthCapabilities>;
+
 pub type SpacesArgs = p2panda_spaces::SpacesArgs<AuthCapabilities>;
 
 pub type SpacesStore = p2panda_store::spaces::SqliteSpacesStore<Extensions>;

@@ -24,17 +24,17 @@ use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
 use crate::spaces::types::{
-    AuthCapabilities, InnerSpace, NoBody, SpacesManager, SpacesManagerError,
+    AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
-    SpaceError, SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
+    SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
     to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Pipeline, StreamEvent, StreamFrom,
-    StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
-    processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamEvent,
+    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
+    event_stream, processed_stream,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -442,7 +442,7 @@ impl Node {
     pub async fn space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
+    ) -> Result<(Space<M>, SpaceSubscription<M>), SubscribeSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -453,7 +453,7 @@ impl Node {
         &self,
         space_id: impl Into<SpaceId>,
         from: StreamFrom,
-    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
+    ) -> Result<(Space<M>, SpaceSubscription<M>), SubscribeSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -538,7 +538,7 @@ impl Node {
     pub async fn create_space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-    ) -> Result<(Space<M>, SpaceSubscription<M>), SpaceError>
+    ) -> Result<(Space<M>, SpaceSubscription<M>), CreateSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -625,7 +625,7 @@ impl Node {
         tx.to_output_tx
             .send(events)
             .await
-            .map_err(|_| SpaceError::AppSend)?;
+            .map_err(|_| CreateSpaceError::AppSend)?;
 
         let inner = self
             .spaces_manager
@@ -738,3 +738,43 @@ pub enum SpawnError {
 #[derive(Debug, Error)]
 #[error("error occurred in internal actor: {0}")]
 pub struct CreateStreamError(pub String);
+
+/// Errors which can occur when subscribing to a stream.
+#[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
+pub enum SubscribeSpaceError {
+    #[error(transparent)]
+    Space(#[from] InnerSpaceError),
+
+    #[error(transparent)]
+    Manager(#[from] SpacesManagerError),
+
+    #[error(transparent)]
+    CreateStream(#[from] CreateStreamError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
+
+    #[error(transparent)]
+    ImportKeyBundle(#[from] ImportError),
+}
+
+/// Errors which can occur when creating a stream.
+#[derive(Debug, Error)]
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
+pub enum CreateSpaceError {
+    #[error(transparent)]
+    Manager(#[from] SpacesManagerError),
+
+    #[error(transparent)]
+    CreateStream(#[from] CreateStreamError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
+
+    #[error(transparent)]
+    ImportKeyBundle(#[from] ImportError),
+
+    #[error("couldn't send event due to broken app channel")]
+    AppSend,
+}

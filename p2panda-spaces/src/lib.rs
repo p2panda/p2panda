@@ -27,7 +27,7 @@ use p2panda_core::{Hash, VerifyingKey};
 pub use auth::message::AuthMessage;
 pub use config::Config;
 pub use credentials::Credentials;
-pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
+pub use event::{Event, GroupActor, GroupEvent, GroupsContext, SpaceContext, SpaceEvent};
 pub use forge::Forge;
 pub use message::{SpacesArgs, SpacesMessage};
 pub use store::SpacesStoreState;

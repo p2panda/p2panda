@@ -1967,4 +1967,101 @@ pub(crate) mod tests {
         sorted.sort();
         assert_eq!(sorted, vec![0, 1, 2, 3]);
     }
+
+    #[test]
+    fn promote_demote_group() {
+        let y = TestGroupState::new();
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![
+                (GroupMember::Individual(ALICE), Access::manage()),
+                (GroupMember::Individual(BOB), Access::write()),
+                (GroupMember::Individual(CLAIRE), Access::read()),
+            ],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::manage()),
+                (BOB, Access::write()),
+                (CLAIRE, Access::read()),
+            ]
+        );
+
+        let op2 = create_group(
+            DAN,
+            1,
+            G2,
+            vec![
+                (GroupMember::Individual(DAN), Access::manage()),
+                (GroupMember::Group(G1), Access::read()),
+            ],
+            vec![op1.id()],
+        );
+
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_ii.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::read()),
+                (BOB, Access::read()),
+                (CLAIRE, Access::read()),
+                (DAN, Access::manage())
+            ]
+        );
+
+        let op3 = promote_member(
+            DAN,
+            2,
+            G2,
+            GroupMember::Group(G1),
+            Access::write(),
+            vec![op2.id()],
+        );
+
+        let y_iii = TestGroup::process(y_ii, &op3).unwrap();
+        let mut members = y_iii.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::write()),
+                (BOB, Access::write()),
+                (CLAIRE, Access::read()),
+                (DAN, Access::manage())
+            ]
+        );
+
+        let op4 = demote_member(
+            DAN,
+            3,
+            G2,
+            GroupMember::Group(G1),
+            Access::pull(),
+            vec![op3.id()],
+        );
+
+        let y_iv = TestGroup::process(y_iii, &op4).unwrap();
+        let mut members = y_iv.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::pull()),
+                (BOB, Access::pull()),
+                (CLAIRE, Access::pull()),
+                (DAN, Access::manage())
+            ]
+        );
+    }
 }
