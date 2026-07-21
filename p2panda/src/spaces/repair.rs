@@ -25,7 +25,7 @@ use crate::operation::Operation;
 use crate::spaces::group_log_id;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
-use crate::streams::{LocalStreamFuture, StreamEvent};
+use crate::streams::{LocalStreamFuture, StreamEvent, to_stream_event};
 
 const REPAIR_FREQUENCY_SECS: u64 = 1;
 
@@ -219,7 +219,7 @@ pub(crate) async fn repair_space<M>(
     let events = events
         .into_iter()
         .filter_map(|event| match event {
-            p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+            p2panda_spaces::Event::Space(space_event) => Some(to_stream_event(space_event)),
             _ => None,
         })
         .collect();

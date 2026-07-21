@@ -16,6 +16,7 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{Transaction, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::broadcast;
 use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
@@ -32,9 +33,9 @@ use crate::spaces::{
     to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamEvent,
-    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
-    event_stream, processed_stream,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamFrom,
+    StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
+    processed_stream, to_stream_event,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -47,6 +48,7 @@ pub struct Node {
     tasks: TaskTracker,
     network: Network,
     spaces_manager: SpacesManager,
+    events_tx: broadcast::Sender<SystemEvent>,
 }
 
 impl Node {
@@ -93,6 +95,8 @@ impl Node {
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
 
+        let (events_tx, _) = broadcast::channel::<SystemEvent>(256);
+
         Ok(Node {
             config,
             store,
@@ -101,6 +105,7 @@ impl Node {
             tasks,
             network,
             spaces_manager,
+            events_tx,
         })
     }
 
@@ -325,6 +330,7 @@ impl Node {
             self.forge.clone(),
             self.spaces_manager.clone(),
             pipeline,
+            self.events_tx.clone(),
             from,
         )
         .await
@@ -377,7 +383,9 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        Ok(event_stream(discovery_events))
+        let system_events = self.events_tx.subscribe();
+
+        Ok(event_stream(system_events, discovery_events))
     }
 
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
@@ -391,9 +399,9 @@ impl Node {
         match self.spaces_manager.group(group_id.into()).await? {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
-                let (tx, rx) = self.stream::<NoBody>(topic).await?;
+                let (tx, _rx) = self.stream::<NoBody>(topic).await?;
 
-                Ok(Some(Group::new(inner, tx, rx)))
+                Ok(Some(Group::new(inner, tx, self.events_tx.subscribe())))
             }
             None => Ok(None),
         }
@@ -614,10 +622,12 @@ impl Node {
         }
 
         // Manually forward the resulting spaces events to the application layer.
+        //
+        // @TODO: forward global auth events onto event stream.
         let events = events
             .into_iter()
             .filter_map(|event| match event {
-                p2panda_spaces::Event::Space(space_event) => Some(StreamEvent::Space(space_event)),
+                p2panda_spaces::Event::Space(space_event) => Some(to_stream_event(space_event)),
                 _ => None,
             })
             .collect();
@@ -626,6 +636,8 @@ impl Node {
             .send(events)
             .await
             .map_err(|_| CreateSpaceError::AppSend)?;
+
+        // self.events_tx.send(value)
 
         let inner = self
             .spaces_manager

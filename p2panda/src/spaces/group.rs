@@ -4,21 +4,22 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_util::stream::StreamExt;
 use futures_util::{FutureExt, Stream};
 use p2panda_auth::{Access, AccessLevel};
-use p2panda_core::VerifyingKey;
-use p2panda_spaces::{ActorId, GroupsContext, MemberId};
+use p2panda_spaces::{ActorId, GroupId, GroupsContext, MemberId};
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
 use tokio::task::AbortHandle;
+use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 
 use crate::node::CreateStreamError;
 use crate::processor::ProcessorError;
 use crate::spaces::GroupActor;
-use crate::spaces::types::{InnerGroup, InnerGroupError, NoBody, SpacesManagerError};
-use crate::streams::{ExternalStreamFuture, ImportError, StreamPublisher, StreamSubscription};
+use crate::spaces::types::{
+    InnerGroup, InnerGroupError, InnerGroupEvent, NoBody, SpacesManagerError,
+};
+use crate::streams::{ExternalStreamFuture, ImportError, StreamPublisher, SystemEvent};
 
 #[derive(Debug)]
 pub struct Group {
@@ -38,33 +39,30 @@ impl Group {
     pub(crate) fn new(
         inner: InnerGroup,
         tx: StreamPublisher<NoBody>,
-        mut rx: StreamSubscription<NoBody>,
+        mut in_event_stream_rx: broadcast::Receiver<SystemEvent>,
     ) -> Self {
-        let (event_stream_tx, event_stream_rx) = broadcast::channel::<GroupEvent>(256);
+        let (out_event_stream_tx, out_event_stream_rx) = broadcast::channel::<GroupEvent>(256);
 
+        let group_id = inner.id();
         let event_stream_handle = tokio::spawn(async move {
-            // TODO: Convert events.
-            while let Some(_event) = rx.next().await {
-                let event = GroupEvent::Added {
-                    added: GroupActor {
-                        id: ActorId::from(VerifyingKey::default()),
-                        group: false,
-                    },
-                    context: GroupsContext {
-                        author: VerifyingKey::default(),
-                        group_actors: vec![],
-                        members: vec![],
-                    },
+            while let Ok(event) = in_event_stream_rx.recv().await {
+                let SystemEvent::Auth(event) = event else {
+                    continue;
                 };
 
-                let _ = event_stream_tx.send(event);
+                if !event.inner.effects(group_id) {
+                    continue;
+                }
+
+                // @TODO: convert into dedicated GroupEvent.
+                let _ = out_event_stream_tx.send(to_group_event(group_id, event.inner));
             }
         });
 
         Self {
             inner,
             tx,
-            event_stream_rx: RefCell::new(event_stream_rx),
+            event_stream_rx: RefCell::new(out_event_stream_rx),
             event_stream_handle: event_stream_handle.abort_handle(),
         }
     }
@@ -81,7 +79,7 @@ impl Group {
             .replace_with(|stream| stream.resubscribe());
 
         // TODO: Check if we really want to silence broadcast "lagged" errors here?
-        let stream = BroadcastStream::new(stream).filter_map(|event| async { event.ok() });
+        let stream = BroadcastStream::new(stream).filter_map(|event| event.ok());
 
         Box::pin(stream)
     }
@@ -159,22 +157,6 @@ impl Into<ActorId> for Group {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GroupEvent {
-    Created {
-        initial_members: Vec<(GroupActor, AccessLevel)>,
-        context: GroupsContext<()>,
-    },
-    Added {
-        added: GroupActor,
-        context: GroupsContext<()>,
-    },
-    Removed {
-        removed: GroupActor,
-        context: GroupsContext<()>,
-    },
-}
-
 pub struct GroupFuture {
     pub(crate) group_id: ActorId,
     pub(crate) processed: ExternalStreamFuture,
@@ -218,4 +200,53 @@ pub enum GroupError {
 
     #[error(transparent)]
     CreateStream(#[from] CreateStreamError),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroupEvent {
+    pub group_id: ActorId,
+    pub members: Vec<(ActorId, AccessLevel)>,
+    pub actors: Vec<(GroupActor, AccessLevel)>,
+    pub inner: InnerGroupEvent,
+}
+
+pub fn to_group_event(group_id: GroupId, event: InnerGroupEvent) -> GroupEvent {
+    let GroupsContext {
+        effected_members,
+        effected_actors,
+        ..
+    } = event.context();
+
+    let members = effected_members
+        .get(&group_id)
+        .map_or_else(Vec::new, |members| {
+            members
+                .iter()
+                .map(|(id, access)| (*id, access.level))
+                .collect()
+        });
+
+    let actors = effected_actors
+        .get(&group_id)
+        .map_or_else(Vec::new, |members| {
+            members
+                .iter()
+                .map(|(actor, access)| {
+                    (
+                        GroupActor {
+                            id: actor.id(),
+                            group: actor.is_group(),
+                        },
+                        access.level,
+                    )
+                })
+                .collect()
+        });
+
+    GroupEvent {
+        group_id,
+        members,
+        actors,
+        inner: event,
+    }
 }
