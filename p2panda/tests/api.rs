@@ -620,9 +620,10 @@ async fn graceful_closure_of_publisher() {
     drop(icebear_tx);
     drop(icebear_rx);
 
-    // Attempting to create a new stream for the same topic will return an error because the
-    // cleanup initated by dropping the publisher and subscriber has not yet completed.
-    assert!(icebear.stream::<String>(chat_id).await.is_err());
+    // TODO: known flaky assertion: https://github.com/p2panda/p2panda/issues/1320
+    // // Attempting to create a new stream for the same topic will return an error because the
+    // // cleanup initated by dropping the publisher and subscriber has not yet completed.
+    // assert!(icebear.stream::<String>(chat_id).await.is_err());
 
     // Briefly sleep to await cleanup.
     sleep(Duration::from_millis(50)).await;

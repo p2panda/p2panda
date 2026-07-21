@@ -11,7 +11,9 @@ pub type NoBody = ();
 /// In the high-level API we don't do anything with auth capabilities (yet).
 pub type AuthCapabilities = ();
 
-pub type SpaceEvent = p2panda_spaces::SpaceEvent<AuthCapabilities>;
+pub type InnerGroupEvent = p2panda_spaces::GroupEvent<AuthCapabilities>;
+
+pub type InnerSpaceEvent = p2panda_spaces::SpaceEvent<AuthCapabilities>;
 
 pub type SpacesArgs = p2panda_spaces::SpacesArgs<AuthCapabilities>;
 

@@ -15,8 +15,8 @@ use tracing::debug;
 
 use crate::operation::{Extensions, LogId, Operation};
 use crate::processor::Pipeline;
-use crate::streams::StreamEvent;
 use crate::streams::stream::{Source, process_operation_in};
+use crate::streams::{ForwardEvent, StreamEvent};
 
 /// Determines the starting point of a subscription stream.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
@@ -49,7 +49,7 @@ impl From<Cursor<VerifyingKey, LogId>> for StreamFrom {
 pub(crate) async fn replay_log_ranges<M>(
     topic: Topic,
     store: &SqliteStore,
-    to_output_tx: &mpsc::Sender<Vec<StreamEvent<M>>>,
+    to_output_tx: &mpsc::Sender<Vec<ForwardEvent<M>>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
     log_ranges: LogRanges<VerifyingKey, LogId>,
@@ -65,7 +65,7 @@ where
     }
 
     to_output_tx
-        .send(vec![StreamEvent::ReplayStarted { total_operations }])
+        .send(vec![StreamEvent::ReplayStarted { total_operations }.into()])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
@@ -89,7 +89,7 @@ where
     }
 
     to_output_tx
-        .send(vec![StreamEvent::ReplayEnded])
+        .send(vec![StreamEvent::ReplayEnded.into()])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
