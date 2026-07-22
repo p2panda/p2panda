@@ -40,6 +40,7 @@ p2panda-sync = { workspace = true, default-features = true }
 pin-project = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+static_assertions.workspace = true
 thiserror = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["sync"] }
 tokio-stream = { workspace = true, features = ["sync"] }
