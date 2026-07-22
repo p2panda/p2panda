@@ -509,3 +509,104 @@ async fn api_validation() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn application_messages_from_removed_members_are_filtered()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Panda creates a space and Penguin joins it.
+    // Panda adds Penguin to the space.
+    // Penguin publishes a message into the space; Panda receives it.
+    // Panda removes Penguin from the space.
+    // Penguin publishes a second message into the space.
+    // Panda receives stream events related to the removal of Penguin but does _not_ receive an
+    // application message on the events stream.
+
+    setup_logging();
+
+    use p2panda::Topic;
+    use p2panda_auth::AccessLevel;
+
+    let topic = Topic::random();
+
+    let panda = p2panda::spawn().await?;
+    let penguin = p2panda::spawn().await?;
+
+    // Penguin subscribes to the space.
+    let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+    let (penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
+
+    while let Some(event) = penguin_rx.next().await {
+        if let StreamEvent::Space(SpaceEvent::Created { .. }) = event {
+            break;
+        };
+    }
+
+    // Panda adds Penguin as a member of the space.
+    //
+    // They can do this because they received their key bundle by now.
+    let ready = panda_space.add(penguin.id(), AccessLevel::Write).await?;
+    assert!(ready.await.is_ok());
+
+    // Penguin publishes a message to all members.
+    let message = SecretData {
+        title: "My favorite things".to_string(),
+        content: "Hello, everyone!".to_string(),
+    };
+
+    let ready = penguin_space.publish(message.clone()).await?;
+    assert!(ready.await.is_ok());
+
+    // Panda receives the message from Penguin.
+    loop {
+        let Some(event) = panda_rx.next().await else {
+            panic!("unexpected stream closure");
+        };
+        let StreamEvent::Processed { operation, .. } = event else {
+            continue;
+        };
+        assert_eq!(&message, operation.message());
+        break;
+    }
+
+    // Panda removes Penguin.
+    let ready = panda_space.remove(penguin.id()).await?;
+    assert!(ready.await.is_ok());
+
+    // Penguin publishes a second message to all members.
+    let message = SecretData {
+        title: "Hurtful words".to_string(),
+        content: "Panda can't jump very high".to_string(),
+    };
+
+    let ready = penguin_space.publish(message.clone()).await?;
+    assert!(ready.await.is_ok());
+
+    let mut import_started = false;
+    let mut group_removed = false;
+    let mut import_ended = false;
+
+    // Panda receives the second message from penguin.
+    //
+    // Since Panda has removed Penguin, we do not expect `StreamEvent::Processed` to be emitted.
+    loop {
+        let Some(event) = panda_rx.next().await else {
+            panic!("unexpected stream closure");
+        };
+
+        match event {
+            StreamEvent::ImportStarted { .. } => import_started = true,
+            StreamEvent::ImportEnded { .. } => import_ended = true,
+            StreamEvent::Group(GroupEvent::Removed { .. }) => group_removed = true,
+            StreamEvent::Processed { .. } => {
+                panic!("unexpected application message after member removal")
+            }
+            _ => (),
+        }
+
+        if import_started && group_removed && import_ended {
+            break;
+        }
+    }
+
+    Ok(())
+}

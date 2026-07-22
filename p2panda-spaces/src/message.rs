@@ -27,6 +27,12 @@ pub struct SpacesMessage<C> {
     pub args: SpacesArgs<C>,
 }
 
+impl<C> SpacesMessage<C> {
+    pub fn is_application_message(&self) -> bool {
+        matches!(self.args, SpacesArgs::Application { .. })
+    }
+}
+
 impl<C> Borrow<SpacesArgs<C>> for SpacesMessage<C> {
     fn borrow(&self) -> &SpacesArgs<C> {
         &self.args
