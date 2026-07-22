@@ -586,6 +586,7 @@ mod tests {
     use crate::traits::Protocol;
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_no_operations() {
         let mut peer: Peer = Peer::new(0).await;
 
@@ -627,6 +628,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_some_operations() {
         let mut peer = Peer::new(0).await;
         let log_id = 0;
@@ -714,6 +716,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_bidirectional_exchange() {
         setup_logging();
 
@@ -817,6 +820,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_unexpected_operation_before_presend() {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
@@ -845,6 +849,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_unexpected_presend_twice() {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
@@ -876,6 +881,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_unexpected_done_before_anything() {
         let mut peer = Peer::new(0).await;
         let logs = Logs::default();
@@ -889,6 +895,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_unexpected_have_after_presend() {
         let mut peer = Peer::new(0).await;
         const LOG_ID: TestLogId = 1;
@@ -920,6 +927,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[test_log::test]
     async fn log_sync_with_concurrently_pruned_log() {
         setup_logging();
 
