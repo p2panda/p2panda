@@ -1,28 +1,87 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::traits::{Digest, OperationId};
+use p2panda_core::traits::Digest;
+use p2panda_core::{Extensions, Hash, Operation};
 use p2panda_store::Transaction;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::orderer::OrdererStore;
+use p2panda_store::processor::ProcessorStore;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Mutex, Notify};
 
-use crate::orderer::{CausalOrderer, Ordering};
-use crate::processors::Processor;
+use crate::Processor;
+use crate::orderer::CausalOrderer;
 
-pub struct Orderer<T, ID, S> {
-    inner: Mutex<CausalOrderer<ID, S>>,
-    store: S,
-    notify: Notify,
-    _marker: PhantomData<T>,
+pub trait OrdererMetadata<E> {
+    /// Metadata attached to an input event we want to persist in database next to ordering info.
+    type Metadata: Serialize + for<'de> Deserialize<'de>;
+
+    /// Extract metadata from input.
+    fn metadata(&self) -> Self::Metadata;
+
+    /// Re-construct input from operation and persisted metadata.
+    fn from_operation(operation: Operation<E>, meta: Self::Metadata) -> Self;
 }
 
-impl<T, ID, S> Orderer<T, ID, S>
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
+pub enum OrdererArgs {
+    Process {
+        dependencies: Vec<Hash>,
+    },
+    #[default]
+    Ignore,
+}
+
+#[derive(Clone, Debug)]
+pub enum OrdererResult {
+    /// Item has unmet dependencies, is buffered and now in "pending" state.
+    Pending,
+
+    /// Item is "ready" and was a dependency for one or more operations which are "freed" now.
+    ///
+    /// This input may trigger zero to many ReadyOutput items to follow.
+    ReadyInput { dependent_operations: Vec<Hash> },
+
+    /// Item was buffered by orderer and is now marked as "ready" by another "input" item, to be
+    /// finally forwarded in correct order.
+    ReadyOutput,
+
+    /// Item was ignored as specified in input arguments.
+    Ignored,
+}
+
+impl OrdererResult {
+    pub fn is_pending(&self) -> bool {
+        matches!(self, OrdererResult::Pending)
+    }
+}
+
+pub struct Orderer<S, T, E> {
+    inner: Mutex<CausalOrderer<Hash, S>>,
+    store: S,
+    notify: Notify,
+    // We're keeping an unbound, in-memory buffer of all "freed" events here. This means that if an
+    // event frees n events, we will need to keep all n of them here. This shouldn't be a problem as
+    // long as n stays low (<100 items).
+    //
+    // The alternative is to move the logic polling from the inner orderer into "next" which allows
+    // a more atomic and memory-efficient streaming design where we only look at one item at a time.
+    // We still need a way to tell the pipeline how many items got "freed" by it to allow the
+    // correct input stream ordering to take place (see docs in pipeline.rs of p2panda crate), this
+    // functionality should be possible to add to the inner orderer.
+    queue: RefCell<VecDeque<(T, OrdererResult)>>,
+    _marker: PhantomData<E>,
+}
+
+impl<S, T, E> Orderer<S, T, E>
 where
-    ID: OperationId,
-    S: Clone + Transaction + OrdererStore<ID> + OperationStore<T, ID>,
+    S: Clone + Transaction + OrdererStore<Hash> + OperationStore<Operation<E>, Hash>,
 {
     pub fn new(store: S) -> Self {
         let inner = CausalOrderer::new(store.clone());
@@ -31,38 +90,131 @@ where
             inner: Mutex::new(inner),
             store,
             notify: Notify::new(),
+            queue: RefCell::new(VecDeque::new()),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T, ID, S> Processor<T> for Orderer<T, ID, S>
+impl<S, T, E> Processor<T> for Orderer<S, T, E>
 where
-    T: Digest<ID> + Ordering<ID>,
-    ID: OperationId,
-    S: Transaction + OrdererStore<ID> + OperationStore<T, ID>,
+    S: Transaction
+        + OrdererStore<Hash>
+        + OperationStore<Operation<E>, Hash>
+        + ProcessorStore<T::Metadata>,
+    T: OrdererMetadata<E> + Borrow<OrdererArgs> + Digest<Hash>,
+    E: Extensions,
 {
-    // TODO: Define result type and leverage Noop variant to pass-through.
-    // type Output = (T, OrdererResult);
-    type Output = T;
+    type Output = (T, OrdererResult);
 
-    type Error = (Option<T>, OrdererError<T, ID, S>);
+    type Error = (T, OrdererError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let permit = match self.store.begin().await {
-            Ok(permit) => permit,
-            Err(err) => return Err((Some(input), OrdererError::Transaction(err))),
-        };
+        let args = input.borrow();
 
-        let inner = self.inner.lock().await;
-        if let Err(err) = inner.process(input.hash(), &input.dependencies()[..]).await {
-            return Err((Some(input), OrdererError::OrdererStore(err)));
-        };
+        if let OrdererArgs::Process { dependencies } = args {
+            let inner = self.inner.lock().await;
 
-        self.store
-            .commit(permit)
-            .await
-            .map_err(|err| (Some(input), OrdererError::Transaction(err)))?;
+            let permit = match self.store.begin().await {
+                Ok(permit) => permit,
+                Err(err) => return Err((input, OrdererError::Transaction(err.to_string()))),
+            };
+
+            match inner.process(input.hash(), dependencies).await {
+                // a) Item has all dependencies met, we can directly mark it as "ready".
+                Ok(true) => {
+                    let mut dependent_operations = Vec::new();
+
+                    loop {
+                        match inner.next().await {
+                            Ok(Some(id)) => {
+                                // Ignore our own input.
+                                if id != input.hash() {
+                                    dependent_operations.push(id);
+                                }
+
+                                continue;
+                            }
+                            Ok(None) => {
+                                break;
+                            }
+                            Err(err) => {
+                                return Err((input, OrdererError::OrdererStore(err.to_string())));
+                            }
+                        }
+                    }
+
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, OrdererError::Transaction(err.to_string())));
+                    }
+
+                    let mut to_queue = Vec::new();
+
+                    for id in &dependent_operations {
+                        let operation = match self
+                            .store
+                            .get_operation(id)
+                            .await
+                            .map_err(|err| OrdererError::OperationStore(err.to_string()))
+                        {
+                            Ok(Some(operation)) => operation,
+                            Ok(None) => {
+                                return Err((input, OrdererError::StoreInconsistency(*id)));
+                            }
+                            Err(err) => return Err((input, err)),
+                        };
+
+                        let metadata = match self.store.get_event(id).await {
+                            Ok(Some(metadata)) => metadata,
+                            Ok(None) => {
+                                return Err((input, OrdererError::StoreInconsistency(*id)));
+                            }
+                            Err(err) => {
+                                return Err((input, OrdererError::ProcessorStore(err.to_string())));
+                            }
+                        };
+
+                        to_queue.push((
+                            T::from_operation(operation, metadata),
+                            OrdererResult::ReadyOutput,
+                        ));
+                    }
+
+                    // Always forward the current input first.
+                    self.queue.borrow_mut().push_back((
+                        input,
+                        OrdererResult::ReadyInput {
+                            dependent_operations,
+                        },
+                    ));
+
+                    // .. followed by all items which have been marked as "ready" by input.
+                    for item in to_queue {
+                        self.queue.borrow_mut().push_back(item);
+                    }
+                }
+
+                // b) Item doesn't have dependencies met yet, mark it as "pending", it is buffered now.
+                Ok(false) => {
+                    if let Err(err) = self.store.set_event(&input.hash(), &input.metadata()).await {
+                        return Err((input, OrdererError::ProcessorStore(err.to_string())));
+                    };
+
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, OrdererError::Transaction(err.to_string())));
+                    }
+
+                    self.queue
+                        .borrow_mut()
+                        .push_back((input, OrdererResult::Pending));
+                }
+                Err(err) => return Err((input, OrdererError::OrdererStore(err.to_string()))),
+            }
+        } else {
+            self.queue
+                .borrow_mut()
+                .push_back((input, OrdererResult::Ignored));
+        }
 
         self.notify.notify_one(); // Wake up any pending next call
 
@@ -70,35 +222,12 @@ where
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
+        // TODO: If we decide to handle all logic in the "process" part (less memory efficient
+        // approach, see comment above) we should consider replacing the Processor trait with a
+        // Streamas "next" is not required anymore.
         loop {
-            let inner = self.inner.lock().await;
-
-            let permit = self
-                .store
-                .begin()
-                .await
-                .map_err(|err| (None, OrdererError::Transaction(err)))?;
-
-            if let Some(id) = inner
-                .next()
-                .await
-                .map_err(|err| (None, OrdererError::OrdererStore(err)))?
-            {
-                self.store
-                    .commit(permit)
-                    .await
-                    .map_err(|err| (None, OrdererError::Transaction(err)))?;
-
-                return match self
-                    .store
-                    .get_operation(&id)
-                    .await
-                    .map_err(OrdererError::OperationStore)
-                {
-                    Ok(Some(operation)) => Ok(operation),
-                    Ok(None) => Err((None, OrdererError::StoreInconsistency(id))),
-                    Err(err) => Err((None, err)),
-                };
+            if let Some(output) = self.queue.borrow_mut().pop_front() {
+                return Ok(output);
             }
 
             self.notify.notified().await;
@@ -106,29 +235,31 @@ where
     }
 }
 
-#[derive(Debug, Error)]
-pub enum OrdererError<T, ID, S>
-where
-    T: Ordering<ID>,
-    ID: OperationId,
-    S: Transaction + OrdererStore<ID> + OperationStore<T, ID>,
-{
+#[derive(Clone, Debug, Error)]
+pub enum OrdererError {
     #[error("could not find item with id {0} in operation store")]
-    StoreInconsistency(ID),
+    StoreInconsistency(Hash),
 
     #[error("{0}")]
-    OrdererStore(<S as OrdererStore<ID>>::Error),
+    OrdererStore(String),
 
     #[error("{0}")]
-    OperationStore(<S as OperationStore<T, ID>>::Error),
+    OperationStore(String),
 
     #[error("{0}")]
-    Transaction(<S as Transaction>::Error),
+    ProcessorStore(String),
+
+    #[error("{0}")]
+    Transaction(String),
 }
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+    use std::borrow::Borrow;
+
     use futures_util::stream;
+    use p2panda_core::traits::Digest;
     use p2panda_core::{Body, Hash, Header, Operation, SigningKey, Topic};
     use p2panda_store::operations::OperationStore;
     use p2panda_store::{SqliteStore, tx_unwrap};
@@ -137,17 +268,53 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use crate::StreamLayerExt;
+    use crate::orderer::OrdererMetadata;
 
-    use super::{Orderer, Ordering};
+    use super::{Orderer, OrdererArgs, OrdererResult};
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     struct TestExtension {
         dependencies: Vec<Hash>,
     }
 
-    impl Ordering<Hash> for Operation<TestExtension> {
-        fn dependencies(&self) -> Vec<Hash> {
-            self.header.extensions.dependencies.to_owned()
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Event {
+        orderer_args: OrdererArgs,
+        operation: Operation<TestExtension>,
+    }
+
+    impl Borrow<OrdererArgs> for Event {
+        fn borrow(&self) -> &OrdererArgs {
+            &self.orderer_args
+        }
+    }
+
+    impl Digest<Hash> for Event {
+        fn hash(&self) -> Hash {
+            self.operation.hash
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct EventMetadata;
+
+    impl OrdererMetadata<TestExtension> for Event {
+        type Metadata = EventMetadata;
+
+        fn metadata(&self) -> Self::Metadata {
+            EventMetadata
+        }
+
+        // The `meta` parameter is a requirement of the trait function signature but we do not
+        // require it for this test implementation, hence the lint bypass.
+        #[allow(unused_variables)]
+        fn from_operation(operation: Operation<TestExtension>, meta: Self::Metadata) -> Self {
+            Self {
+                orderer_args: OrdererArgs::Process {
+                    dependencies: operation.header.extensions.dependencies.clone(),
+                },
+                operation,
+            }
         }
     }
 
@@ -179,6 +346,8 @@ mod tests {
             }
         };
 
+        let event_panda = Event::from_operation(operation_panda.clone(), EventMetadata);
+
         let operation_icebear = {
             let signing_key = SigningKey::generate();
             let verifying_key = signing_key.verifying_key();
@@ -202,6 +371,8 @@ mod tests {
                 body: Some(body),
             }
         };
+
+        let event_icebear = Event::from_operation(operation_icebear.clone(), EventMetadata);
 
         let local = task::LocalSet::new();
 
@@ -228,17 +399,32 @@ mod tests {
 
                 let mut stream = stream::iter(vec![
                     // Process Icebear's operation first. It will arrive "out of order".
-                    operation_icebear.clone(),
+                    event_icebear.clone(),
                     // Process Pandas's operation next. It will "free" Icebear's operation.
-                    operation_panda.clone(),
+                    event_panda.clone(),
                 ])
                 .layer(orderer);
 
-                let operation = stream.next().await.unwrap().unwrap();
-                assert_eq!(operation, operation_panda);
+                // Icebear's event has a dependency on Panda's event so it remains in a pending
+                // state for now.
+                let (event, result) = stream.next().await.unwrap().unwrap();
+                assert!(result.is_pending());
+                assert_eq!(event, event_icebear);
 
-                let operation = stream.next().await.unwrap().unwrap();
-                assert_eq!(operation, operation_icebear);
+                // Panda's event is released. It frees up Icebear's event which is now ready.
+                let (event, result) = stream.next().await.unwrap().unwrap();
+                assert_matches!(
+                    result,
+                    OrdererResult::ReadyInput {
+                        dependent_operations: _
+                    }
+                );
+                assert_eq!(event, event_panda);
+
+                // Icebear's event has it's dependencies met and is released.
+                let (event, result) = stream.next().await.unwrap().unwrap();
+                assert_matches!(result, OrdererResult::ReadyOutput);
+                assert_eq!(event, event_icebear);
             })
             .await;
     }
