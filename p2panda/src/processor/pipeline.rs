@@ -14,6 +14,7 @@ use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
+use p2panda_stream::orderer::{Orderer, OrdererResult};
 use serde::{Deserialize, Serialize};
 use tokio::pin;
 use tokio::runtime::Builder;
@@ -22,7 +23,6 @@ use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
-use crate::processor::orderer::{Orderer, OrdererResult};
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::types::{SpacesManager, SpacesProcessor};
@@ -421,11 +421,11 @@ mod tests {
     use p2panda_core::traits::Digest;
     use p2panda_core::{Hash, PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
+    use p2panda_stream::orderer::{OrdererArgs, OrdererResult};
 
     use crate::credentials::Credentials;
     use crate::forge::OperationForge;
     use crate::operation::LogId;
-    use crate::processor::orderer::{OrdererArgs, OrdererResult};
     use crate::processor::{ProcessorStatus, TaskTracker};
     use crate::spaces::spaces_manager;
     use crate::streams::Source;
