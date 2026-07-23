@@ -206,7 +206,7 @@ mod tests {
     use crate::Processor;
     use crate::groups::GroupsOperation;
     use crate::ingest::{Ingest, IngestArgs};
-    use crate::orderer::{Orderer, Ordering};
+    use crate::orderer::{Orderer, OrdererArgs, OrdererMetadata, Ordering};
 
     use super::GroupsArgs;
 
@@ -252,20 +252,62 @@ mod tests {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    struct IngestEvent<E> {
-        pub operation: Operation<E>,
+    struct IngestEvent {
+        pub operation: Operation<TestExtensions>,
         pub args: IngestArgs<usize, Topic>,
+        pub orderer_args: OrdererArgs,
     }
 
-    impl<E> Borrow<IngestArgs<usize, Topic>> for IngestEvent<E> {
+    impl Borrow<IngestArgs<usize, Topic>> for IngestEvent {
         fn borrow(&self) -> &IngestArgs<usize, Topic> {
             &self.args
         }
     }
 
-    impl<E> Borrow<Operation<E>> for IngestEvent<E> {
-        fn borrow(&self) -> &Operation<E> {
+    impl Borrow<Operation<TestExtensions>> for IngestEvent {
+        fn borrow(&self) -> &Operation<TestExtensions> {
             &self.operation
+        }
+    }
+
+    impl Borrow<OrdererArgs> for IngestEvent {
+        fn borrow(&self) -> &OrdererArgs {
+            &self.orderer_args
+        }
+    }
+
+    impl Digest<Hash> for IngestEvent {
+        fn hash(&self) -> Hash {
+            self.operation.hash
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct EventMetadata {
+        topic: Topic,
+    }
+
+    impl OrdererMetadata<TestExtensions> for IngestEvent {
+        type Metadata = EventMetadata;
+
+        fn metadata(&self) -> Self::Metadata {
+            let topic = self.args.topic;
+
+            EventMetadata { topic }
+        }
+
+        fn from_operation(operation: Operation<TestExtensions>, meta: Self::Metadata) -> Self {
+            Self {
+                args: IngestArgs {
+                    log_id: operation.header.extensions.log_id,
+                    topic: meta.topic,
+                    prune_flag: false,
+                },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: operation.header.extensions.dependencies.clone(),
+                },
+                operation,
+            }
         }
     }
 
@@ -307,6 +349,9 @@ mod tests {
                     log_id: LOG_ID.into(),
                     topic,
                     prune_flag: false,
+                },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: op_00.dependencies(),
                 },
             })
             .await
@@ -361,6 +406,17 @@ mod tests {
             dependencies: vec![],
         };
         let op_00: Operation<TestExtensions> = alice_log.operation(&[], TestExtensions::from(args));
+        let event_00 = IngestEvent {
+            operation: op_00.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: op_00.dependencies(),
+            },
+        };
 
         // Bobby operation.
         let args = GroupsExtensionArgs {
@@ -372,6 +428,17 @@ mod tests {
             dependencies: vec![op_00.hash()],
         };
         let op_01: Operation<TestExtensions> = bobby_log.operation(&[], TestExtensions::from(args));
+        let event_01 = IngestEvent {
+            operation: op_01.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: op_01.dependencies(),
+            },
+        };
 
         // Cathy operation.
         let args = GroupsExtensionArgs {
@@ -382,63 +449,46 @@ mod tests {
             dependencies: vec![op_01.hash()],
         };
         let op_02: Operation<TestExtensions> = cathy_log.operation(&[], TestExtensions::from(args));
+        let event_02 = IngestEvent {
+            operation: op_02.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: op_02.dependencies(),
+            },
+        };
 
         let store = SqliteStore::temporary().await;
         let ingest = Ingest::new(store.clone());
         let orderer = Orderer::new(store.clone());
         let groups = Groups::new(store.clone());
 
-        ingest
-            .process(IngestEvent {
-                operation: op_02.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
+        ingest.process(event_02.clone()).await.unwrap();
 
-        ingest
-            .process(IngestEvent {
-                operation: op_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
+        ingest.process(event_01.clone()).await.unwrap();
 
-        ingest
-            .process(IngestEvent {
-                operation: op_00.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
+        ingest.process(event_00.clone()).await.unwrap();
 
-        // Operations are processed by the orderer in reverse order.
-        orderer.process(op_02).await.unwrap();
-        orderer.process(op_01).await.unwrap();
-        orderer.process(op_00).await.unwrap();
+        // Events are processed by the orderer in reverse order.
+        orderer.process(event_02.clone()).await.unwrap();
+        orderer.process(event_01.clone()).await.unwrap();
+        orderer.process(event_00.clone()).await.unwrap();
 
-        // Each operation freed from the orderer is processed by the groups processor.
-        for _op in 0..3 {
-            let next_op = orderer.next().await.unwrap();
-            groups
-                .process(GroupsArgs::Process {
-                    state_id,
-                    operation: next_op,
-                })
-                .await
-                .unwrap()
+        // Each event freed from the orderer is processed by the groups processor.
+        for _event in 0..5 {
+            let (next_event, result) = orderer.next().await.unwrap();
+            if !result.is_pending() {
+                groups
+                    .process(GroupsArgs::Process {
+                        state_id,
+                        operation: next_event.operation,
+                    })
+                    .await
+                    .unwrap()
+            }
         }
 
         let permit = store.begin().await.unwrap();
@@ -494,16 +544,21 @@ mod tests {
         let create_alice_device_00: Operation<TestExtensions> =
             alice_log.operation(&[], TestExtensions::from(args));
 
+        let create_alice_device_00_event = IngestEvent {
+            operation: create_alice_device_00.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: create_alice_device_00.dependencies(),
+            },
+        };
+
         let alice_ingest = Ingest::new(alice_store.clone());
         alice_ingest
-            .process(IngestEvent {
-                operation: create_alice_device_00.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
+            .process(create_alice_device_00_event)
             .await
             .unwrap();
 
@@ -525,16 +580,21 @@ mod tests {
         let create_bobby_device_01: Operation<TestExtensions> =
             bobby_log.operation(&[], TestExtensions::from(args));
 
+        let create_bobby_device_01_event = IngestEvent {
+            operation: create_bobby_device_01.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: create_bobby_device_01.dependencies(),
+            },
+        };
+
         let bobby_ingest = Ingest::new(bobby_store.clone());
         bobby_ingest
-            .process(IngestEvent {
-                operation: create_bobby_device_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
+            .process(create_bobby_device_01_event)
             .await
             .unwrap();
 
@@ -556,16 +616,21 @@ mod tests {
         let create_cathy_device_02: Operation<TestExtensions> =
             cathy_log.operation(&[], TestExtensions::from(args));
 
+        let create_cathy_device_02_event = IngestEvent {
+            operation: create_cathy_device_02.clone(),
+            args: IngestArgs {
+                log_id: LOG_ID.into(),
+                topic,
+                prune_flag: false,
+            },
+            orderer_args: OrdererArgs::Process {
+                dependencies: create_cathy_device_02.dependencies(),
+            },
+        };
+
         let cathy_ingest = Ingest::new(cathy_store.clone());
         cathy_ingest
-            .process(IngestEvent {
-                operation: create_cathy_device_02.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
+            .process(create_cathy_device_02_event)
             .await
             .unwrap();
 
@@ -587,6 +652,9 @@ mod tests {
                     log_id: LOG_ID.into(),
                     topic,
                     prune_flag: false,
+                },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: create_bobby_device_01.dependencies(),
                 },
             })
             .await
@@ -630,6 +698,9 @@ mod tests {
                     topic,
                     prune_flag: false,
                 },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: create_alice_bobby_chat_03.dependencies(),
+                },
             })
             .await
             .unwrap();
@@ -651,6 +722,9 @@ mod tests {
                         log_id: LOG_ID.into(),
                         topic,
                         prune_flag: false,
+                    },
+                    orderer_args: OrdererArgs::Process {
+                        dependencies: op.dependencies(),
                     },
                 })
                 .await
@@ -687,6 +761,9 @@ mod tests {
                     log_id: LOG_ID.into(),
                     topic,
                     prune_flag: false,
+                },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: create_bobby_device_01.dependencies(),
                 },
             })
             .await
@@ -729,6 +806,9 @@ mod tests {
                     topic,
                     prune_flag: false,
                 },
+                orderer_args: OrdererArgs::Process {
+                    dependencies: create_bobby_cathy_chat_04.dependencies(),
+                },
             })
             .await
             .unwrap();
@@ -750,6 +830,9 @@ mod tests {
                         log_id: LOG_ID.into(),
                         topic,
                         prune_flag: false,
+                    },
+                    orderer_args: OrdererArgs::Process {
+                        dependencies: op.dependencies(),
                     },
                 })
                 .await

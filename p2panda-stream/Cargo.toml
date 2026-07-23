@@ -38,7 +38,9 @@ ingest = [
     "dep:serde",
 ]
 log_prune = []
-orderer = []
+orderer = [
+  "p2panda-store/processor"
+]
 spaces = [
   "p2panda-auth",
   "p2panda-spaces",

@@ -9,5 +9,5 @@ mod tests;
 mod traits;
 
 pub use orderer::CausalOrderer;
-pub use processor::{Orderer, OrdererError};
+pub use processor::{Orderer, OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 pub use traits::Ordering;
