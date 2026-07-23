@@ -8,11 +8,12 @@ use p2panda_core::{
 };
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
+use p2panda_stream::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
+
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::processor::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 use crate::streams::Source;
 
