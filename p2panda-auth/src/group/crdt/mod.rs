@@ -303,6 +303,22 @@ where
         }
     }
 
+    /// Get all parent groups of the passed target group.
+    ///
+    /// A parent group is any group that the target group is a transitive child of. Said another
+    /// way, if the membership of the target group changed, a parent is any group which would be
+    /// effected by this change.
+    pub fn parents(&self, target: ID) -> Vec<ID> {
+        let mut parents = vec![];
+        for (id, _) in self.current_state() {
+            let children = self.groups(id);
+            if children.iter().any(|(id, _)| id == &target) {
+                parents.push(id)
+            }
+        }
+        parents
+    }
+
     /// Get all current individual members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.traverse_members(group_id, 0)

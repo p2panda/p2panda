@@ -31,8 +31,8 @@ pub use external_stream::ExternalStreamFuture;
 pub(crate) use local_stream::LocalStreamFuture;
 pub use publisher::{ImportError, PublishError, PublishFuture, StreamPublisher};
 pub use replay::{ReplayError, StreamFrom};
-pub(crate) use stream::processed_stream;
 pub use stream::{ProcessedOperation, Source, StreamEvent};
+pub(crate) use stream::{processed_stream, to_stream_event};
 pub use subscription::StreamSubscription;
 pub use sync_metrics::{SessionPhase, SyncError};
 

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
+use p2panda_auth::AccessLevel;
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic, VerifyingKey};
@@ -14,11 +15,12 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
+use p2panda_spaces::{ActorId, SpaceContext, SpaceId};
 use p2panda_store::SqliteStore;
 use p2panda_stream::spaces::SpacesResult;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
@@ -27,8 +29,8 @@ use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::spawn_repair_task;
-use crate::spaces::types::{SpaceEvent, SpacesManager};
+use crate::spaces::types::{InnerSpaceEvent, SpacesManager};
+use crate::spaces::{GroupActor, GroupEvent, spawn_repair_task, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
@@ -39,7 +41,7 @@ use crate::streams::publisher::StreamPublisher;
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::subscription::StreamSubscription;
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
-use crate::streams::{Event, Pipeline};
+use crate::streams::{Event, Pipeline, SystemEvent};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -106,6 +108,7 @@ pub(crate) async fn processed_stream<M>(
     forge: OperationForge,
     spaces_manager: SpacesManager,
     pipeline: Pipeline,
+    event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
@@ -188,7 +191,7 @@ where
 
         tokio::spawn(async move {
             loop {
-                let stream_events = tokio::select! {
+                let forward_events = tokio::select! {
                     // We need to process pipeline output events _before_ any other system events.
                     // This is crucial to ensure correct ordering of events such as "replay started"
                     // being followed by "processed operations" and then finally by "replay ended",
@@ -198,7 +201,7 @@ where
                     // Handle resulting output events from the pipeline and forward them as stream
                     // events to application layer, when applicable.
                     from_pipeline_event = pipeline.next() => {
-                        if let Some(stream_events) =
+                        if let Some(forward_events) =
                             process_operation_out::<M>(
                                 from_pipeline_event,
                                 topic,
@@ -206,7 +209,7 @@ where
                                 &acked
                             ).await
                         {
-                            stream_events
+                            forward_events
                         } else {
                             continue;
                         }
@@ -214,8 +217,8 @@ where
 
                     // Any other process forwarding an event (like "replay ended", etc.) to the
                     // application layer.
-                    Some(stream_events) = to_output_rx.recv() => {
-                        stream_events
+                    Some(forward_events) = to_output_rx.recv() => {
+                        forward_events.into_iter().map(ForwardEvent::stream).collect()
                     }
 
                     // Break out of the loop, thereby ending the task, when both the
@@ -230,8 +233,15 @@ where
                 //
                 // If channel stopped working because the subscriber got dropped, ignore it as
                 // we still might want to process locally published operations.
-                for stream_event in stream_events {
-                    let _ = app_tx.send(stream_event).await;
+                for forward_event in forward_events {
+                    match forward_event {
+                        ForwardEvent::System(system_event) => {
+                            let _ = event_tx.send(system_event);
+                        }
+                        ForwardEvent::Stream(stream_event) => {
+                            let _ = app_tx.send(stream_event).await;
+                        }
+                    }
                 }
             }
         });
@@ -494,7 +504,7 @@ pub(crate) async fn process_operation_out<M>(
     topic: Topic,
     ack_policy: AckPolicy,
     acked: &Acked,
-) -> Option<Vec<StreamEvent<M>>>
+) -> Option<Vec<ForwardEvent<M>>>
 where
     M: for<'a> Deserialize<'a> + Send + 'static,
 {
@@ -507,11 +517,11 @@ where
             error,
         );
 
-        let failure_event = vec![StreamEvent::ProcessingFailed {
+        let failure_event = vec![ForwardEvent::stream(StreamEvent::ProcessingFailed {
             event,
             error,
             source,
-        }];
+        })];
 
         return Some(failure_event);
     }
@@ -534,13 +544,13 @@ where
                             if ack_policy == AckPolicy::Automatic
                                 && let Err(error) = acked.ack(&event).await
                             {
-                                forward_events.push(StreamEvent::AckFailed {
+                                forward_events.push(ForwardEvent::stream(StreamEvent::AckFailed {
                                     event: event.clone(),
                                     error: Arc::new(error),
-                                });
+                                }));
                             }
 
-                            forward_events.push(StreamEvent::Processed {
+                            forward_events.push(ForwardEvent::stream(StreamEvent::Processed {
                                 operation: ProcessedOperation {
                                     event: event.clone(),
                                     topic,
@@ -548,28 +558,56 @@ where
                                     message,
                                 },
                                 source: source.clone(),
-                            });
+                            }));
                         }
-                        Err(error) => forward_events.push(StreamEvent::DecodeFailed {
-                            event: event.clone(),
-                            error,
-                        }),
+                        Err(error) => {
+                            forward_events.push(ForwardEvent::stream(StreamEvent::DecodeFailed {
+                                event: event.clone(),
+                                error,
+                            }))
+                        }
                     }
                 }
 
                 p2panda_spaces::Event::KeyBundle { author } => {
-                    forward_events.push(StreamEvent::KeyBundle(*author))
+                    forward_events.push(ForwardEvent::stream(StreamEvent::KeyBundle(*author)))
                 }
 
-                p2panda_spaces::Event::Group(_) => {
-                    // @TODO: It's not clear if group events should be forwarded on the spaces
-                    // stream, so for now we don't forward any.
-                    // forward_events.push(StreamEvent::Group(group_event.to_owned()))
+                p2panda_spaces::Event::Auth(group_event) => {
+                    let members = group_event
+                        .context()
+                        .members
+                        .iter()
+                        .map(|(id, access)| (*id, access.level))
+                        .collect();
+
+                    let actors = group_event
+                        .context()
+                        .actors
+                        .iter()
+                        .map(|(actor, access)| {
+                            (
+                                GroupActor {
+                                    id: actor.id(),
+                                    group: actor.is_group(),
+                                },
+                                access.level,
+                            )
+                        })
+                        .collect();
+
+                    let event = GroupEvent {
+                        group_id: group_event.group_id(),
+                        members,
+                        actors,
+                        inner: group_event.clone(),
+                    };
+                    forward_events.push(ForwardEvent::system(SystemEvent::Auth(event)))
                 }
 
-                p2panda_spaces::Event::Space(space_event) => {
-                    forward_events.push(StreamEvent::Space(space_event.to_owned()))
-                }
+                p2panda_spaces::Event::Space(space_event) => forward_events.push(
+                    ForwardEvent::stream(to_stream_event(space_event.to_owned())),
+                ),
             }
         }
     } else {
@@ -577,10 +615,10 @@ where
         let Some(body) = event.body() else {
             // _Always_ ack system-level events, even if no automatic policy was configured.
             if let Err(error) = acked.ack(&event).await {
-                return Some(vec![StreamEvent::AckFailed {
+                return Some(vec![ForwardEvent::stream(StreamEvent::AckFailed {
                     event,
                     error: Arc::new(error),
-                }]);
+                })]);
             }
 
             return None;
@@ -604,13 +642,13 @@ where
                 if ack_policy == AckPolicy::Automatic
                     && let Err(error) = acked.ack(&event).await
                 {
-                    return Some(vec![StreamEvent::AckFailed {
+                    return Some(vec![ForwardEvent::stream(StreamEvent::AckFailed {
                         event,
                         error: Arc::new(error),
-                    }]);
+                    })]);
                 }
 
-                return Some(vec![StreamEvent::Processed {
+                return Some(vec![ForwardEvent::stream(StreamEvent::Processed {
                     operation: ProcessedOperation {
                         event,
                         topic,
@@ -618,9 +656,14 @@ where
                         message,
                     },
                     source,
-                }]);
+                })]);
             }
-            Err(error) => return Some(vec![StreamEvent::DecodeFailed { event, error }]),
+            Err(error) => {
+                return Some(vec![ForwardEvent::stream(StreamEvent::DecodeFailed {
+                    event,
+                    error,
+                })]);
+            }
         }
     }
 
@@ -754,16 +797,85 @@ pub enum StreamEvent<M> {
     },
 
     /// Space has been created or modified.
-    Space(SpaceEvent),
-
-    // @TODO: It's not clear where group events should be forwarded so we don't send any for now
-    // and therefore this variant is commented out.
-    //
-    /// Group has been created or modified.
-    // Group(GroupEvent<AuthCapabilities>),
+    Space {
+        space_id: SpaceId,
+        members: Vec<(ActorId, AccessLevel)>,
+        actors: Vec<(GroupActor, AccessLevel)>,
+        inner: InnerSpaceEvent,
+    },
 
     /// Key bundle has been processed.
     KeyBundle(VerifyingKey),
+}
+
+pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
+    match &event {
+        p2panda_spaces::SpaceEvent::Created {
+            space_id,
+            context: SpaceContext {
+                members, actors, ..
+            },
+            ..
+        }
+        | p2panda_spaces::SpaceEvent::Added {
+            space_id,
+            context: SpaceContext {
+                members, actors, ..
+            },
+            ..
+        }
+        | p2panda_spaces::SpaceEvent::Removed {
+            space_id,
+            context: SpaceContext {
+                members, actors, ..
+            },
+            ..
+        }
+        | p2panda_spaces::SpaceEvent::Promoted {
+            space_id,
+            context: SpaceContext {
+                members, actors, ..
+            },
+            ..
+        }
+        | p2panda_spaces::SpaceEvent::Demoted {
+            space_id,
+            context: SpaceContext {
+                members, actors, ..
+            },
+            ..
+        } => StreamEvent::Space {
+            space_id: *space_id,
+            members: to_members(members),
+            actors: to_actors(actors),
+            inner: event,
+        },
+        p2panda_spaces::SpaceEvent::Ejected { space_id } => StreamEvent::Space {
+            space_id: *space_id,
+            members: vec![],
+            actors: vec![],
+            inner: event,
+        },
+    }
+}
+
+#[derive(Clone, Debug)]
+// @TODO: StreamEvent is a large type and I believe it will remain that way, maybe best to Box
+// here.
+#[allow(clippy::large_enum_variant)]
+pub enum ForwardEvent<M> {
+    System(SystemEvent),
+    Stream(StreamEvent<M>),
+}
+
+impl<M> ForwardEvent<M> {
+    pub fn system(event: SystemEvent) -> Self {
+        Self::System(event)
+    }
+
+    pub fn stream(event: StreamEvent<M>) -> Self {
+        Self::Stream(event)
+    }
 }
 
 /// Processed operation with application message coming from a topic stream.

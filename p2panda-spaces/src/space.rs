@@ -327,6 +327,7 @@ where
 
         // Get next space members.
         let next_members = y.groups_y.members(y.group_id);
+        let current_parents = y.groups_y.inner.parents(y.group_id);
         let next_secret_members = secret_members(&next_members);
 
         // Process the change of membership on encryption the context.
@@ -373,6 +374,7 @@ where
             auth_message,
             &SpacesMessage::space_membership(&space_message),
             &current_members,
+            &current_parents,
         );
 
         Ok((y, space_message, events))
@@ -409,6 +411,7 @@ where
         let duplicate_pointer = y.groups_y.inner.operations.contains_key(&auth_message.id());
 
         let current_members = y.groups_y.members(y.group_id);
+        let current_parents = y.groups_y.inner.parents(y.group_id);
         let current_secret_members = secret_members(&current_members);
 
         // Process auth message on space auth state.
@@ -461,8 +464,14 @@ where
             .orderer
             .add_dependency(*id, space_dependencies);
 
-        let mut events =
-            Self::generate_space_events(me, &y, auth_message, space_message, &current_members);
+        let mut events = Self::generate_space_events(
+            me,
+            &y,
+            auth_message,
+            space_message,
+            &current_members,
+            &current_parents,
+        );
 
         events.extend(application_events);
 
@@ -476,6 +485,7 @@ where
         auth_message: &AuthMessage<C>,
         space_message: &SpaceMembershipMessage,
         previous_members: &[(ActorId, Access<C>)],
+        previous_parents: &[ActorId],
     ) -> Vec<Event<C>> {
         let mut events = vec![];
         // If current and next member sets are equal it indicates that the space is not affected
@@ -505,6 +515,7 @@ where
             space_message,
             auth_message,
             previous_members,
+            previous_parents,
         );
 
         events.push(space_event);

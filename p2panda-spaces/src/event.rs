@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::{HashMap, HashSet};
+
+use p2panda_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 
 use p2panda_auth::Access;
@@ -52,7 +55,7 @@ impl GroupActor {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
-    Group(GroupEvent<C>),
+    Auth(GroupEvent<C>),
     Application { space_id: SpaceId, data: Vec<u8> },
     // @TODO: Could maybe add field to show when the bundle is valid until?
     KeyBundle { author: MemberId },
@@ -66,10 +69,19 @@ pub struct GroupsContext<C> {
     pub author: ActorId,
 
     /// Root group actors, can be individuals or groups.
-    pub group_actors: Vec<(GroupActor, Access<C>)>,
+    pub actors: Vec<(GroupActor, Access<C>)>,
 
     /// Members of this group.
     pub members: Vec<(ActorId, Access<C>)>,
+
+    /// All groups for which this group is a child (direct or transitive).
+    pub parents: Vec<ActorId>,
+
+    /// All effected groups and their members.
+    pub effected_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>>,
+
+    /// all effected groups and their actors.
+    pub effected_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>>,
 }
 
 /// Additional context attached to space events.
@@ -173,6 +185,26 @@ impl<C> GroupEvent<C> {
             GroupEvent::Promoted { group_id, .. } => *group_id,
             GroupEvent::Demoted { group_id, .. } => *group_id,
         }
+    }
+
+    pub fn context(&self) -> &GroupsContext<C> {
+        match self {
+            GroupEvent::Created { context, .. }
+            | GroupEvent::Added { context, .. }
+            | GroupEvent::Removed { context, .. }
+            | GroupEvent::Promoted { context, .. }
+            | GroupEvent::Demoted { context, .. } => context,
+        }
+    }
+
+    pub fn effects(&self, group_id: GroupId) -> bool {
+        let mut effected_parents = self.context().effected_actors.keys();
+
+        if effected_parents.any(|id| *id == group_id) {
+            return true;
+        }
+
+        false
     }
 }
 
@@ -283,16 +315,17 @@ where
 pub(crate) fn auth_message_to_group_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
+    previous_parents: &[MemberId],
 ) -> GroupEvent<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
-    let context = groups_context(auth_y, auth_message);
+    let context = groups_context(auth_y, auth_message, previous_parents);
     match auth_message.action() {
         AuthGroupAction::Create { .. } => GroupEvent::Created {
             group_id,
-            initial_members: context.group_actors.clone(),
+            initial_members: context.actors.clone(),
             context,
         },
         AuthGroupAction::Add { member, access } => GroupEvent::Added {
@@ -324,12 +357,13 @@ where
 pub(crate) fn group_message_to_auth_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
+    previous_parents: &[MemberId],
 ) -> Event<C>
 where
     C: Conditions,
 {
-    let group_event = auth_message_to_group_event(auth_y, auth_message);
-    Event::Group(group_event)
+    let group_event = auth_message_to_group_event(auth_y, auth_message, previous_parents);
+    Event::Auth(group_event)
 }
 
 pub(crate) fn space_message_to_space_event<C>(
@@ -339,6 +373,7 @@ pub(crate) fn space_message_to_space_event<C>(
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
     previous_members: &[(MemberId, Access<C>)],
+    previous_parents: &[MemberId],
 ) -> Event<C>
 where
     C: Conditions,
@@ -355,7 +390,7 @@ where
         members: next_members.to_vec(),
         actors: next_actors,
     };
-    let groups_context = groups_context(auth_y, auth_message);
+    let groups_context = groups_context(auth_y, auth_message, previous_parents);
 
     let space_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
@@ -405,25 +440,55 @@ where
     Event::Space(space_event)
 }
 
-fn groups_context<C>(auth_y: &AuthGroupState<C>, auth_message: &AuthMessage<C>) -> GroupsContext<C>
+fn groups_context<C>(
+    auth_y: &AuthGroupState<C>,
+    auth_message: &AuthMessage<C>,
+    previous_parents: &[MemberId],
+) -> GroupsContext<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
 
-    let mut group_actors: Vec<_> = auth_y
+    let mut actors: Vec<_> = auth_y
         .root_members(group_id)
         .into_iter()
         .map(|(member, access)| (GroupActor::from_group_member(member), access))
         .collect();
-    sort_members(&mut group_actors);
+    sort_members(&mut actors);
 
     let mut members = auth_y.members(group_id);
     sort_members(&mut members);
 
+    let mut parents = auth_y.inner.parents(group_id);
+    parents.sort();
+
+    let effected: HashSet<&VerifyingKey> =
+        HashSet::from_iter(parents.iter().chain(previous_parents.iter()));
+    let effected_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>> = effected
+        .iter()
+        .map(|id| (**id, auth_y.members(**id)))
+        .collect();
+    let effected_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>> = effected
+        .into_iter()
+        .map(|id| {
+            (
+                *id,
+                auth_y
+                    .root_members(*id)
+                    .into_iter()
+                    .map(|(member, access)| (GroupActor::from_group_member(member), access))
+                    .collect(),
+            )
+        })
+        .collect();
+
     GroupsContext {
         author: auth_message.author(),
         members,
-        group_actors,
+        actors,
+        effected_members,
+        effected_actors,
+        parents,
     }
 }
