@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use iroh::endpoint::EndpointHooks;
 use p2panda_core::SigningKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
@@ -9,6 +10,7 @@ use crate::address_book::AddressBook;
 use crate::iroh_endpoint::actors::{IrohEndpoint, IrohEndpointArgs};
 use crate::iroh_endpoint::api::{Endpoint, EndpointError};
 use crate::iroh_endpoint::config::IrohConfig;
+use crate::iroh_endpoint::hooks::EndpointHooksList;
 use crate::{DEFAULT_NETWORK_ID, NetworkId};
 
 pub struct Builder {
@@ -17,6 +19,7 @@ pub struct Builder {
     config: Option<IrohConfig>,
     relay_urls: HashSet<iroh::RelayUrl>,
     address_book: AddressBook,
+    hooks: EndpointHooksList,
 }
 
 impl Builder {
@@ -27,6 +30,7 @@ impl Builder {
             config: None,
             address_book,
             relay_urls: HashSet::new(),
+            hooks: EndpointHooksList::new(),
         }
     }
 
@@ -68,17 +72,35 @@ impl Builder {
         self
     }
 
+    /// Register custom hooks with the endpoint.
+    ///
+    /// Endpoint hooks intercept the connection establishment process of an iroh `Endpoint`.
+    ///
+    /// Multiple hooks can be registered with the `Endpoint` and will be called in their order of
+    /// registration. If any of the hooks result in a connection rejection, all further processing
+    /// is aborted and subsequent hooks will not be called.
+    ///
+    /// See iroh's [`EndpointHooks`] documentation for further details.
+    ///
+    /// [`EndpointHooks`]: https://docs.rs/iroh/latest/iroh/endpoint/trait.EndpointHooks.html
+    pub fn hooks(mut self, hook: impl EndpointHooks + 'static + Clone) -> Self {
+        self.hooks.push(hook);
+        self
+    }
+
     pub(crate) fn build_args(self) -> IrohEndpointArgs {
         let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
         let signing_key = self.signing_key.unwrap_or_default();
         let config = self.config.unwrap_or_default();
         let relay_map = iroh::RelayMap::from_iter(self.relay_urls);
+
         (
             network_id,
             signing_key,
             config,
             relay_map,
             self.address_book,
+            self.hooks,
         )
     }
 
