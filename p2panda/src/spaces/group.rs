@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::cell::RefCell;
 use std::pin::Pin;
+use std::sync::RwLock;
 use std::task::{Context, Poll};
 
 use futures_util::stream::StreamExt;
@@ -24,9 +24,11 @@ use crate::streams::{ExternalStreamFuture, ImportError, StreamPublisher, StreamS
 pub struct Group {
     inner: InnerGroup,
     tx: StreamPublisher<NoBody>,
-    event_stream_rx: RefCell<broadcast::Receiver<GroupEvent>>,
+    event_stream_rx: RwLock<broadcast::Receiver<GroupEvent>>,
     event_stream_handle: AbortHandle,
 }
+
+static_assertions::assert_impl_all!(Group: Send, Sync);
 
 impl Drop for Group {
     fn drop(&mut self) {
@@ -64,7 +66,7 @@ impl Group {
         Self {
             inner,
             tx,
-            event_stream_rx: RefCell::new(event_stream_rx),
+            event_stream_rx: RwLock::new(event_stream_rx),
             event_stream_handle: event_stream_handle.abort_handle(),
         }
     }
@@ -76,9 +78,13 @@ impl Group {
     pub fn event_stream(&self) -> impl Stream<Item = GroupEvent> + Send + Unpin + 'static {
         // Make sure we're not re-subscribing and thus dropping all events which might be still in
         // the buffer of the first broadcast receiver instance.
-        let stream = self
-            .event_stream_rx
-            .replace_with(|stream| stream.resubscribe());
+        let stream = {
+            let write = self.event_stream_rx.write().unwrap();
+            let resubscribed = write.resubscribe();
+
+            let mut write = write;
+            std::mem::replace(&mut *write, resubscribed)
+        };
 
         // TODO: Check if we really want to silence broadcast "lagged" errors here?
         let stream = BroadcastStream::new(stream).filter_map(|event| async { event.ok() });
