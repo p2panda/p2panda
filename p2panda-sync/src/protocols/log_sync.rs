@@ -140,7 +140,9 @@ where
                         return Err(LogSyncError::UnexpectedStreamClosure);
                     };
                     let message = message
-                        .inspect_err(|error| debug!(parent: &span, ?error, "Message stream errored"))
+                        .inspect_err(
+                            |error| debug!(parent: &span, ?error, "Message stream errored"),
+                        )
                         .map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                     let LogSyncMessage::Have(remote) = message else {
@@ -169,7 +171,9 @@ where
                                 .get_log_size(verifying_key, log_id, *after, *until)
                                 .instrument(span.clone())
                                 .await
-                                .inspect_err(|error| debug!(parent: &span, ?error, "Log sync error"))
+                                .inspect_err(
+                                    |error| debug!(parent: &span, ?error, "Log sync error"),
+                                )
                                 .map_err(|err| LogSyncError::OperationStore(format!("{err}")))?
                             {
                                 outbound_operations += inner_outbound_operations;
