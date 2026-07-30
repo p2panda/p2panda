@@ -212,7 +212,7 @@ where
         // query includes the operation with sequence number 0.
         let after_operator = if after.is_none() { ">=" } else { ">" };
 
-        let query_str = format!(
+        let operations = query_as::<_, OperationRow>(&format!(
             "
             SELECT
                 hash,
@@ -221,26 +221,21 @@ where
             FROM
                 operations_v1
             WHERE
-                verifying_key = ?
-                AND log_id = ?
-                AND seq_num {} ?
-                AND seq_num <= ?
+                verifying_key = $1
+                AND log_id = $2
+                AND seq_num {} $3
+                AND seq_num <= $4
             ORDER BY
                 seq_num
             ",
             after_operator
-        );
-
-        let operations = query_as::<_, OperationRow>(&query_str)
-            .bind(author.to_string())
-            .bind(
-                encode_cbor(&log_id)
-                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-            )
-            .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(SeqNum::MAX).to_string())
-            .fetch_all(&self.pool)
-            .await?;
+        ))
+        .bind(author.to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
+        .bind(after.unwrap_or(0).to_string())
+        .bind(until.unwrap_or(SeqNum::MAX).to_string())
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut entries = Vec::new();
         for operation in operations {
