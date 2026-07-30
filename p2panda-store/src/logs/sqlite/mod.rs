@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
-use sqlx::{query, query_as};
+use sqlx::{QueryBuilder, query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
@@ -101,54 +101,43 @@ where
         author: &VerifyingKey,
         logs: &[L],
     ) -> Result<Option<BTreeMap<L, SeqNum>>, Self::Error> {
-        let mut encoded_log_ids = Vec::new();
-        for log in logs {
-            let encoded_log_id =
-                encode_cbor(&log).map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
-            encoded_log_ids.push(encoded_log_id);
-        }
-
-        // This query formation approach is required since there is currently no
-        // way to directly bind arrays as comma-separated lists in sqlx.
-        let params = format!("?{}", ", ?".repeat(encoded_log_ids.len() - 1));
-        let query_str = format!(
-            "
-            SELECT
+        let mut query_builder = QueryBuilder::new(
+            r#"SELECT
                 log_id,
                 MAX(seq_num) as seq_num
             FROM
                 operations_v1
             WHERE
-                verifying_key = ?
-                AND log_id IN ( {} )
-            GROUP BY
-                log_id
-            ",
-            params
+                verifying_key = "#,
         );
 
-        let mut query = query_as::<_, LogHeightRow>(&query_str).bind(author.to_string());
+        query_builder.push_bind(author.to_string());
+        query_builder.push(" AND log_id IN ( ");
 
-        for log_id in encoded_log_ids {
-            query = query.bind(log_id)
-        }
-
-        let log_heights_query = query.fetch_all(&self.pool).await?;
-
-        let log_heights = if log_heights_query.is_empty() {
-            None
-        } else {
-            let mut log_heights = BTreeMap::new();
-
-            for row in log_heights_query {
-                let (log_id, seq_num) = row.try_into()?;
-                log_heights.insert(log_id, seq_num);
+        {
+            let mut separated = query_builder.separated(", ");
+            for log in logs {
+                let encoded_log_id = encode_cbor(&log)
+                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
+                separated.push_bind(encoded_log_id);
             }
 
-            Some(log_heights)
-        };
+            separated.push_unseparated(") GROUP BY log_id");
+        }
 
-        Ok(log_heights)
+        let log_heights = query_builder
+            .build_query_as::<LogHeightRow>()
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(|row| row.try_into())
+            .collect::<Result<BTreeMap<L, u32>, _>>()?;
+
+        if log_heights.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(log_heights))
+        }
     }
 
     /// Retrieve the count and total byte size of all operations in an author's log.
