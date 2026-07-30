@@ -19,6 +19,7 @@ use p2panda_net::{
 use p2panda_store::SqliteStore;
 use thiserror::Error;
 
+use crate::authoriser::Authoriser;
 use crate::operation::Extensions;
 
 #[derive(Clone, Debug)]
@@ -37,6 +38,7 @@ impl Network {
         config: NetworkConfig,
         signing_key: SigningKey,
         store: SqliteStore,
+        authoriser: Authoriser,
     ) -> Result<Self, NetworkError> {
         let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
@@ -50,7 +52,8 @@ impl Network {
         let mut endpoint = Endpoint::builder(address_book.clone())
             .config(config.iroh)
             .signing_key(signing_key)
-            .network_id(config.network_id);
+            .network_id(config.network_id)
+            .hooks(authoriser);
 
         for url in &config.relay_urls {
             endpoint = endpoint.relay_url(url.clone());
