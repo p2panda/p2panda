@@ -159,10 +159,7 @@ where
         after: Option<SeqNum>,
         until: Option<SeqNum>,
     ) -> Result<Option<(u32, u32)>, Self::Error> {
-        // We need to use an inclusive greater-than to ensure our
-        // query includes the operation with sequence number 0.
-        let after_operator = if after.is_none() { ">=" } else { ">" };
-        let query_str = format!(
+        let log_meta: Option<LogMetaRow> = query_as::<_, LogMetaRow>(
             "
             SELECT
                 SUM(header_size) AS total_header_bytes,
@@ -171,24 +168,25 @@ where
             FROM
                 operations_v1
             WHERE
-                verifying_key = ?
-                AND log_id = ?
-                AND seq_num {} ?
-                AND seq_num <= ?
+                verifying_key = $1
+                AND log_id =$2
+                AND (
+                    ($3 == true AND seq_num >= $4)
+                    OR
+                    ($3 == false AND seq_num > $4)
+                )
+                AND seq_num <= $5
             ",
-            after_operator
-        );
-
-        let log_meta: Option<LogMetaRow> = query_as::<_, LogMetaRow>(&query_str)
-            .bind(author.to_string())
-            .bind(
-                encode_cbor(&log_id)
-                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-            )
-            .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(SeqNum::MAX).to_string())
-            .fetch_optional(&self.pool)
-            .await?;
+        )
+        .bind(author.to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
+        // We need to use an inclusive greater-than to ensure our
+        // query includes the operation with sequence number 0.
+        .bind(after.is_none())
+        .bind(after.unwrap_or(0).to_string())
+        .bind(until.unwrap_or(SeqNum::MAX).to_string())
+        .fetch_optional(&self.pool)
+        .await?;
 
         let Some(row) = log_meta else {
             return Ok(None);
@@ -208,11 +206,7 @@ where
         after: Option<SeqNum>,
         until: Option<SeqNum>,
     ) -> Result<Option<Vec<(Operation<E>, Vec<u8>)>>, Self::Error> {
-        // We need to use an inclusive greater-than to ensure our
-        // query includes the operation with sequence number 0.
-        let after_operator = if after.is_none() { ">=" } else { ">" };
-
-        let operations = query_as::<_, OperationRow>(&format!(
+        let operations = query_as::<_, OperationRow>(
             "
             SELECT
                 hash,
@@ -223,15 +217,21 @@ where
             WHERE
                 verifying_key = $1
                 AND log_id = $2
-                AND seq_num {} $3
-                AND seq_num <= $4
+                AND (
+                    ($3 == true AND seq_num >= $4)
+                    OR
+                    ($3 == false AND seq_num > $4)
+                )
+                AND seq_num <= $5
             ORDER BY
                 seq_num
             ",
-            after_operator
-        ))
+        )
         .bind(author.to_string())
         .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
+        // We need to use an inclusive greater-than to ensure our
+        // query includes the operation with sequence number 0.
+        .bind(after.is_none())
         .bind(after.unwrap_or(0).to_string())
         .bind(until.unwrap_or(SeqNum::MAX).to_string())
         .fetch_all(&self.pool)
