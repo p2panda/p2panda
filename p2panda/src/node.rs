@@ -20,6 +20,7 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::debug;
 
+use crate::authoriser::Authoriser;
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::forge::{Forge, OperationForge};
@@ -51,6 +52,7 @@ pub struct Node {
     spaces_manager: SpacesManager,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: RwLock<broadcast::Receiver<SystemEvent>>,
+    authoriser: Authoriser,
 }
 
 impl Node {
@@ -84,10 +86,13 @@ impl Node {
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
+        let authoriser = Authoriser::new();
+
         let network = Network::spawn(
             config.network.clone(),
             credentials.node_signing_key(),
             store.clone(),
+            authoriser.clone(),
         )
         .await?;
 
@@ -109,6 +114,7 @@ impl Node {
             spaces_manager,
             events_tx,
             events_rx: RwLock::new(events_rx),
+            authoriser,
         })
     }
 
@@ -379,6 +385,8 @@ impl Node {
     pub async fn event_stream(
         &self,
     ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
+        let authoriser_events = self.authoriser.events().await;
+
         let discovery_events = self
             .network
             .discovery
@@ -394,7 +402,7 @@ impl Node {
             std::mem::replace(&mut *write, resubscribed)
         };
 
-        Ok(event_stream(events_rx, discovery_events))
+        Ok(event_stream(events_rx, authoriser_events, discovery_events))
     }
 
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
@@ -709,6 +717,11 @@ impl Node {
         relay_url: RelayUrl,
     ) -> Result<(), NetworkError> {
         self.network.insert_bootstrap(node_id, relay_url).await
+    }
+
+    /// Blocks all connection attempts with the given node.
+    pub async fn block(&self, node_id: NodeId) {
+        self.authoriser.block(node_id).await;
     }
 }
 

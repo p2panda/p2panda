@@ -12,6 +12,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::spaces::GroupActor;
 use crate::spaces::types::InnerGroupEvent;
+use crate::authoriser::AuthoriserEvent;
 
 /// System event.
 ///
@@ -20,6 +21,7 @@ use crate::spaces::types::InnerGroupEvent;
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
+    Authoriser(AuthoriserEvent),
     Discovery(DiscoveryEvent),
     Groups {
         /// Id of the group this event originated from.
@@ -38,24 +40,36 @@ pub enum SystemEvent {
     },
 }
 
+pub type EventStream = Pin<Box<dyn Stream<Item = SystemEvent> + Send + Unpin + 'static>>;
+
 /// Merge the provided event streams into a single, unified system event stream.
 pub(crate) fn event_stream(
     events_stream: broadcast::Receiver<SystemEvent>,
+    authoriser_events: broadcast::Receiver<AuthoriserEvent>,
     discovery_events: broadcast::Receiver<DiscoveryEvent>,
-) -> impl Stream<Item = SystemEvent> + Send + Unpin + 'static {
+) -> EventStream {
+    let events_broadcast_stream = BroadcastStream::new(events_stream);
+    let authoriser_broadcast_stream = BroadcastStream::new(authoriser_events);
     let discovery_broadcast_stream = BroadcastStream::new(discovery_events);
+
+    let authoriser_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
+        authoriser_broadcast_stream
+            .filter_map(|event| async { event.ok().map(SystemEvent::Authoriser) })
+            .boxed(),
+    );
 
     let discovery_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
         discovery_broadcast_stream
-            .filter_map(|event| async { event.ok().map(SystemEvent::Discovery) }),
+            .filter_map(|event| async { event.ok().map(SystemEvent::Discovery) })
+            .boxed(),
     );
 
-    let events_broadcast_stream = BroadcastStream::new(events_stream);
 
     let events_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> =
         Box::pin(events_broadcast_stream.filter_map(|event| async { event.ok() }));
 
     let mut stream_set = SelectAll::new();
+    stream_set.push(authoriser_stream);
     stream_set.push(discovery_stream);
     stream_set.push(events_stream);
 

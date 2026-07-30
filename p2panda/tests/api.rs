@@ -3,6 +3,7 @@
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::Credentials;
+use p2panda::authoriser::AuthoriserEvent;
 use p2panda::node::AckPolicy;
 use p2panda::operation::{Extensions, LogId, Operation};
 use p2panda::streams::{
@@ -651,4 +652,43 @@ async fn graceful_closure_of_publisher() {
 
     // The stream can now be successfully created immediately after calling close.
     assert!(icebear.stream::<String>(chat_id).await.is_ok());
+}
+
+#[tokio::test]
+async fn block_node_connections() {
+    setup_logging();
+
+    let chat_id = Topic::random();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    panda.block(icebear.id()).await;
+
+    // Panda joins the chat and sends a message.
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx
+        .publish("I just blocked Icebear!".into())
+        .await
+        .unwrap();
+
+    // Create a system event stream for panda.
+    let mut events = panda.event_stream().await.unwrap();
+
+    // Icebear joins the chat.
+    let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    let mut received_event = false;
+
+    // The discovery system should try and initiate a connection to Icebear.
+    // We expect the connection establishment to be blocked.
+    while let Some(event) = events.next().await {
+        if let SystemEvent::Authoriser(AuthoriserEvent::Blocked(node)) = event {
+            assert_eq!(node, icebear.id());
+            received_event = true;
+            break;
+        }
+    }
+
+    assert!(received_event);
 }
