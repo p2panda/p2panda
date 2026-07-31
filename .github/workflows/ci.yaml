@@ -1,6 +1,13 @@
 name: CI
 
-on: push
+on:
+  push:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 env:
   CARGO_TERM_COLOR: always
