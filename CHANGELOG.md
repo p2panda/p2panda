@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Changed
+
+- net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
+
 ### Fixed
 
 - encryption: Do not require pre-key bundle when initialising TwoParty state as a recipient [#1297](https://github.com/p2panda/p2panda/pull/1297)
