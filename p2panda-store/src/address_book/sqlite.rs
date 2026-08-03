@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Topic, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as, query_scalar};
+use sqlx::{QueryBuilder, query, query_as, query_scalar};
 
 use crate::address_book::{AddressBookStore, NodeInfo};
 use crate::sqlite::{SqliteError, SqliteStore};
@@ -130,26 +129,33 @@ where
             })
             .await?;
 
-        let node_ids: Vec<&String> = result.iter().map(|item| &item.0).collect();
-
         // Remove associated topics for removed nodes.
         self.tx(async |tx| {
-            query(&format!(
-                "
+            let mut query_builder = QueryBuilder::new(
+                r#"
                 DELETE FROM
                     topics2node_infos_v1
                 WHERE
-                    node_id IN ({})
-                ",
-                in_op_str(&node_ids)
-            ))
-            .execute(&mut **tx)
-            .await
-            .map_err(SqliteError::Sqlite)
+                    node_id IN ( "#,
+            );
+
+            {
+                let mut separated = query_builder.separated(", ");
+                for item in result.iter() {
+                    separated.push_bind(&item.0);
+                }
+                separated.push_unseparated(") ");
+            }
+
+            query_builder
+                .build()
+                .execute(&mut **tx)
+                .await
+                .map_err(SqliteError::Sqlite)
         })
         .await?;
 
-        Ok(node_ids.len())
+        Ok(result.len())
     }
 
     async fn node_info(&self, id: &VerifyingKey) -> Result<Option<N>, Self::Error> {
@@ -274,20 +280,30 @@ where
     async fn selected_node_infos(&self, ids: &[VerifyingKey]) -> Result<Vec<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(&format!(
-                    "
+                let mut query_builder = QueryBuilder::new(
+                    r#"
                     SELECT
                         node_info
                     FROM
                         node_infos_v1
                     WHERE
-                        node_id IN ({})
-                    ",
-                    in_op_str(ids)
-                ))
-                .fetch_all(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
+                        node_id IN (
+                "#,
+                );
+
+                {
+                    let mut separated = query_builder.separated(", ");
+                    for id in ids.iter() {
+                        separated.push_bind(id.to_string());
+                    }
+                    separated.push_unseparated(" ) ");
+                }
+
+                query_builder
+                    .build_query_as::<(Vec<u8>,)>()
+                    .fetch_all(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
             })
             .await?;
 
@@ -346,8 +362,8 @@ where
     async fn node_infos_by_topics(&self, topics: &[Topic]) -> Result<Vec<N>, Self::Error> {
         let result = self
             .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(&format!(
-                    "
+                let mut query_builder = QueryBuilder::new(
+                    r#"
                     SELECT
                         node_infos_v1.node_info
                     FROM
@@ -355,16 +371,31 @@ where
                     LEFT JOIN topics2node_infos_v1
                         ON node_infos_v1.node_id = topics2node_infos_v1.node_id
                     WHERE
-                        topics2node_infos_v1.topic_id IN ({})
+                        topics2node_infos_v1.topic_id IN (
+                "#,
+                );
+
+                {
+                    let mut separated = query_builder.separated(", ");
+                    for topic in topics {
+                        separated.push_bind(topic.to_string());
+                    }
+                    separated.push_unseparated(") ");
+                }
+
+                query_builder.push(
+                    r#"
                         AND node_infos_v1.stale = FALSE
                     GROUP BY
                         node_infos_v1.node_id
-                    ",
-                    in_op_str(topics)
-                ))
-                .fetch_all(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
+                    "#,
+                );
+
+                query_builder
+                    .build_query_as::<(Vec<u8>,)>()
+                    .fetch_all(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
             })
             .await?;
 
@@ -450,21 +481,6 @@ impl SqliteStore {
 
         Ok(())
     }
-}
-
-/// Takes a list of items implementing `Display` to turn it into an SQL "IN" operator where each
-/// item is represented as a string.
-///
-/// ```text
-/// SELECT * FROM users
-/// WHERE
-///     id IN ('1a', '2b', '3c');
-/// ```
-fn in_op_str<T: Display>(list: &[T]) -> String {
-    list.iter()
-        .map(|item| format!("'{item}'"))
-        .collect::<Vec<String>>()
-        .join(",")
 }
 
 /// Deserialize multiple rows containing encoded node info.

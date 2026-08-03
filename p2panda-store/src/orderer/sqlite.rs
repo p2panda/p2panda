@@ -6,7 +6,7 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use p2panda_core::Hash;
-use sqlx::{query, query_as};
+use sqlx::{QueryBuilder, query, query_as};
 
 use crate::orderer::OrdererStore;
 #[cfg(any(test, feature = "test_utils"))]
@@ -328,23 +328,20 @@ where
     }
 
     async fn ready(&self, dependencies: &[ID]) -> Result<bool, Self::Error> {
-        self.tx(async |tx| {
-            let sql = format!(
-                "
-                SELECT
-                    COUNT(id)
-                FROM
-                    orderer_ready_v1
-                WHERE id IN ({})
-                ",
-                dependencies
-                    .iter()
-                    .map(|dep| format!("'{dep}'"))
-                    .collect::<Vec<String>>()
-                    .join(",")
-            );
+        let mut query_builder =
+            QueryBuilder::new("SELECT COUNT(id) FROM orderer_ready_v1 WHERE id IN (");
 
-            let result: (i64,) = query_as(&sql).fetch_one(&mut **tx).await?;
+        let mut separated = query_builder.separated(", ");
+        for dep in dependencies {
+            separated.push_bind(dep.to_string());
+        }
+
+        separated.push_unseparated(") ");
+
+        let query = query_builder.build_query_as::<(i64,)>();
+
+        self.tx(async |tx| {
+            let result = query.fetch_one(&mut **tx).await?;
             Ok(result.0 as usize == dependencies.len())
         })
         .await
