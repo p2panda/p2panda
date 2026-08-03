@@ -12,11 +12,12 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
+- sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
 
 ### Fixed
 
 - encryption: Do not require pre-key bundle when initialising TwoParty state as a recipient [#1297](https://github.com/p2panda/p2panda/pull/1297)
-- encryption: Update hpke-rs to v0.7.0 [#1309](https://github.com/p2panda/p2panda/pull/1309)
+- encryption: Update hpke-rs to v0.7.0 to fix RUSTSEC [#1309](https://github.com/p2panda/p2panda/pull/1309)
 
 ## [0.7.0] - 07/07/2026
 
