@@ -7,11 +7,12 @@ use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
 use p2panda_core::traits::{Digest, Provenance};
 use p2panda_core::{Hash, VerifyingKey};
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
-use p2panda_encryption::{crypto::xchacha20::XAeadNonce, key_bundle::LongTermKeyBundle};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthMessage;
+use crate::member::Member;
 use crate::types::EncryptionDirectMessage;
 use crate::{ActorId, GroupId, OperationId, SpaceId};
 
@@ -152,10 +153,8 @@ where
 /// Enum representing all possible message types.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SpacesArgs<C> {
-    /// System message, contains key bundle of the given author.
-    ///
-    /// Note: Applications should check if the key bundle was authored by the sender.
-    KeyBundle { key_bundle: LongTermKeyBundle },
+    /// System message, contains key bundle of the given member.
+    Member(Member),
 
     /// System message containing group control message.
     Group {
@@ -235,7 +234,7 @@ impl<C> SpacesArgs<C> {
     /// themselves been processed.
     pub fn dependencies(&self) -> Vec<Hash> {
         match self {
-            SpacesArgs::KeyBundle { .. } => vec![],
+            SpacesArgs::Member { .. } => vec![],
             SpacesArgs::Group {
                 auth_dependencies, ..
             } => auth_dependencies.to_owned(),
@@ -259,7 +258,7 @@ impl<C> SpacesArgs<C> {
 
     pub fn variant_str(&self) -> String {
         match self {
-            SpacesArgs::KeyBundle { .. } => "key bundle".to_string(),
+            SpacesArgs::Member { .. } => "key bundle".to_string(),
             SpacesArgs::Group { .. } => "auth group".to_string(),
             SpacesArgs::SpaceMembership { .. } => "space membership".to_string(),
             SpacesArgs::SpaceUpdate { .. } => "space update".to_string(),

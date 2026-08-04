@@ -1803,7 +1803,7 @@ async fn add_expired_member_to_group() {
             signature,
         );
 
-        Member::new(bob.manager.id(), bundle)
+        Member::new(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
@@ -1856,7 +1856,7 @@ async fn process_operation_from_expired_member() {
             signature,
         );
 
-        Member::new(bob.manager.id(), bundle)
+        Member::new(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.

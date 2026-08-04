@@ -8,6 +8,7 @@ use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::VerifyingKey;
 
 use crate::auth::message::AuthMessage;
+use crate::member::Member;
 use crate::message::SpaceMembershipMessage;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
@@ -53,6 +54,9 @@ impl GroupActor {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
+    /// A member's info with associated key-bundle has been received.
+    Member(Member),
+
     /// A group membership change occurred in the shared groups state.
     ///
     /// This event does _not_ signify that any space has incorporated this change yet. The
@@ -64,10 +68,6 @@ pub enum Event<C> {
     /// Encrypted application messages are buffered until the local member is welcomed into a
     /// space with a "create" or "add" message.
     Application { space_id: SpaceId, data: Vec<u8> },
-
-    // @TODO: Could maybe add field to show when the bundle is valid until?
-    /// An actors' pre-key bundle has been received.
-    KeyBundle { author: MemberId },
 
     /// A membership change occurred on a space.
     ///

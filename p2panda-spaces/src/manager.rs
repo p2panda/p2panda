@@ -255,11 +255,11 @@ where
         // Route message to the regarding member-, group- or space processor.
         let result = match args {
             // Received key bundle from a member.
-            SpacesArgs::KeyBundle { key_bundle } => {
+            SpacesArgs::Member(member) => {
                 let mut manager = self.inner.write().await;
                 let event = manager
                     .identity
-                    .process_key_bundle(message.author(), key_bundle)
+                    .process(member.clone())
                     .await
                     .map_err(ManagerError::IdentityManager)?;
 
