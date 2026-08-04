@@ -71,6 +71,7 @@ where
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
         let members = self.actors().await?;
+
         can_write(self.inner.me(), &members).map_err(|err| PublishSpaceError::Validation {
             space_id: self.id(),
             err,
@@ -116,6 +117,7 @@ where
         let me = self.inner.me();
         let actor = actor.into();
         let members = self.actors().await?;
+
         can_add_member(me, actor, &members).map_err(|err| AddSpaceMemberError::Validation {
             actor,
             space_id: self.id(),
@@ -147,6 +149,7 @@ where
         let me = self.inner.me();
         let actor = actor.into();
         let members = self.actors().await?;
+
         can_remove_member(me, actor, &members).map_err(|err| {
             RemoveSpaceMemberError::Validation {
                 actor,
@@ -177,6 +180,7 @@ where
         let me = self.inner.me();
         let actor = actor.into();
         let members = self.actors().await?;
+
         can_promote_member(me, actor, access, &members).map_err(|err| {
             PromoteSpaceMemberError::Validation {
                 actor,
@@ -216,6 +220,7 @@ where
         let me = self.inner.me();
         let actor = actor.into();
         let members = self.actors().await?;
+
         can_demote_member(me, actor, access, &members).map_err(|err| {
             DemoteSpaceMemberError::Validation {
                 actor,
@@ -325,15 +330,16 @@ where
         self.tx.close().await
     }
 
-    /// Incorporate missing groups messages into the space, any resulting operations are
-    /// published live into the space topic.
+    /// Incorporate missing groups messages into the space, any resulting operations are published
+    /// live into the space topic.
     pub(crate) async fn repair(&self) -> Result<bool, RepairSpaceError> {
         let (tx, rx) = oneshot::channel();
 
-        // @TODO: Currently we default to merging all groups into the space state, once we do this
-        // selectively we can specify the groups to be included (root group + added / removed)
-        // using the RepairStrategy::Partial variant.
+        // TODO: Currently we default to merging all groups into the space state, once we do this
+        // selectively we can specify the groups to be included (root group + added / removed) using
+        // the RepairStrategy::Partial variant.
         self.tx.repair_tx.send((RepairStrategy::Global, tx)).await?;
+
         let repaired = rx.await??;
         Ok(repaired)
     }
@@ -377,7 +383,11 @@ impl Future for SpaceFuture {
 
 #[derive(Debug, Error)]
 pub enum AddSpaceMemberError {
-    #[error("failed validation adding {actor} to space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    #[error(
+        "failed validation adding {actor} to space {space_id}: {err}",
+        actor = actor.fmt_short(),
+        space_id = space_id.fmt_short()
+    )]
     Validation {
         actor: ActorId,
         space_id: SpaceId,
@@ -396,7 +406,11 @@ pub enum AddSpaceMemberError {
 
 #[derive(Debug, Error)]
 pub enum RemoveSpaceMemberError {
-    #[error("failed validation removing {actor} to space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    #[error(
+        "failed validation removing {actor} to space {space_id}: {err}",
+        actor = actor.fmt_short(),
+        space_id = space_id.fmt_short()
+    )]
     Validation {
         actor: ActorId,
         space_id: SpaceId,
@@ -415,7 +429,11 @@ pub enum RemoveSpaceMemberError {
 
 #[derive(Debug, Error)]
 pub enum PromoteSpaceMemberError {
-    #[error("failed validation promoting {actor} to {access} access in space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    #[error(
+        "failed validation promoting {actor} to {access} access in space {space_id}: {err}",
+        actor = actor.fmt_short(),
+        space_id = space_id.fmt_short()
+    )]
     Validation {
         actor: ActorId,
         access: AccessLevel,
@@ -435,7 +453,11 @@ pub enum PromoteSpaceMemberError {
 
 #[derive(Debug, Error)]
 pub enum DemoteSpaceMemberError {
-    #[error("failed validation demoting {actor} to {access} access in space {space_id}: {err}", actor = actor.fmt_short(), space_id = space_id.fmt_short())]
+    #[error(
+        "failed validation demoting {actor} to {access} access in space {space_id}: {err}",
+        actor = actor.fmt_short(),
+        space_id = space_id.fmt_short()
+    )]
     Validation {
         actor: ActorId,
         access: AccessLevel,
@@ -477,7 +499,10 @@ pub enum ProcessError {
 
 #[derive(Debug, Error)]
 pub enum PublishSpaceError {
-    #[error("failed validation to space {space_id}: {err}", space_id = space_id.fmt_short())]
+    #[error(
+        "failed validation to space {space_id}: {err}",
+        space_id = space_id.fmt_short()
+    )]
     Validation { space_id: SpaceId, err: WriteError },
 
     #[error(transparent)]

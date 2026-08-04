@@ -683,7 +683,6 @@ impl Node {
 
     pub async fn me(&self) -> Result<Member, MemberError> {
         let inner = self.spaces_manager.me().await?;
-
         Ok(Member { inner })
     }
 

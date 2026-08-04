@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -26,16 +25,24 @@ use crate::streams::local_stream::LocalStreamFuture;
 use crate::streams::{Event, ForwardEvent};
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
+
 type ImportExternalTx = mpsc::Sender<(
     BoxStream<'static, Operation>,
     oneshot::Sender<ExternalStreamFuture>,
 )>;
-type ImportLocalTx = mpsc::Sender<(
+
+pub(crate) type ImportLocalTx = mpsc::Sender<(
     BoxStream<'static, Operation>,
     oneshot::Sender<LocalStreamFuture>,
 )>;
-type ToOutputTx<M> = mpsc::Sender<Vec<ForwardEvent<M>>>;
-type RepairTx = mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
+
+pub(crate) type ToOutputTx<M> = mpsc::Sender<Vec<ForwardEvent<M>>>;
+
+pub(crate) type RepairTx =
+    mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
+
+pub(crate) type RepairRx =
+    mpsc::Receiver<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
 
 /// Publish messages into a topic stream.
 ///
@@ -105,15 +112,12 @@ pub struct StreamPublisher<M> {
     topic: Topic,
     forge: OperationForge,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-    #[allow(clippy::type_complexity)]
     pub(crate) publish_tx: PublishTx<M>,
     import_external_tx: ImportExternalTx,
-    #[allow(clippy::type_complexity)]
-    import_local_tx: ImportLocalTx,
+    pub(crate) import_local_tx: ImportLocalTx,
     pub(crate) to_output_tx: ToOutputTx<M>,
     pub(crate) repair_tx: RepairTx,
     _guard: StreamDropGuard,
-    _marker: PhantomData<M>,
 }
 
 impl<M> StreamPublisher<M>
@@ -143,7 +147,6 @@ where
             repair_tx,
             to_output_tx,
             _guard,
-            _marker: PhantomData,
         }
     }
 
