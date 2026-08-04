@@ -171,12 +171,9 @@ where
     /// Register a member with long-term key bundle material.
     ///
     /// Throws an error if provided key bundle has an invalid signature or expired.
-    //
-    // NOTE: **Security:** This method does _only_ validate if the pre-key signature maps to the
-    // given identity key but **not** if the member's handle / id is authentic. Applications need to
-    // provide an authentication scheme and validate `Member` before calling this method to prevent
-    // impersonation attacks.
     pub async fn register_member(&mut self, member: &Member) -> Result<(), IdentityError<F, C>> {
+        member.verify()?;
+
         let pki = {
             let y = self.key_registry().await?;
             KeyRegistry::add_longterm_bundle(y, member.id(), member.key_bundle().clone())?
