@@ -171,7 +171,10 @@ where
     /// Register a member with long-term key bundle material.
     ///
     /// Throws an error if provided key bundle has an invalid signature or expired.
-    pub async fn register_member(&mut self, member: &Member) -> Result<(), IdentityError<F, C>> {
+    pub async fn process(&mut self, member: &Member) -> Result<Event<C>, IdentityError<F, C>> {
+        // 1. Claimed member id belongs to the associated key bundle and it's X3DH identity key.
+        // 2. Key bundle's pre-key belongs to identity key.
+        // 3. Key bundle has not expired.
         member.verify()?;
 
         let pki = {
@@ -197,14 +200,7 @@ where
                 .map_err(|err| StoreError::Transaction(err.to_string()))?;
         }
 
-        Ok(())
-    }
-
-    /// Process member information with associated key bundle received from the network.
-    pub async fn process(&mut self, member: Member) -> Result<Event<C>, IdentityError<F, C>> {
-        member.verify()?;
-        self.register_member(&member).await?;
-        Ok(Event::Member(member))
+        Ok(Event::Member(member.clone()))
     }
 
     pub async fn forge(&mut self, args: SpacesArgs<C>) -> Result<F::Message, IdentityError<F, C>> {
@@ -373,7 +369,7 @@ mod tests {
         let bob_id = bob_credentials.verifying_key().into();
 
         let bob_member = bob_identity_manager.me().await.unwrap();
-        alice_identity_manager.process(bob_member).await.unwrap();
+        alice_identity_manager.process(&bob_member).await.unwrap();
 
         let key_registry_y = alice_identity_manager.key_registry().await.unwrap();
         let (_, bundle): (_, Option<LongTermKeyBundle>) =

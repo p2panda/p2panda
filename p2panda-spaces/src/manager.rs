@@ -259,7 +259,7 @@ where
                 let mut manager = self.inner.write().await;
                 let event = manager
                     .identity
-                    .process(member.clone())
+                    .process(member)
                     .await
                     .map_err(ManagerError::IdentityManager)?;
 
@@ -333,11 +333,12 @@ where
     /// channel (QR code scan etc.).
     pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C>> {
         let mut manager = self.inner.write().await;
-        manager
+        let _event = manager
             .identity
-            .register_member(member)
+            .process(member)
             .await
-            .map_err(ManagerError::IdentityManager)
+            .map_err(ManagerError::IdentityManager);
+        Ok(())
     }
 
     /// Check if my latest key bundle has expired.
