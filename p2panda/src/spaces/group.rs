@@ -5,8 +5,12 @@ use std::sync::RwLock;
 use std::task::{Context, Poll};
 
 use futures_util::{FutureExt, Stream};
+use p2panda_auth::validation::{
+    AddMemberError, RemoveMemberError, can_add_member, can_remove_member,
+};
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::VerifyingKey;
+use p2panda_core::traits::ShortFormat;
 use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId};
 use thiserror::Error;
 use tokio::sync::{broadcast, oneshot};
@@ -104,15 +108,25 @@ impl Group {
         Box::pin(stream)
     }
 
+    /// Add a new member to the group.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
         access: AccessLevel,
-    ) -> Result<GroupFuture, GroupError> {
+    ) -> Result<GroupFuture, AddGroupMemberError> {
+        let me = self.inner.me();
+        let actor = actor.into();
+        let members = self.actors().await?;
+        can_add_member(me, actor, &members).map_err(|err| AddGroupMemberError::Validation {
+            actor,
+            group_id: self.id(),
+            err,
+        })?;
+
         let (_, message, _events) = self
             .inner
             .add(
-                actor.into(),
+                actor,
                 Access {
                     conditions: None,
                     level: access,
@@ -133,8 +147,23 @@ impl Group {
         })
     }
 
-    pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<GroupFuture, GroupError> {
-        let (_, message, _events) = self.inner.remove(actor.into()).await?;
+    /// Remove an existing member from the group.
+    pub async fn remove(
+        &self,
+        actor: impl Into<ActorId>,
+    ) -> Result<GroupFuture, RemoveGroupMemberError> {
+        let me = self.inner.me();
+        let actor = actor.into();
+        let members = self.actors().await?;
+        can_remove_member(me, actor, &members).map_err(|err| {
+            RemoveGroupMemberError::Validation {
+                actor,
+                group_id: self.id(),
+                err,
+            }
+        })?;
+
+        let (_, message, _) = self.inner.remove(actor).await?;
 
         let processed = self
             .tx
@@ -149,6 +178,10 @@ impl Group {
         })
     }
 
+    /// Returns all group members and their access level.
+    ///
+    /// These members are all the individuals in the group after nested groups have been
+    /// flattened.
     pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupError> {
         let result = self.inner.members().await.map(|members| {
             members
@@ -160,8 +193,15 @@ impl Group {
         Ok(result)
     }
 
-    // TODO: "actors" method to return the _non-flattened_ actors in a group. This will help to
-    // build multi-device applications.
+    /// Returns all group actors (groups and individuals) and their access levels.
+    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerGroupError> {
+        self.inner.actors().await.map(|actors| {
+            actors
+                .iter()
+                .map(|(actor, access)| (*actor, access.level))
+                .collect()
+        })
+    }
 }
 
 #[allow(clippy::from_over_into)]
@@ -268,7 +308,7 @@ fn to_actor(
 #[derive(Debug, Error)]
 pub enum GroupError {
     #[error(transparent)]
-    Space(#[from] InnerGroupError),
+    Group(#[from] InnerGroupError),
 
     #[error(transparent)]
     Processor(#[from] ProcessorError),
@@ -281,4 +321,36 @@ pub enum GroupError {
 
     #[error(transparent)]
     CreateStream(#[from] CreateStreamError),
+}
+
+#[derive(Debug, Error)]
+pub enum AddGroupMemberError {
+    #[error("failed validation adding {actor} to group {group_id}: {err}", actor = actor.fmt_short(), group_id = group_id.fmt_short())]
+    Validation {
+        actor: ActorId,
+        group_id: GroupId,
+        err: AddMemberError,
+    },
+
+    #[error(transparent)]
+    Group(#[from] InnerGroupError),
+
+    #[error(transparent)]
+    Import(#[from] ImportError),
+}
+
+#[derive(Debug, Error)]
+pub enum RemoveGroupMemberError {
+    #[error("failed validation removing {actor} to group {group_id}: {err}", actor = actor.fmt_short(), group_id = group_id.fmt_short())]
+    Validation {
+        actor: ActorId,
+        group_id: GroupId,
+        err: RemoveMemberError,
+    },
+
+    #[error(transparent)]
+    Group(#[from] InnerGroupError),
+
+    #[error(transparent)]
+    Import(#[from] ImportError),
 }
