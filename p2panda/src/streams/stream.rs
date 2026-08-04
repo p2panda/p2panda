@@ -576,9 +576,8 @@ where
                     }
                 }
 
-                p2panda_spaces::Event::KeyBundle { author } => {
-                    forward_events.push(ForwardEvent::topic_stream(StreamEvent::KeyBundle(*author)))
-                }
+                p2panda_spaces::Event::Member(member) => forward_events
+                    .push(ForwardEvent::topic_stream(StreamEvent::Member(member.id()))),
 
                 p2panda_spaces::Event::Groups(group_event) => forward_events.push(
                     ForwardEvent::system(to_system_event(group_event.to_owned())),
@@ -787,7 +786,7 @@ pub enum StreamEvent<M> {
     },
 
     /// Key bundle has been processed.
-    KeyBundle(VerifyingKey),
+    Member(VerifyingKey),
 }
 
 pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
