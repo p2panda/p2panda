@@ -103,7 +103,7 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
-        let SpacesArgs::Auth {
+        let SpacesArgs::Group {
             group_id,
             group_action,
             auth_dependencies,
@@ -157,8 +157,8 @@ pub enum SpacesArgs<C> {
     /// Note: Applications should check if the key bundle was authored by the sender.
     KeyBundle { key_bundle: LongTermKeyBundle },
 
-    /// System message containing an auth control message.
-    Auth {
+    /// System message containing group control message.
+    Group {
         /// id of the group this message applies to.
         group_id: GroupId,
 
@@ -169,7 +169,7 @@ pub enum SpacesArgs<C> {
         auth_dependencies: Vec<OperationId>,
     },
 
-    /// System message containing a reference to an `SpacesArgs::Auth` message and additional
+    /// System message containing a reference to an `SpacesArgs::Group` message and additional
     /// fields for applying the resulting membership change to a specific space.
     SpaceMembership {
         /// Space this message should be applied to.
@@ -236,7 +236,7 @@ impl<C> SpacesArgs<C> {
     pub fn dependencies(&self) -> Vec<Hash> {
         match self {
             SpacesArgs::KeyBundle { .. } => vec![],
-            SpacesArgs::Auth {
+            SpacesArgs::Group {
                 auth_dependencies, ..
             } => auth_dependencies.to_owned(),
             SpacesArgs::SpaceMembership {
@@ -260,7 +260,7 @@ impl<C> SpacesArgs<C> {
     pub fn variant_str(&self) -> String {
         match self {
             SpacesArgs::KeyBundle { .. } => "key bundle".to_string(),
-            SpacesArgs::Auth { .. } => "auth group".to_string(),
+            SpacesArgs::Group { .. } => "auth group".to_string(),
             SpacesArgs::SpaceMembership { .. } => "space membership".to_string(),
             SpacesArgs::SpaceUpdate { .. } => "space update".to_string(),
             SpacesArgs::Application { .. } => "application".to_string(),

@@ -115,7 +115,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
             }
 
             // 2. Group logs.
-            p2panda_spaces::SpacesArgs::Auth { group_id, .. } => {
+            p2panda_spaces::SpacesArgs::Group { group_id, .. } => {
                 // Every author maintains their own log of control messages _per_ group.
                 let log_id = group_log_id(group_id);
 
@@ -235,7 +235,7 @@ pub(crate) async fn make_space_group_log_associations(
     };
 
     // Associate all group logs for members introduced by this operation.
-    if let Some(SpacesArgs::Auth {
+    if let Some(SpacesArgs::Group {
         group_id,
         group_action: GroupAction::Create { .. },
         ..
