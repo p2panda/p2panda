@@ -29,7 +29,7 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, Group, GroupError, KEY_BUNDLE_LOG_ID, Member, MemberError, Space,
+    AccessLevel, ActorId, Group, GroupError, MEMBER_CONTROL_MESSAGE, Member, MemberError, Space,
     SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
     to_initial_members,
 };
@@ -522,7 +522,7 @@ impl Node {
             .associate(
                 &Topic::from(space_id),
                 &self.id(),
-                &Hash::digest(KEY_BUNDLE_LOG_ID),
+                &Hash::digest(MEMBER_CONTROL_MESSAGE),
             )
             .await?;
 
@@ -583,7 +583,7 @@ impl Node {
                 .associate(
                     &Topic::from(space_id),
                     &self.id(),
-                    &Hash::digest(KEY_BUNDLE_LOG_ID),
+                    &Hash::digest(MEMBER_CONTROL_MESSAGE),
                 )
                 .await
         })?;

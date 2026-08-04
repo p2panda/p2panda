@@ -63,7 +63,7 @@ async fn spaces_api() -> Result<(), Box<dyn std::error::Error>> {
     // Panda receives both penguins key bundles.
     let mut expected = HashSet::from([penguin_laptop.id(), penguin_mobile.id()]);
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::KeyBundle(verifying_key) = event {
+        if let StreamEvent::Member(verifying_key) = event {
             expected.remove(&verifying_key);
             if expected.is_empty() {
                 break;
@@ -304,7 +304,7 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::KeyBundle(..) = event {
+        if let StreamEvent::Member(..) = event {
             break;
         };
     }
@@ -588,7 +588,7 @@ async fn api_validation() -> Result<(), Box<dyn std::error::Error>> {
     let (tiger_space, mut tiger_rx) = tiger.space::<String>(topic).await?;
 
     while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::KeyBundle(verifying_key) = event {
+        if let StreamEvent::Member(verifying_key) = event {
             if verifying_key == tiger.id() {
                 break;
             }
