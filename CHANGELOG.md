@@ -34,6 +34,7 @@ Highlights are marked with a pancake 🥞
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
 - net: Introduce an `Authoriser` for maintaining and enforcing allowlists and blocklists [#1321](https://github.com/p2panda/p2panda/pull/1321)
 - node: Integrate the `Authoriser` into the `Node`[#1321](https://github.com/p2panda/p2panda/pull/1321)
+- node: Automatically renew expired key-bundles and publish member messages more efficiently [#1337](https://github.com/p2panda/p2panda/pull/1337)
 
 ### Changed
 
