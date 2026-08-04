@@ -183,7 +183,7 @@ where
         // the ancestor group itself.
         let dependencies = AuthGroup::heads(&y, group_id, &action);
 
-        let args = SpacesArgs::Auth {
+        let args = SpacesArgs::Group {
             group_id,
             auth_dependencies: dependencies,
             group_action: action,

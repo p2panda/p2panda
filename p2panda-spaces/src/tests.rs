@@ -56,7 +56,7 @@ async fn create_space() {
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
 
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
@@ -228,7 +228,7 @@ async fn add_member_to_space() {
     let members = space.members().await.unwrap();
     drop(space);
 
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
@@ -410,7 +410,7 @@ async fn add_pull_member_to_space() {
         .unwrap();
     let members = space.members().await.unwrap();
 
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id: auth_group_id,
         group_action,
         auth_dependencies,
@@ -653,7 +653,7 @@ async fn remove_member() {
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let (message_03, message_04, _) = space.remove_persisted(bob_id).await.unwrap();
 
-    let SpacesArgs::Auth { group_action, .. } = message_03.borrow() else {
+    let SpacesArgs::Group { group_action, .. } = message_03.borrow() else {
         panic!("expected auth message");
     };
 
@@ -776,7 +776,7 @@ async fn concurrent_removal_conflict() {
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let (message_05, message_06, _) = space.add_persisted(dave_id, Access::read()).await.unwrap();
 
-    let SpacesArgs::Auth { group_action, .. } = message_05.borrow() else {
+    let SpacesArgs::Group { group_action, .. } = message_05.borrow() else {
         panic!("expected auth message");
     };
 
@@ -864,7 +864,7 @@ async fn space_from_existing_auth_state() {
     let message_03 = messages[1].clone();
     let message_04 = messages[2].clone();
 
-    let SpacesArgs::Auth { group_action, .. } = message_02.borrow() else {
+    let SpacesArgs::Group { group_action, .. } = message_02.borrow() else {
         panic!("expected auth message");
     };
 
@@ -957,7 +957,7 @@ async fn create_group() {
     );
 
     // There is one auth message.
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id,
         group_action,
         ..
@@ -1024,7 +1024,7 @@ async fn add_member_to_group() {
     );
 
     // There is one auth message.
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id,
         group_action,
         auth_dependencies,
@@ -1078,7 +1078,7 @@ async fn remove_member_from_group() {
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
 
     // There is one auth message.
-    let SpacesArgs::Auth {
+    let SpacesArgs::Group {
         group_id,
         group_action,
         auth_dependencies,
