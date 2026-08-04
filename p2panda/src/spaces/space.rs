@@ -51,9 +51,6 @@ pub(crate) fn spaces_stream<M>(
     )
 }
 
-// TODO: We need a way to automatically publish key bundles (if configured, it should also be an
-// option to _not_ do that to only allow initial key agreement through side channels which is more
-// private).
 #[derive(Debug)]
 pub struct Space<M> {
     inner: InnerSpace,
@@ -260,17 +257,19 @@ where
         messages: [SpacesMessage; 2],
         events: Vec<Event<AuthCapabilities>>,
     ) -> Result<(), ProcessError> {
-        let permit = self.store.begin().await?;
-
         // Persist the computed groups and spaces state to the stores.
-        self.store
-            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
-            .await?;
-        self.store
-            .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
-            .await?;
+        {
+            let permit = self.store.begin().await?;
 
-        self.store.commit(permit).await?;
+            self.store
+                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+                .await?;
+            self.store
+                .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
+                .await?;
+
+            self.store.commit(permit).await?;
+        }
 
         let processed = self
             .tx

@@ -551,25 +551,6 @@ impl Node {
             .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
         let (tx, rx) = self.stream_from::<M>(topic, from).await?;
 
-        // Publish one key bundle whenever we subscribe to a space.
-        //
-        // @TODO: this is a rather naive approach, we likely want some (configurable?) service
-        // that periodically publishes key bundles.
-        let message = self.spaces_manager.key_bundle_message().await?;
-
-        let operation = message.into_operation();
-        let processed = tx
-            .import_local(futures_util::stream::once(async { operation }))
-            .await?;
-
-        // Wait until processing the events has finished.
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
-
         // Spawn per-space repair background task.
         let repair_task = RepairTask::spawn(
             inner.id(),
@@ -619,9 +600,6 @@ impl Node {
         let (tx, rx) = self.stream::<M>(topic).await?;
 
         // Publish one key bundle whenever we create a space.
-        //
-        // @TODO: this is a rather naive approach, we likely want some service that periodically
-        // publishes key bundles.
         let key_bundle_message = self.spaces_manager.key_bundle_message().await?;
 
         // Issue the events to create a space.
@@ -635,18 +613,20 @@ impl Node {
         let (groups_y, space_y, create_space_messages, events) =
             self.spaces_manager.create_space(space_id, &[]).await?;
 
-        let permit = self.store.begin().await?;
+        // Persist the computed groups- and spaces-state to the stores.
+        {
+            let permit = self.store.begin().await?;
 
-        // Persist the computed groups and spaces state to the stores.
-        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-        spaces_store
-            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
-            .await?;
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
-            .await?;
+            let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
+            spaces_store
+                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+                .await?;
+            spaces_store
+                .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+                .await?;
 
-        self.store.commit(permit).await?;
+            self.store.commit(permit).await?;
+        }
 
         // Process the -spaces events by importing them as an "external stream".
         let mut messages = vec![key_bundle_message];
