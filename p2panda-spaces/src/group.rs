@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -69,6 +70,11 @@ where
             manager: manager_ref,
             id,
         }
+    }
+
+    /// Verifying key of the local actor.
+    pub fn my_id(&self) -> VerifyingKey {
+        self.manager.id()
     }
 
     /// Create a group containing initial members with associated access levels.
@@ -214,6 +220,18 @@ where
         let mut group_members = y.members(self.id);
         sort_members(&mut group_members);
         Ok(group_members)
+    }
+
+    /// All actors (both groups and individuals) in the group.
+    pub async fn actors(&self) -> Result<Vec<(MemberId, Access<C>)>, GroupError<F, C>> {
+        let y = self.manager.get_groups_state().await?;
+        let mut members: Vec<(MemberId, Access<C>)> = y
+            .root_members(self.id)
+            .into_iter()
+            .map(|(member, access)| (member.id(), access))
+            .collect();
+        sort_members(&mut members);
+        Ok(members)
     }
 }
 
