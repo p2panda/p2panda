@@ -22,7 +22,9 @@ use tracing::{debug, trace, warn};
 use crate::operation::Operation;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
 use crate::spaces::{SpacesManagerError, group_log_id};
-use crate::streams::{ImportLocalTx, LocalStreamFuture, RepairRx, StreamEvent, ToOutputTx};
+use crate::streams::{
+    ImportLocalTx, LocalStreamFuture, RepairRx, ToOutputTx, to_stream_event, to_system_event,
+};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
