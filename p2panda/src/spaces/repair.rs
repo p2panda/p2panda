@@ -142,7 +142,7 @@ pub(crate) async fn repair_space<M>(
         };
 
         // Ignore non-groups operations.
-        let Some(SpacesArgs::Auth {
+        let Some(SpacesArgs::Group {
             group_id,
             group_action,
             ..

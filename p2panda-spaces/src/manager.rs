@@ -265,7 +265,7 @@ where
 
                 (None, None, vec![event])
             }
-            SpacesArgs::Auth { .. } => {
+            SpacesArgs::Group { .. } => {
                 let event = Group::process(self.clone(), &SpacesMessage::auth(message))
                     .await
                     .map_err(ManagerError::Group)?;
@@ -520,7 +520,7 @@ where
             };
 
             match message.borrow() {
-                SpacesArgs::Auth { .. } => SpacesMessage::auth(&message),
+                SpacesArgs::Group { .. } => SpacesMessage::auth(&message),
                 _ => {
                     return Err(ManagerError::IncorrectMessageVariant(auth_message_id));
                 }
