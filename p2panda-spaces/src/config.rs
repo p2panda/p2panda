@@ -14,8 +14,8 @@ pub struct Config {
     /// When a key bundle should be considered expired and thus invalid.
     pub pre_key_lifetime: Duration,
 
-    /// Rotate our own pre keys after this duration, to allow some time between peers receiving
-    /// our new one and the old one expiring.
+    /// Rotate our own pre-keys after this duration, to allow some time between peers receiving our
+    /// new one and the old one expiring.
     pub pre_key_rotate_after: Duration,
 }
 

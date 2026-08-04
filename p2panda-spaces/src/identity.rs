@@ -19,7 +19,7 @@ use thiserror::Error;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::manager::StoreError;
-use crate::member::Member;
+use crate::member::{Member, MemberError};
 use crate::message::SpacesArgs;
 use crate::{Config, Credentials, MemberId};
 
@@ -76,7 +76,11 @@ where
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub(crate) async fn me(&self) -> Result<Member, IdentityError<F, C>> {
-        Ok(Member::new(self.id(), self.key_bundle().await?))
+        Ok(Member::new(
+            &self.rng,
+            &self.credentials,
+            self.key_bundle().await?,
+        )?)
     }
 
     /// Returns "latest", publishable key bundle of us or automatically generates a new one if
@@ -98,7 +102,7 @@ where
             return Ok(bundle);
         }
 
-        // Automatically rotate pre key.
+        // Automatically rotate pre-key.
         let key_manager_y_i = KeyManager::rotate_prekey(
             key_manager_y,
             Lifetime::new(self.config.pre_key_lifetime.as_secs()),
@@ -159,9 +163,7 @@ where
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn key_bundle_message(&mut self) -> Result<F::Message, IdentityError<F, C>> {
-        let args = SpacesArgs::KeyBundle {
-            key_bundle: self.key_bundle().await?,
-        };
+        let args = SpacesArgs::Member(self.me().await?);
         let message = self.forge.forge(args).await.map_err(IdentityError::Forge)?;
         Ok(message)
     }
@@ -201,16 +203,11 @@ where
         Ok(())
     }
 
-    /// Process a key bundle received from the network.
-    pub async fn process_key_bundle(
-        &mut self,
-        author: MemberId,
-        key_bundle: &LongTermKeyBundle,
-    ) -> Result<Event<C>, IdentityError<F, C>> {
-        key_bundle.verify()?;
-        let member = Member::new(author, key_bundle.clone());
+    /// Process member information with associated key bundle received from the network.
+    pub async fn process(&mut self, member: Member) -> Result<Event<C>, IdentityError<F, C>> {
+        member.verify()?;
         self.register_member(&member).await?;
-        Ok(Event::KeyBundle { author })
+        Ok(Event::Member(member))
     }
 
     pub async fn forge(&mut self, args: SpacesArgs<C>) -> Result<F::Message, IdentityError<F, C>> {
@@ -268,6 +265,9 @@ where
 
     #[error(transparent)]
     KeyBundle(#[from] KeyBundleError),
+
+    #[error(transparent)]
+    Member(#[from] MemberError),
 
     #[error("received long-term key bundle for {0} on message signed by unexpected author {1}")]
     KeyBundleAuthor(VerifyingKey, VerifyingKey),
@@ -333,8 +333,8 @@ mod tests {
         let actor_id = credentials.signing_key().verifying_key();
         assert_eq!(msg.author(), actor_id);
         match msg.borrow() {
-            SpacesArgs::KeyBundle { key_bundle } => {
-                assert!(key_bundle.verify().is_ok());
+            SpacesArgs::Member(member) => {
+                assert!(member.verify().is_ok());
             }
             _ => panic!("expected key bundle message"),
         }
@@ -376,18 +376,13 @@ mod tests {
         let bob_id = bob_credentials.verifying_key().into();
 
         let bob_member = bob_identity_manager.me().await.unwrap();
-        let bob_bundle = bob_member.key_bundle();
-        alice_identity_manager
-            .process_key_bundle(bob_id, bob_bundle)
-            .await
-            .unwrap();
+        alice_identity_manager.process(bob_member).await.unwrap();
 
         let key_registry_y = alice_identity_manager.key_registry().await.unwrap();
         let (_, bundle): (_, Option<LongTermKeyBundle>) =
             KeyRegistry::key_bundle(key_registry_y, &bob_id).unwrap();
         assert!(bundle.is_some());
         let bundle_identity_key = bundle.unwrap().identity_key().to_owned();
-        assert_eq!(bundle_identity_key, *bob_bundle.identity_key());
         assert_eq!(
             bundle_identity_key,
             bob_credentials.identity_secret().verifying_key().unwrap()

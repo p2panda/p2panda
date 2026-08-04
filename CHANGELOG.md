@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 - node: API for promoting and demoting space members [#1311](https://github.com/p2panda/p2panda/pull/1311)
 - node: Emit per-group and global groups events [#1313](https://github.com/p2panda/p2panda/pull/1313)
 - stream: Hooks processor to register event callbacks in streaming pipeline [#1339](https://github.com/p2panda/p2panda/pull/1339)
+- spaces: Safe key bundle registration by cross-signing X3DH identity- and verifying-keys [#1332](https://github.com/p2panda/p2panda/pull/1332)
 
 ### Changed
 
