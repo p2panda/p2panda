@@ -238,7 +238,7 @@ where
                         ForwardEvent::System(system_event) => {
                             let _ = event_tx.send(*system_event);
                         }
-                        ForwardEvent::Stream(stream_event) => {
+                        ForwardEvent::Topic(stream_event) => {
                             let _ = app_tx.send(*stream_event).await;
                         }
                     }
@@ -520,7 +520,7 @@ where
             error,
         );
 
-        let failure_event = vec![ForwardEvent::stream(StreamEvent::ProcessingFailed {
+        let failure_event = vec![ForwardEvent::topic_stream(StreamEvent::ProcessingFailed {
             event,
             error,
             source,
@@ -547,33 +547,37 @@ where
                             if ack_policy == AckPolicy::Automatic
                                 && let Err(error) = acked.ack(&event).await
                             {
-                                forward_events.push(ForwardEvent::stream(StreamEvent::AckFailed {
-                                    event: event.clone(),
-                                    error: Arc::new(error),
-                                }));
+                                forward_events.push(ForwardEvent::topic_stream(
+                                    StreamEvent::AckFailed {
+                                        event: event.clone(),
+                                        error: Arc::new(error),
+                                    },
+                                ));
                             }
 
-                            forward_events.push(ForwardEvent::stream(StreamEvent::Processed {
-                                operation: ProcessedOperation {
-                                    event: event.clone(),
-                                    topic,
-                                    acked: acked.clone(),
-                                    message,
+                            forward_events.push(ForwardEvent::topic_stream(
+                                StreamEvent::Processed {
+                                    operation: ProcessedOperation {
+                                        event: event.clone(),
+                                        topic,
+                                        acked: acked.clone(),
+                                        message,
+                                    },
+                                    source: source.clone(),
                                 },
-                                source: source.clone(),
-                            }));
+                            ));
                         }
-                        Err(error) => {
-                            forward_events.push(ForwardEvent::stream(StreamEvent::DecodeFailed {
+                        Err(error) => forward_events.push(ForwardEvent::topic_stream(
+                            StreamEvent::DecodeFailed {
                                 event: event.clone(),
                                 error,
-                            }))
-                        }
+                            },
+                        )),
                     }
                 }
 
                 p2panda_spaces::Event::KeyBundle { author } => {
-                    forward_events.push(ForwardEvent::stream(StreamEvent::KeyBundle(*author)))
+                    forward_events.push(ForwardEvent::topic_stream(StreamEvent::KeyBundle(*author)))
                 }
 
                 p2panda_spaces::Event::Groups(group_event) => forward_events.push(
@@ -581,7 +585,7 @@ where
                 ),
 
                 p2panda_spaces::Event::Spaces(space_event) => forward_events.push(
-                    ForwardEvent::stream(to_stream_event(space_event.to_owned())),
+                    ForwardEvent::topic_stream(to_stream_event(space_event.to_owned())),
                 ),
             }
         }
@@ -590,7 +594,7 @@ where
         let Some(body) = event.body() else {
             // _Always_ ack system-level events, even if no automatic policy was configured.
             if let Err(error) = acked.ack(&event).await {
-                return Some(vec![ForwardEvent::stream(StreamEvent::AckFailed {
+                return Some(vec![ForwardEvent::topic_stream(StreamEvent::AckFailed {
                     event,
                     error: Arc::new(error),
                 })]);
@@ -617,13 +621,13 @@ where
                 if ack_policy == AckPolicy::Automatic
                     && let Err(error) = acked.ack(&event).await
                 {
-                    return Some(vec![ForwardEvent::stream(StreamEvent::AckFailed {
+                    return Some(vec![ForwardEvent::topic_stream(StreamEvent::AckFailed {
                         event,
                         error: Arc::new(error),
                     })]);
                 }
 
-                return Some(vec![ForwardEvent::stream(StreamEvent::Processed {
+                return Some(vec![ForwardEvent::topic_stream(StreamEvent::Processed {
                     operation: ProcessedOperation {
                         event,
                         topic,
@@ -634,10 +638,9 @@ where
                 })]);
             }
             Err(error) => {
-                return Some(vec![ForwardEvent::stream(StreamEvent::DecodeFailed {
-                    event,
-                    error,
-                })]);
+                return Some(vec![ForwardEvent::topic_stream(
+                    StreamEvent::DecodeFailed { event, error },
+                )]);
             }
         }
     }
@@ -873,7 +876,7 @@ pub(crate) fn to_system_event(event: InnerGroupEvent) -> SystemEvent {
 #[derive(Clone, Debug)]
 pub enum ForwardEvent<M> {
     System(Box<SystemEvent>),
-    Stream(Box<StreamEvent<M>>),
+    Topic(Box<StreamEvent<M>>),
 }
 
 impl<M> ForwardEvent<M> {
@@ -881,14 +884,14 @@ impl<M> ForwardEvent<M> {
         Self::System(Box::new(event))
     }
 
-    pub fn stream(event: StreamEvent<M>) -> Self {
-        Self::Stream(Box::new(event))
+    pub fn topic_stream(event: StreamEvent<M>) -> Self {
+        Self::Topic(Box::new(event))
     }
 }
 
 impl<M> From<StreamEvent<M>> for ForwardEvent<M> {
     fn from(value: StreamEvent<M>) -> ForwardEvent<M> {
-        ForwardEvent::stream(value)
+        ForwardEvent::topic_stream(value)
     }
 }
 
