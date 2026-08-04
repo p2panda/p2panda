@@ -35,6 +35,8 @@ Highlights are marked with a pancake 🥞
 - spaces: Only emit membership change events if local user is space member [#1304](https://github.com/p2panda/p2panda/pull/1304)
 - store: sqlx 0.9.0, use safer query builder [#1322](https://github.com/p2panda/p2panda/pull/1322)
 - node: Make `Group` sendsync [#1306](https://github.com/p2panda/p2panda/pull/1306)
+- net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
+- sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
 
 ### Fixed
 
@@ -42,7 +44,7 @@ Highlights are marked with a pancake 🥞
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
 - node: Allow event processing to handle out-of-order buffering by separating i/o streams and preserve input ordering [#1271](https://github.com/p2panda/)
 - encryption: Do not require pre-key bundle when initialising TwoParty state as a recipient [#1297](https://github.com/p2panda/p2panda/pull/1297)
-- encryption: Update hpke-rs to v0.7.0 [#1309](https://github.com/p2panda/p2panda/pull/1309)
+- encryption: Update hpke-rs to v0.7.0 to fix RUSTSEC [#1309](https://github.com/p2panda/p2panda/pull/1309)
 
 ## [0.7.0] - 07/07/2026
 
