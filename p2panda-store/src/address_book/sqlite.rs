@@ -14,7 +14,7 @@ use crate::sqlite::{SqliteError, SqliteStore};
 
 impl<N> AddressBookStore<VerifyingKey, N> for SqliteStore
 where
-    N: NodeInfo<VerifyingKey> + Serialize + for<'de> Deserialize<'de>,
+    N: NodeInfo<VerifyingKey> + Serialize + for<'de> Deserialize<'de> + Send + Unpin,
 {
     type Error = SqliteError;
 
@@ -55,10 +55,7 @@ where
                 ",
             )
             .bind(info.id().to_hex())
-            .bind(
-                encode_cbor(&info)
-                    .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?,
-            )
+            .bind(NodeInfoEncode(&info))
             .bind(info.is_bootstrap())
             .bind(info.is_stale())
             .execute(&mut **tx)
@@ -159,26 +156,21 @@ where
     }
 
     async fn node_info(&self, id: &VerifyingKey) -> Result<Option<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        node_info
-                    FROM
-                        node_infos_v1
-                    WHERE
-                        node_id = ?
-                    ",
-                )
-                .bind(id.to_hex())
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_info(result)
+        query_as::<_, (NodeInfoDecode<N>,)>(
+            "
+            SELECT
+                node_info
+            FROM
+                node_infos_v1
+            WHERE
+                node_id = ?
+            ",
+        )
+        .bind(id.to_hex())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(SqliteError::Sqlite)
+        .map(|o| o.map(|(n,)| n.0))
     }
 
     async fn node_topics(&self, id: &VerifyingKey) -> Result<HashSet<Topic>, Self::Error> {
@@ -211,25 +203,20 @@ where
     }
 
     async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        node_info
-                    FROM
-                        node_infos_v1
-                    WHERE
-                        stale = FALSE
-                    ",
-                )
-                .fetch_all(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_infos(result)
+        query_as::<_, (NodeInfoDecode<N>,)>(
+            "
+                SELECT
+                    node_info
+                FROM
+                    node_infos_v1
+                WHERE
+                    stale = FALSE
+                ",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(SqliteError::Sqlite)
+        .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
     }
 
     async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
@@ -278,36 +265,31 @@ where
     }
 
     async fn selected_node_infos(&self, ids: &[VerifyingKey]) -> Result<Vec<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                let mut query_builder = QueryBuilder::new(
-                    r#"
-                    SELECT
-                        node_info
-                    FROM
-                        node_infos_v1
-                    WHERE
-                        node_id IN (
-                "#,
-                );
+        let mut query_builder = QueryBuilder::new(
+            r#"
+                SELECT
+                    node_info
+                FROM
+                    node_infos_v1
+                WHERE
+                    node_id IN (
+            "#,
+        );
 
-                {
-                    let mut separated = query_builder.separated(", ");
-                    for id in ids.iter() {
-                        separated.push_bind(id.to_string());
-                    }
-                    separated.push_unseparated(" ) ");
-                }
+        {
+            let mut separated = query_builder.separated(", ");
+            for id in ids.iter() {
+                separated.push_bind(id.to_string());
+            }
+            separated.push_unseparated(" ) ");
+        }
 
-                query_builder
-                    .build_query_as::<(Vec<u8>,)>()
-                    .fetch_all(pool)
-                    .await
-                    .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_infos(result)
+        query_builder
+            .build_query_as::<(NodeInfoDecode<N>,)>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(SqliteError::Sqlite)
+            .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
     }
 
     async fn set_topics(
@@ -360,95 +342,80 @@ where
     }
 
     async fn node_infos_by_topics(&self, topics: &[Topic]) -> Result<Vec<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                let mut query_builder = QueryBuilder::new(
-                    r#"
-                    SELECT
-                        node_infos_v1.node_info
-                    FROM
-                        node_infos_v1
-                    LEFT JOIN topics2node_infos_v1
-                        ON node_infos_v1.node_id = topics2node_infos_v1.node_id
-                    WHERE
-                        topics2node_infos_v1.topic_id IN (
-                "#,
-                );
+        let mut query_builder = QueryBuilder::new(
+            r#"
+                SELECT
+                    node_infos_v1.node_info
+                FROM
+                    node_infos_v1
+                LEFT JOIN topics2node_infos_v1
+                    ON node_infos_v1.node_id = topics2node_infos_v1.node_id
+                WHERE
+                    topics2node_infos_v1.topic_id IN (
+            "#,
+        );
 
-                {
-                    let mut separated = query_builder.separated(", ");
-                    for topic in topics {
-                        separated.push_bind(topic.to_string());
-                    }
-                    separated.push_unseparated(") ");
-                }
+        {
+            let mut separated = query_builder.separated(", ");
+            for topic in topics {
+                separated.push_bind(topic.to_string());
+            }
+            separated.push_unseparated(") ");
+        }
 
-                query_builder.push(
-                    r#"
-                        AND node_infos_v1.stale = FALSE
-                    GROUP BY
-                        node_infos_v1.node_id
-                    "#,
-                );
+        query_builder.push(
+            r#"
+                AND node_infos_v1.stale = FALSE
+            GROUP BY
+                node_infos_v1.node_id
+            "#,
+        );
 
-                query_builder
-                    .build_query_as::<(Vec<u8>,)>()
-                    .fetch_all(pool)
-                    .await
-                    .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_infos(result)
+        query_builder
+            .build_query_as::<(NodeInfoDecode<N>,)>()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(SqliteError::Sqlite)
+            .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
     }
 
     async fn random_node(&self) -> Result<Option<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        node_info
-                    FROM
-                        node_infos_v1
-                    WHERE
-                        stale = FALSE
-                    ORDER BY RANDOM()
-                    LIMIT 1
-                    ",
-                )
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_info(result)
+        query_as::<_, (NodeInfoDecode<N>,)>(
+            "
+                SELECT
+                    node_info
+                FROM
+                    node_infos_v1
+                WHERE
+                    stale = FALSE
+                ORDER BY RANDOM()
+                LIMIT 1
+                ",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(SqliteError::Sqlite)
+        .map(|o| o.map(|(n,)| n.0))
     }
 
     async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        node_info
-                    FROM
-                        node_infos_v1
-                    WHERE
-                        bootstrap = TRUE
-                        AND stale = FALSE
-                    ORDER BY RANDOM()
-                    LIMIT 1
-                    ",
-                )
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        decode_node_info(result)
+        query_as::<_, (NodeInfoDecode<N>,)>(
+            "
+                SELECT
+                    node_info
+                FROM
+                    node_infos_v1
+                WHERE
+                    bootstrap = TRUE
+                    AND stale = FALSE
+                ORDER BY RANDOM()
+                LIMIT 1
+            ",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(SqliteError::Sqlite)
+        .map(|o| o.map(|(n,)| n.0))
     }
 }
 
@@ -483,31 +450,55 @@ impl SqliteStore {
     }
 }
 
-/// Deserialize multiple rows containing encoded node info.
-fn decode_node_infos<N>(result: Vec<(Vec<u8>,)>) -> Result<Vec<N>, SqliteError>
+struct NodeInfoDecode<N>(N);
+
+impl<N> sqlx::Type<sqlx::Sqlite> for NodeInfoDecode<N>
 where
     N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
 {
-    result
-        .iter()
-        .map(|item| {
-            decode_cbor(&item.0[..])
-                .map_err(|err| SqliteError::Decode("node_info".to_string(), err.into()))
-        })
-        .collect()
+    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
+        <Vec<u8> as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
 }
 
-/// Deserialize single row maybe containing encoded node info.
-fn decode_node_info<N>(result: Option<(Vec<u8>,)>) -> Result<Option<N>, SqliteError>
+impl<N> sqlx::Decode<'_, sqlx::Sqlite> for NodeInfoDecode<N>
 where
     N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
 {
-    match result {
-        Some((bytes,)) => {
-            Ok(Some(decode_cbor(&bytes[..]).map_err(|err| {
-                SqliteError::Decode("node_info".to_string(), err.into())
-            })?))
-        }
-        None => Ok(None),
+    fn decode(
+        value: <sqlx::Sqlite as sqlx::Database>::ValueRef<'_>,
+    ) -> Result<Self, sqlx::error::BoxDynError> {
+        let bytes = <&[u8] as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
+
+        let cbor = decode_cbor(bytes)
+            .map_err(|err| SqliteError::Decode("node_info".to_string(), err.into()))?;
+
+        Ok(NodeInfoDecode(cbor))
+    }
+}
+
+struct NodeInfoEncode<'a, N>(&'a N);
+
+impl<'r, N> sqlx::Type<sqlx::Sqlite> for NodeInfoEncode<'r, N>
+where
+    N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
+{
+    fn type_info() -> <sqlx::Sqlite as sqlx::Database>::TypeInfo {
+        <Vec<u8> as sqlx::Type<sqlx::Sqlite>>::type_info()
+    }
+}
+
+impl<'r, N> sqlx::Encode<'r, sqlx::Sqlite> for NodeInfoEncode<'r, N>
+where
+    N: NodeInfo<VerifyingKey> + Serialize + for<'a> Deserialize<'a>,
+{
+    fn encode_by_ref(
+        &self,
+        buf: &mut <sqlx::Sqlite as sqlx::Database>::ArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        let cbor_buf = encode_cbor(&self.0)
+            .map_err(|err| SqliteError::Encode("node_info".to_string(), err))?;
+
+        <Vec<u8> as sqlx::Encode<sqlx::Sqlite>>::encode(cbor_buf, buf)
     }
 }
