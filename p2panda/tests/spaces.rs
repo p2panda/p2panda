@@ -6,7 +6,8 @@ use std::collections::HashSet;
 
 use p2panda::Topic;
 use p2panda::spaces::{
-    AddSpaceMemberError, GroupEvent, InnerGroupEvent, PublishSpaceError, RemoveSpaceMemberError,
+    AddGroupMemberError, AddSpaceMemberError, GroupEvent, InnerGroupEvent, PublishSpaceError,
+    RemoveGroupMemberError, RemoveSpaceMemberError,
 };
 use p2panda::streams::{StreamEvent, SystemEvent};
 use p2panda::{SigningKey, operation::Header};
@@ -628,6 +629,108 @@ async fn api_validation() -> Result<(), Box<dyn std::error::Error>> {
         result.err().unwrap(),
         PublishSpaceError::Validation {
             err: WriteError::UnrecognisedActor,
+            ..
+        }
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn groups_api_validation() -> Result<(), Box<dyn std::error::Error>> {
+    setup_logging();
+
+    let panda = p2panda::spawn().await.unwrap();
+    let lion = p2panda::spawn().await?;
+    let tiger = p2panda::spawn().await?;
+
+    let topic = Topic::random();
+
+    // NOTE: Having a space in this test is only required to sync the group operations.
+    let (_panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+    let (_tiger_space, _tiger_rx) = tiger.space::<SecretData>(topic).await.unwrap();
+    let (_lion_space, _lion_rx) = lion.space::<SecretData>(topic).await.unwrap();
+
+    let mut lion_system_rx = lion.event_stream().await?;
+    let mut tiger_system_rx = tiger.event_stream().await?;
+
+    let panda_group = panda
+        .create_group(&[
+            (panda.id(), AccessLevel::Manage),
+            (lion.id(), AccessLevel::Read),
+        ])
+        .await?;
+
+    // Panda can't re-add themselves.
+    let result = panda_group.add(panda.id(), AccessLevel::Write).await;
+    assert_matches!(
+        result.err().unwrap(),
+        AddGroupMemberError::Validation {
+            err: AddMemberError::AlreadyAdded,
+            ..
+        }
+    );
+
+    // Panda can't remove a non-member.
+    let result = panda_group
+        .remove(SigningKey::generate().verifying_key())
+        .await;
+    assert_matches!(
+        result.err().unwrap(),
+        RemoveGroupMemberError::Validation {
+            err: RemoveMemberError::NonMember,
+            ..
+        }
+    );
+
+    // Lion receives the group event on their system stream.
+    loop {
+        if let Some(SystemEvent::Groups {
+            group_id,
+            inner: InnerGroupEvent::Created { .. },
+            ..
+        }) = lion_system_rx.next().await
+        {
+            if group_id == panda_group.id() {
+                break;
+            }
+        };
+    }
+
+    // Tiger receives the group event on their system stream.
+    loop {
+        if let Some(SystemEvent::Groups {
+            group_id,
+            inner: InnerGroupEvent::Created { .. },
+            ..
+        }) = tiger_system_rx.next().await
+        {
+            if group_id == panda_group.id() {
+                break;
+            }
+        };
+    }
+
+    // Tiger isn't a recognized group actor.
+    let panda_group_on_tiger = tiger.group(panda_group.id()).await.unwrap().unwrap();
+    let result = panda_group_on_tiger
+        .add(tiger.id(), AccessLevel::Write)
+        .await;
+    assert_matches!(
+        result.err().unwrap(),
+        AddGroupMemberError::Validation {
+            err: AddMemberError::UnrecognisedActor,
+            ..
+        }
+    );
+
+    // Lion doesn't have required access level.
+    let panda_group_on_lion = lion.group(panda_group.id()).await.unwrap().unwrap();
+    let result = panda_group_on_lion.remove(panda.id()).await;
+    assert_matches!(
+        result.err().unwrap(),
+        RemoveGroupMemberError::Validation {
+            err: RemoveMemberError::InsufficientAccess,
             ..
         }
     );

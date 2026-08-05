@@ -18,7 +18,9 @@ pub use p2panda_spaces::manager::ManagerError;
 pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext, SpaceId};
 
 pub(crate) use forge::{KEY_BUNDLE_LOG_ID, group_log_id};
-pub use group::{Group, GroupError, GroupEvent, GroupFuture};
+pub use group::{
+    AddGroupMemberError, Group, GroupError, GroupEvent, GroupFuture, RemoveGroupMemberError,
+};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use repair::{RepairError, RepairStrategy, spawn_repair_task};
 pub(crate) use space::spaces_stream;
