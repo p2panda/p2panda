@@ -9,6 +9,7 @@ use p2panda_net::{NetworkId, NodeId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::Instrument;
 
 pub use crate::builder::NodeBuilder;
 use crate::forge::{Forge, OperationForge};
@@ -291,6 +292,7 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
+        let span = tracing::error_span!("stream-from", topic = %topic, ack_policy = tracing::field::debug(self.config.ack_policy));
         let (tx, rx) = processed_stream(
             topic,
             self.config.ack_policy,
@@ -300,6 +302,7 @@ impl Node {
             self.pipeline.clone(),
             from,
         )
+        .instrument(span)
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
