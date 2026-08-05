@@ -27,6 +27,7 @@ Highlights are marked with a pancake 🥞
 - node: Allow graceful closure of sync sessions [#1307](https://github.com/p2panda/p2panda/pull/1307)
 - node: API for promoting and demoting space members [#1311](https://github.com/p2panda/p2panda/pull/1311)
 - node: Emit per-group and global groups events [#1313](https://github.com/p2panda/p2panda/pull/1313)
+- stream: Filter out spaces application messages from concurrently removed members [#1291](https://github.com/p2panda/p2panda/pull/1291)
 
 ### Changed
 
