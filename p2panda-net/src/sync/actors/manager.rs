@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use iroh::endpoint::Connection;
+use iroh::endpoint::{Connection, VarInt};
 use iroh::protocol::ProtocolHandler;
 use p2panda_core::Topic;
 use p2panda_sync::FromSync;
@@ -20,6 +20,7 @@ use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
+use crate::authoriser::{Authoriser, AuthoriserError};
 use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
@@ -105,6 +106,7 @@ where
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
+    authoriser: Authoriser,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
@@ -233,14 +235,14 @@ where
 
     type Msg = ToSyncManager<M::Message, M::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, Authoriser);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip) = args;
+        let (protocol_id, sync_args, endpoint, gossip, authoriser) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -256,6 +258,7 @@ where
             protocol_id,
             endpoint,
             gossip,
+            authoriser,
             gossip_handles,
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
@@ -298,6 +301,7 @@ where
                     .accept(
                         state.protocol_id.clone(),
                         SyncProtocolHandler {
+                            authoriser: state.authoriser.clone(),
                             stream_ref: myself.clone(),
                         },
                     )
@@ -398,6 +402,16 @@ where
                 let _ = reply.send(());
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
+                // Authorise that we should be connecting on this topic with the remote node.
+                if !state.authoriser.can_connect_on_topic(topic, node_id).await {
+                    warn!(
+                        "blocked initiating sync with node {} on topic {}",
+                        node_id.fmt_short(),
+                        topic.fmt_short()
+                    );
+                    return Ok(());
+                }
+
                 if let Some((sync_manager_actor, live_mode)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
@@ -511,6 +525,7 @@ where
     M: Send + 'static,
     E: Send + 'static,
 {
+    authoriser: Authoriser,
     stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
@@ -557,6 +572,20 @@ where
             .run(&mut tx, &mut rx)
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
+
+        let allow = self.authoriser.can_connect_on_topic(topic, node_id).await;
+
+        if !allow {
+            warn!(
+                "rejected sync with blocked node {} on topic {}",
+                node_id.fmt_short(),
+                topic.fmt_short()
+            );
+            connection.close(VarInt::from_u32(0), b"not authorised");
+            return Err(iroh::protocol::AcceptError::from_err(
+                AuthoriserError::NotAuthorised,
+            ));
+        }
 
         // We know the topic now and send an accept message to the stream actor where it will then
         // be routed to the correct sync manager.

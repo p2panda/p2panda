@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
+use p2panda_net::authoriser::Authoriser;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
@@ -20,7 +21,6 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tracing::debug;
 
-use crate::authoriser::Authoriser;
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::forge::{Forge, OperationForge};
@@ -94,6 +94,7 @@ impl Node {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
         let authoriser = Authoriser::new();
+        authoriser.permissive().await;
 
         let network = Network::spawn(
             config.network.clone(),
@@ -743,6 +744,11 @@ impl Node {
     /// Blocks all connection attempts with the given node.
     pub async fn block(&self, node_id: NodeId) {
         self.authoriser.block(node_id).await;
+    }
+
+    /// Blocks all connection attempts with the given node for a single topic.
+    pub async fn topic_block(&self, topic: Topic, node_id: NodeId) {
+        self.authoriser.topic_block(topic, node_id).await;
     }
 }
 
