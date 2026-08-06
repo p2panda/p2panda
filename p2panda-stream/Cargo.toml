@@ -28,6 +28,7 @@ default = [
   "log_prune",
   "orderer",
   "spaces",
+  "hooks",
 ]
 groups = [
   "p2panda-auth/serde",
@@ -45,6 +46,7 @@ spaces = [
   "p2panda-store/spaces",
   "dep:serde",
 ]
+hooks = []
 
 [dependencies]
 futures-util = { workspace = true }
