@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use p2panda_core::{SigningKey, Topic};
 use p2panda_net::address_book::AddressBookError;
 use p2panda_net::addrs::{NodeInfo, TrustedTransportInfo};
+use p2panda_net::authoriser::Authoriser;
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
 use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{EndpointAddr, EndpointError, IrohConfig, RelayUrl};
@@ -19,7 +20,6 @@ use p2panda_net::{
 use p2panda_store::SqliteStore;
 use thiserror::Error;
 
-use crate::authoriser::Authoriser;
 use crate::operation::Extensions;
 
 #[derive(Clone, Debug)]
@@ -53,7 +53,7 @@ impl Network {
             .config(config.iroh)
             .signing_key(signing_key)
             .network_id(config.network_id)
-            .hooks(authoriser);
+            .hooks(authoriser.clone());
 
         for url in &config.relay_urls {
             endpoint = endpoint.relay_url(url.clone());
@@ -84,6 +84,7 @@ impl Network {
             .await?;
 
         let log_sync = LogSync::builder(store.clone(), endpoint.clone(), gossip.clone())
+            .authoriser(authoriser)
             .spawn()
             .await?;
 

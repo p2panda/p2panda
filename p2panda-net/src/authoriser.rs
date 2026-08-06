@@ -109,6 +109,29 @@ impl Authoriser {
         authoriser.tx.subscribe()
     }
 
+    /// Sends an authoriser event into the events stream.
+    ///
+    /// All subscribers will be notified of the event.
+    pub async fn send_event(&self, event: AuthoriserEvent) {
+        let authoriser = self.inner.write().await;
+
+        // Only send the event if there are active receivers.
+        //
+        // This is primarily to prevent flooding the logs with warnings when events are emitted but
+        // no event stream subscription exists.
+        if authoriser.tx.receiver_count() > 0 {
+            if let Err(err) = authoriser.tx.send(event) {
+                warn!("failed to send authoriser event: {}", err)
+            } else {
+                println!("successfully sent authoriser event")
+            }
+        }
+    }
+
+    /// Sets the authoriser mode to permissive.
+    ///
+    /// Any connection or sync session with a node or node-topic combination will be allowed, as
+    /// long as it has not been explicitly added to the blocklist.
     pub async fn permissive(&self) {
         let mut authoriser = self.inner.write().await;
         authoriser.mode = AuthoriserMode::Permissive;
@@ -169,10 +192,7 @@ impl Authoriser {
             AuthoriserEvent::TopicBlocked { topic, node }
         };
 
-        if let Err(err) = authoriser
-            .tx
-            .send(event)
-        {
+        if let Err(err) = authoriser.tx.send(event) {
             warn!("failed to send authoriser event: {}", err)
         }
 
@@ -192,10 +212,7 @@ impl Authoriser {
             AuthoriserEvent::ConnectionBlocked { node }
         };
 
-        if let Err(err) = authoriser
-            .tx
-            .send(event)
-        {
+        if let Err(err) = authoriser.tx.send(event) {
             warn!("failed to send authoriser event: {}", err)
         }
 

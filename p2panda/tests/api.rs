@@ -671,4 +671,45 @@ mod connection_authorisation {
 
         assert!(received_event);
     }
+
+    #[tokio::test]
+    async fn block_node_connections_for_topic() {
+        setup_logging();
+
+        let chat_id = Topic::random();
+
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
+
+        // Panda blocks icebear on the chat topic.
+        panda.topic_block(chat_id, icebear.id()).await;
+
+        // Panda joins the chat and sends a message.
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx
+            .publish("I just blocked Icebear!".into())
+            .await
+            .unwrap();
+
+        // Create a system event stream for panda.
+        let mut events = panda.event_stream().await.unwrap();
+
+        // Icebear joins the chat.
+        let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+        let mut received_event = false;
+
+        // Panda & Icebear will discover that they have similar interest in the chat topic, however
+        // any sync attempt will be blocked..
+        while let Some(event) = events.next().await {
+            if let SystemEvent::Authoriser(AuthoriserEvent::TopicBlocked { topic, node }) = event {
+                if node == icebear.id() && topic == chat_id {
+                    received_event = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(received_event);
+    }
 }
