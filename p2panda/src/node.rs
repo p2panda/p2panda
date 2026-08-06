@@ -65,7 +65,7 @@ impl Node {
     /// failure.
     pub async fn spawn() -> Result<Self, SpawnError> {
         // Initialises an in-memory SQLite database.
-        let store = SqliteStoreBuilder::default().build().await?;
+        let store = SqliteStoreBuilder::memory().build().await?;
 
         // Generate random keys.
         let credentials = Credentials::generate();
