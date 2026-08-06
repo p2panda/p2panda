@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
@@ -39,6 +39,8 @@ use crate::streams::{
     processed_stream, to_stream_event, to_system_event,
 };
 
+static_assertions::assert_impl_all!(Node: Send, Sync);
+
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
 #[derive(Debug)]
 pub struct Node {
@@ -50,7 +52,7 @@ pub struct Node {
     network: Network,
     spaces_manager: SpacesManager,
     events_tx: broadcast::Sender<SystemEvent>,
-    events_rx: RwLock<broadcast::Receiver<SystemEvent>>,
+    events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
 }
 
 impl Node {
@@ -108,7 +110,7 @@ impl Node {
             network,
             spaces_manager,
             events_tx,
-            events_rx: RwLock::new(events_rx),
+            events_rx: Mutex::new(events_rx),
         })
     }
 
@@ -386,15 +388,18 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        let events_rx = {
-            let write = self.events_rx.write().unwrap();
-            let resubscribed = write.resubscribe();
-
-            let mut write = write;
-            std::mem::replace(&mut *write, resubscribed)
-        };
+        let events_rx = self.resubscribe_event_stream();
 
         Ok(event_stream(events_rx, discovery_events))
+    }
+
+    fn resubscribe_event_stream(&self) -> broadcast::Receiver<SystemEvent> {
+        let mut current = self.events_rx.lock().expect("mutex poisoned");
+        let resubscribed = current.resubscribe();
+
+        // Return current mpmc instance instead of the new one from resubscribing, otherwise we'll
+        // loose items in the current channel buffer.
+        std::mem::replace(&mut *current, resubscribed)
     }
 
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
@@ -409,14 +414,7 @@ impl Node {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
-                let events_rx = {
-                    let write = self.events_rx.write().unwrap();
-                    let resubscribed = write.resubscribe();
-
-                    let mut write = write;
-                    std::mem::replace(&mut *write, resubscribed)
-                };
-
+                let events_rx = self.resubscribe_event_stream();
                 Ok(Some(Group::new(inner, tx, rx, events_rx)))
             }
             None => Ok(None),
@@ -452,13 +450,7 @@ impl Node {
             panic!();
         }
 
-        let events_rx = {
-            let write = self.events_rx.write().unwrap();
-            let resubscribed = write.resubscribe();
-
-            let mut write = write;
-            std::mem::replace(&mut *write, resubscribed)
-        };
+        let events_rx = self.resubscribe_event_stream();
 
         let inner = self
             .spaces_manager
