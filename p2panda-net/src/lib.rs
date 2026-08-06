@@ -236,6 +236,7 @@
 pub mod address_book;
 pub mod addrs;
 pub mod codec;
+pub mod authoriser;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]
@@ -320,6 +321,17 @@ fn hash_protocol_id_with_network_id(
     network_id: NetworkId,
 ) -> Vec<u8> {
     p2panda_core::Hash::digest([protocol_id.as_ref(), &network_id].concat())
+        .as_bytes()
+        .to_vec()
+}
+
+/// Hash the concatenation of the given topic and network identifier.
+fn hash_protocol_id_topic_and_network_id(
+    protocol_id: impl AsRef<[u8]>,
+    topic: impl AsRef<[u8]>,
+    network_id: NetworkId,
+) -> Vec<u8> {
+    p2panda_core::Hash::digest([protocol_id.as_ref(), topic.as_ref(), &network_id].concat())
         .as_bytes()
         .to_vec()
 }

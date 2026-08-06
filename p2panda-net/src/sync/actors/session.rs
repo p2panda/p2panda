@@ -18,7 +18,7 @@ use tracing::Instrument;
 use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::iroh_endpoint::Endpoint;
 use crate::utils::ShortFormat;
-use crate::{NodeId, ProtocolId};
+use crate::{NodeId, ProtocolId, hash_protocol_id_topic_and_network_id};
 
 pub type SyncSessionId = u64;
 
@@ -84,7 +84,12 @@ where
                 protocol,
                 protocol_id,
             } => {
-                let connection = state.0.connect(node_id, protocol_id).await?;
+                let mixed_alpn = hash_protocol_id_topic_and_network_id(
+                    protocol_id,
+                    topic.as_bytes(),
+                    state.0.network_id(),
+                );
+                let connection = state.0.connect(node_id, mixed_alpn).await?;
 
                 // First run the TopicHandshake protocol.
                 let (tx, rx) = connection.open_bi().await?;

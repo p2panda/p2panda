@@ -5,6 +5,7 @@ use std::pin::Pin;
 use futures_util::Stream;
 use futures_util::stream::{SelectAll, StreamExt};
 use p2panda_auth::AccessLevel;
+use p2panda_net::authoriser::AuthoriserEvent;
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_spaces::{ActorId, GroupId};
 use tokio::sync::broadcast;
@@ -12,7 +13,6 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::spaces::GroupActor;
 use crate::spaces::types::InnerGroupEvent;
-use crate::authoriser::AuthoriserEvent;
 
 /// System event.
 ///

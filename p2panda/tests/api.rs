@@ -3,7 +3,6 @@
 use futures_util::StreamExt;
 use mock_instant::thread_local::MockClock;
 use p2panda::Credentials;
-use p2panda::authoriser::AuthoriserEvent;
 use p2panda::node::AckPolicy;
 use p2panda::operation::{Extensions, LogId, Operation};
 use p2panda::streams::{
@@ -13,6 +12,7 @@ use p2panda_core::cbor::encode_cbor;
 use p2panda_core::logs::LogHeights;
 use p2panda_core::test_utils::{TestLog, setup_logging};
 use p2panda_core::{Cursor, Hash, Topic};
+use p2panda_net::authoriser::AuthoriserEvent;
 use p2panda_net::discovery::DiscoveryEvent;
 use p2panda_store::logs::LogStore;
 use tokio::task::JoinHandle;
@@ -683,10 +683,52 @@ async fn block_node_connections() {
     // The discovery system should try and initiate a connection to Icebear.
     // We expect the connection establishment to be blocked.
     while let Some(event) = events.next().await {
-        if let SystemEvent::Authoriser(AuthoriserEvent::Blocked(node)) = event {
-            assert_eq!(node, icebear.id());
-            received_event = true;
-            break;
+        if let SystemEvent::Authoriser(AuthoriserEvent::ConnectionBlocked { node }) = event {
+            if node == icebear.id() {
+                received_event = true;
+                break;
+            }
+        }
+    }
+
+    assert!(received_event);
+}
+
+#[tokio::test]
+async fn block_node_connections_for_topic() {
+    setup_logging();
+
+    let chat_id = Topic::random();
+
+    let panda = p2panda::builder().spawn().await.unwrap();
+    let icebear = p2panda::builder().spawn().await.unwrap();
+
+    // Panda blocks icebear on the chat topic.
+    panda.topic_block(chat_id, icebear.id()).await;
+
+    // Panda joins the chat and sends a message.
+    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+    panda_tx
+        .publish("I just blocked Icebear!".into())
+        .await
+        .unwrap();
+
+    // Create a system event stream for panda.
+    let mut events = panda.event_stream().await.unwrap();
+
+    // Icebear joins the chat.
+    let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+    let mut received_event = false;
+
+    // Panda & Icebear will discover that they have similar interest in the chat topic, however
+    // any sync attempt will be blocked..
+    while let Some(event) = events.next().await {
+        if let SystemEvent::Authoriser(AuthoriserEvent::TopicBlocked { topic, node }) = event {
+            if node == icebear.id() && topic == chat_id {
+                received_event = true;
+                break;
+            }
         }
     }
 
