@@ -255,17 +255,17 @@ where
         // Route message to the regarding member-, group- or space processor.
         let result = match args {
             // Received key bundle from a member.
-            SpacesArgs::KeyBundle { key_bundle } => {
+            SpacesArgs::Member(member) => {
                 let mut manager = self.inner.write().await;
                 let event = manager
                     .identity
-                    .process_key_bundle(message.author(), key_bundle)
+                    .process(member)
                     .await
                     .map_err(ManagerError::IdentityManager)?;
 
                 (None, None, vec![event])
             }
-            SpacesArgs::Auth { .. } => {
+            SpacesArgs::Group { .. } => {
                 let event = Group::process(self.clone(), &SpacesMessage::auth(message))
                     .await
                     .map_err(ManagerError::Group)?;
@@ -333,11 +333,12 @@ where
     /// channel (QR code scan etc.).
     pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C>> {
         let mut manager = self.inner.write().await;
-        manager
+        let _event = manager
             .identity
-            .register_member(member)
+            .process(member)
             .await
-            .map_err(ManagerError::IdentityManager)
+            .map_err(ManagerError::IdentityManager);
+        Ok(())
     }
 
     /// Check if my latest key bundle has expired.
@@ -520,7 +521,7 @@ where
             };
 
             match message.borrow() {
-                SpacesArgs::Auth { .. } => SpacesMessage::auth(&message),
+                SpacesArgs::Group { .. } => SpacesMessage::auth(&message),
                 _ => {
                     return Err(ManagerError::IncorrectMessageVariant(auth_message_id));
                 }

@@ -2,14 +2,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use p2panda_core::VerifyingKey;
-use serde::{Deserialize, Serialize};
-
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
+use p2panda_core::VerifyingKey;
 
 use crate::auth::message::AuthMessage;
+use crate::member::Member;
 use crate::message::SpaceMembershipMessage;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
@@ -17,7 +16,7 @@ use crate::utils::{
 };
 use crate::{ActorId, GroupId, MemberId, SpaceId};
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupActor {
     id: ActorId,
     is_group: bool,
@@ -52,9 +51,12 @@ impl GroupActor {
 }
 
 /// Events emitted when system state changes or application messages are processed.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
+    /// A member's info with associated key-bundle has been received.
+    Member(Member),
+
     /// A group membership change occurred in the shared groups state.
     ///
     /// This event does _not_ signify that any space has incorporated this change yet. The
@@ -67,10 +69,6 @@ pub enum Event<C> {
     /// space with a "create" or "add" message.
     Application { space_id: SpaceId, data: Vec<u8> },
 
-    // @TODO: Could maybe add field to show when the bundle is valid until?
-    /// An actors' pre-key bundle has been received.
-    KeyBundle { author: MemberId },
-
     /// A membership change occurred on a space.
     ///
     /// This event is emitted every time the membership of a space changes. Events are silently
@@ -80,7 +78,7 @@ pub enum Event<C> {
 }
 
 /// Additional context attached to group events.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupContext<C> {
     /// The actor who authored the associated group action.
     pub author: ActorId,
@@ -102,7 +100,7 @@ pub struct GroupContext<C> {
 }
 
 /// Additional context attached to space events.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpaceContext<C> {
     /// The actor who applied this action to the spaces state.
     ///
@@ -121,7 +119,7 @@ pub struct SpaceContext<C> {
 }
 
 /// Events emitted when global auth state changes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GroupEvent<C> {
     /// A group was created.
     Created {
@@ -243,7 +241,7 @@ impl<C> GroupEvent<C> {
 }
 
 /// Events emitted when space membership changes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpaceEvent<C> {
     /// A space was created.
     Created {

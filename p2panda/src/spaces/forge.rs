@@ -15,7 +15,7 @@ use crate::operation::{Extensions, LogId, Operation};
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
-pub(crate) const KEY_BUNDLE_LOG_ID: &[u8] = b"key_bundle/v1";
+pub(crate) const MEMBER_CONTROL_MESSAGE: &[u8] = b"member_control/v1";
 
 const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
 
@@ -98,13 +98,12 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
         // by -spaces? If yes, are declaring _all_ dependencies really it's concern or only the ones
         // which are relevant to the spaces protocol?
         let operation = match args {
-            // 1. Key Bundle logs.
-            p2panda_spaces::SpacesArgs::KeyBundle { ref key_bundle } => {
-                // TODO: Check actual encoding format of key bundle. Will require versioning.
-                let bytes = encode_cbor(&key_bundle).expect("serialisation of key bundle to CBOR");
+            // 1. Member logs (with associated key bundles).
+            p2panda_spaces::SpacesArgs::Member(ref member) => {
+                let bytes = encode_cbor(&member).expect("serialisation of key bundle to CBOR");
 
-                // Every author maintains their own key bundle log.
-                let log_id = LogId::digest(KEY_BUNDLE_LOG_ID);
+                // Every member maintains their own log with key bundles inside.
+                let log_id = LogId::digest(MEMBER_CONTROL_MESSAGE);
 
                 // TODO: The key bundle itself should not be in the header to allow deleting it
                 // after a while (without breaking the whole key bundle log.
@@ -115,7 +114,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
             }
 
             // 2. Group logs.
-            p2panda_spaces::SpacesArgs::Auth { group_id, .. } => {
+            p2panda_spaces::SpacesArgs::Group { group_id, .. } => {
                 // Every author maintains their own log of control messages _per_ group.
                 let log_id = group_log_id(group_id);
 
@@ -235,7 +234,7 @@ pub(crate) async fn make_space_group_log_associations(
     };
 
     // Associate all group logs for members introduced by this operation.
-    if let Some(SpacesArgs::Auth {
+    if let Some(SpacesArgs::Group {
         group_id,
         group_action: GroupAction::Create { .. },
         ..
