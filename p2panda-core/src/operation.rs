@@ -76,9 +76,7 @@ use thiserror::Error;
 
 use crate::extensions::{Extension, Extensions};
 use crate::hash::{HASH_LEN, Hash};
-#[cfg(any(test, feature = "test_utils"))]
-use crate::identity::Signer;
-use crate::identity::{SIGNATURE_LEN, Signature, SigningKey, VERIFYING_KEY_LEN, VerifyingKey};
+use crate::identity::{SIGNATURE_LEN, Signature, Signer, VERIFYING_KEY_LEN, VerifyingKey};
 use crate::logs::SeqNum;
 use crate::traits::{Chain, Digest, Offchain, Provenance};
 
@@ -325,10 +323,10 @@ where
         self
     }
 
-    pub fn build(self, signing_key: &SigningKey, extensions: E) -> Header<E> {
+    pub fn build<S: Signer>(self, signer: &S, extensions: E) -> Header<E> {
         let version = 1;
 
-        let verifying_key = signing_key.verifying_key();
+        let verifying_key = signer.verifying_key();
 
         let extensions_cbor = if Header::<E>::has_non_zero_sized_extensions() {
             let extensions_cbor = Value::serialized(&extensions).expect("serializable extensions");
@@ -348,7 +346,7 @@ where
             extensions_cbor.as_ref(),
         );
 
-        let signature = signing_key.sign(&signing_bytes);
+        let signature = signer.sign(&signing_bytes);
 
         let bytes = encode_header(
             version,
