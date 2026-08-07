@@ -402,6 +402,8 @@ pub enum IdentityError {
 
 pub trait Signer {
     fn sign(&self, bytes: &[u8]) -> Signature;
+
+    fn verifying_key(&self) -> VerifyingKey;
 }
 
 #[cfg(test)]
