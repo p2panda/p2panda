@@ -23,6 +23,10 @@ workspace = true
 
 [features]
 default = []
+arbitrary = [
+  "dep:arbitrary",
+  "test_utils",
+]
 test_utils = [
   "dep:mock_instant",
   "dep:tracing-subscriber",

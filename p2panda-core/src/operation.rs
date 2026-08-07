@@ -453,6 +453,30 @@ pub struct Header<E = ()> {
     pub(crate) digest: Hash,
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a, E> arbitrary::Arbitrary<'a> for Header<E>
+where
+    E: Default + Extensions,
+{
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let header = Header {
+            version: u.arbitrary()?,
+            verifying_key: u.arbitrary()?,
+            signature: Signature::from_bytes(&[0; SIGNATURE_LEN]),
+            payload_size: u.arbitrary()?,
+            payload_hash: u.arbitrary()?,
+            seq_num: u.arbitrary()?,
+            backlink: u.arbitrary()?,
+            extensions: E::default(),
+            extensions_cbor: None,
+            size: 0,
+            digest: Hash::from_bytes([0; HASH_LEN]),
+        };
+
+        Ok(header)
+    }
+}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl<E> Default for Header<E>
 where

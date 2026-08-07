@@ -3,7 +3,6 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Header, SigningKey};
 
 // Create arbitrary header, sign, serialize and deserialize it.
@@ -11,11 +10,11 @@ fuzz_target!(|header: Header<()>| {
     let signing_key = SigningKey::generate();
 
     let mut header = header;
+    header.verifying_key = signing_key.verifying_key();
     header.sign(&signing_key);
-    header.verify();
 
-    let bytes = encode_cbor(&header).expect("header encoding");
-    let result: Result<Header<()>, _> = decode_cbor(&bytes[..]);
+    let bytes = header.encode();
+    let result: Result<Header<()>, _> = Header::<()>::decode(&bytes);
 
     // We expect these cases to fail:
     //
