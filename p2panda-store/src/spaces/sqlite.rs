@@ -52,10 +52,10 @@ where
             .await?
         {
             Some(operation) => {
-                let args = operation.header().extensions.borrow().clone();
+                let args = operation.header.extensions.borrow().clone();
                 let message = SpacesMessage {
                     id: operation.hash,
-                    author: operation.header().verifying_key,
+                    author: operation.header.verifying_key,
                     args,
                 };
                 Ok(Some(message))
