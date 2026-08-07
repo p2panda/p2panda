@@ -2,12 +2,12 @@
 
 use std::error::Error as StdError;
 
+use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Body, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
-use p2panda_sync::protocols::ShortFormat;
 use thiserror::Error;
 use tracing::trace;
 
@@ -125,7 +125,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             trace!(
                 id = operation.hash.fmt_short(),
                 author = self.credentials.verifying_key().fmt_short(),
-                log_id = Hash::from(log_id.as_bytes()).fmt_short(),
+                log_id = log_id.fmt_short(),
                 seq = operation.header.seq_num,
                 "operation created"
             );
