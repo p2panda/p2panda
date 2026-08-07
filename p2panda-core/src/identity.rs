@@ -149,6 +149,10 @@ impl Signer for SigningKey {
     fn sign(&self, bytes: &[u8]) -> Signature {
         self.sign(bytes)
     }
+
+    fn verifying_key(&self) -> VerifyingKey {
+        self.verifying_key()
+    }
 }
 
 #[cfg(feature = "arbitrary")]
@@ -402,6 +406,8 @@ pub enum IdentityError {
 
 pub trait Signer {
     fn sign(&self, bytes: &[u8]) -> Signature;
+
+    fn verifying_key(&self) -> VerifyingKey;
 }
 
 #[cfg(test)]

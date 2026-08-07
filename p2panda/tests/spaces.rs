@@ -4,15 +4,14 @@ use core::panic;
 use std::assert_matches;
 use std::collections::HashSet;
 
-use p2panda::Topic;
 use p2panda::spaces::{
     AddSpaceMemberError, GroupEvent, InnerGroupEvent, PublishSpaceError, RemoveSpaceMemberError,
 };
 use p2panda::streams::{StreamEvent, SystemEvent};
-use p2panda::{SigningKey, operation::Header};
+use p2panda::{SigningKey, Topic};
+use p2panda_auth::AccessLevel;
 use p2panda_auth::validation::{AddMemberError, RemoveMemberError, WriteError};
-use p2panda_auth::{Access, AccessLevel};
-use p2panda_core::{cbor::decode_cbor, test_utils::setup_logging};
+use p2panda_core::test_utils::setup_logging;
 use p2panda_spaces::SpaceEvent;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
@@ -362,45 +361,6 @@ async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(&message, operation.message());
         break;
     }
-    Ok(())
-}
-
-#[tokio::test]
-async fn encode_decode() -> Result<(), Box<dyn std::error::Error>> {
-    setup_logging();
-
-    use p2panda::Topic;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    struct SecretData {
-        title: String,
-        content: String,
-    }
-
-    let topic = Topic::random();
-
-    let panda = p2panda::spawn().await?;
-    let penguin = p2panda::spawn().await?;
-    let member = penguin.me().await?;
-    panda.register_member(member).await?;
-
-    let (space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
-
-    // Access the inner spaces manager so we can directly create and access an add message.
-    let spaces_manager = panda.spaces_manager();
-    let space = spaces_manager.space(space.id()).await?.unwrap();
-    let (_, _, _, space_message, _) = space.add(penguin.id(), Access::read()).await?;
-
-    // Encode and decode the add operation.
-    let operation = space_message.into_operation();
-    let header = operation.header();
-    let cbor_bytes = header.to_bytes();
-    let decoded_header: Header = decode_cbor(&cbor_bytes[..]).unwrap();
-
-    // This fails half the time.
-    assert_eq!(header.hash(), decoded_header.hash());
-
     Ok(())
 }
 

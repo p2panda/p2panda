@@ -346,6 +346,7 @@ use std::borrow::Borrow;
 use std::hash::Hash as StdHash;
 
 use p2panda_core::hash::{HASH_LEN, Hash};
+use p2panda_core::traits::ShortFormat;
 use p2panda_core::{PruneFlag, Timestamp, Topic};
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
@@ -688,6 +689,12 @@ impl LogId {
 impl From<Hash> for LogId {
     fn from(value: Hash) -> Self {
         Self(value)
+    }
+}
+
+impl ShortFormat for LogId {
+    fn fmt_short(&self) -> String {
+        self.0.fmt_short()
     }
 }
 

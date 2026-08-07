@@ -274,16 +274,11 @@ impl TestClient {
     ) -> (Header<()>, Vec<u8>, Body) {
         let (header, header_bytes, body) = self.create_operation_no_insert(body, log_id).await;
 
-        let id = header.hash();
-        let operation = Operation {
-            hash: header.hash(),
-            header: header.clone(),
-            body: Some(body.to_owned()),
-        };
+        let operation = Operation::from_parts(header.clone(), Some(body.to_owned()));
 
         tx_unwrap!(&self.store, {
             self.store
-                .insert_operation(&id, &operation, &log_id)
+                .insert_operation(&operation.hash, &operation, &log_id)
                 .await
                 .unwrap();
         });
@@ -336,21 +331,15 @@ pub fn create_operation(
     seq_num: SeqNum,
     backlink: Option<Hash>,
 ) -> (Header<TestExtensions>, Vec<u8>, Body) {
-    let body = Body::new(body);
+    let body = Body::from_bytes(body);
 
-    let mut header = Header::<()> {
-        version: 1,
-        verifying_key: signing_key.verifying_key(),
-        signature: None,
-        payload_size: body.size(),
-        payload_hash: Some(body.hash()),
-        seq_num,
-        backlink,
-        extensions: (),
-    };
+    let header = Header::builder()
+        .seq_num(seq_num)
+        .backlink(backlink)
+        .body(&body)
+        .build(signing_key, ());
 
-    header.sign(signing_key);
-    let header_bytes = header.to_bytes();
+    let header_bytes = header.encode();
 
     (header, header_bytes, body)
 }

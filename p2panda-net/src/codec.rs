@@ -160,7 +160,6 @@ pub enum CodecError {
 mod tests {
     use futures_util::{FutureExt, SinkExt, StreamExt};
     use p2panda_core::test_utils::TestLog;
-    use p2panda_core::{Body, Header};
     use tokio::io::AsyncWriteExt;
     use tokio_util::codec::{FramedRead, FramedWrite};
 
@@ -261,7 +260,7 @@ mod tests {
 
     #[tokio::test]
     async fn operations_stream() {
-        type Payload = (Header<u32>, Option<Body>);
+        type Payload = (Vec<u8>, Option<Vec<u8>>);
 
         // Give stream a large enough buffer size since we're creating all messages up-front before
         // consuming them.
@@ -274,7 +273,12 @@ mod tests {
         let log = TestLog::new();
         for _ in 0..100 {
             let operation = log.operation(b"boom boom boom", 32);
-            tx.send((operation.header, operation.body)).await.unwrap();
+            tx.send((
+                operation.header.encode(),
+                operation.body.map(|body| body.to_bytes()),
+            ))
+            .await
+            .unwrap();
         }
 
         // Receiver writes bytes into buffer, attempts decoding and returns header/body tuple 100

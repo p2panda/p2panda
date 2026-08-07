@@ -485,21 +485,9 @@ async fn import_external_stream() {
     assert!(start_received);
     assert!(end_received);
     assert_eq!(imported.len(), 3);
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_1.header().hash())
-    );
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_2.header().hash())
-    );
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_3.header().hash())
-    );
+    assert!(imported.iter().any(|event| event.id() == operation_1.hash));
+    assert!(imported.iter().any(|event| event.id() == operation_2.hash));
+    assert!(imported.iter().any(|event| event.id() == operation_3.hash));
     assert!(end_received);
 }
 
