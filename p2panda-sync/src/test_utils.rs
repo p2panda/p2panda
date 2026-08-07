@@ -33,7 +33,7 @@ pub type TestLogSync = LogSync<TestLogId, TestExtensions, SqliteStore, TestLogSy
 pub type TestLogSyncError = LogSyncError;
 
 // Types used in topic log sync protocol tests.
-pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId, TestExtensions>;
+pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<TestExtensions>;
 pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId, TestExtensions>;
 pub type TestTopicSyncError = TopicLogSyncError;
@@ -220,17 +220,11 @@ pub fn create_operation(
     backlink: Option<Hash>,
     log_id: TestLogId,
 ) -> (Header<TestExtensions>, Vec<u8>) {
-    let mut header = Header::<TestExtensions> {
-        version: 1,
-        verifying_key: signing_key.verifying_key(),
-        signature: None,
-        payload_size: body.size(),
-        payload_hash: Some(body.hash()),
-        seq_num,
-        backlink,
-        extensions: log_id,
-    };
-    header.sign(signing_key);
-    let header_bytes = header.to_bytes();
+    let header = Header::builder()
+        .body(body)
+        .seq_num(seq_num)
+        .backlink(backlink)
+        .build(signing_key, log_id);
+    let header_bytes = header.encode();
     (header, header_bytes)
 }
