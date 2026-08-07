@@ -451,6 +451,30 @@ pub struct Header<E = ()> {
     pub(crate) digest: Hash,
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a, E> arbitrary::Arbitrary<'a> for Header<E>
+where
+    E: Default + Extensions,
+{
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let header = Header {
+            version: 1,
+            verifying_key: u.arbitrary()?,
+            signature: Signature::from_bytes(&[0; SIGNATURE_LEN]),
+            payload_size: u.arbitrary()?,
+            payload_hash: u.arbitrary()?,
+            seq_num: u.arbitrary()?,
+            backlink: u.arbitrary()?,
+            extensions: E::default(),
+            extensions_cbor: None,
+            size: 0,
+            digest: Hash::from_bytes([0; HASH_LEN]),
+        };
+
+        Ok(header)
+    }
+}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl<E> Default for Header<E>
 where
@@ -583,11 +607,17 @@ where
     pub fn sign(&mut self, signer: &SigningKey) {
         let signing_bytes = self.encode_signing_bytes();
         self.signature = signer.sign(&signing_bytes);
+        self.update_size_and_digest();
     }
 
     pub fn verify(&self) -> bool {
         let signing_bytes = self.encode_signing_bytes();
         self.verifying_key.verify(&signing_bytes, &self.signature)
+    }
+
+    fn update_size_and_digest(&mut self) {
+        self.size = self.size();
+        self.digest = self.hash();
     }
 }
 

@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 p2panda-auth = { workspace = true, default-features = true, features = ["test_utils"] }
-p2panda-core = { workspace = true, default-features = true, features = ["arbitrary"] }
+p2panda-core = { workspace = true, default-features = true, features = ["test_utils", "arbitrary"] }
 p2panda-encryption = { workspace = true, default-features = true, features = ["test_utils"] }
 rand = { workspace = true, default-features = true, features = ["alloc"] }
 
