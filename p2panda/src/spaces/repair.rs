@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use futures_util::stream::BoxStream;
 use p2panda_core::traits::{Provenance, ShortFormat};
 use p2panda_core::{Hash, Topic};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
@@ -14,7 +13,6 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 use tokio::task::JoinHandle;
@@ -22,12 +20,13 @@ use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
-use crate::spaces::group_log_id;
-use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
-use crate::spaces::{SpacesManagerError, types::SpacesManager};
-use crate::streams::{ForwardEvent, LocalStreamFuture, to_stream_event, to_system_event};
+use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
+use crate::spaces::{SpacesManagerError, group_log_id};
+use crate::streams::{
+    ImportLocalTx, LocalStreamFuture, RepairRx, ToOutputTx, to_stream_event, to_system_event,
+};
 
-const REPAIR_FREQUENCY_SECS: u64 = 1;
+const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
 /// Strategy by which a space should be repaired.
 ///
@@ -43,14 +42,14 @@ const REPAIR_FREQUENCY_SECS: u64 = 1;
 ///
 /// ## Partial
 ///
-/// Only operations for groups added to a space (via a local action or by explicit association)
-/// are merged into the space. This results in improved privacy as there is no group "leakage"
-/// from the shared state into the space, however it means the initial "discovery" of a new
-/// to-be-added group must be solved via another channel (side-channel, dedicated topic, etc..).
+/// Only operations for groups added to a space (via a local action or by explicit association) are
+/// merged into the space. This results in improved privacy as there is no group "leakage" from the
+/// shared state into the space, however it means the initial "discovery" of a new to-be-added group
+/// must be solved via another channel (side-channel, dedicated topic, etc.).
 ///
-/// @TODO: This initial discovery mechanism is not yet implemented, it may be solved via invite
-/// tokens, or manually exporting and then registering a member group. Therefore all spaces use
-/// the "Global" strategy for now.
+/// TODO: This initial discovery mechanism is not yet implemented, it may be solved via invite
+/// tokens, or manually exporting and then registering a member group. Therefore all spaces use the
+/// "Global" strategy for now.
 #[derive(Debug)]
 pub enum RepairStrategy {
     Global,
@@ -76,11 +75,8 @@ pub(crate) async fn repair_space<M>(
     scope: RepairStrategy,
     manager: &SpacesManager,
     store: &SqliteStore,
-    import_local_tx: &mpsc::Sender<(
-        BoxStream<'static, Operation>,
-        oneshot::Sender<LocalStreamFuture>,
-    )>,
-    to_output_tx: &mpsc::Sender<Vec<ForwardEvent<M>>>,
+    import_local_tx: &ImportLocalTx,
+    to_output_tx: &ToOutputTx<M>,
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
@@ -108,30 +104,28 @@ pub(crate) async fn repair_space<M>(
 
     store.commit(permit).await?;
 
-    let include = match scope {
+    let group_ids = match scope {
         RepairStrategy::Global => groups_y.groups_global(),
         RepairStrategy::Partial(group_ids) => group_ids,
     };
 
-    // Identify if this space needs repairing.
-    let repair = match manager.space_repair_required(space_id, &include).await {
+    let repair = match manager.space_repair_required(space_id, &group_ids).await {
         Ok(ids) => ids,
         Err(err) => {
             return Err(err.into());
         }
     };
 
-    // If not return now already.
     if !repair {
         return Ok(false);
     }
 
-    // Collect all missing groups operations. These will be imported into the space and forwarded
-    // to live-mode peers.
+    // Collect all missing groups operations. These will be imported into the space and forwarded to
+    // live-mode peers.
     let permit = store.begin().await?;
 
     let mut groups_operations = vec![];
-    for id in groups_y.inner.toposort(&include) {
+    for id in groups_y.inner.toposort(&group_ids) {
         if space_y.groups_y.inner.operations.contains_key(&id) {
             continue;
         }
@@ -176,7 +170,7 @@ pub(crate) async fn repair_space<M>(
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &include).await?;
+    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &group_ids).await?;
 
     // If no space messages were forged during repairing then no state change occurred and we
     // don't need to persist here. This occurs when we are not a _read_ member of the space (yet).
@@ -247,12 +241,9 @@ pub(crate) fn spawn_repair_task<M>(
     topic: Topic,
     manager: SpacesManager,
     store: SqliteStore,
-    import_local_tx: mpsc::Sender<(
-        BoxStream<'static, Operation>,
-        oneshot::Sender<LocalStreamFuture>,
-    )>,
-    to_output_tx: mpsc::Sender<Vec<ForwardEvent<M>>>,
-    mut repair_rx: mpsc::Receiver<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>,
+    import_local_tx: ImportLocalTx,
+    to_output_tx: ToOutputTx<M>,
+    mut repair_rx: RepairRx,
 ) -> JoinHandle<()>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -270,8 +261,9 @@ where
                         }
                     }
                 }
+
                 // Scheduled repair triggered.
-                _ = sleep(Duration::from_secs(REPAIR_FREQUENCY_SECS)) => None,
+                _ = sleep(REPAIR_FREQUENCY) => None,
             };
 
             match args {

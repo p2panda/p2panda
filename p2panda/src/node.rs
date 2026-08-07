@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
@@ -39,6 +39,8 @@ use crate::streams::{
     processed_stream, to_stream_event, to_system_event,
 };
 
+static_assertions::assert_impl_all!(Node: Send, Sync);
+
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
 #[derive(Debug)]
 pub struct Node {
@@ -50,7 +52,7 @@ pub struct Node {
     network: Network,
     spaces_manager: SpacesManager,
     events_tx: broadcast::Sender<SystemEvent>,
-    events_rx: RwLock<broadcast::Receiver<SystemEvent>>,
+    events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
 }
 
 impl Node {
@@ -65,7 +67,7 @@ impl Node {
     /// failure.
     pub async fn spawn() -> Result<Self, SpawnError> {
         // Initialises an in-memory SQLite database.
-        let store = SqliteStoreBuilder::default().build().await?;
+        let store = SqliteStoreBuilder::memory().build().await?;
 
         // Generate random keys.
         let credentials = Credentials::generate();
@@ -108,7 +110,7 @@ impl Node {
             network,
             spaces_manager,
             events_tx,
-            events_rx: RwLock::new(events_rx),
+            events_rx: Mutex::new(events_rx),
         })
     }
 
@@ -386,15 +388,18 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        let events_rx = {
-            let write = self.events_rx.write().unwrap();
-            let resubscribed = write.resubscribe();
-
-            let mut write = write;
-            std::mem::replace(&mut *write, resubscribed)
-        };
+        let events_rx = self.resubscribe_event_stream();
 
         Ok(event_stream(events_rx, discovery_events))
+    }
+
+    fn resubscribe_event_stream(&self) -> broadcast::Receiver<SystemEvent> {
+        let mut current = self.events_rx.lock().expect("mutex poisoned");
+        let resubscribed = current.resubscribe();
+
+        // Return current mpmc instance instead of the new one from resubscribing, otherwise we'll
+        // loose items in the current channel buffer.
+        std::mem::replace(&mut *current, resubscribed)
     }
 
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
@@ -409,14 +414,7 @@ impl Node {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
-                let events_rx = {
-                    let write = self.events_rx.write().unwrap();
-                    let resubscribed = write.resubscribe();
-
-                    let mut write = write;
-                    std::mem::replace(&mut *write, resubscribed)
-                };
-
+                let events_rx = self.resubscribe_event_stream();
                 Ok(Some(Group::new(inner, tx, rx, events_rx)))
             }
             None => Ok(None),
@@ -452,13 +450,7 @@ impl Node {
             panic!();
         }
 
-        let events_rx = {
-            let write = self.events_rx.write().unwrap();
-            let resubscribed = write.resubscribe();
-
-            let mut write = write;
-            std::mem::replace(&mut *write, resubscribed)
-        };
+        let events_rx = self.resubscribe_event_stream();
 
         let inner = self
             .spaces_manager
@@ -542,26 +534,13 @@ impl Node {
             .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
         let (tx, rx) = self.stream_from::<M>(topic, from).await?;
 
-        // Publish one key bundle whenever we subscribe to a space.
-        //
-        // @TODO: this is a rather naive approach, we likely want some (configurable?) service
-        // that periodically publishes key bundles.
-        let message = self.spaces_manager.key_bundle_message().await?;
-
-        let operation = message.into_operation();
-        let processed = tx
-            .import_local(futures_util::stream::once(async { operation }))
-            .await?;
-
-        // Wait until processing the events has finished.
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
-
-        Ok(spaces_stream::<M>(inner, self.store.clone(), tx, rx))
+        Ok(spaces_stream::<M>(
+            inner,
+            self.spaces_manager.clone(),
+            self.store.clone(),
+            tx,
+            rx,
+        ))
     }
 
     pub async fn create_space<M>(
@@ -594,9 +573,6 @@ impl Node {
         let (tx, rx) = self.stream::<M>(topic).await?;
 
         // Publish one key bundle whenever we create a space.
-        //
-        // @TODO: this is a rather naive approach, we likely want some service that periodically
-        // publishes key bundles.
         let key_bundle_message = self.spaces_manager.key_bundle_message().await?;
 
         // Issue the events to create a space.
@@ -610,18 +586,20 @@ impl Node {
         let (groups_y, space_y, create_space_messages, events) =
             self.spaces_manager.create_space(space_id, &[]).await?;
 
-        let permit = self.store.begin().await?;
+        // Persist the computed groups- and spaces-state to the stores.
+        {
+            let permit = self.store.begin().await?;
 
-        // Persist the computed groups and spaces state to the stores.
-        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-        spaces_store
-            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
-            .await?;
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
-            .await?;
+            let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
+            spaces_store
+                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+                .await?;
+            spaces_store
+                .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+                .await?;
 
-        self.store.commit(permit).await?;
+            self.store.commit(permit).await?;
+        }
 
         // Process the -spaces events by importing them as an "external stream".
         let mut messages = vec![key_bundle_message];
@@ -667,7 +645,13 @@ impl Node {
             .await?
             .expect("materialised space after processing operations");
 
-        let (space, rx) = spaces_stream::<M>(inner, self.store.clone(), tx, rx);
+        let (space, rx) = spaces_stream::<M>(
+            inner,
+            self.spaces_manager.clone(),
+            self.store.clone(),
+            tx,
+            rx,
+        );
         Ok((space, rx))
     }
 
@@ -683,7 +667,6 @@ impl Node {
 
     pub async fn me(&self) -> Result<Member, MemberError> {
         let inner = self.spaces_manager.me().await?;
-
         Ok(Member { inner })
     }
 

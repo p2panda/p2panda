@@ -224,7 +224,7 @@ where
                     // Break out of the loop, thereby ending the task, when both the
                     // `StreamPublisher` and `StreamSubscription` have been dropped.
                     _ = cancellation_token_child.cancelled() => {
-                            debug!(topic = %topic.to_hex(), "aborting output event processing task");
+                        debug!(topic = %topic.to_hex(), "aborting output event processing task");
                         break
                     }
                 };
@@ -414,16 +414,14 @@ where
 
                                 continue;
                             },
-                            LocalStreamEvent::End =>
-                                vec![]
-                            ,
+                            LocalStreamEvent::End => vec![] ,
                         }
                     },
 
                     // Break out of the loop, thereby ending the task, when both the
                     // `StreamPublisher` and `StreamSubscription` have been dropped.
                     _ = cancellation_token_child.cancelled() => {
-                            debug!(topic = %topic.to_hex(), "aborting input event processing task");
+                        debug!(topic = %topic.to_hex(), "aborting input event processing task");
                         break
                     }
                 };
@@ -467,12 +465,11 @@ pub(crate) async fn process_operation_in(
 
     match source {
         Source::ExternalStream { .. } | Source::LocalStore
-            // Try pushing operation to other nodes if we have an active and
-            // "live" sync session with them. This allows disseminating new
-            // messages quickly in the network.
+            // Try pushing operation to other nodes if we have an active and "live" sync session
+            // with them. This allows disseminating new messages quickly in the network.
             //
-            // If no active live session exists, nodes will pick up the
-            // operation later when running the sync protocol.
+            // If no active live session exists, nodes will pick up the operation later when running
+            // the sync protocol.
             if sync_handle.publish(operation.clone()).is_err() => {
                 warn!(
                     operation_id = %operation.hash(),
@@ -762,8 +759,8 @@ pub enum StreamEvent<M> {
     ///
     /// This is an application-level error and indicates an invalid application payload.
     //
-    // TODO: Since this is an applicaton-level concern we should remove encoding / decoding from our
-    // APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
+    // TODO: Since this is an application-level concern we should remove encoding / decoding from
+    // our APIs. See related issue: https://github.com/p2panda/p2panda/issues/1072
     DecodeFailed { event: Event, error: DecodeError },
 
     /// Topic stream could not acknowledge events due to an internal error.
