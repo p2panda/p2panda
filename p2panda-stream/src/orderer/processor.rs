@@ -157,50 +157,30 @@ mod tests {
         // Icebear's.
         let operation_panda = {
             let signing_key = SigningKey::generate();
-            let verifying_key = signing_key.verifying_key();
-
             let body: Body = b"Hi, Icebear".to_vec().into();
 
-            let mut header = Header {
-                verifying_key,
-                payload_size: body.size(),
-                payload_hash: Some(body.hash()),
-                extensions: TestExtension {
+            let header = Header::builder().body(&body).build(
+                &signing_key,
+                TestExtension {
                     dependencies: vec![],
                 },
-                ..Default::default()
-            };
-            header.sign(&signing_key);
+            );
 
-            Operation {
-                hash: header.hash(),
-                header,
-                body: Some(body),
-            }
+            Operation::from_parts(header, Some(body))
         };
 
         let operation_icebear = {
             let signing_key = SigningKey::generate();
-            let verifying_key = signing_key.verifying_key();
-
             let body: Body = b"Hello, Pandasan!".to_vec().into();
 
-            let mut header = Header {
-                verifying_key,
-                payload_size: body.size(),
-                payload_hash: Some(body.hash()),
-                extensions: TestExtension {
+            let header = Header::builder().body(&body).build(
+                &signing_key,
+                TestExtension {
                     dependencies: vec![operation_panda.hash],
                 },
-                ..Default::default()
-            };
-            header.sign(&signing_key);
+            );
 
-            Operation {
-                hash: header.hash(),
-                header,
-                body: Some(body),
-            }
+            Operation::from_parts(header, Some(body))
         };
 
         let local = task::LocalSet::new();

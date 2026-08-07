@@ -70,11 +70,10 @@ where
         .map_err(|err| IngestError::InvalidOperation(err.to_string()))?;
 
     // Insert operation into store and associate its log with the given topic.
-    let id = operation.hash;
     let verifying_key = operation.header.verifying_key;
 
     store
-        .insert_operation(&id, operation, log_id)
+        .insert_operation(&operation.hash, operation, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -225,25 +224,14 @@ mod tests {
 
         // Create an operation which has already advanced in the log (it has a backlink and higher
         // sequence number).
-        let mut header = Header {
-            verifying_key: signing_key.verifying_key(),
-            version: 1,
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 12, // we'll be missing 11 operations between the first and this one
-            backlink: Some(Hash::digest(b"mock operation")),
-            extensions: (),
-        };
-        header.sign(&signing_key);
+        let header = Header::builder()
+            // we'll be missing 11 operations between the first and this one
+            .chain(12, Hash::digest(b"mock operation"))
+            .build(&signing_key, ());
 
-        let operation = Operation {
-            hash: header.hash(),
-            header,
-            body: None,
-        };
-
+        let operation = Operation::from_parts(header, None);
         let result = ingest_operation(&store, &operation, &1, &1, false).await;
+
         assert!(result.is_err());
     }
 
@@ -254,46 +242,18 @@ mod tests {
 
         // 1. Create an advanced operation in a log which assumes that all previous operations have
         //    been pruned.
-        let mut header = Header {
-            verifying_key: signing_key.verifying_key(),
-            version: 1,
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 1,
-            backlink: Some(Hash::digest(b"mock operation")),
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let operation = Operation {
-            hash: header.hash(),
-            header,
-            body: None,
-        };
+        let header = Header::builder()
+            .chain(1, Hash::digest(b"mock operation"))
+            .build(&signing_key, ());
+        let operation = Operation::from_parts(header, None);
 
         let prune_flag = true; // Ingest does not do any pruning, but the flag affects validation.
         let result = ingest_operation(&store, &operation, &1, &1, prune_flag).await;
         assert!(result.is_ok());
 
         // 2. Create an operation which is from an "outdated" seq from before the log was pruned.
-        let mut header = Header {
-            verifying_key: signing_key.verifying_key(),
-            version: 1,
-            signature: None,
-            payload_size: 0,
-            payload_hash: None,
-            seq_num: 0,
-            backlink: None,
-            extensions: (),
-        };
-        header.sign(&signing_key);
-
-        let operation = Operation {
-            hash: header.hash(),
-            header,
-            body: None,
-        };
+        let header = Header::builder().build(&signing_key, ());
+        let operation = Operation::from_parts(header, None);
 
         let result = ingest_operation(&store, &operation, &1, &1, false).await;
         assert!(result.is_err());
