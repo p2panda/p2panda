@@ -268,7 +268,7 @@ mod tests {
 
         // Setup Peer A
         let mut peer_a = Peer::new(0).await;
-        let body = Body::new("Hello from Peer A".as_bytes());
+        let body = Body::from_bytes(b"Hello from Peer A");
         let _ = peer_a.create_operation(&body, LOG_ID).await;
         let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
         peer_a.associate(&topic, &logs).await;
@@ -276,7 +276,7 @@ mod tests {
 
         // Setup Peer B
         let mut peer_b = Peer::new(1).await;
-        let body = Body::new("Hello from Peer B".as_bytes());
+        let body = Body::from_bytes(b"Hello from Peer B");
         let _ = peer_b.create_operation(&body, LOG_ID).await;
         let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
         peer_b.associate(&topic, &logs).await;
@@ -427,19 +427,19 @@ mod tests {
 
         // Peer A
         let mut peer_a = Peer::new(0).await;
-        let body_a = Body::new("Hello from A".as_bytes());
+        let body_a = Body::from_bytes("Hello from A".as_bytes());
         let (peer_a_header_0, _) = peer_a.create_operation(&body_a, LOG_ID).await;
         let mut manager_a = TestTopicSyncManager::new(peer_a.store.clone());
 
         // Peer B
         let mut peer_b = Peer::new(1).await;
-        let body_b = Body::new("Hello from B".as_bytes());
+        let body_b = Body::from_bytes("Hello from B".as_bytes());
         let (peer_b_header_0, _) = peer_b.create_operation(&body_b, LOG_ID).await;
         let mut manager_b = TestTopicSyncManager::new(peer_b.store.clone());
 
         // Peer C
         let mut peer_c = Peer::new(2).await;
-        let body_c = Body::new("Hello from C".as_bytes());
+        let body_c = Body::from_bytes("Hello from C".as_bytes());
         let (peer_c_header_0, _) = peer_c.create_operation(&body_c, LOG_ID).await;
         let mut manager_c = TestTopicSyncManager::new(peer_c.store.clone());
 
@@ -521,9 +521,9 @@ mod tests {
         let mut handle_ba = manager_b.session_handle(SESSION_BA).await.unwrap();
         let mut handle_ca = manager_c.session_handle(SESSION_CA).await.unwrap();
 
-        let body_a = Body::new("Hello again from A".as_bytes());
-        let body_b = Body::new("Hello again from B".as_bytes());
-        let body_c = Body::new("Hello again from C".as_bytes());
+        let body_a = Body::from_bytes("Hello again from A".as_bytes());
+        let body_b = Body::from_bytes("Hello again from B".as_bytes());
+        let body_c = Body::from_bytes("Hello again from C".as_bytes());
         let (peer_a_header_1, _) = peer_a.create_operation(&body_a, LOG_ID).await;
         let (peer_b_header_1, _) = peer_b.create_operation(&body_b, LOG_ID).await;
         let (peer_c_header_1, _) = peer_c.create_operation(&body_c, LOG_ID).await;
@@ -561,17 +561,17 @@ mod tests {
                 tokio::select! {
                     Some(event) = event_stream_a.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_a.push(operation.header().clone());
+                            operations_a.push(operation.header.clone());
                         }
                     }
                     Some(event) = event_stream_b.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_b.push(operation.header().clone());
+                            operations_b.push(operation.header.clone());
                         }
                     }
                     Some(event) = event_stream_c.next() => {
                         if let TopicLogSyncEvent::OperationReceived { operation, .. } = event.event() {
-                            operations_c.push(operation.header().clone());
+                            operations_c.push(operation.header.clone());
                         }
                     }
                     else => tokio::time::sleep(Duration::from_millis(20)).await
@@ -605,7 +605,7 @@ mod tests {
 
         // Setup Peer A
         let mut peer_a = Peer::new(0).await;
-        let body = Body::new("Hello from Peer A".as_bytes());
+        let body = Body::from_bytes("Hello from Peer A".as_bytes());
         let _ = peer_a.create_operation(&body, LOG_ID).await;
         let logs = BTreeMap::from([(peer_a.id(), vec![LOG_ID])]);
         peer_a.associate(&topic, &logs).await;
@@ -621,7 +621,7 @@ mod tests {
 
         // Setup Peer B
         let mut peer_b = Peer::new(1).await;
-        let body = Body::new("Hello from Peer B".as_bytes());
+        let body = Body::from_bytes(b"Hello from Peer B");
         let _ = peer_b.create_operation(&body, LOG_ID).await;
         let logs = BTreeMap::from([(peer_b.id(), vec![LOG_ID])]);
         peer_b.associate(&topic, &logs).await;
