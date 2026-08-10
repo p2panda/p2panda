@@ -36,7 +36,7 @@ use crate::spaces::{
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamFrom,
     StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
-    processed_stream, to_stream_event, to_system_event,
+    group_to_system_event, processed_stream, to_stream_event,
 };
 
 /// Node API with methods to establish ephemeral and eventually consistent topic streams.
@@ -650,7 +650,7 @@ impl Node {
                     Some(to_stream_event(space_event).into())
                 }
                 p2panda_spaces::Event::Groups(group_event) => {
-                    Some(to_system_event(group_event).into())
+                    Some(group_to_system_event(group_event).into())
                 }
                 _ => None,
             })
