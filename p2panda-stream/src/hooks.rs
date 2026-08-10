@@ -10,17 +10,17 @@ use tokio::sync::Notify;
 use crate::Processor;
 
 /// Hook to trigger custom actions by observing processor events passing through the pipeline.
-pub trait ProcessorHook<T> {
-    fn on_input<'a>(&'a self, input: &'a T) -> impl Future<Output = ()> + 'a;
+pub trait ProcessorHook<T>: Send {
+    fn on_input<'a>(&'a self, input: &'a T) -> impl Future<Output = ()> + Send + 'a;
 }
 
-type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-trait DynProcessorHook<T> {
+trait DynProcessorHook<T>: Send {
     fn on_input<'a>(&'a self, input: &'a T) -> BoxFuture<'a, ()>;
 }
 
-impl<I, T: ProcessorHook<I> + 'static> DynProcessorHook<I> for T {
+impl<I, T: ProcessorHook<I>> DynProcessorHook<I> for T {
     fn on_input<'a>(&'a self, input: &'a I) -> BoxFuture<'a, ()> {
         Box::pin(ProcessorHook::on_input(self, input))
     }
@@ -29,7 +29,7 @@ impl<I, T: ProcessorHook<I> + 'static> DynProcessorHook<I> for T {
 /// List of custom hooks which can be registered on a single processor layer.
 #[derive(Default)]
 pub struct ProcessorHooksList<T> {
-    inner: Vec<Box<dyn DynProcessorHook<T>>>,
+    inner: Vec<Box<dyn DynProcessorHook<T> + Sync>>,
 }
 
 impl<T> ProcessorHooksList<T> {
@@ -37,12 +37,15 @@ impl<T> ProcessorHooksList<T> {
         Self { inner: Vec::new() }
     }
 
-    pub fn push(&mut self, hook: impl ProcessorHook<T> + 'static) {
+    pub fn push(&mut self, hook: impl ProcessorHook<T> + Sync + 'static) {
         self.inner.push(Box::new(hook));
     }
 }
 
-impl<T> ProcessorHook<T> for ProcessorHooksList<T> {
+impl<T> ProcessorHook<T> for ProcessorHooksList<T>
+where
+    T: Sync,
+{
     async fn on_input(&self, input: &T) {
         for hook in &self.inner {
             hook.on_input(input).await;
@@ -70,12 +73,15 @@ impl<T> Hooks<T> {
         }
     }
 
-    pub fn push(&mut self, hook: impl ProcessorHook<T> + 'static) {
+    pub fn push(&mut self, hook: impl ProcessorHook<T> + Sync + 'static) {
         self.list.push(hook);
     }
 }
 
-impl<T> Processor<T> for Hooks<T> {
+impl<T> Processor<T> for Hooks<T>
+where
+    T: Sync,
+{
     type Output = T;
 
     type Error = Infallible;
@@ -102,8 +108,8 @@ impl<T> Processor<T> for Hooks<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     use tokio::task;
 
@@ -117,25 +123,26 @@ mod tests {
 
         #[derive(Clone, Debug)]
         struct BooHook {
-            result: Rc<RefCell<bool>>,
+            result: Arc<AtomicBool>,
         }
 
         impl ProcessorHook<Event> for BooHook {
             async fn on_input(&self, input: &Event) {
                 // Are you screaming already? .. if not, trigger hook!
-                self.result.replace_with(|_| &input.to_uppercase() != input);
+                self.result
+                    .swap(&input.to_uppercase() != input, Ordering::Relaxed);
             }
         }
 
         #[derive(Clone, Debug)]
         struct ZzzHook {
-            result: Rc<RefCell<bool>>,
+            result: Arc<AtomicBool>,
         }
 
         impl ProcessorHook<Event> for ZzzHook {
             async fn on_input(&self, input: &Event) {
                 // Are you sleeping already? .. if not, trigger hook!
-                self.result.replace_with(|_| !input.is_empty());
+                self.result.swap(!input.is_empty(), Ordering::Relaxed);
             }
         }
 
@@ -144,11 +151,11 @@ mod tests {
         local
             .run_until(async {
                 let boo = BooHook {
-                    result: Rc::default(),
+                    result: Arc::default(),
                 };
 
                 let zzz = ZzzHook {
-                    result: Rc::default(),
+                    result: Arc::default(),
                 };
 
                 let mut processor = Hooks::<Event>::new();
@@ -158,20 +165,26 @@ mod tests {
                 processor.process("I'm not scared.".into()).await.unwrap();
                 let _ = processor.next().await.unwrap();
 
-                assert!(*boo.result.borrow(), "BOO, WE SCARED YOU!");
-                assert!(*zzz.result.borrow(), "You should be sleeping!");
+                assert!(boo.result.load(Ordering::Relaxed), "BOO, WE SCARED YOU!");
+                assert!(
+                    zzz.result.load(Ordering::Relaxed),
+                    "You should be sleeping!"
+                );
 
                 processor.process("AAAAAAAAAAH".into()).await.unwrap();
                 let _ = processor.next().await.unwrap();
 
-                assert!(!*boo.result.borrow(), "AHAHAHAHA");
-                assert!(*zzz.result.borrow(), "Try to sleep!");
+                assert!(!boo.result.load(Ordering::Relaxed), "AHAHAHAHA");
+                assert!(zzz.result.load(Ordering::Relaxed), "Try to sleep!");
 
                 processor.process("".into()).await.unwrap();
                 let _ = processor.next().await.unwrap();
 
-                assert!(!*boo.result.borrow(), "Okay, you are silent.");
-                assert!(!*zzz.result.borrow(), "Good, you are sleeping. Good night!");
+                assert!(!boo.result.load(Ordering::Relaxed), "Okay, you are silent.");
+                assert!(
+                    !zzz.result.load(Ordering::Relaxed),
+                    "Good, you are sleeping. Good night!"
+                );
             })
             .await;
     }
