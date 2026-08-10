@@ -10,13 +10,13 @@ use tokio::sync::Notify;
 use crate::Processor;
 
 /// Hook to trigger custom actions by observing processor events passing through the pipeline.
-pub trait ProcessorHook<T>: std::fmt::Debug {
+pub trait ProcessorHook<T> {
     fn on_input<'a>(&'a self, input: &'a T) -> impl Future<Output = ()> + 'a;
 }
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
-trait DynProcessorHook<T>: std::fmt::Debug {
+trait DynProcessorHook<T> {
     fn on_input<'a>(&'a self, input: &'a T) -> BoxFuture<'a, ()>;
 }
 
@@ -27,7 +27,7 @@ impl<I, T: ProcessorHook<I> + 'static> DynProcessorHook<I> for T {
 }
 
 /// List of custom hooks which can be registered on a single processor layer.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct ProcessorHooksList<T> {
     inner: Vec<Box<dyn DynProcessorHook<T>>>,
 }
@@ -42,10 +42,7 @@ impl<T> ProcessorHooksList<T> {
     }
 }
 
-impl<T> ProcessorHook<T> for ProcessorHooksList<T>
-where
-    T: std::fmt::Debug,
-{
+impl<T> ProcessorHook<T> for ProcessorHooksList<T> {
     async fn on_input(&self, input: &T) {
         for hook in &self.inner {
             hook.on_input(input).await;
@@ -53,7 +50,7 @@ where
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Hooks<T> {
     list: ProcessorHooksList<T>,
     notify: Notify,
@@ -78,10 +75,7 @@ impl<T> Hooks<T> {
     }
 }
 
-impl<T> Processor<T> for Hooks<T>
-where
-    T: std::fmt::Debug,
-{
+impl<T> Processor<T> for Hooks<T> {
     type Output = T;
 
     type Error = Infallible;
