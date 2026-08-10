@@ -20,7 +20,7 @@ use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::authoriser::{Authoriser, AuthoriserError};
+use crate::authoriser::{Authoriser, AuthoriserError, AuthoriserEvent};
 use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
@@ -403,12 +403,23 @@ where
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
                 // Authorise that we should be connecting on this topic with the remote node.
-                if !state.authoriser.can_connect_on_topic(topic, node_id).await {
-                    warn!(
-                        "blocked initiating sync with node {} on topic {}",
-                        node_id.fmt_short(),
-                        topic.fmt_short()
-                    );
+                if state.authoriser.can_connect_on_topic(node_id, topic).await {
+                    state
+                        .authoriser
+                        .send_event(AuthoriserEvent::TopicAllowed {
+                            topic,
+                            node: node_id,
+                        })
+                        .await;
+                } else {
+                    let event = AuthoriserEvent::TopicBlocked {
+                        topic,
+                        node: node_id,
+                    };
+                    warn!("{}", event);
+                    state.authoriser.send_event(event).await;
+
+                    // Do not initiate a sync session with a blocked topic-node combination.
                     return Ok(());
                 }
 
@@ -573,7 +584,7 @@ where
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
-        let allow = self.authoriser.can_connect_on_topic(topic, node_id).await;
+        let allow = self.authoriser.can_connect_on_topic(node_id, topic).await;
 
         if !allow {
             warn!(

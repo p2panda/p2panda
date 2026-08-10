@@ -251,7 +251,6 @@
 //! [iroh]: https://www.iroh.computer/
 //! [local-first]: https://www.inkandswitch.com/local-first-software/
 //! [p2panda]: https://p2panda.org
-// pub mod authoriser;
 mod builder;
 pub mod credentials;
 mod forge;

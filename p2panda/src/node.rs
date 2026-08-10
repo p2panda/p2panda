@@ -741,14 +741,36 @@ impl Node {
         self.network.insert_bootstrap(node_id, relay_url).await
     }
 
+    /// Allows all connection attempts with the given node.
+    ///
+    /// The allowlist is not currently persisted. This means it will need to be repopulated by
+    /// calling this method after each process restart.
+    pub async fn allow(&self, node_id: NodeId) {
+        self.connection_authoriser.allow(node_id).await;
+    }
+
+    /// Allows all connection attempts with the given node for a single topic.
+    ///
+    /// The allowlist is not currently persisted. This means it will need to be repopulated by
+    /// calling this method after each process restart.
+    pub async fn topic_allow(&self, node_id: NodeId, topic: Topic) {
+        self.connection_authoriser.topic_allow(node_id, topic).await;
+    }
+
     /// Blocks all connection attempts with the given node.
+    ///
+    /// The blocklist is not currently persisted. This means it will need to be repopulated by
+    /// calling this method after each process restart.
     pub async fn block(&self, node_id: NodeId) {
         self.authoriser.block(node_id).await;
     }
 
     /// Blocks all connection attempts with the given node for a single topic.
-    pub async fn topic_block(&self, topic: Topic, node_id: NodeId) {
-        self.authoriser.topic_block(topic, node_id).await;
+    ///
+    /// The blocklist is not currently persisted. This means it will need to be repopulated by
+    /// calling this method after each process restart.
+    pub async fn topic_block(&self, node_id: NodeId, topic: Topic) {
+        self.authoriser.topic_block(node_id, topic).await;
     }
 }
 
