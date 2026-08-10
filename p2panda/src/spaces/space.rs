@@ -22,11 +22,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
+use tracing::error;
 
 use crate::operation::Extensions;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManagerError};
-use crate::spaces::{RepairError, RepairTask};
+use crate::spaces::{KeyBundleTaskCommand, KeyBundleTaskSender, RepairError, RepairTask};
 use crate::streams::{
     CloseError, ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
     to_stream_event, to_system_event,
@@ -37,14 +38,26 @@ pub(crate) fn spaces_stream<M>(
     inner: InnerSpace,
     store: SqliteStore,
     repair_task: RepairTask,
+    key_bundle_task_tx: KeyBundleTaskSender,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
-) -> (Space<M>, SpaceSubscription<M>) {
+) -> (Space<M>, SpaceSubscription<M>)
+where
+    M: Serialize,
+{
+    if let Err(err) = key_bundle_task_tx.send(KeyBundleTaskCommand::AddStream(
+        inner.id(),
+        tx.import_local_tx.clone(),
+    )) {
+        error!(space_id = %inner.id(), "failed adding stream to key bundle task: {err}");
+    }
+
     (
         Space {
             inner,
             store: SqliteSpacesStore::new(store),
             repair_task,
+            key_bundle_task_tx,
             tx,
         },
         SpaceSubscription { rx },
@@ -52,11 +65,26 @@ pub(crate) fn spaces_stream<M>(
 }
 
 #[derive(Debug)]
-pub struct Space<M> {
+pub struct Space<M>
+where
+    M: Serialize,
+{
     inner: InnerSpace,
     store: SqliteSpacesStore<Extensions>,
     repair_task: RepairTask,
+    key_bundle_task_tx: KeyBundleTaskSender,
     tx: StreamPublisher<M>,
+}
+
+impl<M> Drop for Space<M>
+where
+    M: Serialize,
+{
+    fn drop(&mut self) {
+        let _ = self
+            .key_bundle_task_tx
+            .send(KeyBundleTaskCommand::RemoveStream(self.id()));
+    }
 }
 
 impl<M> Space<M>

@@ -12,6 +12,7 @@ use p2panda_core::{Extensions, Hash, LogId};
 use p2panda_store::SqliteStore;
 use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
+use p2panda_stream::hooks::{Hooks, ProcessorHooksList};
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
 use p2panda_stream::orderer::{Orderer, OrdererResult};
@@ -161,9 +162,9 @@ impl<L, E, TP> Pipeline<L, E, TP>
 where
     // NOTE: Unfortunately there's no scoped "spawn_local" yet (it's an experimental tokio feature)
     // and we need to require a Send + 'static trait bounds, even though it's not used anywhere.
-    L: LogId + Send + 'static,
-    E: Extensions + Send + 'static,
-    TP: Clone + Send + Serialize + for<'a> Deserialize<'a> + 'static,
+    L: LogId + Send + Sync + 'static,
+    E: Extensions + Send + Sync + 'static,
+    TP: Clone + Send + Sync + Serialize + for<'a> Deserialize<'a> + 'static,
 {
     /// Creates a new "event processor" pipeline.
     ///
@@ -176,6 +177,7 @@ where
         store: SqliteStore,
         tasks: TaskTracker<Event<L, E, TP>, PipelineTaskId>,
         spaces_manager: SpacesManager,
+        post_hooks: ProcessorHooksList<Event<L, E, TP>>,
     ) -> Self {
         let pipeline_id = id.into();
 
@@ -194,21 +196,24 @@ where
             let from_pipeline_queue = from_pipeline_queue.clone();
             let from_pipeline_notify = from_pipeline_notify.clone();
 
+            let post_pipeline_hook = Hooks::<Event<L, E, TP>>::from_list(post_hooks);
+
             thread::spawn(move || {
                 let local = LocalSet::new();
 
                 local.spawn_local(async move {
                     let me = spaces_manager.id();
+
                     // Prepare event processing pipeline.
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
                     let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone());
                     let log_prune =
                         LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
-
-                    let spaces_store = SqliteSpacesStore::new(store);
-                    let spaces =
-                        SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager);
+                    let spaces = {
+                        let spaces_store = SqliteSpacesStore::new(store);
+                        SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
+                    };
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(to_pipeline_rx)
@@ -262,7 +267,9 @@ where
                                 event.spaces = ProcessorStatus::Failed(err);
                                 event.noop()
                             }
-                        });
+                        })
+                        .layer(post_pipeline_hook)
+                        .map(|result| result.expect("hook processor is infallible"));
 
                     pin!(pipeline);
 
@@ -421,6 +428,7 @@ mod tests {
     use p2panda_core::traits::Digest;
     use p2panda_core::{Hash, PruneFlag, SigningKey, Topic};
     use p2panda_store::SqliteStore;
+    use p2panda_stream::hooks::ProcessorHooksList;
     use p2panda_stream::orderer::{OrdererArgs, OrdererResult};
 
     use crate::credentials::Credentials;
@@ -443,7 +451,13 @@ mod tests {
         let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
-        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(
+            pipeline_id,
+            store,
+            tasks,
+            spaces_manager,
+            ProcessorHooksList::new(),
+        );
 
         let log = TestLog::new();
         let topic = Topic::random();
@@ -496,7 +510,13 @@ mod tests {
         let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
-        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(
+            pipeline_id,
+            store,
+            tasks,
+            spaces_manager,
+            ProcessorHooksList::new(),
+        );
 
         let mut events = Vec::new();
         let mut dependencies = Vec::new();
@@ -550,7 +570,13 @@ mod tests {
         let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
-        let pipeline = Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager);
+        let pipeline = Pipeline::<LogId, (), Topic>::new(
+            pipeline_id,
+            store,
+            tasks,
+            spaces_manager,
+            ProcessorHooksList::new(),
+        );
 
         let log_icebear = TestLog::new();
         let log_panda = TestLog::new();

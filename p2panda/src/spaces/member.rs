@@ -3,17 +3,23 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use p2panda_auth::Access;
+use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
-use p2panda_spaces::{ActorId, SpaceId};
+use p2panda_net::NodeId;
+use p2panda_spaces::{ActorId, MemberId, SpaceId};
+use p2panda_store::topics::TopicStore;
+use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_stream::hooks::ProcessorHook;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
 use tracing::{debug, error};
 
 use crate::operation::Operation;
 use crate::spaces::Group;
-use crate::spaces::types::{InnerMember, SpacesManager, SpacesManagerError};
-use crate::streams::{ImportLocalTx, LocalStreamFuture};
+use crate::spaces::forge::member_log_id;
+use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
+use crate::streams::{Event, ImportLocalTx, LocalStreamFuture};
 
 const CHECK_KEY_BUNDLE_FREQUENCY: Duration = Duration::from_mins(15);
 
@@ -95,11 +101,13 @@ pub enum MemberError {
     Manager(#[from] SpacesManagerError),
 }
 
+pub type KeyBundleTaskSender = mpsc::UnboundedSender<KeyBundleTaskCommand>;
+
 /// Background task to automatically publish a new member message into all registered space streams if
 /// the associated key bundle is about to expire.
+#[derive(Clone, Debug)]
 pub struct KeyBundleTask {
-    tx: mpsc::UnboundedSender<KeyBundleTaskCommand>,
-    handle: JoinHandle<()>,
+    tx: KeyBundleTaskSender,
 }
 
 impl KeyBundleTask {
@@ -109,7 +117,7 @@ impl KeyBundleTask {
 
         let (tx, rx) = mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let result = renew_expired_key_bundles(manager, rx).await;
 
             match result {
@@ -120,11 +128,11 @@ impl KeyBundleTask {
             }
         });
 
-        Self { tx, handle }
+        Self { tx }
     }
 
     /// Use the returned sender to add and remove space streams.
-    pub fn command_handle(&self) -> mpsc::UnboundedSender<KeyBundleTaskCommand> {
+    pub fn command_handle(&self) -> KeyBundleTaskSender {
         self.tx.clone()
     }
 }
@@ -140,28 +148,6 @@ pub enum KeyBundleTaskCommand {
 
     /// Remove inactive / closed stream from the list.
     RemoveStream(SpaceId),
-}
-
-async fn publish_member_message(
-    operation: Operation,
-    space_id: &SpaceId,
-    import_local_tx: &ImportLocalTx,
-) -> bool {
-    let stream = Box::pin(futures_util::stream::once(async { operation }));
-
-    // We don't need to await the result.
-    let (ready_tx, _) = oneshot::channel::<LocalStreamFuture>();
-
-    if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
-        debug!(
-            space_id = %space_id.fmt_short(),
-            "sending member message failed due to error: {err}"
-        );
-
-        return false;
-    }
-
-    true
 }
 
 async fn renew_expired_key_bundles(
@@ -188,12 +174,13 @@ async fn renew_expired_key_bundles(
                     continue;
                 }
 
-                debug!(
-                    spaces_streams_len = spaces_streams.len(),
-                    "key bundle expired, automatically generate new one"
-                );
-
                 let operation = manager.key_bundle_message().await?.into_operation();
+
+                debug!(
+                    active_streams = spaces_streams.len(),
+                    seq_num = operation.header.seq_num,
+                    "key bundle non-existent or expired, automatically generate new one"
+                );
 
                 let mut failed_sends = Vec::new();
 
@@ -235,29 +222,124 @@ async fn renew_expired_key_bundles(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use p2panda_core::test_utils::setup_logging;
-    use p2panda_store::SqliteStore;
+async fn publish_member_message(
+    operation: Operation,
+    space_id: &SpaceId,
+    import_local_tx: &ImportLocalTx,
+) -> bool {
+    let stream = Box::pin(futures_util::stream::once(async { operation }));
 
-    use crate::Credentials;
-    use crate::forge::OperationForge;
-    use crate::streams::TaskTracker;
+    // We don't need to await the result.
+    let (ready_tx, _) = oneshot::channel::<LocalStreamFuture>();
 
-    use super::KeyBundleTask;
+    if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
+        debug!(
+            space_id = %space_id.fmt_short(),
+            "sending member message failed due to error: {err}"
+        );
 
-    #[tokio::test]
-    async fn inform_spaces_about_new_key_bundles() {
-        setup_logging();
+        return false;
+    }
 
-        let spaces_manager = {
-            let store = SqliteStore::temporary().await;
-            let tasks = TaskTracker::new();
-            let credentials = Credentials::generate();
-            let forge = OperationForge::new(credentials.clone(), store.clone());
-            crate::spaces::spaces_manager(forge, credentials, store.clone()).unwrap()
+    true
+}
+
+/// Associate member log's by observing spaces events.
+///
+/// This helps with the following problem:
+///
+/// ```text
+/// Peer A creates space S with B, C, D
+///   A associates their member log to S
+/// Peer B joins space S
+///   B associates their member log to S
+/// Peer B wants to remove C
+///
+/// --> Peer B needs to inform A & D about the new secret but doesn't have the member log of D yet.
+/// ```
+///
+/// If Peer B would already associate D's member log when they've observed the CREATE event they
+/// would have had a chance to receive it from A. This hook makes sure that the association takes
+/// place.
+pub async fn associate_members(
+    my_node_id: VerifyingKey,
+    store: &SqliteStore,
+    events: &[p2panda_spaces::Event<AuthCapabilities>],
+) -> Option<(SpaceId, Vec<MemberId>)> {
+    for event in events {
+        let p2panda_spaces::Event::Spaces(space_event) = event else {
+            continue;
         };
 
-        let task = KeyBundleTask::spawn(spaces_manager);
+        let (space_id, context) = match space_event {
+            p2panda_spaces::SpaceEvent::Created {
+                space_id, context, ..
+            } => (space_id, context),
+            p2panda_spaces::SpaceEvent::Added {
+                space_id, context, ..
+            } => (space_id, context),
+            _ => continue,
+        };
+
+        // We have to look at _current_ members instead of only the added ones since we might not
+        // process all events from the beginning, especially if we've been added later to the group.
+        let members = &context.members;
+
+        if let Err(err) = associate_members_inner(store, space_id, members).await {
+            error!(
+                my_node_id = %my_node_id.fmt_short(),
+                space_id = %space_id.fmt_short(),
+                "member association failed: {err}"
+            );
+        } else {
+            debug!(
+                my_node_id = %my_node_id.fmt_short(),
+                space_id = %space_id.fmt_short(),
+                "associate {} member logs", members.len()
+            );
+        }
+    }
+
+    None
+}
+
+async fn associate_members_inner(
+    store: &SqliteStore,
+    space_id: &SpaceId,
+    members: &[(VerifyingKey, Access)],
+) -> Result<(), SqliteError> {
+    tx!(store, {
+        for (id, _) in members {
+            store.associate(space_id, id, &member_log_id()).await?;
+        }
+    });
+
+    Ok(())
+}
+
+/// Pipeline hook to observe spaces events and automatically associate member logs to the space when
+/// someone new was added.
+pub struct MemberAssociationHook {
+    my_node_id: NodeId,
+    store: SqliteStore,
+}
+
+impl MemberAssociationHook {
+    pub fn new(my_node_id: NodeId, store: SqliteStore) -> Self {
+        Self { my_node_id, store }
+    }
+}
+
+impl ProcessorHook<Event> for MemberAssociationHook {
+    async fn on_input(&self, input: &Event) {
+        let crate::processor::ProcessorStatus::Completed(ref result) = input.spaces else {
+            return;
+        };
+
+        let p2panda_stream::spaces::SpacesResult::Processed { events } = result else {
+            return;
+        };
+
+        associate_members(self.my_node_id, &self.store, events).await;
     }
 }
