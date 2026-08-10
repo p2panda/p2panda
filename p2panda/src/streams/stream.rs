@@ -446,6 +446,8 @@ pub(crate) async fn process_operation_in(
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
+    // TODO: Using the Source here to determine live-mode behaviour is not explicit enough and might
+    // lead to errors.
     match source {
         Source::ExternalStream { .. } | Source::LocalStore
             // Try pushing operation to other nodes if we have an active and "live" sync session

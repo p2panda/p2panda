@@ -15,7 +15,8 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{Transaction, tx};
+use p2panda_store::tx;
+use p2panda_stream::hooks::ProcessorHooksList;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -30,14 +31,15 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, MEMBER_CONTROL_MESSAGE,
-    Member, MemberError, RepairTask, Space, SpaceSubscription, actor_to_topic, group_log_id,
-    spaces_manager, spaces_stream, to_initial_members,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask,
+    MEMBER_CONTROL_MESSAGE, Member, MemberAssociationHook, MemberError, RepairTask, Space,
+    SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamFrom,
-    StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream, event_stream,
-    processed_stream, to_stream_event, to_system_event,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
+    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
+    event_stream, processed_stream, to_stream_event, to_system_event,
 };
 
 static_assertions::assert_impl_all!(Node: Send, Sync);
@@ -52,6 +54,7 @@ pub struct Node {
     tasks: TaskTracker,
     network: Network,
     spaces_manager: SpacesManager,
+    key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
     connection_authoriser: ConnectionAuthoriser,
@@ -110,6 +113,9 @@ impl Node {
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();
 
+        // Spawn background tasks which run for the duration of the whole program.
+        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone());
+
         let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
 
         Ok(Node {
@@ -120,6 +126,7 @@ impl Node {
             tasks,
             network,
             spaces_manager,
+            key_bundle_task,
             events_tx,
             events_rx: Mutex::new(events_rx),
             connection_authoriser,
@@ -322,6 +329,20 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
+        self.stream_from_inner(topic, from, ProcessorHooksList::new())
+            .await
+    }
+
+    // TODO: This should be a proper TopicStream-builder.
+    async fn stream_from_inner<M>(
+        &self,
+        topic: impl Into<Topic>,
+        from: StreamFrom,
+        post_pipeline_hooks: ProcessorHooksList<Event>,
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
         let live_mode = true;
         let topic = topic.into();
 
@@ -337,6 +358,7 @@ impl Node {
             self.store.clone(),
             self.tasks.clone(),
             self.spaces_manager.clone(),
+            post_pipeline_hooks,
         );
 
         let (tx, rx) = processed_stream(
@@ -497,47 +519,39 @@ impl Node {
     {
         let space_id = space_id.into();
 
-        let permit = self.store.begin().await?;
+        tx!(self.store, {
+            // Associate all group logs we have with the space topic, this handles the "first time
+            // subscription" case where we want to sync all groups logs up-front.
+            //
+            // TODO: This can be removed once we have a working orderer as then the repair task can
+            // be relied upon.
+            let y: AuthGroupState<AuthCapabilities> = self
+                .store
+                .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+                .await?
+                .unwrap_or_default();
 
-        // Associate all group logs we have with the space topic, this handles the "first time
-        // subscription" case where we want to sync all groups logs up-front.
-        //
-        // @TODO: This can be removed once we have a working orderer as then the repair task can
-        // be relied upon.
-        let y: AuthGroupState<AuthCapabilities> = self
-            .store
-            .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-            .await?
-            .unwrap_or_default();
+            for group_id in y.groups_global() {
+                debug!(
+                    group_id = group_id.fmt_short(),
+                    space_id = space_id.fmt_short(),
+                    "associate group log with space topic"
+                );
+                self.store
+                    .associate(&Topic::from(space_id), &self.id(), &group_log_id(group_id))
+                    .await?;
+            }
 
-        for group_id in y.groups_global() {
-            debug!(
-                group_id = group_id.fmt_short(),
-                space_id = space_id.fmt_short(),
-                "associate group log with space topic"
-            );
+            // Associate the space topic with our own member / key bundle logs.
             self.store
-                .associate(&Topic::from(space_id), &self.id(), &group_log_id(group_id))
+                .associate(
+                    &Topic::from(space_id),
+                    &self.id(),
+                    &Hash::digest(MEMBER_CONTROL_MESSAGE),
+                )
                 .await?;
-        }
+        });
 
-        // Associate the space topic with the key bundle logs.
-        //
-        // This does _not_ happen during ingest as at that point there is no topic which could be
-        // used to perform this association. The same key bundle log can be associated with many
-        // spaces. And it can't happen in the forge as a user may never actually publish into a
-        // space.
-        self.store
-            .associate(
-                &Topic::from(space_id),
-                &self.id(),
-                &Hash::digest(MEMBER_CONTROL_MESSAGE),
-            )
-            .await?;
-
-        self.store.commit(permit).await?;
-
-        let topic = space_id;
         let inner = self
             .spaces_manager
             .space(space_id)
@@ -549,7 +563,8 @@ impl Node {
             // the space topic but only to announce their key bundles and await receiving control
             // messages.
             .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
-        let (tx, rx) = self.stream_from::<M>(topic, from).await?;
+
+        let (tx, rx) = self.space_stream_from_inner(space_id, from).await?;
 
         // Spawn per-space repair background task.
         let repair_task = RepairTask::spawn(
@@ -565,9 +580,24 @@ impl Node {
             inner,
             self.store.clone(),
             repair_task,
+            self.key_bundle_task.command_handle(),
             tx,
             rx,
         ))
+    }
+
+    async fn space_stream_from_inner<M>(
+        &self,
+        topic: impl Into<Topic>,
+        from: StreamFrom,
+    ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
+    where
+        M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
+    {
+        let mut post_pipeline = ProcessorHooksList::new();
+        post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
+
+        self.stream_from_inner(topic, from, post_pipeline).await
     }
 
     pub async fn create_space<M>(
@@ -579,11 +609,7 @@ impl Node {
     {
         let space_id = space_id.into();
 
-        // Associate the space topic with the key bundle logs.
-        //
-        // This does _not_ happen during ingest as at that point there is no topic which could be
-        // used to perform this association. The same key bundle log can be associated with many
-        // spaces.
+        // Associate the space topic with our own member / key bundle log.
         tx!(&self.store, {
             self.store
                 .associate(
@@ -594,13 +620,10 @@ impl Node {
                 .await
         })?;
 
-        // Establish a topic pub/sub stream using the space id as a topic. This also associates
-        // the key bundle log with the space topic.
-        let topic = space_id;
-        let (tx, rx) = self.stream::<M>(topic).await?;
-
-        // Publish one key bundle whenever we create a space.
-        let key_bundle_message = self.spaces_manager.key_bundle_message().await?;
+        // Establish a topic pub/sub stream using the space id as a topic.
+        let (tx, rx) = self
+            .space_stream_from_inner(space_id, StreamFrom::Frontier)
+            .await?;
 
         // Issue the events to create a space.
         //
@@ -614,9 +637,7 @@ impl Node {
             self.spaces_manager.create_space(space_id, &[]).await?;
 
         // Persist the computed groups- and spaces-state to the stores.
-        {
-            let permit = self.store.begin().await?;
-
+        tx!(self.store, {
             let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
             spaces_store
                 .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
@@ -624,17 +645,13 @@ impl Node {
             spaces_store
                 .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
                 .await?;
-
-            self.store.commit(permit).await?;
-        }
-
-        // Process the -spaces events by importing them as an "external stream".
-        let mut messages = vec![key_bundle_message];
-        messages.extend(create_space_messages);
+        });
 
         let processed = tx
             .import_local(futures_util::stream::iter(
-                messages.into_iter().map(|message| message.into_operation()),
+                create_space_messages
+                    .into_iter()
+                    .map(|message| message.into_operation()),
             ))
             .await?;
 
@@ -682,7 +699,15 @@ impl Node {
             tx.to_output_tx.clone(),
         );
 
-        let (space, rx) = spaces_stream::<M>(inner, self.store.clone(), repair_task, tx, rx);
+        let (space, rx) = spaces_stream::<M>(
+            inner,
+            self.store.clone(),
+            repair_task,
+            self.key_bundle_task.command_handle(),
+            tx,
+            rx,
+        );
+
         Ok((space, rx))
     }
 

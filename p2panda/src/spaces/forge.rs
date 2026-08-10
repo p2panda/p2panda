@@ -108,7 +108,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // this is _one single log_ across all spaces.
                 //
                 // New member messages are created automatically by a background task.
-                let log_id = LogId::digest(MEMBER_CONTROL_MESSAGE);
+                let log_id = member_log_id();
 
                 // TODO: The key bundle itself should not be in the header to allow deleting it
                 // after a while (without breaking the whole key bundle log.
@@ -205,6 +205,10 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
     }
 }
 
+pub(crate) fn member_log_id() -> LogId {
+    LogId::digest(MEMBER_CONTROL_MESSAGE)
+}
+
 fn space_log_id(space_id: SpaceId) -> LogId {
     LogId::digest(&{
         let mut bytes = Vec::new();
@@ -234,7 +238,8 @@ pub(crate) async fn make_space_group_log_associations(
     space_group_id: VerifyingKey,
     groups_message_id: Hash,
 ) -> Result<(), SpacesForgeError> {
-    let Some(groups_operation): Option<Operation> = store.get_operation(&groups_message_id).await?
+    let Some(groups_operation): Option<Operation> =
+        store.get_operation_tx(&groups_message_id).await?
     else {
         return Err(SpacesForgeError::MissingGroupsOperation(groups_message_id));
     };
