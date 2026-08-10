@@ -628,9 +628,9 @@ mod shutdown {
 
 mod connection_authorisation {
     use p2panda::Topic;
-    use p2panda::authoriser::AuthoriserEvent;
     use p2panda::streams::SystemEvent;
     use p2panda_core::test_utils::setup_logging;
+    use p2panda_net::authoriser::AuthoriserEvent;
     use tokio_stream::StreamExt;
 
     #[tokio::test]
@@ -662,7 +662,7 @@ mod connection_authorisation {
         // The discovery system should try and initiate a connection to Icebear.
         // We expect the connection establishment to be blocked.
         while let Some(event) = events.next().await {
-            if let SystemEvent::Authoriser(AuthoriserEvent::Blocked(node)) = event {
+            if let SystemEvent::Authoriser(AuthoriserEvent::ConnectionBlocked { node }) = event {
                 assert_eq!(node, icebear.id());
                 received_event = true;
                 break;
@@ -682,7 +682,7 @@ mod connection_authorisation {
         let icebear = p2panda::builder().spawn().await.unwrap();
 
         // Panda blocks icebear on the chat topic.
-        panda.topic_block(chat_id, icebear.id()).await;
+        panda.topic_block(icebear.id(), chat_id).await;
 
         // Panda joins the chat and sends a message.
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();

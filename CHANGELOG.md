@@ -32,6 +32,8 @@ Highlights are marked with a pancake 🥞
 - node: Membership change validation in Group API [#1336](https://github.com/p2panda/p2panda/pull/1336)
 - stream: Filter out spaces application messages from concurrently removed members [#1291](https://github.com/p2panda/p2panda/pull/1291)
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
+- net: Introduce an `Authoriser` for maintaining and enforcing allowlists and blocklists [#1321](https://github.com/p2panda/p2panda/pull/1321)
+- node: Integrate the `Authoriser` into the `Node`[#1321](https://github.com/p2panda/p2panda/pull/1321)
 
 ### Changed
 

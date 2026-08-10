@@ -11,7 +11,6 @@ use p2panda_spaces::{ActorId, GroupId};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::authoriser::AuthoriserEvent;
 use crate::spaces::GroupActor;
 use crate::spaces::types::InnerGroupEvent;
 
