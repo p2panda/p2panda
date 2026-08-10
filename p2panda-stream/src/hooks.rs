@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::convert::Infallible;
 use std::pin::Pin;
 
 use tokio::sync::Notify;
@@ -83,7 +84,7 @@ where
 {
     type Output = T;
 
-    type Error = T;
+    type Error = Infallible;
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         ProcessorHook::on_input(&self.list, &input).await;
