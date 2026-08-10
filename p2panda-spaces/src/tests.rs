@@ -2098,3 +2098,196 @@ async fn promote_demote() {
 
     assert_eq!(all_bob_events.len(), 6);
 }
+
+#[tokio::test]
+async fn detect_affected_concurrent_application_messages() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+    let claire = <TestPeer>::new(2).await;
+
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+
+    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
+    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
+
+    for bundle in [alice_bundle, bob_bundle, claire_bundle] {
+        alice_manager.process_persisted(&bundle).await.unwrap();
+        bob_manager.process_persisted(&bundle).await.unwrap();
+        claire_manager.process_persisted(&bundle).await.unwrap();
+    }
+
+    // Alice creates a Space with Bob as manager and Claire as "write" member
+    let space_id = SpaceId::digest(b"0");
+    let (_, messages, _) = alice_manager
+        .create_space_persisted(
+            space_id,
+            &[(bob_id, Access::manage()), (claire_id, Access::write())],
+        )
+        .await
+        .unwrap();
+
+    for message in messages.iter() {
+        bob.persist_operation(message).await.unwrap();
+        bob_manager.process_persisted(message).await.unwrap();
+        claire.persist_operation(message).await.unwrap();
+        claire_manager.process_persisted(message).await.unwrap();
+    }
+
+    let claire_space = claire_manager.space(space_id).await.unwrap().unwrap();
+    let (space_message, _) = claire_space
+        .publish_persisted(b"innocent message")
+        .await
+        .unwrap();
+
+    let claire_application_message_id = space_message.hash;
+
+    alice.persist_operation(&space_message).await.unwrap();
+    alice_manager
+        .process_persisted(&space_message)
+        .await
+        .unwrap();
+
+    let bob_space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let (group_message, space_message, _) = bob_space.remove_persisted(claire_id).await.unwrap();
+
+    alice.persist_operation(&group_message).await.unwrap();
+    alice_manager
+        .process_persisted(&group_message)
+        .await
+        .unwrap();
+    alice.persist_operation(&space_message).await.unwrap();
+    let events = alice_manager
+        .process_persisted(&space_message)
+        .await
+        .unwrap();
+    let Event::Spaces(SpaceEvent::Removed {
+        effected_application_messages,
+        ..
+    }) = &events[0]
+    else {
+        panic!("unexpected message");
+    };
+
+    assert_eq!(effected_application_messages.len(), 1);
+    assert!(effected_application_messages.contains(&claire_application_message_id));
+}
+
+#[tokio::test]
+async fn detect_affected_concurrent_application_messages_by_proof() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+    let claire = <TestPeer>::new(2).await;
+    let dave = <TestPeer>::new(3).await;
+
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+    let dave_id = dave.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+    let dave_manager = dave.manager.clone();
+
+    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
+    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
+    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
+
+    for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
+        alice_manager.process_persisted(&bundle).await.unwrap();
+        bob_manager.process_persisted(&bundle).await.unwrap();
+        claire_manager.process_persisted(&bundle).await.unwrap();
+        dave_manager.process_persisted(&bundle).await.unwrap();
+    }
+
+    // Alice creates a Space with Bob and Claire as managers.
+    let space_id = SpaceId::digest(b"0");
+    let (alice_space, messages, _) = alice_manager
+        .create_space_persisted(
+            space_id,
+            &[(bob_id, Access::manage()), (claire_id, Access::manage())],
+        )
+        .await
+        .unwrap();
+    let space_group_id = alice_space.group_id().await.unwrap();
+
+    for message in messages.iter() {
+        bob.persist_operation(message).await.unwrap();
+        bob_manager.process_persisted(message).await.unwrap();
+        claire.persist_operation(message).await.unwrap();
+        claire_manager.process_persisted(message).await.unwrap();
+        dave.persist_operation(message).await.unwrap();
+        dave_manager.process_persisted(message).await.unwrap();
+    }
+
+    // Bob adds Dave with "write" access.
+    let bob_space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let (group_message, space_message, _) = bob_space
+        .add_persisted(dave_id, Access::write())
+        .await
+        .unwrap();
+
+    // Alice and Dave receive the "add" messages.
+    for message in [group_message, space_message] {
+        alice.persist_operation(&message).await.unwrap();
+        alice_manager.process_persisted(&message).await.unwrap();
+        dave.persist_operation(&message).await.unwrap();
+        dave_manager.process_persisted(&message).await.unwrap();
+    }
+
+    // Dave publishes a message, exercising their "write" access.
+    let dave_space = dave_manager.space(space_id).await.unwrap().unwrap();
+    let (space_message, _) = dave_space
+        .publish_persisted(b"innocent message")
+        .await
+        .unwrap();
+
+    let dave_application_message_id = space_message.hash;
+
+    // Alice processes the application message.
+    alice.persist_operation(&space_message).await.unwrap();
+    alice_manager
+        .process_persisted(&space_message)
+        .await
+        .unwrap();
+
+    // Concurrently to Dave being added to the group, Claire removes Bob (which transitively
+    // removes Dave).
+    let claire_space = claire_manager.space(space_id).await.unwrap().unwrap();
+    let (group_message, _, _) = claire_space.remove_persisted(bob_id).await.unwrap();
+
+    // Alice processes _only_ the group message. This simulates a group change occurring without a
+    // corresponding space message being issued.
+    alice.persist_operation(&group_message).await.unwrap();
+    alice_manager
+        .process_persisted(&group_message)
+        .await
+        .unwrap();
+
+    // Alice "repairs" the space. This forges a new space message which in the spaces dependency
+    // graph is _not_ concurrent to Dave's previously processed application message (because Alice
+    // already observed it). This is important for this test as we want to assert that application
+    // messages which refer to concurrent proofs, but are themselves not concurrent, are still
+    // detected as being effected by the remove.
+    let (_, events) = alice_space
+        .repair_persisted(&[space_group_id])
+        .await
+        .unwrap();
+
+    let Event::Spaces(SpaceEvent::Removed {
+        effected_application_messages,
+        ..
+    }) = &events[0]
+    else {
+        panic!("unexpected message");
+    };
+
+    assert_eq!(effected_application_messages.len(), 1);
+    assert!(effected_application_messages.contains(&dave_application_message_id));
+}

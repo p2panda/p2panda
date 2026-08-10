@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! API for managing members of a space and sending/receiving messages.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_auth::validation::{VerifyClaimedWriteError, verify_claimed_write_access};
-use p2panda_core::traits::{Digest, ShortFormat};
+use p2panda_core::traits::{Digest, Provenance, ShortFormat};
 use p2panda_core::{SigningKey, VerifyingKey};
 use p2panda_encryption::key_manager::KeyManagerState;
 use p2panda_encryption::key_registry::KeyRegistryState;
@@ -509,9 +509,7 @@ where
 
         // Construct space membership event.
         let space_event = to_space_event(
-            y.space_id,
-            y.group_id,
-            &y.groups_y,
+            y,
             space_message,
             auth_message,
             previous_members,
@@ -620,7 +618,15 @@ where
             .orderer
             .add_dependency(encryption_message.id(), &message.space_dependencies);
 
-        // Persist new state.
+        // Store the proof mapping.
+        //
+        // This is used for understanding which application messages are affected by concurrent
+        // member removals.
+        y.proofs.insert(
+            message.id,
+            (message.author, message.proof.iter().cloned().collect()),
+        );
+
         let events = encryption_output_to_space_events(&y.space_id, encryption_output);
 
         Ok(Some((y, events)))
@@ -778,6 +784,7 @@ where
                     group_id,
                     groups_y,
                     encryption_y,
+                    proofs: Default::default(),
                 }
             }
         };
@@ -836,7 +843,7 @@ where
         y.encryption_y = encryption_y;
 
         // Construct space args.
-        let (args, dependencies) = {
+        let (args, dependencies, proof) = {
             let EncryptionMessage::Args(encryption_args) = encryption_args else {
                 panic!("here we're only dealing with local operations");
             };
@@ -850,19 +857,29 @@ where
             else {
                 panic!("unexpected message type");
             };
+            let proof = y.groups_y.heads(&[y.group_id]);
             let args = SpacesArgs::Application {
                 space_id: y.space_id,
                 space_dependencies: dependencies.clone(),
-                proof: y.groups_y.heads(&[y.group_id]),
+                proof: proof.clone(),
                 group_secret_id,
                 nonce,
                 ciphertext,
             };
-            (args, dependencies)
+            (args, dependencies, proof)
         };
 
         // Forge message.
         let message = manager.identity.forge(args).await?;
+
+        // Store the proof mapping.
+        //
+        // This is used for understanding which application messages are affected by concurrent
+        // member removals.
+        y.proofs.insert(
+            message.hash(),
+            (message.author(), proof.into_iter().collect()),
+        );
 
         // Update dependencies.
         y.encryption_y
@@ -997,7 +1014,10 @@ pub struct SpacesState<C> {
     pub group_id: VerifyingKey,
     pub groups_y: AuthGroupState<C>,
     pub encryption_y: EncryptionGroupState,
+    pub proofs: ProofsMap,
 }
+
+pub(crate) type ProofsMap = HashMap<OperationId, (VerifyingKey, HashSet<OperationId>)>;
 
 impl<C> SpacesState<C>
 where
@@ -1010,7 +1030,7 @@ where
     ) -> Self {
         let space_id = space_y.space_id;
         let group_id = space_y.group_id;
-        let (groups_y, encryption_y) =
+        let (groups_y, encryption_y, proofs) =
             space_y.assemble_encryption_state(key_manager_y, key_registry_y);
 
         Self {
@@ -1018,6 +1038,7 @@ where
             group_id,
             groups_y,
             encryption_y,
+            proofs,
         }
     }
 }

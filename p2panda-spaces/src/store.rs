@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::orderer::EncryptionOrdererState;
-use crate::space::SpacesState;
+use crate::space::{ProofsMap, SpacesState};
 use crate::types::{AuthGroupState, EncryptionGroupState};
 use crate::{GroupId, MemberId, SpaceId};
 
@@ -34,6 +34,7 @@ pub struct SpacesStoreState<C> {
     // TODO: Verify if this really required here? Maybe ordering is handled on another layer.
     pub orderer: EncryptionOrdererState,
     pub two_party: HashMap<MemberId, TwoPartyState<LongTermKeyBundle>>,
+    pub proofs: ProofsMap,
 }
 
 impl<C> SpacesStoreState<C> {
@@ -41,7 +42,7 @@ impl<C> SpacesStoreState<C> {
         self,
         my_keys: KeyManagerState,
         pki: KeyRegistryState<MemberId>,
-    ) -> (AuthGroupState<C>, EncryptionGroupState) {
+    ) -> (AuthGroupState<C>, EncryptionGroupState, ProofsMap) {
         let groups_y = self.groups_y;
 
         let encryption_y = EncryptionGroupState {
@@ -60,7 +61,7 @@ impl<C> SpacesStoreState<C> {
             is_welcomed: self.is_welcomed,
         };
 
-        (groups_y, encryption_y)
+        (groups_y, encryption_y, self.proofs)
     }
 }
 
@@ -71,6 +72,7 @@ impl<C> From<SpacesState<C>> for SpacesStoreState<C> {
             space_id: y.space_id,
             group_id: y.group_id,
             groups_y: y.groups_y,
+            proofs: y.proofs,
             is_welcomed: y.encryption_y.is_welcomed,
             secrets: y.encryption_y.secrets,
             orderer: y.encryption_y.orderer,

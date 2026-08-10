@@ -3,6 +3,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::convert::Infallible;
 
+use p2panda_auth::graph::concurrent_operations;
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::GroupMessage;
@@ -99,6 +100,25 @@ impl EncryptionOrdererState {
     /// Has the orderer seen a certain message.
     pub fn has_seen(&self, id: OperationId) -> bool {
         self.graph.contains_node(id)
+    }
+
+    /// Returns ids of any application messages concurrent to the target operation.
+    pub fn concurrent_application_messages(&self, id: OperationId) -> Vec<OperationId> {
+        let concurrent = concurrent_operations(&self.graph, id);
+        concurrent
+            .into_iter()
+            .filter(|id| {
+                let message = self.messages.get(id).unwrap();
+                if let EncryptionMessage::Forged {
+                    args: EncryptionArgs::Application { .. },
+                    ..
+                } = message
+                {
+                    return true;
+                }
+                false
+            })
+            .collect()
     }
 }
 

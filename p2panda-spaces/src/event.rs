@@ -10,11 +10,12 @@ use p2panda_core::VerifyingKey;
 use crate::auth::message::AuthMessage;
 use crate::member::Member;
 use crate::message::SpaceMembershipMessage;
+use crate::space::SpacesState;
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
     added_members, demoted_members, promoted_members, removed_members, sort_members,
 };
-use crate::{ActorId, GroupId, MemberId, SpaceId};
+use crate::{ActorId, GroupId, MemberId, OperationId, SpaceId};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupActor {
@@ -286,6 +287,9 @@ pub enum SpaceEvent<C> {
 
         /// Additional event context and group state after any change occurred.
         groups_context: GroupContext<C>,
+
+        /// Effected concurrent application messages.
+        effected_application_messages: Vec<OperationId>,
     },
 
     /// One or many individuals were promoted in the space.
@@ -316,6 +320,11 @@ pub enum SpaceEvent<C> {
 
         /// Additional event context and group state after any change occurred.
         groups_context: GroupContext<C>,
+
+        /// Effected concurrent application messages.
+        ///
+        /// Will only ever be populated if member was demoted to below "write" access.
+        effected_application_messages: Vec<OperationId>,
     },
 
     /// Local actor was removed from the space.
@@ -388,9 +397,7 @@ where
 }
 
 pub(crate) fn to_space_event<C>(
-    space_id: SpaceId,
-    group_id: GroupId,
-    auth_y: &AuthGroupState<C>,
+    y: &SpacesState<C>,
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
     previous_members: &[(MemberId, Access<C>)],
@@ -399,8 +406,11 @@ pub(crate) fn to_space_event<C>(
 where
     C: Conditions,
 {
-    let next_members = &auth_y.members(group_id);
-    let next_actors: Vec<_> = auth_y
+    let space_id = y.space_id;
+    let group_id = y.group_id;
+    let next_members = &y.groups_y.members(group_id);
+    let next_actors: Vec<_> = y
+        .groups_y
         .root_members(group_id)
         .into_iter()
         .map(|(member, access)| (GroupActor::from_group_member(member), access))
@@ -411,7 +421,7 @@ where
         members: next_members.to_vec(),
         actors: next_actors,
     };
-    let groups_context = groups_context(auth_y, auth_message, previous_ancestors);
+    let groups_context = groups_context(&y.groups_y, auth_message, previous_ancestors);
 
     let space_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
@@ -431,11 +441,23 @@ where
         }
         AuthGroupAction::Remove { .. } => {
             let removed = removed_members(previous_members, next_members);
+            // If this is a remove message we need to collect any concurrent application messages
+            // which may be effected by the change.
+            let removed_authors: Vec<VerifyingKey> =
+                removed.iter().map(|(member, _)| *member).collect();
+            let effected_application_messages = detect_concurrent_app_messages(
+                y,
+                space_message.id,
+                auth_message.id(),
+                &removed_authors,
+            );
+
             SpaceEvent::Removed {
                 space_id,
                 removed,
                 context,
                 groups_context,
+                effected_application_messages,
             }
         }
         AuthGroupAction::Promote { .. } => {
@@ -449,16 +471,106 @@ where
         }
         AuthGroupAction::Demote { .. } => {
             let demoted = demoted_members(previous_members, next_members);
+            let non_write_demoted_members: Vec<_> = demoted
+                .iter()
+                .filter_map(|(member, access)| {
+                    if access < &Access::<C>::write() {
+                        Some(*member)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let effected_application_messages = detect_concurrent_app_messages(
+                y,
+                space_message.id,
+                auth_message.id(),
+                &non_write_demoted_members,
+            );
+
             SpaceEvent::Demoted {
                 space_id,
                 demoted,
                 context,
                 groups_context,
+                effected_application_messages,
             }
         }
     };
 
     Event::Spaces(space_event)
+}
+
+/// Detect any application messages which were authored by a concurrently removed author.
+///
+/// There are two possible concurrency cases to detect, one can be inferred by inspecting the
+/// "proof" (a concrete point in the groups operation graph) an application message carries, the
+/// other by observing concurrency in the space operation graph itself.
+///
+/// Case 1: proof is concurrent
+///
+/// The application message is referring to a proof which is entirely concurrent to the target
+/// remove operation.
+///
+/// ```text
+///    Remove A                              ...          
+///       │                                   │           
+///       │                                   ▼           
+///       │   Add B ◄─────────────────────── App          
+///       │    │            proof             │           
+///       │    ▼                              ▼           
+///       └─► Add A                          ...          
+///            │                              │           
+///            ▼                              ▼           
+///          Group                          Space         
+///                                                                                                          
+/// ```  
+///
+/// Case 2: space operation is concurrent                                                    
+///                                     
+/// The application message is published concurrently to the membership message which incorporated
+/// the target remove into the space.
+///
+/// ```text
+///     Remove A ◄─────────────────────── Membership         
+///       │                                   │              
+///       │                                   ▼              
+///       │   Add B ◄──────────────────── Membership      App
+///       │    │                              │            │
+///       │    ▼                              ▼            │
+///       └─► Add A ◄───────────────────  Membership ◄─────┘
+///            │                              │              
+///            ▼                              ▼              
+///          Group                          Space      
+/// ```      
+fn detect_concurrent_app_messages<C: Conditions>(
+    y: &SpacesState<C>,
+    space_message_id: OperationId,
+    group_message_id: OperationId,
+    removed_authors: &[VerifyingKey],
+) -> Vec<OperationId> {
+    let concurrent_application_messages = y
+        .encryption_y
+        .orderer
+        .concurrent_application_messages(space_message_id);
+    let concurrent_groups_messages = y.groups_y.inner.concurrent_operations(group_message_id);
+    let mut effected_application_messages = vec![];
+    for (id, (author, proofs)) in y.proofs.iter() {
+        if !removed_authors.contains(author) {
+            // This operation author is not effected.
+            continue;
+        };
+
+        // If an application messages refers to _only_ concurrent branches in it's proof
+        // OR the application message was published concurrently to the space message
+        // which incorporated this group change then add it to the effected messages vec.
+        if concurrent_groups_messages.is_superset(proofs)
+            || concurrent_application_messages.contains(id)
+        {
+            effected_application_messages.push(*id);
+        }
+    }
+    effected_application_messages
 }
 
 /// Compute groups context.
