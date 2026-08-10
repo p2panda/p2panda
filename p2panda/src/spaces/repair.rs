@@ -25,7 +25,7 @@ use crate::operation::Operation;
 use crate::spaces::group_log_id;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesStore};
 use crate::spaces::{SpacesManagerError, types::SpacesManager};
-use crate::streams::{ForwardEvent, LocalStreamFuture, group_to_system_event, to_stream_event};
+use crate::streams::{ForwardEvent, LocalStreamFuture, to_stream_event, to_system_event};
 
 const REPAIR_FREQUENCY_SECS: u64 = 1;
 
@@ -220,9 +220,7 @@ pub(crate) async fn repair_space<M>(
         .into_iter()
         .filter_map(|event| match event {
             p2panda_spaces::Event::Spaces(space_event) => Some(to_stream_event(space_event).into()),
-            p2panda_spaces::Event::Groups(group_event) => {
-                Some(group_to_system_event(group_event).into())
-            }
+            p2panda_spaces::Event::Groups(group_event) => Some(to_system_event(group_event).into()),
             _ => None,
         })
         .collect();

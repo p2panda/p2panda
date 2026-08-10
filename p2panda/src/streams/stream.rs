@@ -576,14 +576,11 @@ where
                     }
                 }
 
-                p2panda_spaces::Event::Member(member) => {
-                    forward_events.push(ForwardEvent::system(SystemEvent::MemberInfoReceived {
-                        member_id: member.id(),
-                    }))
-                }
+                p2panda_spaces::Event::Member(member) => forward_events
+                    .push(ForwardEvent::topic_stream(StreamEvent::Member(member.id()))),
 
                 p2panda_spaces::Event::Groups(group_event) => forward_events.push(
-                    ForwardEvent::system(group_to_system_event(group_event.to_owned())),
+                    ForwardEvent::system(to_system_event(group_event.to_owned())),
                 ),
 
                 p2panda_spaces::Event::Spaces(space_event) => forward_events.push(
@@ -843,7 +840,7 @@ pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
     }
 }
 
-pub(crate) fn group_to_system_event(event: InnerGroupEvent) -> SystemEvent {
+pub(crate) fn to_system_event(event: InnerGroupEvent) -> SystemEvent {
     let members = event
         .context()
         .members

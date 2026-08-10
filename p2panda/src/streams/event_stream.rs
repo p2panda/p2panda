@@ -6,7 +6,7 @@ use futures_util::Stream;
 use futures_util::stream::{SelectAll, StreamExt};
 use p2panda_auth::AccessLevel;
 use p2panda_net::discovery::DiscoveryEvent;
-use p2panda_spaces::{ActorId, GroupId, MemberId};
+use p2panda_spaces::{ActorId, GroupId};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 
@@ -20,13 +20,7 @@ use crate::spaces::types::InnerGroupEvent;
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
-    /// Events of the discovery protocol.
     Discovery(DiscoveryEvent),
-
-    /// Received member info with associated key-bundle.
-    MemberInfoReceived { member_id: MemberId },
-
-    /// Group change occurred.
     Groups {
         /// Id of the group this event originated from.
         group_id: GroupId,
