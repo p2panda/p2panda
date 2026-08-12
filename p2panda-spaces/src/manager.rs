@@ -93,7 +93,7 @@ where
         credentials: Credentials,
         rng: Rng,
     ) -> Result<Self, ManagerError<F, C>> {
-        Self::new_with_config(store, forge, credentials, &Config::default(), rng)
+        Self::new_with_config(store, forge, credentials, Config::default(), rng)
     }
 
     /// Instantiate a new manager with custom configuration.
@@ -102,12 +102,11 @@ where
         store: S,
         forge: F,
         credentials: Credentials,
-        config: &Config,
+        config: Config,
         rng: Rng,
     ) -> Result<Self, ManagerError<F, C>> {
         let actor_id: ActorId = credentials.verifying_key();
-        let identity =
-            IdentityManager::new(store.clone(), forge, credentials, config.clone(), &rng)?;
+        let identity = IdentityManager::new(store.clone(), forge, credentials, config, &rng)?;
         let inner = ManagerInner {
             store,
             identity,

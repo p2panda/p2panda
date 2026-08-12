@@ -10,7 +10,7 @@ use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{AuthGroupState, Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
@@ -107,8 +107,13 @@ impl Node {
         )
         .await?;
 
-        // TODO: Expose -spaces configuration to public API.
-        let spaces_manager = spaces_manager(forge.clone(), credentials.clone(), store.clone())?;
+        let spaces_manager = spaces_manager(
+            forge.clone(),
+            credentials.clone(),
+            store.clone(),
+            // TODO: Expose -spaces configuration to public API.
+            SpacesConfig::default(),
+        )?;
 
         // Prepare manager which orchestrates processing of incoming operations.
         let tasks = TaskTracker::new();

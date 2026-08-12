@@ -48,13 +48,13 @@ impl TestPeer {
         let rng = Rng::from_seed([peer_id; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        Self::new_with_config(peer_id, credentials, &config, rng).await
+        Self::new_with_config(peer_id, credentials, config, rng).await
     }
 
     pub async fn new_with_config(
         peer_id: TestPeerId,
         credentials: Credentials,
-        config: &Config,
+        config: Config,
         rng: Rng,
     ) -> Self {
         let store = SqliteStore::temporary().await;
