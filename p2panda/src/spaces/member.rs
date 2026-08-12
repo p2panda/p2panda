@@ -46,6 +46,8 @@ use std::time::Duration;
 use p2panda_auth::Access;
 use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
+use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle};
+use p2panda_encryption::traits::KeyBundle;
 use p2panda_net::NodeId;
 use p2panda_spaces::{ActorId, MemberId, SpaceId};
 use p2panda_store::topics::TopicStore;
@@ -69,6 +71,19 @@ pub struct Member {
 impl Member {
     pub fn id(&self) -> ActorId {
         self.inner.id()
+    }
+
+    pub fn key_bundle(&self) -> &LongTermKeyBundle {
+        self.inner.key_bundle()
+    }
+
+    pub fn lifetime(&self) -> &Lifetime {
+        self.inner.key_bundle().lifetime()
+    }
+
+    pub fn verify(&self) -> Result<(), p2panda_spaces::member::MemberError> {
+        self.inner.verify()?;
+        Ok(())
     }
 }
 
