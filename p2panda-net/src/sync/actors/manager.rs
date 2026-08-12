@@ -595,12 +595,23 @@ where
             .can_connect_on_topic(node_id, topic)
             .await;
 
-        if !allow {
-            warn!(
-                "rejected sync with blocked node {} on topic {}",
-                node_id.fmt_short(),
-                topic.fmt_short()
-            );
+        // Authorise that we should be connecting on this topic with the remote node.
+        if allow {
+            self.connection_authoriser
+                .send_event(ConnectionAuthoriserEvent::TopicAllowed {
+                    topic,
+                    node: node_id,
+                })
+                .await;
+        } else {
+            let event = ConnectionAuthoriserEvent::TopicBlocked {
+                topic,
+                node: node_id,
+            };
+            warn!("{}", event);
+            self.connection_authoriser.send_event(event).await;
+
+            // Do not accept a sync session with a blocked topic-node combination.
             connection.close(VarInt::from_u32(0), b"not authorised");
             return Err(iroh::protocol::AcceptError::from_err(
                 ConnectionAuthoriserError::NotAuthorised,

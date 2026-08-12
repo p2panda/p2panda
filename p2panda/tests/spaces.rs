@@ -1018,6 +1018,10 @@ mod filtered_messages {
         // Panda subscribes again.
         let (_panda_space, mut panda_rx) = panda.space::<SecretData>(topic).await.unwrap();
 
+        // And manually adds penguin to the allow-list as removed members are automatically
+        // blocked.
+        panda.topic_allow(penguin_id, topic).await;
+
         // Panda will be sent the second message from penguin, however it will not be forwarded to
         // the app layer as they know penguin has been removed (concurrent to the application
         // message being published).
@@ -1249,5 +1253,110 @@ mod members {
         // direct message to D. Note that B doesn't need a key bundle for A because A already
         // initiated a 2SM session with B when they've been added to the space.
         node_b_space.remove(node_c.id()).await.unwrap();
+    }
+}
+
+mod connection_authorisation {
+
+    use p2panda::streams::{StreamEvent, SystemEvent};
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_net::connection_authoriser::ConnectionAuthoriserEvent;
+    use tokio_stream::StreamExt;
+
+    use super::{SecretData, spawn_node};
+
+    #[tokio::test]
+    async fn member_allow_and_block() {
+        setup_logging();
+
+        use p2panda::Topic;
+        use p2panda_auth::AccessLevel;
+
+        let network_id = Topic::random().into();
+        let topic = Topic::random();
+
+        let panda = spawn_node(network_id).await;
+        let mut panda_system_rx = panda.event_stream().await.unwrap();
+        let penguin = spawn_node(network_id).await;
+
+        // Panda creates a space.
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+
+        // Penguin subscribes to the space.
+        let (penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+
+        while let Some(event) = panda_rx.next().await {
+            if let StreamEvent::Member(member) = event {
+                if member == penguin.id() {
+                    break;
+                }
+            };
+        }
+
+        // Panda adds Penguin as a member of the space.
+        let penguin_id = penguin.id();
+        panda_space
+            .add(penguin_id, AccessLevel::Write)
+            .await
+            .unwrap();
+
+        while let Some(event) = penguin_rx.next().await {
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+
+            if members.iter().any(|(member, _)| *member == penguin.id()) {
+                break;
+            }
+        }
+
+        // Penguin unsubscribes from the space.
+        penguin_space.close().await.unwrap();
+
+        // Panda removes Penguin.
+        panda_space
+            .remove(penguin_id)
+            .await
+            .expect("panda removes penguin");
+
+        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+
+        while let Some(event) = panda_system_rx.next().await {
+            let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::TopicBlocked {
+                topic: topic_inner,
+                node,
+            }) = event
+            else {
+                continue;
+            };
+
+            assert_eq!(node, penguin_id);
+            assert_eq!(topic_inner, topic);
+            break;
+        }
+
+        penguin_space.close().await.unwrap();
+
+        // Panda adds Penguin again.
+        panda_space
+            .add(penguin_id, AccessLevel::Read)
+            .await
+            .expect("panda removes penguin");
+
+        let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+
+        while let Some(event) = panda_system_rx.next().await {
+            let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::TopicAllowed {
+                topic: topic_inner,
+                node,
+            }) = event
+            else {
+                continue;
+            };
+
+            assert_eq!(node, penguin_id);
+            assert_eq!(topic_inner, topic);
+            break;
+        }
     }
 }

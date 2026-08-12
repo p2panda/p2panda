@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use p2panda_core::traits::{Provenance, ShortFormat};
 use p2panda_core::{Hash, Topic};
+use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
@@ -19,6 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
+use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
 use crate::spaces::{SpacesManagerError, group_log_id};
 use crate::streams::{
@@ -79,6 +81,8 @@ pub(crate) async fn repair_space<M>(
     store: &SqliteStore,
     import_local_tx: &ImportLocalTx,
     to_output_tx: &ToOutputTx<M>,
+    // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
+    connection_authoriser: &ConnectionAuthoriser,
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
@@ -212,6 +216,9 @@ pub(crate) async fn repair_space<M>(
     // Await processing of operations to be complete.
     ready_rx.await?;
 
+    // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
+    update_authoriser(connection_authoriser, &events).await;
+
     let events = events
         .into_iter()
         .filter_map(|event| match event {
@@ -253,6 +260,8 @@ impl RepairTask {
         strategy: RepairStrategy,
         import_tx: ImportLocalTx,
         to_output_tx: ToOutputTx<M>,
+        // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
+        connection_authoriser: ConnectionAuthoriser,
     ) -> Self
     where
         M: Send + 'static,
@@ -275,6 +284,7 @@ impl RepairTask {
                             &store,
                             &import_tx,
                             &to_output_tx,
+                            &connection_authoriser
                         )
                         .await;
 
@@ -299,6 +309,7 @@ impl RepairTask {
                                     &store,
                                     &import_tx,
                                     &to_output_tx,
+                                    &connection_authoriser
                                 )
                                 .await;
 
