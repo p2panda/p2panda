@@ -119,7 +119,7 @@ impl Node {
         let tasks = TaskTracker::new();
 
         // Spawn background tasks which run for the duration of the whole program.
-        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone());
+        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone()).await;
 
         let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
 

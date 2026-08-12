@@ -40,6 +40,7 @@
 //! Since this log is maintained independent of a particular space we need to explicitly associate
 //! it when the space starts to depend on the member's key bundles.
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use p2panda_auth::Access;
@@ -51,7 +52,7 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use p2panda_stream::hooks::ProcessorHook;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Notify, mpsc, oneshot};
 use tracing::{debug, error};
 
 use crate::operation::Operation;
@@ -59,8 +60,6 @@ use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
 use crate::streams::{Event, ImportLocalTx, LocalStreamFuture};
-
-const CHECK_KEY_BUNDLE_FREQUENCY: Duration = Duration::from_mins(15);
 
 #[derive(Debug)]
 pub struct Member {
@@ -149,21 +148,48 @@ pub struct KeyBundleTask {
 
 impl KeyBundleTask {
     /// Spawn key bundle background task.
-    pub fn spawn(manager: SpacesManager) -> Self {
+    ///
+    /// This method awaits until we can be sure at least one valid key bundle was published into the
+    /// member's log. This assures that all logic to subscribe to a space causes sync session to be
+    /// initialised _after_ the log was checked & populated.
+    pub async fn spawn(manager: SpacesManager) -> Self {
+        Self::spawn_inner(manager, CHECK_KEY_BUNDLE_FREQUENCY).await
+    }
+
+    #[cfg(test)]
+    pub async fn spawn_with_frequency(manager: SpacesManager, frequency: Duration) -> Self {
+        Self::spawn_inner(manager, frequency).await
+    }
+
+    async fn spawn_inner(manager: SpacesManager, frequency: Duration) -> Self {
         debug!("key bundle management task started");
 
         let (tx, rx) = mpsc::unbounded_channel();
+        let ready_signal = Arc::new(Notify::new());
 
-        tokio::spawn(async move {
-            let result = renew_expired_key_bundles(manager, rx).await;
+        {
+            let ready_signal = ready_signal.clone();
 
-            match result {
-                Ok(_) => debug!("key bundle management task ended"),
-                Err(ref err) => {
-                    error!("failed task to automatically renew key bundles: {}", err);
+            tokio::spawn(async move {
+                let result = renew_expired_key_bundles(manager, rx, ready_signal, frequency).await;
+
+                match result {
+                    Ok(_) => debug!("key bundle management task ended"),
+                    Err(ref err) => {
+                        error!("failed task to automatically renew key bundles: {}", err);
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        // Wait until we've received a "ready" signal from the internal task. Like this we can
+        // assure to only return when we know that at least one valid key bundle is already in the
+        // member's log. This is especially important when the application starts for the first time
+        // or after a long time where the key bundle expired in the meantime.
+        //
+        // This should prevent potential race conditions of other tasks which assume that at least
+        // one valid key bundle should be available.
+        ready_signal.notified().await;
 
         Self { tx }
     }
@@ -191,9 +217,13 @@ pub enum KeyBundleTaskCommand {
     RemoveStream(SpaceId),
 }
 
+const CHECK_KEY_BUNDLE_FREQUENCY: Duration = Duration::from_mins(15);
+
 async fn renew_expired_key_bundles(
     manager: SpacesManager,
     mut rx: mpsc::UnboundedReceiver<KeyBundleTaskCommand>,
+    ready_signal: Arc<Notify>,
+    frequency: Duration,
 ) -> Result<(), SpacesManagerError> {
     // Keep a list of all spaces streams where we publish the new "member" message into when a key
     // bundle is about to expire.
@@ -205,13 +235,14 @@ async fn renew_expired_key_bundles(
 
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
-    let mut interval = tokio::time::interval(CHECK_KEY_BUNDLE_FREQUENCY);
+    let mut interval = tokio::time::interval(frequency);
     loop {
         tokio::select! {
             biased;
 
             _ = interval.tick() => {
                 if !manager.key_bundle_expired().await? {
+                    ready_signal.notify_one();
                     continue;
                 }
 
@@ -242,6 +273,8 @@ async fn renew_expired_key_bundles(
                 for space_id in failed_sends.iter() {
                     spaces_streams.remove(space_id);
                 }
+
+                ready_signal.notify_one();
             }
 
             command = rx.recv() => {
@@ -270,8 +303,7 @@ async fn publish_member_message(
 ) -> bool {
     let stream = Box::pin(futures_util::stream::once(async { operation }));
 
-    // We don't need to await the result.
-    let (ready_tx, _) = oneshot::channel::<LocalStreamFuture>();
+    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
 
     if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
         debug!(
@@ -281,6 +313,9 @@ async fn publish_member_message(
 
         return false;
     }
+
+    // Wait until this member message was properly ingested.
+    let _ = ready_rx.await;
 
     true
 }
