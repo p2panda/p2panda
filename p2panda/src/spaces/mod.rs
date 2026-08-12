@@ -22,7 +22,7 @@ pub use group::{
     AddGroupMemberError, Group, GroupError, GroupEvent, GroupFuture, RemoveGroupMemberError,
 };
 pub use member::{GroupActor, Member, MemberError};
-pub(crate) use repair::{RepairError, RepairStrategy, spawn_repair_task};
+pub(crate) use repair::{DEFAULT_REPAIR_STRATEGY, RepairError, RepairTask};
 pub(crate) use space::spaces_stream;
 pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceFuture,

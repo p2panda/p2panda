@@ -41,6 +41,7 @@ Highlights are marked with a pancake 🥞
 - node: Make `Group` sendsync [#1306](https://github.com/p2panda/p2panda/pull/1306)
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
 - sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
+- node: Move repair task out of stream [#1347](https://github.com/p2panda/p2panda/pull/1347)
 
 ### Fixed
 

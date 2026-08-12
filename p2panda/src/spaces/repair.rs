@@ -11,22 +11,23 @@ use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::oneshot::Sender;
 use tokio::sync::oneshot::error::RecvError;
-use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
 use crate::spaces::{SpacesManagerError, group_log_id};
 use crate::streams::{
-    ImportLocalTx, LocalStreamFuture, RepairRx, ToOutputTx, to_stream_event, to_system_event,
+    ImportLocalTx, LocalStreamFuture, ToOutputTx, to_stream_event, to_system_event,
 };
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
+
+pub const DEFAULT_REPAIR_STRATEGY: RepairStrategy = RepairStrategy::Global;
 
 /// Strategy by which a space should be repaired.
 ///
@@ -50,9 +51,10 @@ const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 /// TODO: This initial discovery mechanism is not yet implemented, it may be solved via invite
 /// tokens, or manually exporting and then registering a member group. Therefore all spaces use the
 /// "Global" strategy for now.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RepairStrategy {
     Global,
+    #[allow(unused)]
     Partial(Vec<GroupId>),
 }
 
@@ -72,7 +74,7 @@ pub enum RepairStrategy {
 /// peers.
 pub(crate) async fn repair_space<M>(
     space_id: SpaceId,
-    scope: RepairStrategy,
+    strategy: &RepairStrategy,
     manager: &SpacesManager,
     store: &SqliteStore,
     import_local_tx: &ImportLocalTx,
@@ -104,9 +106,9 @@ pub(crate) async fn repair_space<M>(
 
     store.commit(permit).await?;
 
-    let group_ids = match scope {
+    let group_ids = match strategy {
         RepairStrategy::Global => groups_y.groups_global(),
-        RepairStrategy::Partial(group_ids) => group_ids,
+        RepairStrategy::Partial(group_ids) => group_ids.clone(),
     };
 
     let repair = match manager.space_repair_required(space_id, &group_ids).await {
@@ -234,74 +236,101 @@ pub(crate) async fn repair_space<M>(
     Ok(true)
 }
 
-/// Spawn the repair task which triggers work on a schedule or from being signalled from elsewhere
-/// in the node API.
-#[allow(clippy::type_complexity)]
-pub(crate) fn spawn_repair_task<M>(
-    topic: Topic,
-    manager: SpacesManager,
-    store: SqliteStore,
-    import_local_tx: ImportLocalTx,
-    to_output_tx: ToOutputTx<M>,
-    mut repair_rx: RepairRx,
-) -> JoinHandle<()>
-where
-    M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
-{
-    tokio::spawn(async move {
-        loop {
-            let args = tokio::select! {
-                // We received a signal to repair the space.
-                msg = repair_rx.recv() => {
-                    match msg {
-                        Some(args) => Some(args),
-                        None => {
-                            // If the repair_tx is dropped then we can exit this task.
-                            return;
+pub type RepairTaskSender = mpsc::UnboundedSender<RepairTaskCommand>;
+
+/// Background task to automatically repair a space.
+#[derive(Clone, Debug)]
+pub struct RepairTask {
+    tx: RepairTaskSender,
+}
+
+impl RepairTask {
+    /// Spawn repair background task.
+    pub fn spawn<M>(
+        space_id: SpaceId,
+        manager: SpacesManager,
+        store: SqliteStore,
+        strategy: RepairStrategy,
+        import_tx: ImportLocalTx,
+        to_output_tx: ToOutputTx<M>,
+    ) -> Self
+    where
+        M: Send + 'static,
+    {
+        debug!("repair management task started");
+
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(REPAIR_FREQUENCY);
+            loop {
+                tokio::select! {
+                    biased;
+
+                    _ = interval.tick() => {
+                        let result = repair_space(
+                            space_id,
+                            &strategy,
+                            &manager,
+                            &store,
+                            &import_tx,
+                            &to_output_tx,
+                        )
+                        .await;
+
+                        if let Err(ref err) = result {
+                            warn!("failed to repair spaces: {}", err);
+                        }
+                    }
+
+                    command = rx.recv() => {
+                        let Some(command) = command else {
+                            // Stop task when all senders were dropped.
+                            debug!("space repair task ended");
+                            break;
+                        };
+
+                        match command {
+                            RepairTaskCommand::Repair(reply_tx) => {
+                                let result = repair_space(
+                                    space_id,
+                                    &strategy,
+                                    &manager,
+                                    &store,
+                                    &import_tx,
+                                    &to_output_tx,
+                                )
+                                .await;
+
+                                if let Err(ref err) = result {
+                                    warn!("failed to repair spaces: {}", err);
+                                }
+
+                                let _ = reply_tx.send(result);
+
+                            },
                         }
                     }
                 }
-
-                // Scheduled repair triggered.
-                _ = sleep(REPAIR_FREQUENCY) => None,
-            };
-
-            match args {
-                Some((scope, reply_tx)) => {
-                    let result = repair_space(
-                        topic.into(),
-                        scope,
-                        &manager,
-                        &store,
-                        &import_local_tx,
-                        &to_output_tx,
-                    )
-                    .await;
-
-                    if let Err(ref err) = result {
-                        warn!("failed to repair spaces: {}", err);
-                    }
-
-                    let _ = reply_tx.send(result);
-                }
-                None => {
-                    let result = repair_space(
-                        topic.into(),
-                        RepairStrategy::Global,
-                        &manager,
-                        &store,
-                        &import_local_tx,
-                        &to_output_tx,
-                    )
-                    .await;
-
-                    if let Err(ref err) = result {
-                        warn!("failed to repair spaces: {}", err);
-                    }
-                }
             }
-        }
-    })
+        });
+
+        Self { tx }
+    }
+
+    pub async fn repair(&self) -> Result<bool, RepairError> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(RepairTaskCommand::Repair(tx))?;
+        let repaired = rx.await??;
+        Ok(repaired)
+    }
+}
+
+/// Command for space repair task.
+#[derive(Debug)]
+pub enum RepairTaskCommand {
+    /// Repair a space already registered with the task.
+    Repair(Sender<Result<bool, RepairError>>),
 }
 
 #[derive(Debug, Error)]
@@ -315,6 +344,9 @@ pub enum RepairError {
 
     #[error("could not send to processor pipeline: {0}")]
     SendToProcessor(String),
+
+    #[error(transparent)]
+    SendToTask(#[from] SendError<RepairTaskCommand>),
 
     #[error("import ready channel broken")]
     Recv(#[from] RecvError),
