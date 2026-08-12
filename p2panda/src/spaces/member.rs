@@ -434,3 +434,128 @@ impl ProcessorHook<Event> for MemberAssociationHook {
         associate_members(self.my_node_id, &self.store, events).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_core::{Topic, VerifyingKey};
+    use p2panda_spaces::Config;
+    use p2panda_store::SqliteStore;
+    use p2panda_store::logs::LogStore;
+    use tokio::sync::mpsc;
+    use tokio_stream::StreamExt;
+
+    use crate::Credentials;
+    use crate::forge::OperationForge;
+    use crate::operation::Operation;
+    use crate::spaces::forge::member_log_id;
+
+    use super::{KeyBundleTask, KeyBundleTaskCommand};
+
+    async fn get_op_count(store: &SqliteStore, verifying_key: VerifyingKey) -> u32 {
+        let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_size(
+            store,
+            &verifying_key,
+            &member_log_id(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        result.map(|(op_count, _)| op_count).unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn ensure_key_bundle_after_spawn() {
+        setup_logging();
+
+        let credentials = Credentials::generate();
+        let store = SqliteStore::temporary().await;
+
+        let spaces_manager = {
+            let forge = OperationForge::new(credentials.clone(), store.clone());
+            crate::spaces::spaces_manager(
+                forge,
+                credentials.clone(),
+                store.clone(),
+                Config::default(),
+            )
+            .unwrap()
+        };
+
+        // 1. At start the member's log is empty.
+        assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 0);
+
+        // 2. We launch the background task and expect a first key bundle to be published
+        //    automatically in the member's log.
+        let _task = KeyBundleTask::spawn(spaces_manager.clone()).await;
+        assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
+
+        // 3. The key bundle exists and is valid. Calling "me" doesn't generate a new one.
+        let key_bundle = spaces_manager.me().await.unwrap();
+        assert!(key_bundle.verify().is_ok());
+        assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
+    }
+
+    #[tokio::test]
+    async fn inform_active_spaces_about_new_key_bundles() {
+        setup_logging();
+
+        let credentials = Credentials::generate();
+        let store = SqliteStore::temporary().await;
+
+        let spaces_manager = {
+            let forge = OperationForge::new(credentials.clone(), store.clone());
+            crate::spaces::spaces_manager(
+                forge,
+                credentials.clone(),
+                store.clone(),
+                // Key bundles should expire before our background task checks next.
+                Config {
+                    pre_key_lifetime: Duration::from_millis(2000),
+                    pre_key_rotate_after: Duration::from_millis(1000),
+                },
+            )
+            .unwrap()
+        };
+
+        // 1. Spawn background task and register a mock spaces stream to it. We don't expect this
+        //    stream to receive any key bundles yet as they were added _afterwards_.
+        let task =
+            KeyBundleTask::spawn_with_frequency(spaces_manager.clone(), Duration::from_millis(300))
+                .await;
+        let handle = task.command_handle();
+
+        let space_id = Topic::random();
+        let (import_tx, mut import_rx) = mpsc::channel(16);
+        let _ = handle.send(KeyBundleTaskCommand::AddStream(space_id.into(), import_tx));
+
+        assert!(import_rx.is_empty());
+        assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
+
+        // 2. Background task is going into next cycle which will cause generation of new key
+        //    bundle. We expect all currently active streams (in "live-mode") to be informed about
+        //    this update.
+        let (mut import_stream, _) = import_rx.recv().await.expect("import stream exists");
+        let operation = import_stream.next().await.expect("an operation was forged");
+
+        let member_msg = match operation
+            .header
+            .extensions
+            .spaces_args()
+            .expect("spaces args in header")
+        {
+            p2panda_spaces::SpacesArgs::Member(member) => member,
+            _ => panic!("expected spaces args to be of type 'member'"),
+        };
+        assert!(member_msg.verify().is_ok());
+
+        let expected_member_msg = spaces_manager.me().await.unwrap();
+        // Compare key-bundles since every member instance will be generated with a new signature
+        // and is therefore not equal.
+        assert_eq!(expected_member_msg.key_bundle(), member_msg.key_bundle());
+        assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 2);
+    }
+}
