@@ -18,7 +18,6 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
-use crate::spaces::{RepairError, RepairStrategy};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
 use crate::streams::local_stream::LocalStreamFuture;
@@ -37,12 +36,6 @@ pub(crate) type ImportLocalTx = mpsc::Sender<(
 )>;
 
 pub(crate) type ToOutputTx<M> = mpsc::Sender<Vec<ForwardEvent<M>>>;
-
-pub(crate) type RepairTx =
-    mpsc::Sender<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
-
-pub(crate) type RepairRx =
-    mpsc::Receiver<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>;
 
 /// Publish messages into a topic stream.
 ///
@@ -116,7 +109,6 @@ pub struct StreamPublisher<M> {
     import_external_tx: ImportExternalTx,
     pub(crate) import_local_tx: ImportLocalTx,
     pub(crate) to_output_tx: ToOutputTx<M>,
-    pub(crate) repair_tx: RepairTx,
     _guard: StreamDropGuard,
 }
 
@@ -133,7 +125,6 @@ where
         publish_tx: PublishTx<M>,
         import_external_tx: ImportExternalTx,
         import_local_tx: ImportLocalTx,
-        repair_tx: RepairTx,
         to_output_tx: ToOutputTx<M>,
         _guard: StreamDropGuard,
     ) -> Self {
@@ -144,7 +135,6 @@ where
             publish_tx,
             import_external_tx,
             import_local_tx,
-            repair_tx,
             to_output_tx,
             _guard,
         }

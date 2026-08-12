@@ -30,7 +30,7 @@ pub(crate) use event_stream::event_stream;
 pub use external_stream::ExternalStreamFuture;
 pub(crate) use local_stream::LocalStreamFuture;
 pub use publisher::{CloseError, ImportError, PublishError, PublishFuture, StreamPublisher};
-pub(crate) use publisher::{ImportLocalTx, RepairRx, ToOutputTx};
+pub(crate) use publisher::{ImportLocalTx, ToOutputTx};
 pub use replay::{ReplayError, StreamFrom};
 pub use stream::{ForwardEvent, ProcessedOperation, Source, StreamEvent};
 pub(crate) use stream::{processed_stream, to_stream_event, to_system_event};

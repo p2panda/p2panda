@@ -29,8 +29,8 @@ use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::{InnerSpaceEvent, SpacesManager};
-use crate::spaces::{GroupActor, InnerGroupEvent, spawn_repair_task, to_actors, to_members};
+use crate::spaces::types::InnerSpaceEvent;
+use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
@@ -106,7 +106,6 @@ pub(crate) async fn processed_stream<M>(
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
     forge: OperationForge,
-    spaces_manager: SpacesManager,
     pipeline: Pipeline,
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
@@ -159,18 +158,6 @@ where
     // If any other process wants to bring an stream event forward to the application layer ("output
     // stream"), this channel should be used.
     let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<ForwardEvent<M>>>(128);
-
-    let (repair_tx, repair_rx) = mpsc::channel(1);
-
-    // Task concerned with repairing a space.
-    let repair_task_handle = spawn_repair_task(
-        topic,
-        spaces_manager.clone(),
-        store.clone(),
-        import_local_tx.clone(),
-        to_output_tx.clone(),
-        repair_rx,
-    );
 
     // Create a cancellation token which is used to break out of the input and output event
     // processing tasks once all instances of the `StreamPublisher` and `StreamSubscription` have
@@ -428,9 +415,6 @@ where
 
                 let _ = to_output_tx.send(forward_events).await;
             }
-
-            // Abort the repair task.
-            repair_task_handle.abort();
         });
     }
 
@@ -442,7 +426,6 @@ where
         publish_tx,
         import_external_tx,
         import_local_tx,
-        repair_tx,
         to_output_tx,
         drop_guard.clone(),
     );

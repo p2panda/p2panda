@@ -29,9 +29,9 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, Group, GroupError, MEMBER_CONTROL_MESSAGE, Member, MemberError, Space,
-    SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
-    to_initial_members,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, MEMBER_CONTROL_MESSAGE,
+    Member, MemberError, RepairTask, Space, SpaceSubscription, actor_to_topic, group_log_id,
+    spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, ImportError, Pipeline, StreamFrom,
@@ -338,7 +338,6 @@ impl Node {
             sync_handle,
             self.store.clone(),
             self.forge.clone(),
-            self.spaces_manager.clone(),
             pipeline,
             self.events_tx.clone(),
             from,
@@ -558,7 +557,23 @@ impl Node {
             panic!();
         }
 
-        Ok(spaces_stream::<M>(inner, self.store.clone(), tx, rx))
+        // Spawn per-space repair background task.
+        let repair_task = RepairTask::spawn(
+            inner.id(),
+            self.spaces_manager.clone(),
+            self.store.clone(),
+            DEFAULT_REPAIR_STRATEGY,
+            tx.import_local_tx.clone(),
+            tx.to_output_tx.clone(),
+        );
+
+        Ok(spaces_stream::<M>(
+            inner,
+            self.store.clone(),
+            repair_task,
+            tx,
+            rx,
+        ))
     }
 
     pub async fn create_space<M>(
@@ -664,7 +679,17 @@ impl Node {
             .await?
             .expect("materialised space after processing operations");
 
-        let (space, rx) = spaces_stream::<M>(inner, self.store.clone(), tx, rx);
+        // Spawn per-space repair background task.
+        let repair_task = RepairTask::spawn(
+            inner.id(),
+            self.spaces_manager.clone(),
+            self.store.clone(),
+            DEFAULT_REPAIR_STRATEGY,
+            tx.import_local_tx.clone(),
+            tx.to_output_tx.clone(),
+        );
+
+        let (space, rx) = spaces_stream::<M>(inner, self.store.clone(), repair_task, tx, rx);
         Ok((space, rx))
     }
 

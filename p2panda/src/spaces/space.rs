@@ -20,14 +20,13 @@ use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use crate::operation::Extensions;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManagerError};
-use crate::spaces::{RepairError, RepairStrategy};
+use crate::spaces::{RepairError, RepairTask};
 use crate::streams::{
     CloseError, ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
     to_stream_event, to_system_event,
@@ -37,6 +36,7 @@ use crate::streams::{
 pub(crate) fn spaces_stream<M>(
     inner: InnerSpace,
     store: SqliteStore,
+    repair_task: RepairTask,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
 ) -> (Space<M>, SpaceSubscription<M>) {
@@ -44,6 +44,7 @@ pub(crate) fn spaces_stream<M>(
         Space {
             inner,
             store: SqliteSpacesStore::new(store),
+            repair_task,
             tx,
         },
         SpaceSubscription { rx },
@@ -57,6 +58,7 @@ pub(crate) fn spaces_stream<M>(
 pub struct Space<M> {
     inner: InnerSpace,
     store: SqliteSpacesStore<Extensions>,
+    repair_task: RepairTask,
     tx: StreamPublisher<M>,
 }
 
@@ -332,15 +334,8 @@ where
 
     /// Incorporate missing groups messages into the space, any resulting operations are published
     /// live into the space topic.
-    pub(crate) async fn repair(&self) -> Result<bool, RepairSpaceError> {
-        let (tx, rx) = oneshot::channel();
-
-        // TODO: Currently we default to merging all groups into the space state, once we do this
-        // selectively we can specify the groups to be included (root group + added / removed) using
-        // the RepairStrategy::Partial variant.
-        self.tx.repair_tx.send((RepairStrategy::Global, tx)).await?;
-
-        let repaired = rx.await??;
+    pub(crate) async fn repair(&self) -> Result<bool, RepairError> {
+        let repaired = self.repair_task.repair().await?;
         Ok(repaired)
     }
 }
@@ -395,7 +390,7 @@ pub enum AddSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairSpaceError),
+    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -418,7 +413,7 @@ pub enum RemoveSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairSpaceError),
+    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -442,7 +437,7 @@ pub enum PromoteSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairSpaceError),
+    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -466,7 +461,7 @@ pub enum DemoteSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairSpaceError),
+    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -518,22 +513,5 @@ pub enum PublishSpaceError {
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairSpaceError),
-}
-
-#[derive(Debug, Error)]
-#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
-pub enum RepairSpaceError {
-    #[error(transparent)]
-    Space(#[from] InnerSpaceError),
-
-    #[error(transparent)]
-    Repair(#[from] RepairError),
-
-    #[allow(clippy::type_complexity)]
-    #[error("failed to send on space repair task channel")]
-    Send(#[from] SendError<(RepairStrategy, oneshot::Sender<Result<bool, RepairError>>)>),
-
-    #[error("couldn't receive reply from repair task due to broken channel")]
-    Recv(#[from] RecvError),
+    RepairSpace(#[from] RepairError),
 }
