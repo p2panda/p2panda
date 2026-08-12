@@ -38,7 +38,8 @@ use crate::types::{
     EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
 use crate::utils::{
-    added_secret_members, removed_secret_members, secret_members, sort_members, typed_members,
+    added_secret_members, removed_members, removed_secret_members, secret_members, sort_members,
+    typed_members,
 };
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId, StrongRemoveResolver};
 
@@ -473,6 +474,16 @@ where
             &current_ancestors,
         );
 
+        // Record any individuals that were removed from the space.
+        for event in events.iter() {
+            if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
+                let removed = removed_members(&current_members, &context.members)
+                    .into_iter()
+                    .map(|(member, _)| member);
+                y.removed.extend(removed);
+            }
+        }
+
         events.extend(application_events);
 
         Ok(Some((y, events)))
@@ -778,6 +789,7 @@ where
                     group_id,
                     groups_y,
                     encryption_y,
+                    removed: Default::default(),
                 }
             }
         };
@@ -802,6 +814,18 @@ where
         let mut members = y.groups_y.members(y.group_id);
         sort_members(&mut members);
         Ok(members)
+    }
+
+    /// Returns all members who were removed from, and not re-admitted to, this space.
+    pub async fn removed(&self) -> Result<Vec<MemberId>, SpaceError<F, C>> {
+        let y = self.state().await?;
+        let mut members = y.groups_y.members(y.group_id).into_iter();
+        let removed = y
+            .removed
+            .iter()
+            .filter(|removed| members.any(|(member, _)| member != **removed))
+            .cloned();
+        Ok(removed.collect())
     }
 
     /// All actors (both groups and individuals) in the space.
@@ -997,6 +1021,10 @@ pub struct SpacesState<C> {
     pub group_id: VerifyingKey,
     pub groups_y: AuthGroupState<C>,
     pub encryption_y: EncryptionGroupState,
+
+    /// The set of all individuals who have ever been removed from the space, either via. direct
+    /// removal, or transitively as a member of a removed group.
+    pub removed: HashSet<MemberId>,
 }
 
 impl<C> SpacesState<C>
@@ -1010,6 +1038,7 @@ where
     ) -> Self {
         let space_id = space_y.space_id;
         let group_id = space_y.group_id;
+        let removed = space_y.removed.clone();
         let (groups_y, encryption_y) =
             space_y.assemble_encryption_state(key_manager_y, key_registry_y);
 
@@ -1018,6 +1047,7 @@ where
             group_id,
             groups_y,
             encryption_y,
+            removed,
         }
     }
 }
