@@ -1,21 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use futures_util::StreamExt;
-use mock_instant::thread_local::MockClock;
-use p2panda::Credentials;
-use p2panda::node::AckPolicy;
-use p2panda::operation::{Extensions, LogId, Operation};
-use p2panda::streams::{
-    EphemeralMessage, ProcessedOperation, StreamEvent, StreamFrom, SystemEvent,
-};
-use p2panda_core::cbor::encode_cbor;
-use p2panda_core::logs::LogHeights;
-use p2panda_core::test_utils::{TestLog, setup_logging};
-use p2panda_core::{Cursor, Hash, Topic};
-use p2panda_net::discovery::DiscoveryEvent;
-use p2panda_store::logs::LogStore;
-use tokio::task::JoinHandle;
-use tokio::time::{Duration, sleep};
+use p2panda::streams::StreamEvent;
+use p2panda_core::Hash;
 
 fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32) {
     let StreamEvent::ReplayStarted { total_operations } = event else {
@@ -37,618 +23,605 @@ fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash) {
     assert_eq!(operation.id(), id);
 }
 
-#[tokio::test]
-async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
-    // Default & instant setup.
-    let _node = p2panda::spawn().await?;
+mod api {
+    use std::time::Duration;
 
-    // Customizable "builder" setup flow.
-    let _node = p2panda::builder()
-        .database_url("sqlite::memory:")
-        .credentials(Credentials::generate())
-        .spawn()
-        .await?;
+    use mock_instant::thread_local::MockClock;
+    use p2panda::operation::{Extensions, LogId, Operation};
+    use p2panda::streams::{EphemeralMessage, ProcessedOperation, StreamEvent, SystemEvent};
+    use p2panda::{Credentials, Topic};
+    use p2panda_core::cbor::encode_cbor;
+    use p2panda_core::test_utils::{TestLog, setup_logging};
+    use p2panda_net::discovery::DiscoveryEvent;
+    use p2panda_store::logs::LogStore;
+    use tokio::task::JoinHandle;
+    use tokio_stream::StreamExt;
 
-    Ok(())
-}
+    #[tokio::test]
+    async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
+        // Default & instant setup.
+        let _node = p2panda::spawn().await?;
 
-#[tokio::test]
-async fn ephemeral_stream() {
-    let chat_id = Topic::random();
+        // Customizable "builder" setup flow.
+        let _node = p2panda::builder()
+            .database_url("sqlite::memory:")
+            .credentials(Credentials::generate())
+            .spawn()
+            .await?;
 
-    let panda = p2panda::spawn().await.unwrap();
-    let icebear = p2panda::spawn().await.unwrap();
-
-    // Panda joins the chat and sends a message to icebear, then waits for an answer.
-    let panda_task: JoinHandle<EphemeralMessage<String>> = {
-        let (tx, mut rx) = panda.ephemeral_stream(chat_id).await.unwrap();
-
-        tokio::spawn(async move {
-            tx.publish("Hello, Icebear!".into()).await.unwrap();
-            let message = rx.next().await.unwrap();
-            message
-        })
-    };
-
-    // Icebear joins the chat and waits for a message of panda, to then answer.
-    let icebear_task: JoinHandle<EphemeralMessage<String>> = {
-        let (tx, mut rx) = icebear.ephemeral_stream(chat_id).await.unwrap();
-
-        tokio::spawn(async move {
-            let message = rx.next().await.unwrap();
-            // Advance the clock to ensure icebear's message is published later than panda's.
-            MockClock::advance_system_time(Duration::from_secs(1));
-            tx.publish("Hi, Panda!".into()).await.unwrap();
-            message
-        })
-    };
-
-    let icebears_received_msg = icebear_task.await.unwrap();
-    let pandas_received_msg = panda_task.await.unwrap();
-
-    // Message authors match the senders.
-    assert_eq!(icebears_received_msg.author(), panda.id());
-    assert_eq!(pandas_received_msg.author(), icebear.id());
-
-    // Everyone received the right messages.
-    assert_eq!(icebears_received_msg.body(), &"Hello, Icebear!".to_string());
-    assert_eq!(pandas_received_msg.body(), &"Hi, Panda!".to_string());
-
-    // Icebear received the message before panda.
-    assert!(icebears_received_msg.timestamp() < pandas_received_msg.timestamp())
-}
-
-#[tokio::test]
-async fn eventually_consistent_stream() {
-    setup_logging();
-
-    let chat_id = Topic::random();
-
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
-
-    // Panda joins the chat and sends a message to icebear.
-    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
-    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-
-    // Icebear joins the chat and waits for a message of panda.
-    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-
-    let mut received: Option<ProcessedOperation<String>> = None;
-
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Processed { operation, .. } = event {
-            received = Some(operation);
-            break;
-        }
+        Ok(())
     }
 
-    let received = received.expect("icebear should have received operation");
-    assert_eq!(received.message(), &"Hello, Icebear!".to_string());
-    assert_eq!(received.author(), panda.id());
-}
+    #[tokio::test]
+    async fn ephemeral_stream() {
+        let chat_id = Topic::random();
 
-#[tokio::test]
-async fn event_stream() {
-    setup_logging();
+        let panda = p2panda::spawn().await.unwrap();
+        let icebear = p2panda::spawn().await.unwrap();
 
-    let chat_id = Topic::random();
+        // Panda joins the chat and sends a message to icebear, then waits for an answer.
+        let panda_task: JoinHandle<EphemeralMessage<String>> = {
+            let (tx, mut rx) = panda.ephemeral_stream(chat_id).await.unwrap();
 
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
+            tokio::spawn(async move {
+                tx.publish("Hello, Icebear!".into()).await.unwrap();
+                let message = rx.next().await.unwrap();
+                message
+            })
+        };
 
-    // Panda joins the chat and sends a message to icebear.
-    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
-    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+        // Icebear joins the chat and waits for a message of panda, to then answer.
+        let icebear_task: JoinHandle<EphemeralMessage<String>> = {
+            let (tx, mut rx) = icebear.ephemeral_stream(chat_id).await.unwrap();
 
-    // Icebear joins the chat.
-    let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+            tokio::spawn(async move {
+                let message = rx.next().await.unwrap();
+                // Advance the clock to ensure icebear's message is published later than panda's.
+                MockClock::advance_system_time(Duration::from_secs(1));
+                tx.publish("Hi, Panda!".into()).await.unwrap();
+                message
+            })
+        };
 
-    // Create a system event stream for panda.
-    let mut events = panda.event_stream().await.unwrap();
+        let icebears_received_msg = icebear_task.await.unwrap();
+        let pandas_received_msg = panda_task.await.unwrap();
 
-    let mut received_event = false;
+        // Message authors match the senders.
+        assert_eq!(icebears_received_msg.author(), panda.id());
+        assert_eq!(pandas_received_msg.author(), icebear.id());
 
-    // Wait for the first discovery session started event.
-    while let Some(event) = events.next().await {
-        if let SystemEvent::Discovery(DiscoveryEvent::SessionStarted { .. }) = event {
-            received_event = true;
-            break;
-        }
+        // Everyone received the right messages.
+        assert_eq!(icebears_received_msg.body(), &"Hello, Icebear!".to_string());
+        assert_eq!(pandas_received_msg.body(), &"Hi, Panda!".to_string());
+
+        // Icebear received the message before panda.
+        assert!(icebears_received_msg.timestamp() < pandas_received_msg.timestamp())
     }
 
-    assert!(received_event);
-}
+    #[tokio::test]
+    async fn eventually_consistent_stream() {
+        setup_logging();
 
-#[tokio::test]
-async fn log_prefix_pruning() {
-    setup_logging();
+        let chat_id = Topic::random();
 
-    let topic = Topic::random();
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
-
-    let (panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
-
-    // 1. Panda publishes 3 operations into their append-only log.
-    panda_tx.publish(1).await.unwrap();
-    panda_tx.publish(2).await.unwrap();
-    panda_tx.publish(3).await.unwrap();
-
-    // 2. Icebear joins the topic and starts syncing Panda's operations. Please note that due to
-    //    async behaviour we don't know how many operations Icebear will _exactly_ sync before
-    //    pruning takes place.
-    let (_, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
-
-    // 3. Panda prunes their log now and sets the last message to be "4".
-    let processing = panda_tx.prune(Some(4)).await.unwrap();
-
-    // We keep around the hash of the operation which pruned the log.
-    let hash = processing.hash();
-
-    // 4. Panda waits until their pruning operation was successfully processed in their local
-    //    processing pipeline.
-    let result = processing.await.unwrap();
-    assert!(result.is_completed());
-    assert!(!result.is_failed());
-
-    // 5. We wait until icebear processed the (from their perspective remotely incoming) pruning
-    //    operation as well.
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::Processed { operation, .. } = event {
-            assert!(operation.processed().is_completed());
-            assert!(!operation.processed().is_failed());
-
-            if operation.id() == hash {
-                break;
-            }
-        }
-    }
-
-    // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
-    let log_id = LogId::from_topic(topic);
-    let panda_result: Vec<(Operation, Vec<u8>)> = panda
-        .store()
-        .get_log_entries(&panda.id(), &log_id, None, None)
-        .await
-        .expect("no store failure")
-        .expect("result to be Some");
-    assert_eq!(panda_result.iter().count(), 1);
-
-    let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
-        .store()
-        .get_log_entries(&panda.id(), &log_id, None, None)
-        .await
-        .expect("no store failure")
-        .expect("result to be Some");
-    assert_eq!(icebear_result.iter().count(), 1);
-}
-
-#[tokio::test]
-async fn automatic_acking() {
-    setup_logging();
-
-    let topic = Topic::random();
-    let node = p2panda::builder().spawn().await.unwrap();
-
-    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
-
-    // Publish two messages into the stream.
-    let processing = tx.publish("first".into()).await.unwrap();
-    let message_id_1 = processing.hash();
-    processing.await.unwrap();
-
-    let processing = tx.publish("second".into()).await.unwrap();
-    let message_id_2 = processing.hash();
-    processing.await.unwrap();
-
-    // We except to receive them.
-    assert_message_id(&rx.next().await.unwrap(), message_id_1);
-    assert_message_id(&rx.next().await.unwrap(), message_id_2);
-
-    // Await graceful termination of the sync session.
-    let _ = tx.close().await;
-
-    drop(tx);
-    drop(rx);
-
-    // Create a new subscription.
-    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
-
-    // Publish one more message.
-    let processing = tx.publish("third".into()).await.unwrap();
-    let message_id_3 = processing.hash();
-    processing.await.unwrap();
-
-    // We expect to only receive the new, third message and not the previous two ones anymore.
-    assert_message_id(&rx.next().await.unwrap(), message_id_3);
-}
-
-#[tokio::test]
-async fn explicit_acking() {
-    setup_logging();
-
-    let topic = Topic::random();
-    let node = p2panda::builder()
-        .ack_policy(AckPolicy::Explicit)
-        .spawn()
-        .await
-        .unwrap();
-
-    let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
-
-    // Publish two messages into the stream.
-    let message_id_1 = {
-        let processing = tx.publish("first".into()).await.unwrap();
-        let id = processing.hash();
-        processing.await.unwrap();
-        id
-    };
-
-    let message_id_2 = {
-        let processing = tx.publish("second".into()).await.unwrap();
-        let id = processing.hash();
-        processing.await.unwrap();
-        id
-    };
-
-    // We except to receive them from the subscription stream.
-    assert_message_id(&rx.next().await.unwrap(), message_id_1);
-    assert_message_id(&rx.next().await.unwrap(), message_id_2);
-
-    // Acknowledge first message.
-    rx.ack(message_id_1).await.unwrap();
-
-    // Await graceful termination of the sync session.
-    let _ = tx.close().await;
-
-    drop(tx);
-    drop(rx);
-
-    // Create a new subscription, streaming from "acked frontier".
-    let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
-
-    // We except to receive only the un-acked messages from the subscription stream.
-    assert_replay_started(&rx.next().await.unwrap(), 1);
-    assert_message_id(&rx.next().await.unwrap(), message_id_2);
-    assert_replay_ended(&rx.next().await.unwrap());
-}
-
-#[tokio::test]
-async fn replay_stream_from_start() {
-    setup_logging();
-
-    let chat_id = Topic::random();
-
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
-
-    // Panda subscribes to chat and publishes one message.
-    {
+        // Panda joins the chat and sends a message to icebear.
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-        let _ = panda_tx.close().await;
-    }
 
-    // Panda subscribes again, this time asking to replay all messages from start.
-    let (_panda_tx, mut panda_rx) = panda
-        .stream_from::<String>(chat_id, StreamFrom::Start)
-        .await
-        .unwrap();
+        // Icebear joins the chat and waits for a message of panda.
+        let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 
-    // Icebear joins the chat and publishes one message.
-    let (icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-    icebear_tx.publish("Hello, Panda!".into()).await.unwrap();
+        let mut received: Option<ProcessedOperation<String>> = None;
 
-    // Panda should receive the first message they sent again, followed by Icebear's message which
-    // arrived via sync.
-    let mut received = vec![];
-
-    while let Some(event) = panda_rx.next().await {
-        if let StreamEvent::Processed { operation, .. } = event {
-            received.push(operation);
-            if received.len() == 2 {
+        while let Some(event) = icebear_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = event {
+                received = Some(operation);
                 break;
             }
         }
+
+        let received = received.expect("icebear should have received operation");
+        assert_eq!(received.message(), &"Hello, Icebear!".to_string());
+        assert_eq!(received.author(), panda.id());
     }
 
-    assert_eq!(received[0].message(), &"Hello, Icebear!".to_string());
-    assert_eq!(received[1].message(), &"Hello, Panda!".to_string());
-}
+    #[tokio::test]
+    async fn event_stream() {
+        setup_logging();
 
-#[tokio::test]
-async fn replay_stream_from_cursor() {
-    setup_logging();
+        let chat_id = Topic::random();
 
-    let topic = Topic::random();
-    let node = p2panda::builder().spawn().await.unwrap();
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let (tx, rx) = node.stream::<String>(topic).await.unwrap();
+        // Panda joins the chat and sends a message to icebear.
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
 
-    // Publish two messages into the stream.
-    let _message_id_1 = {
-        let processing = tx.publish("first".into()).await.unwrap();
-        let id = processing.hash();
-        processing.await.unwrap();
-        id
-    };
+        // Icebear joins the chat.
+        let (_icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 
-    let message_id_2 = {
-        let processing = tx.publish("second".into()).await.unwrap();
-        let id = processing.hash();
-        processing.await.unwrap();
-        id
-    };
+        // Create a system event stream for panda.
+        let mut events = panda.event_stream().await.unwrap();
 
-    let message_id_3 = {
-        let processing = tx.publish("third".into()).await.unwrap();
-        let id = processing.hash();
-        processing.await.unwrap();
-        id
-    };
+        let mut received_event = false;
 
-    // Await graceful termination of the sync session.
-    let _ = tx.close().await;
-
-    drop(tx);
-    drop(rx);
-
-    let mut cursor = Cursor::new(topic.to_string(), LogHeights::default());
-    cursor.advance(node.id(), LogId::from_topic(topic), 0); // seq_num = 0, the first message
-
-    // Force re-playing from custom cursor position with new stream subscription.
-    let (_tx, mut rx) = node
-        .stream_from::<String>(topic, StreamFrom::Cursor(cursor))
-        .await
-        .unwrap();
-
-    // We expect to only receive the second and third message.
-    assert_replay_started(&rx.next().await.unwrap(), 2);
-    assert_message_id(&rx.next().await.unwrap(), message_id_2);
-    assert_message_id(&rx.next().await.unwrap(), message_id_3);
-    assert_replay_ended(&rx.next().await.unwrap());
-}
-
-#[tokio::test]
-async fn import_external_stream() {
-    setup_logging();
-
-    let chat_id = Topic::random();
-
-    // Panda opens their app and publishes some messages into a chat.
-    let panda_log = TestLog::new();
-    let extensions = Extensions::from_topic(chat_id);
-
-    let operation_1 = panda_log.operation(
-        &encode_cbor(&"Hello, Icebear!").unwrap(),
-        extensions.clone(),
-    );
-    let operation_2 = panda_log.operation(
-        &encode_cbor(&"I'm in a remote place with no internet, it's really nice :-p").unwrap(),
-        extensions.clone(),
-    );
-    let operation_3 = panda_log.operation(
-        &encode_cbor(&"Gunna post these messages to you on an SD card yo!").unwrap(),
-        extensions,
-    );
-
-    // Panda exports messages to an SD card.
-    let exported = vec![
-        operation_1.clone(),
-        operation_2.clone(),
-        operation_3.clone(),
-    ];
-
-    // Panda goes offline and walks to the post office to send the SD card to Icebear.
-
-    // Icebear receives the SD card, opens their app and initiates import.
-    let import_stream = futures_util::stream::iter(exported);
-    let icebear = p2panda::builder().spawn().await.unwrap();
-    let (icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-    let import = icebear_tx.import(import_stream).await.unwrap();
-
-    assert_eq!(import.session_id(), 0);
-    assert!(import.await.is_ok());
-
-    // Icebear receives the new messages after they've been processed.
-    let mut imported = Vec::new();
-    let mut start_received = false;
-    let mut end_received = false;
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::ImportStarted { session_id } = &event {
-            assert!(!start_received);
-            assert_eq!(session_id, &0);
-            start_received = true;
-            continue;
-        };
-
-        if let StreamEvent::Processed { operation, .. } = &event {
-            assert!(start_received);
-            assert!(!end_received);
-            imported.push(operation.clone());
-            if imported.len() == 3 {
-                continue;
+        // Wait for the first discovery session started event.
+        while let Some(event) = events.next().await {
+            if let SystemEvent::Discovery(DiscoveryEvent::SessionStarted { .. }) = event {
+                received_event = true;
+                break;
             }
         }
 
-        if let StreamEvent::ImportEnded { session_id } = event {
-            assert!(start_received);
-            assert!(!end_received);
-            assert_eq!(session_id, 0);
-            end_received = true;
-            break;
-        };
+        assert!(received_event);
     }
 
-    assert!(start_received);
-    assert!(end_received);
-    assert_eq!(imported.len(), 3);
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_1.header().hash())
-    );
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_2.header().hash())
-    );
-    assert!(
-        imported
-            .iter()
-            .any(|event| event.id() == operation_3.header().hash())
-    );
-    assert!(end_received);
-}
+    #[tokio::test]
+    async fn log_prefix_pruning() {
+        setup_logging();
 
-#[tokio::test]
-async fn deduplicate_events() {
-    setup_logging();
+        let topic = Topic::random();
 
-    let chat_id = Topic::random();
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
+        let (panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
 
-    // Panda joins the chat.
-    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        // 1. Panda publishes 3 operations into their append-only log.
+        panda_tx.publish(1).await.unwrap();
+        panda_tx.publish(2).await.unwrap();
+        panda_tx.publish(3).await.unwrap();
 
-    // Icebear joins the chat and waits for a message of panda.
-    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+        // 2. Icebear joins the topic and starts syncing Panda's operations. Please note that due to
+        //    async behaviour we don't know how many operations Icebear will _exactly_ sync before
+        //    pruning takes place.
+        let (_, mut icebear_rx) = icebear.stream::<usize>(topic).await.unwrap();
 
-    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-    panda_tx
-        .publish("Hello, Icebear again!".into())
-        .await
-        .unwrap();
-    panda_tx
-        .publish("Hello, Icebear and again!".into())
-        .await
-        .unwrap();
+        // 3. Panda prunes their log now and sets the last message to be "4".
+        let processing = panda_tx.prune(Some(4)).await.unwrap();
 
-    let mut received = vec![];
+        // We keep around the hash of the operation which pruned the log.
+        let hash = processing.hash();
 
-    loop {
-        let event = icebear_rx.next().await.unwrap();
-        if let StreamEvent::SyncStarted { .. } = event {
-            break;
-        }
-    }
+        // 4. Panda waits until their pruning operation was successfully processed in their local
+        //    processing pipeline.
+        let result = processing.await.unwrap();
+        assert!(result.is_completed());
+        assert!(!result.is_failed());
 
-    loop {
-        tokio::select! {
-            Some(event) = icebear_rx.next() => {
-                if let StreamEvent::Processed { operation, .. } = event {
-                    received.push(operation);
+        // 5. We wait until icebear processed the (from their perspective remotely incoming) pruning
+        //    operation as well.
+        while let Some(event) = icebear_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = event {
+                assert!(operation.processed().is_completed());
+                assert!(!operation.processed().is_failed());
+
+                if operation.id() == hash {
+                    break;
                 }
             }
-            _ = sleep(Duration::from_secs(2)) => {
+        }
+
+        // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
+        let log_id = LogId::from_topic(topic);
+        let panda_result: Vec<(Operation, Vec<u8>)> = panda
+            .store()
+            .get_log_entries(&panda.id(), &log_id, None, None)
+            .await
+            .expect("no store failure")
+            .expect("result to be Some");
+        assert_eq!(panda_result.iter().count(), 1);
+
+        let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
+            .store()
+            .get_log_entries(&panda.id(), &log_id, None, None)
+            .await
+            .expect("no store failure")
+            .expect("result to be Some");
+        assert_eq!(icebear_result.iter().count(), 1);
+    }
+
+    #[tokio::test]
+    async fn import_external_stream() {
+        setup_logging();
+
+        let chat_id = Topic::random();
+
+        // Panda opens their app and publishes some messages into a chat.
+        let panda_log = TestLog::new();
+        let extensions = Extensions::from_topic(chat_id);
+
+        let operation_1 = panda_log.operation(
+            &encode_cbor(&"Hello, Icebear!").unwrap(),
+            extensions.clone(),
+        );
+        let operation_2 = panda_log.operation(
+            &encode_cbor(&"I'm in a remote place with no internet, it's really nice :-p").unwrap(),
+            extensions.clone(),
+        );
+        let operation_3 = panda_log.operation(
+            &encode_cbor(&"Gunna post these messages to you on an SD card yo!").unwrap(),
+            extensions,
+        );
+
+        // Panda exports messages to an SD card.
+        let exported = vec![
+            operation_1.clone(),
+            operation_2.clone(),
+            operation_3.clone(),
+        ];
+
+        // Panda goes offline and walks to the post office to send the SD card to Icebear.
+
+        // Icebear receives the SD card, opens their app and initiates import.
+        let import_stream = futures_util::stream::iter(exported);
+        let icebear = p2panda::builder().spawn().await.unwrap();
+        let (icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+        let import = icebear_tx.import(import_stream).await.unwrap();
+
+        assert_eq!(import.session_id(), 0);
+        assert!(import.await.is_ok());
+
+        // Icebear receives the new messages after they've been processed.
+        let mut imported = Vec::new();
+        let mut start_received = false;
+        let mut end_received = false;
+        while let Some(event) = icebear_rx.next().await {
+            if let StreamEvent::ImportStarted { session_id } = &event {
+                assert!(!start_received);
+                assert_eq!(session_id, &0);
+                start_received = true;
+                continue;
+            };
+
+            if let StreamEvent::Processed { operation, .. } = &event {
+                assert!(start_received);
+                assert!(!end_received);
+                imported.push(operation.clone());
+                if imported.len() == 3 {
+                    continue;
+                }
+            }
+
+            if let StreamEvent::ImportEnded { session_id } = event {
+                assert!(start_received);
+                assert!(!end_received);
+                assert_eq!(session_id, 0);
+                end_received = true;
+                break;
+            };
+        }
+
+        assert!(start_received);
+        assert!(end_received);
+        assert_eq!(imported.len(), 3);
+        assert!(
+            imported
+                .iter()
+                .any(|event| event.id() == operation_1.header().hash())
+        );
+        assert!(
+            imported
+                .iter()
+                .any(|event| event.id() == operation_2.header().hash())
+        );
+        assert!(
+            imported
+                .iter()
+                .any(|event| event.id() == operation_3.header().hash())
+        );
+        assert!(end_received);
+    }
+}
+
+mod event_replays {
+    use p2panda::node::AckPolicy;
+    use p2panda::operation::LogId;
+    use p2panda::streams::{StreamEvent, StreamFrom};
+    use p2panda_core::logs::LogHeights;
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_core::{Cursor, Topic};
+    use tokio_stream::StreamExt;
+
+    use super::{assert_message_id, assert_replay_ended, assert_replay_started};
+
+    #[tokio::test]
+    async fn automatic_acking() {
+        setup_logging();
+
+        let topic = Topic::random();
+        let node = p2panda::builder().spawn().await.unwrap();
+
+        let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+        // Publish two messages into the stream.
+        let processing = tx.publish("first".into()).await.unwrap();
+        let message_id_1 = processing.hash();
+        processing.await.unwrap();
+
+        let processing = tx.publish("second".into()).await.unwrap();
+        let message_id_2 = processing.hash();
+        processing.await.unwrap();
+
+        // We except to receive them.
+        assert_message_id(&rx.next().await.unwrap(), message_id_1);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
+
+        // Await graceful termination of the sync session.
+        let _ = tx.close().await;
+
+        drop(tx);
+        drop(rx);
+
+        // Create a new subscription.
+        let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+        // Publish one more message.
+        let processing = tx.publish("third".into()).await.unwrap();
+        let message_id_3 = processing.hash();
+        processing.await.unwrap();
+
+        // We expect to only receive the new, third message and not the previous two ones anymore.
+        assert_message_id(&rx.next().await.unwrap(), message_id_3);
+    }
+
+    #[tokio::test]
+    async fn explicit_acking() {
+        setup_logging();
+
+        let topic = Topic::random();
+        let node = p2panda::builder()
+            .ack_policy(AckPolicy::Explicit)
+            .spawn()
+            .await
+            .unwrap();
+
+        let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+        // Publish two messages into the stream.
+        let message_id_1 = {
+            let processing = tx.publish("first".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        let message_id_2 = {
+            let processing = tx.publish("second".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        // We except to receive them from the subscription stream.
+        assert_message_id(&rx.next().await.unwrap(), message_id_1);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
+
+        // Acknowledge first message.
+        rx.ack(message_id_1).await.unwrap();
+
+        // Await graceful termination of the sync session.
+        let _ = tx.close().await;
+
+        drop(tx);
+        drop(rx);
+
+        // Create a new subscription, streaming from "acked frontier".
+        let (_tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+        // We except to receive only the un-acked messages from the subscription stream.
+        assert_replay_started(&rx.next().await.unwrap(), 1);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
+        assert_replay_ended(&rx.next().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn replay_stream_from_start() {
+        setup_logging();
+
+        let chat_id = Topic::random();
+
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
+
+        // Panda subscribes to chat and publishes one message.
+        {
+            let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+            panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+            let _ = panda_tx.close().await;
+        }
+
+        // Panda subscribes again, this time asking to replay all messages from start.
+        let (_panda_tx, mut panda_rx) = panda
+            .stream_from::<String>(chat_id, StreamFrom::Start)
+            .await
+            .unwrap();
+
+        // Icebear joins the chat and publishes one message.
+        let (icebear_tx, _icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+        icebear_tx.publish("Hello, Panda!".into()).await.unwrap();
+
+        // Panda should receive the first message they sent again, followed by Icebear's message which
+        // arrived via sync.
+        let mut received = vec![];
+
+        while let Some(event) = panda_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = event {
+                received.push(operation);
+                if received.len() == 2 {
+                    break;
+                }
+            }
+        }
+
+        assert_eq!(received[0].message(), &"Hello, Icebear!".to_string());
+        assert_eq!(received[1].message(), &"Hello, Panda!".to_string());
+    }
+
+    #[tokio::test]
+    async fn replay_stream_from_cursor() {
+        setup_logging();
+
+        let topic = Topic::random();
+        let node = p2panda::builder().spawn().await.unwrap();
+
+        let (tx, rx) = node.stream::<String>(topic).await.unwrap();
+
+        // Publish two messages into the stream.
+        let _message_id_1 = {
+            let processing = tx.publish("first".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        let message_id_2 = {
+            let processing = tx.publish("second".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        let message_id_3 = {
+            let processing = tx.publish("third".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        // Await graceful termination of the sync session.
+        let _ = tx.close().await;
+
+        drop(tx);
+        drop(rx);
+
+        let mut cursor = Cursor::new(topic.to_string(), LogHeights::default());
+        cursor.advance(node.id(), LogId::from_topic(topic), 0); // seq_num = 0, the first message
+
+        // Force re-playing from custom cursor position with new stream subscription.
+        let (_tx, mut rx) = node
+            .stream_from::<String>(topic, StreamFrom::Cursor(cursor))
+            .await
+            .unwrap();
+
+        // We expect to only receive the second and third message.
+        assert_replay_started(&rx.next().await.unwrap(), 2);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
+        assert_message_id(&rx.next().await.unwrap(), message_id_3);
+        assert_replay_ended(&rx.next().await.unwrap());
+    }
+}
+
+mod shutdown {
+    use std::time::Duration;
+
+    use p2panda::Topic;
+    use p2panda::streams::StreamEvent;
+    use p2panda_core::test_utils::setup_logging;
+    use tokio_stream::StreamExt;
+
+    #[tokio::test]
+    async fn sync_is_closed_on_drop() {
+        setup_logging();
+
+        let chat_id = Topic::random();
+
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
+
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
+
+        let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+        let mut sync_started = false;
+
+        while let Some(event) = icebear_rx.next().await {
+            if let StreamEvent::SyncStarted { .. } = event {
+                sync_started = true;
                 break;
             }
         }
-    }
+        assert!(sync_started);
 
-    assert_eq!(received.len(), 3);
-}
+        // Await graceful termination of the sync session.
+        let _ = _icebear_tx.close().await;
 
-#[tokio::test]
-async fn sync_is_closed_on_drop() {
-    setup_logging();
+        // Sync session should be terminated once both stream handles have been dropped.
+        drop(_icebear_tx);
+        drop(icebear_rx);
 
-    let chat_id = Topic::random();
+        // Resubscribe to the same topic.
+        let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
+        let mut sync_started_again = false;
 
-    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
-    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-
-    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-
-    let mut sync_started = false;
-
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::SyncStarted { .. } = event {
-            sync_started = true;
-            break;
+        // Assert that a new sync session has started.
+        //
+        // This serves to ensure that the initial sync session for this topic was terminated once
+        // icebear's stream handles were dropped.
+        while let Some(event) = icebear_rx.next().await {
+            if let StreamEvent::SyncStarted { .. } = event {
+                sync_started_again = true;
+                break;
+            }
         }
+        assert!(sync_started_again);
     }
-    assert!(sync_started);
 
-    // Await graceful termination of the sync session.
-    let _ = _icebear_tx.close().await;
+    #[tokio::test]
+    async fn graceful_closure_of_publisher() {
+        setup_logging();
 
-    // Sync session should be terminated once both stream handles have been dropped.
-    drop(_icebear_tx);
-    drop(icebear_rx);
+        let chat_id = Topic::random();
 
-    // Resubscribe to the same topic.
-    let (_icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let icebear = p2panda::builder().spawn().await.unwrap();
 
-    let mut sync_started_again = false;
+        let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
 
-    // Assert that a new sync session has started.
-    //
-    // This serves to ensure that the initial sync session for this topic was terminated once
-    // icebear's stream handles were dropped.
-    while let Some(event) = icebear_rx.next().await {
-        if let StreamEvent::SyncStarted { .. } = event {
-            sync_started_again = true;
-            break;
-        }
+        let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+        // Sync session should be terminated once both stream handles have been dropped.
+        drop(icebear_tx);
+        drop(icebear_rx);
+
+        // TODO: known flaky assertion: https://github.com/p2panda/p2panda/issues/1320
+        //
+        // // Attempting to create a new stream for the same topic will return an error because the
+        // // cleanup initated by dropping the publisher and subscriber has not yet completed.
+        // assert!(icebear.stream::<String>(chat_id).await.is_err());
+
+        // Briefly sleep to await cleanup.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
+
+        // Gracefully close the publisher, awaiting termination.
+        let _ = icebear_tx.close().await;
+
+        drop(icebear_tx);
+        drop(icebear_rx);
+
+        // The stream can now be successfully created immediately after drop.
+        //
+        // This serves to illustrate that there is nothing problematic about explicitly closing the
+        // publisher and then dropping the stream; the underlying sync handle implementation
+        // deduplicates the `Close` message that is sent to the sync session actor.
+        let stream_result = icebear.stream::<String>(chat_id).await;
+        assert!(stream_result.is_ok());
+
+        let (icebear_tx, _icebear_rx) = stream_result.unwrap();
+
+        // Gracefully close the publisher, awaiting termination.
+        let _ = icebear_tx.close().await;
+
+        // The stream can now be successfully created immediately after calling close.
+        assert!(icebear.stream::<String>(chat_id).await.is_ok());
     }
-    assert!(sync_started_again);
-}
-
-#[tokio::test]
-async fn graceful_closure_of_publisher() {
-    setup_logging();
-
-    let chat_id = Topic::random();
-
-    let panda = p2panda::builder().spawn().await.unwrap();
-    let icebear = p2panda::builder().spawn().await.unwrap();
-
-    let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
-    panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
-
-    let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-
-    // Sync session should be terminated once both stream handles have been dropped.
-    drop(icebear_tx);
-    drop(icebear_rx);
-
-    // TODO: known flaky assertion: https://github.com/p2panda/p2panda/issues/1320
-    // // Attempting to create a new stream for the same topic will return an error because the
-    // // cleanup initated by dropping the publisher and subscriber has not yet completed.
-    // assert!(icebear.stream::<String>(chat_id).await.is_err());
-
-    // Briefly sleep to await cleanup.
-    sleep(Duration::from_millis(50)).await;
-
-    let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
-
-    // Gracefully close the publisher, awaiting termination.
-    let _ = icebear_tx.close().await;
-
-    drop(icebear_tx);
-    drop(icebear_rx);
-
-    // The stream can now be successfully created immediately after drop.
-    //
-    // This serves to illustrate that there is nothing problematic about explicitly closing the
-    // publisher and then dropping the stream; the underlying sync handle implementation
-    // deduplicates the `Close` message that is sent to the sync session actor.
-    let stream_result = icebear.stream::<String>(chat_id).await;
-    assert!(stream_result.is_ok());
-
-    let (icebear_tx, _icebear_rx) = stream_result.unwrap();
-
-    // Gracefully close the publisher, awaiting termination.
-    let _ = icebear_tx.close().await;
-
-    // The stream can now be successfully created immediately after calling close.
-    assert!(icebear.stream::<String>(chat_id).await.is_ok());
 }
