@@ -31,9 +31,10 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask, Member,
-    MemberAssociationHook, MemberError, RepairTask, Space, SpaceSubscription, actor_to_topic,
-    group_log_id, member_log_id, spaces_manager, spaces_stream, to_initial_members,
+    AccessLevel, ActorId, ConnectionAuthoriserHook, DEFAULT_REPAIR_STRATEGY, Group, GroupError,
+    KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space,
+    SpaceSubscription, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -564,6 +565,16 @@ impl Node {
             // messages.
             .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
 
+        // Populate the connection authoriser block-list based on members who were removed from,
+        // and not later re-admitted to, the space. It is possible this is the first time
+        // subscribing to the space in which case there is no state to query yet. For this reason
+        // we ignore errors and fallback to a default empty vec.
+        let removed = inner.removed().await.ok().unwrap_or_default();
+        for node in removed {
+            self.connection_authoriser
+                .topic_block(node, space_id.into())
+                .await;
+        }
         let (tx, rx) = self.space_stream_from_inner(space_id, from).await?;
 
         // Spawn per-space repair background task.
@@ -574,6 +585,7 @@ impl Node {
             DEFAULT_REPAIR_STRATEGY,
             tx.import_local_tx.clone(),
             tx.to_output_tx.clone(),
+            self.connection_authoriser.clone(),
         );
 
         Ok(spaces_stream::<M>(
@@ -583,6 +595,7 @@ impl Node {
             self.key_bundle_task.command_handle(),
             tx,
             rx,
+            self.connection_authoriser.clone(),
         ))
     }
 
@@ -595,6 +608,9 @@ impl Node {
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let mut post_pipeline = ProcessorHooksList::new();
+        post_pipeline.push(ConnectionAuthoriserHook::new(
+            self.connection_authoriser.clone(),
+        ));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
 
         self.stream_from_inner(topic, from, post_pipeline).await
@@ -693,6 +709,7 @@ impl Node {
             DEFAULT_REPAIR_STRATEGY,
             tx.import_local_tx.clone(),
             tx.to_output_tx.clone(),
+            self.connection_authoriser.clone(),
         );
 
         let (space, rx) = spaces_stream::<M>(
@@ -702,6 +719,7 @@ impl Node {
             self.key_bundle_task.command_handle(),
             tx,
             rx,
+            self.connection_authoriser.clone(),
         );
 
         Ok((space, rx))

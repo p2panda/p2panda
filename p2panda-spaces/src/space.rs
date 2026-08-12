@@ -477,6 +477,11 @@ where
         // Record any individuals that were removed from the space.
         for event in events.iter() {
             if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
+                // We accumulate all members who were ever removed from a space here. If only the
+                // diff was used, it would be harder for consumers to implement block patterns
+                // based on this field as information about historic removals would be lost. To
+                // account for re-adds the current membership of the group can be compared against
+                // the remove list.
                 let removed = removed_members(&current_members, &context.members)
                     .into_iter()
                     .map(|(member, _)| member);
@@ -1022,7 +1027,7 @@ pub struct SpacesState<C> {
     pub groups_y: AuthGroupState<C>,
     pub encryption_y: EncryptionGroupState,
 
-    /// The set of all individuals who have ever been removed from the space, either via. direct
+    /// The set of all individuals who have ever been removed from the space, either via direct
     /// removal, or transitively as a member of a removed group.
     pub removed: HashSet<MemberId>,
 }
