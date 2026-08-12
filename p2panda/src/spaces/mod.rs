@@ -10,6 +10,7 @@ pub(crate) mod types;
 
 use p2panda_auth::Access;
 use p2panda_core::Topic;
+use p2panda_spaces::Config;
 use p2panda_store::SqliteStore;
 
 // Re-export useful types.
@@ -42,6 +43,7 @@ pub fn spaces_manager(
     forge: OperationForge,
     credentials: Credentials,
     store: SqliteStore,
+    config: Config,
 ) -> Result<SpacesManager, SpacesManagerError> {
     use p2panda_encryption::Rng;
 
@@ -50,7 +52,7 @@ pub fn spaces_manager(
     let rng = Rng::default();
     let spaces_store = SpacesStore::new(store.clone());
 
-    SpacesManager::new(spaces_store, forge, (&credentials).into(), rng)
+    SpacesManager::new_with_config(spaces_store, forge, (&credentials).into(), config, rng)
 }
 
 pub(crate) fn actor_to_topic(actor_id: impl Into<ActorId>) -> Topic {

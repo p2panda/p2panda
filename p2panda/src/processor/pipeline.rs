@@ -427,6 +427,7 @@ mod tests {
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
     use p2panda_core::{Hash, PruneFlag, SigningKey, Topic};
+    use p2panda_spaces::Config;
     use p2panda_store::SqliteStore;
     use p2panda_stream::hooks::ProcessorHooksList;
     use p2panda_stream::orderer::{OrdererArgs, OrdererResult};
@@ -448,7 +449,8 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
+        let spaces_manager =
+            spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
         let pipeline = Pipeline::<LogId, (), Topic>::new(
@@ -507,7 +509,8 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
+        let spaces_manager =
+            spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
         let pipeline = Pipeline::<LogId, (), Topic>::new(
@@ -567,7 +570,8 @@ mod tests {
         let tasks = TaskTracker::new();
         let credentials = Credentials::generate();
         let forge = OperationForge::new(credentials.clone(), store.clone());
-        let spaces_manager = spaces_manager(forge, credentials, store.clone()).unwrap();
+        let spaces_manager =
+            spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
 
         let pipeline_id = Hash::from([0; 32]);
         let pipeline = Pipeline::<LogId, (), Topic>::new(
