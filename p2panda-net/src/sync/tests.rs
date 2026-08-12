@@ -21,7 +21,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
-use crate::authoriser::Authoriser;
+use crate::connection_authoriser::ConnectionAuthoriser;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
@@ -63,7 +63,7 @@ impl FailingNode {
             .unwrap();
 
         let thread_pool = ThreadLocalActorSpawner::new();
-        let authoriser = Authoriser::default();
+        let connection_authoriser = ConnectionAuthoriser::default();
         let (sync_ref, _) =
             SyncManager::<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>::spawn(
                 None,
@@ -72,7 +72,7 @@ impl FailingNode {
                     sync_args,
                     endpoint,
                     gossip,
-                    authoriser.clone(),
+                    connection_authoriser.clone(),
                 ),
                 thread_pool,
             )
