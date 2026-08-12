@@ -1,5 +1,44 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Members who are part of an encrypted space.
+//!
+//! They are authors who can publish application messages into a space (when they have "write"
+//! access) and / or decrypt incoming ones (when they have "read" access).
+//!
+//! Every member is identified by its verification key (Ed25519). For initial key-agreement we
+//! internally use Signal's X3DH which requires an additional identity key (xEdDSA) and a pre-key
+//! (X25519).
+//!
+//! ## Key bundles
+//!
+//! Key bundles are used across all spaces to add a member or inform them about a new group secret
+//! for the first time. This means that _any_ current member of a group which introduces the first
+//! or a new group secret (via a CREATE, REMOVE or UPDATE) needs to have everyone else's key bundles
+//! available if these two members have never exchanged any secrets yet.
+//!
+//! NOTE: This rule currently applies to each space separately, we are currently looking into
+//! sharing this "two party" / X3DH key agreement state across all spaces, so we only need to do an
+//! initial key agreement with a key bundle _once_ per pair of members across all spaces.
+//!
+//! See related issue: <https://github.com/p2panda/p2panda/issues/1346>
+//!
+//! ## Exchanging key bundles
+//!
+//! The pre-key is published in form of a key bundle in the member's own log. This log is dedicated
+//! to only these kinds of messages.
+//!
+//! Alternatively they can also be shared "offchain" in a side-channel, for example via a QR code
+//! etc. to increase privacy.
+//!
+//! ## Expiring key bundles
+//!
+//! Key bundles expire after a configured number of days and need to be renewed for forward secrecy.
+//! All connected spaces have to be able to sync the new key bundles.
+//!
+//! ## Space association
+//!
+//! Since this log is maintained independent of a particular space we need to explicitly associate
+//! it when the space starts to depend on the member's key bundles.
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -96,15 +135,13 @@ impl From<GroupActor> for ActorId {
 }
 
 #[derive(Debug, Error)]
-pub enum MemberError {
-    #[error(transparent)]
-    Manager(#[from] SpacesManagerError),
-}
+#[error(transparent)]
+pub struct MemberError(#[from] SpacesManagerError);
 
 pub type KeyBundleTaskSender = mpsc::UnboundedSender<KeyBundleTaskCommand>;
 
-/// Background task to automatically publish a new member message into all registered space streams if
-/// the associated key bundle is about to expire.
+/// Background task to automatically publish a new member message into all currently active space
+/// streams if the associated key bundle is about to expire.
 #[derive(Clone, Debug)]
 pub struct KeyBundleTask {
     tx: KeyBundleTaskSender,
@@ -131,7 +168,7 @@ impl KeyBundleTask {
         Self { tx }
     }
 
-    /// Use the returned sender to add and remove space streams.
+    /// Use the returned sender to add and remove active space streams.
     pub fn command_handle(&self) -> KeyBundleTaskSender {
         self.tx.clone()
     }
@@ -144,6 +181,10 @@ pub enum KeyBundleTaskCommand {
     ///
     /// The task will automatically publish "member" messages with the newly generated key bundle
     /// into each stream in the list when the current key bundle is about to expire.
+    ///
+    /// This allows currently connected nodes to directly receive these messages in "live-mode" as
+    /// they get eagerly pushed towards them. Offline nodes will pick them up later as part of the
+    /// regular sync protocol.
     AddStream(SpaceId, ImportLocalTx),
 
     /// Remove inactive / closed stream from the list.
