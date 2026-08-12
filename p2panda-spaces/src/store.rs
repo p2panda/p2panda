@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use p2panda_encryption::data_scheme::SecretBundleState;
 use p2panda_encryption::data_scheme::dcgka::DcgkaState;
@@ -34,6 +34,7 @@ pub struct SpacesStoreState<C> {
     // TODO: Verify if this really required here? Maybe ordering is handled on another layer.
     pub orderer: EncryptionOrdererState,
     pub two_party: HashMap<MemberId, TwoPartyState<LongTermKeyBundle>>,
+    pub removed: HashSet<MemberId>,
 }
 
 impl<C> SpacesStoreState<C> {
@@ -75,6 +76,7 @@ impl<C> From<SpacesState<C>> for SpacesStoreState<C> {
             secrets: y.encryption_y.secrets,
             orderer: y.encryption_y.orderer,
             two_party: y.encryption_y.dcgka.two_party,
+            removed: y.removed,
         }
     }
 }
