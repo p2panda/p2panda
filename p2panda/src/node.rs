@@ -67,7 +67,12 @@ impl Node {
     /// failure.
     pub async fn spawn() -> Result<Self, SpawnError> {
         // Initialises an in-memory SQLite database.
-        let store = SqliteStoreBuilder::memory().build().await?;
+        let store = SqliteStoreBuilder::memory()
+            // TODO: Temp fix required due to following issue:
+            // https://github.com/p2panda/p2panda/issues/1302
+            .max_connections(16)
+            .build()
+            .await?;
 
         // Generate random keys.
         let credentials = Credentials::generate();
