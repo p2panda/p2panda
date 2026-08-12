@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
-use p2panda_net::authoriser::Authoriser;
+use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
@@ -54,7 +54,7 @@ pub struct Node {
     spaces_manager: SpacesManager,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
-    authoriser: Authoriser,
+    connection_authoriser: ConnectionAuthoriser,
 }
 
 impl Node {
@@ -93,14 +93,14 @@ impl Node {
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
-        let authoriser = Authoriser::new();
-        authoriser.permissive().await;
+        let connection_authoriser = ConnectionAuthoriser::new();
+        connection_authoriser.permissive().await;
 
         let network = Network::spawn(
             config.network.clone(),
             credentials.node_signing_key(),
             store.clone(),
-            authoriser.clone(),
+            connection_authoriser.clone(),
         )
         .await?;
 
@@ -122,7 +122,7 @@ impl Node {
             spaces_manager,
             events_tx,
             events_rx: Mutex::new(events_rx),
-            authoriser,
+            connection_authoriser,
         })
     }
 
@@ -392,7 +392,7 @@ impl Node {
     pub async fn event_stream(
         &self,
     ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
-        let authoriser_events = self.authoriser.events().await;
+        let connection_authoriser_events = self.connection_authoriser.events().await;
 
         let discovery_events = self
             .network
@@ -403,7 +403,11 @@ impl Node {
 
         let events_rx = self.resubscribe_event_stream();
 
-        Ok(event_stream(events_rx, authoriser_events, discovery_events))
+        Ok(event_stream(
+            events_rx,
+            connection_authoriser_events,
+            discovery_events,
+        ))
     }
 
     fn resubscribe_event_stream(&self) -> broadcast::Receiver<SystemEvent> {
@@ -762,7 +766,7 @@ impl Node {
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn block(&self, node_id: NodeId) {
-        self.authoriser.block(node_id).await;
+        self.connection_authoriser.block(node_id).await;
     }
 
     /// Blocks all connection attempts with the given node for a single topic.
@@ -770,7 +774,7 @@ impl Node {
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn topic_block(&self, node_id: NodeId, topic: Topic) {
-        self.authoriser.topic_block(node_id, topic).await;
+        self.connection_authoriser.topic_block(node_id, topic).await;
     }
 }
 

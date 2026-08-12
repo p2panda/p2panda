@@ -20,8 +20,10 @@ use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
-use crate::authoriser::{Authoriser, AuthoriserError, AuthoriserEvent};
 use crate::codec::{into_codec_sink, into_codec_stream};
+use crate::connection_authoriser::{
+    ConnectionAuthoriser, ConnectionAuthoriserError, ConnectionAuthoriserEvent,
+};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{ToTopicManager, TopicManager};
@@ -106,7 +108,7 @@ where
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
-    authoriser: Authoriser,
+    connection_authoriser: ConnectionAuthoriser,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
@@ -235,14 +237,14 @@ where
 
     type Msg = ToSyncManager<M::Message, M::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, Authoriser);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, ConnectionAuthoriser);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip, authoriser) = args;
+        let (protocol_id, sync_args, endpoint, gossip, connection_authoriser) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -258,7 +260,7 @@ where
             protocol_id,
             endpoint,
             gossip,
-            authoriser,
+            connection_authoriser,
             gossip_handles,
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
@@ -301,7 +303,7 @@ where
                     .accept(
                         state.protocol_id.clone(),
                         SyncProtocolHandler {
-                            authoriser: state.authoriser.clone(),
+                            connection_authoriser: state.connection_authoriser.clone(),
                             stream_ref: myself.clone(),
                         },
                     )
@@ -403,21 +405,25 @@ where
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
                 // Authorise that we should be connecting on this topic with the remote node.
-                if state.authoriser.can_connect_on_topic(node_id, topic).await {
+                if state
+                    .connection_authoriser
+                    .can_connect_on_topic(node_id, topic)
+                    .await
+                {
                     state
-                        .authoriser
-                        .send_event(AuthoriserEvent::TopicAllowed {
+                        .connection_authoriser
+                        .send_event(ConnectionAuthoriserEvent::TopicAllowed {
                             topic,
                             node: node_id,
                         })
                         .await;
                 } else {
-                    let event = AuthoriserEvent::TopicBlocked {
+                    let event = ConnectionAuthoriserEvent::TopicBlocked {
                         topic,
                         node: node_id,
                     };
                     warn!("{}", event);
-                    state.authoriser.send_event(event).await;
+                    state.connection_authoriser.send_event(event).await;
 
                     // Do not initiate a sync session with a blocked topic-node combination.
                     return Ok(());
@@ -536,7 +542,7 @@ where
     M: Send + 'static,
     E: Send + 'static,
 {
-    authoriser: Authoriser,
+    connection_authoriser: ConnectionAuthoriser,
     stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
@@ -584,7 +590,10 @@ where
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
-        let allow = self.authoriser.can_connect_on_topic(node_id, topic).await;
+        let allow = self
+            .connection_authoriser
+            .can_connect_on_topic(node_id, topic)
+            .await;
 
         if !allow {
             warn!(
@@ -594,7 +603,7 @@ where
             );
             connection.close(VarInt::from_u32(0), b"not authorised");
             return Err(iroh::protocol::AcceptError::from_err(
-                AuthoriserError::NotAuthorised,
+                ConnectionAuthoriserError::NotAuthorised,
             ));
         }
 

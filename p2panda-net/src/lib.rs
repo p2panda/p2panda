@@ -235,9 +235,9 @@
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;
-#[cfg(feature = "iroh_endpoint")]
-pub mod authoriser;
 pub mod codec;
+#[cfg(feature = "iroh_endpoint")]
+pub mod connection_authoriser;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]

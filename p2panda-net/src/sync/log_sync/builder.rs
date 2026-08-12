@@ -9,7 +9,7 @@ use p2panda_store::topics::TopicStore;
 use p2panda_sync::manager::TopicSyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
-use crate::authoriser::Authoriser;
+use crate::connection_authoriser::ConnectionAuthoriser;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
@@ -28,7 +28,7 @@ where
     store: S,
     endpoint: Endpoint,
     gossip: Gossip,
-    authoriser: Authoriser,
+    connection_authoriser: ConnectionAuthoriser,
     _marker: PhantomData<(L, E)>,
 }
 
@@ -43,18 +43,18 @@ where
     E: Extensions + Send + 'static,
 {
     pub fn new(store: S, endpoint: Endpoint, gossip: Gossip) -> Self {
-        let authoriser = Authoriser::new();
+        let connection_authoriser = ConnectionAuthoriser::new();
         Self {
             store,
             endpoint,
             gossip,
-            authoriser,
+            connection_authoriser,
             _marker: PhantomData,
         }
     }
 
-    pub fn authoriser(mut self, authoriser: Authoriser) -> Self {
-        self.authoriser = authoriser;
+    pub fn connection_authoriser(mut self, connection_authoriser: ConnectionAuthoriser) -> Self {
+        self.connection_authoriser = connection_authoriser;
         self
     }
 
@@ -67,7 +67,7 @@ where
                 self.store,
                 self.endpoint,
                 self.gossip,
-                self.authoriser,
+                self.connection_authoriser,
             );
 
             SyncManager::<TopicSyncManager<Topic, S, L, E>>::spawn(None, args, thread_pool).await?
