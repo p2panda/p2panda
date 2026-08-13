@@ -659,12 +659,14 @@ mod connection_authorisation {
 
         let mut received_event = false;
 
-        // The discovery system should try and initiate a connection to Icebear.
-        // We expect the connection establishment to be blocked.
+        // The discovery system will result in a connection attempt.
+        // Regardless of whether panda is the initiator or acceptor,
+        // we expect the connection establishment to be blocked.
         while let Some(event) = events.next().await {
-            if let SystemEvent::ConnectionAuthoriser(
-                ConnectionAuthoriserEvent::ConnectionBlocked { node },
-            ) = event
+            if let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::Blocked {
+                node,
+                role: _,
+            }) = event
             {
                 assert_eq!(node, icebear.id());
                 received_event = true;
