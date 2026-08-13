@@ -1124,3 +1124,108 @@ mod filtered_messages {
         }
     }
 }
+
+mod members {
+    use p2panda::Topic;
+    use p2panda::streams::StreamEvent;
+    use p2panda_auth::AccessLevel;
+    use p2panda_core::test_utils::setup_logging;
+    use tokio_stream::StreamExt;
+
+    // 1. Node A creates space S with {A, B, C, D} inside
+    // 2. Node B removes C from S
+    //
+    // Node B needs to inform A & D about the new secret after removing C and needs a key bundle of
+    // D to do that. If all member logs are correctly associated, B should have received it
+    // indirectly via A.
+    #[tokio::test]
+    async fn indirect_members_log_sync() {
+        setup_logging();
+
+        let topic = Topic::random();
+
+        let node_a = p2panda::spawn().await.unwrap();
+        let node_b = p2panda::spawn().await.unwrap();
+        let node_c = p2panda::spawn().await.unwrap();
+        let node_d = p2panda::spawn().await.unwrap();
+
+        let (node_a_space, mut node_a_rx) = node_a.create_space::<String>(topic).await.unwrap();
+
+        // Nodes C and D come online to sync their member logs with A. Node A will from now on
+        // "carry" their logs. We will shut down C and D directly afterwards to make sure this is
+        // ensured and A stays the only source of C or D's key bundle in the network.
+        let (node_c_space, node_c_rx) = node_c.space::<String>(topic).await.unwrap();
+        let (node_d_space, node_d_rx) = node_d.space::<String>(topic).await.unwrap();
+
+        let mut required_key_bundles = vec![node_c.id(), node_d.id()];
+
+        while let Some(event) = node_a_rx.next().await {
+            let StreamEvent::Member(member_id) = event else {
+                continue;
+            };
+
+            required_key_bundles.retain(|id| &member_id != id);
+
+            if required_key_bundles.is_empty() {
+                break;
+            }
+        }
+
+        drop(node_c_space);
+        drop(node_c_rx);
+
+        drop(node_d_space);
+        drop(node_d_rx);
+
+        // Node A brings everyone into the space. The space has the members {A, B, C, D} now.
+        node_a
+            .register_member(node_b.me().await.unwrap())
+            .await
+            .unwrap();
+
+        node_a_space
+            .add(node_b.id(), AccessLevel::Manage)
+            .await
+            .unwrap();
+
+        node_a_space
+            .add(node_c.id(), AccessLevel::Write)
+            .await
+            .unwrap();
+
+        node_a_space
+            .add(node_d.id(), AccessLevel::Write)
+            .await
+            .unwrap();
+
+        // Wait until B finished processing being added to the space and received all required
+        // key bundles AND got informed about all other members (C and D) being added.
+        let (node_b_space, mut node_b_rx) = node_b.space::<String>(topic).await.unwrap();
+
+        let mut required_key_bundles = vec![node_a.id(), node_d.id()];
+        let mut required_adds = vec![node_b.id(), node_c.id(), node_d.id()];
+
+        while let Some(event) = node_b_rx.next().await {
+            match event {
+                StreamEvent::Space { members, .. } => {
+                    for (member_id, _) in members {
+                        required_adds.retain(|id| &member_id != id);
+                    }
+                }
+                StreamEvent::Member(member_id) => {
+                    required_key_bundles.retain(|id| &member_id != id);
+                }
+                _ => continue,
+            }
+
+            if required_key_bundles.is_empty() && required_adds.is_empty() {
+                break;
+            }
+        }
+
+        // B wants to remove C and needs the key bundles of D to do this since they've never sent a
+        // direct message to D. Note that B doesn't need a key bundle for A because A already
+        // initiated a 2SM session with B when they've been added to the space.
+        node_b_space.remove(node_c.id()).await.unwrap();
+    }
+}
