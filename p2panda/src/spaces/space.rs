@@ -14,10 +14,10 @@ use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::space::SpacesState;
-use p2panda_spaces::{ActorId, AuthGroupState, Event, MemberId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{ActorId, AuthGroupState, MemberId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::{SqliteError, SqliteStore, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -25,6 +25,7 @@ use tokio::sync::oneshot::error::RecvError;
 use tracing::error;
 
 use crate::operation::Extensions;
+use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::spaces::{KeyBundleTaskCommand, KeyBundleTaskSender, RepairError, RepairTask};
@@ -55,7 +56,7 @@ where
     (
         Space {
             inner,
-            store: SqliteSpacesStore::new(store),
+            store,
             repair_task,
             key_bundle_task_tx,
             tx,
@@ -70,7 +71,7 @@ where
     M: Serialize,
 {
     inner: InnerSpace,
-    store: SqliteSpacesStore<Extensions>,
+    store: SqliteStore,
     repair_task: RepairTask,
     key_bundle_task_tx: KeyBundleTaskSender,
     tx: StreamPublisher<M>,
@@ -283,21 +284,24 @@ where
         groups_y: AuthGroupState<AuthCapabilities>,
         space_y: SpacesState<AuthCapabilities>,
         messages: [SpacesMessage; 2],
-        events: Vec<Event<AuthCapabilities>>,
+        events: Vec<p2panda_spaces::Event<AuthCapabilities>>,
     ) -> Result<(), ProcessError> {
-        // Persist the computed groups and spaces state to the stores.
-        {
-            let permit = self.store.begin().await?;
+        // Associate member logs with this space. This is equivalent to the member association hook
+        // which is registered on the event processing pipeline. Since locally issued events are not
+        // going through the pipeline, we have to repeat it here as well.
+        associate_members(self.inner.me(), &self.store, &events).await;
 
-            self.store
+        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
+
+        tx!(spaces_store, {
+            // Persist the computed groups and spaces state to the stores.
+            spaces_store
                 .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
                 .await?;
-            self.store
+            spaces_store
                 .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
                 .await?;
-
-            self.store.commit(permit).await?;
-        }
+        });
 
         let processed = self
             .tx
