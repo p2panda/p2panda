@@ -18,7 +18,7 @@ pub use p2panda_auth::AccessLevel;
 pub use p2panda_spaces::manager::ManagerError;
 pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext, SpaceId};
 
-pub(crate) use forge::{MEMBER_CONTROL_MESSAGE, group_log_id};
+pub(crate) use forge::{group_log_id, member_log_id};
 pub use group::{
     AddGroupMemberError, Group, GroupError, GroupEvent, GroupFuture, RemoveGroupMemberError,
 };

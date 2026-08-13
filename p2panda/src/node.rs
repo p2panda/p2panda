@@ -31,10 +31,9 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask,
-    MEMBER_CONTROL_MESSAGE, Member, MemberAssociationHook, MemberError, RepairTask, Space,
-    SpaceSubscription, actor_to_topic, group_log_id, spaces_manager, spaces_stream,
-    to_initial_members,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask, Member,
+    MemberAssociationHook, MemberError, RepairTask, Space, SpaceSubscription, actor_to_topic,
+    group_log_id, member_log_id, spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -549,11 +548,7 @@ impl Node {
 
             // Associate the space topic with our own member / key bundle logs.
             self.store
-                .associate(
-                    &Topic::from(space_id),
-                    &self.id(),
-                    &Hash::digest(MEMBER_CONTROL_MESSAGE),
-                )
+                .associate(&Topic::from(space_id), &self.id(), &member_log_id())
                 .await?;
         });
 
@@ -617,11 +612,7 @@ impl Node {
         // Associate the space topic with our own member / key bundle log.
         tx!(&self.store, {
             self.store
-                .associate(
-                    &Topic::from(space_id),
-                    &self.id(),
-                    &Hash::digest(MEMBER_CONTROL_MESSAGE),
-                )
+                .associate(&Topic::from(space_id), &self.id(), &member_log_id())
                 .await
         })?;
 
