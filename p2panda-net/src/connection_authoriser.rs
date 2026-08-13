@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use iroh::endpoint::Side;
 use p2panda_core::{Topic, VerifyingKey};
 use thiserror::Error;
 use tokio::sync::RwLock;
@@ -12,7 +13,9 @@ use tokio::sync::broadcast::{self, Receiver, Sender};
 use tracing::warn;
 
 use crate::NetworkId;
-use crate::iroh_endpoint::{BeforeConnectOutcome, EndpointAddr, EndpointHooks};
+use crate::iroh_endpoint::{
+    AfterHandshakeOutcome, BeforeConnectOutcome, EndpointAddr, EndpointHooks,
+};
 use crate::utils::{ShortFormat, to_verifying_key};
 
 /// Connection authoriser mode for determining how connections are accepted and rejected.
@@ -25,18 +28,50 @@ enum ConnectionAuthoriserMode {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionRole {
+    Acceptor,
+    Initiator,
+}
+
+impl Display for ConnectionRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionRole::Acceptor => write!(f, "inbound"),
+            ConnectionRole::Initiator => write!(f, "outbound"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConnectionAuthoriserEvent {
-    ConnectionBlocked { node: VerifyingKey },
-    ConnectionAllowed { node: VerifyingKey },
-    TopicBlocked { topic: Topic, node: VerifyingKey },
-    TopicAllowed { topic: Topic, node: VerifyingKey },
+    Blocked {
+        node: VerifyingKey,
+        role: ConnectionRole,
+    },
+    Allowed {
+        node: VerifyingKey,
+        role: ConnectionRole,
+    },
+    TopicBlocked {
+        topic: Topic,
+        node: VerifyingKey,
+    },
+    TopicAllowed {
+        topic: Topic,
+        node: VerifyingKey,
+    },
 }
 
 impl Display for ConnectionAuthoriserEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionAuthoriserEvent::ConnectionBlocked { node } => {
-                write!(f, "blocked connection attempt to {}", node.fmt_short(),)
+            ConnectionAuthoriserEvent::Blocked { node, role } => {
+                write!(
+                    f,
+                    "blocked {} connection attempt to {}",
+                    role,
+                    node.fmt_short(),
+                )
             }
             ConnectionAuthoriserEvent::TopicBlocked { topic, node } => {
                 write!(
@@ -46,8 +81,13 @@ impl Display for ConnectionAuthoriserEvent {
                     topic.fmt_short()
                 )
             }
-            ConnectionAuthoriserEvent::ConnectionAllowed { node } => {
-                write!(f, "allowed connection attempt to {}", node.fmt_short(),)
+            ConnectionAuthoriserEvent::Allowed { node, role } => {
+                write!(
+                    f,
+                    "allowed {} connection attempt to {}",
+                    role,
+                    node.fmt_short(),
+                )
             }
             ConnectionAuthoriserEvent::TopicAllowed { topic, node } => {
                 write!(
@@ -125,12 +165,10 @@ impl ConnectionAuthoriser {
         //
         // This is primarily to prevent flooding the logs with warnings when events are emitted but
         // no event stream subscription exists.
-        if connection_authoriser.tx.receiver_count() > 0 {
-            if let Err(err) = connection_authoriser.tx.send(event) {
-                warn!("failed to send authoriser event: {}", err)
-            } else {
-                println!("successfully sent authoriser event")
-            }
+        if connection_authoriser.tx.receiver_count() > 0
+            && let Err(err) = connection_authoriser.tx.send(event)
+        {
+            warn!("failed to send authoriser event: {}", err)
         }
     }
 
@@ -230,16 +268,52 @@ impl EndpointHooks for ConnectionAuthoriser {
         // Accept or reject the connection attempt based on the authoriser state for the remote
         // node.
         if self.can_connect(node).await {
-            self.send_event(ConnectionAuthoriserEvent::ConnectionAllowed { node })
-                .await;
+            self.send_event(ConnectionAuthoriserEvent::Allowed {
+                node,
+                role: ConnectionRole::Initiator,
+            })
+            .await;
 
             BeforeConnectOutcome::Accept
         } else {
-            let event = ConnectionAuthoriserEvent::ConnectionBlocked { node };
+            let event = ConnectionAuthoriserEvent::Blocked {
+                node,
+                role: ConnectionRole::Initiator,
+            };
             warn!("{}", event);
             self.send_event(event).await;
 
             BeforeConnectOutcome::Reject
+        }
+    }
+
+    // Runs after the QUIC/TLS handshake completes for both incoming and outgoing connections.
+    //
+    // The remote endpoint ID, ALPN, and other metadata are available, but no application data has been sent or received yet.
+    async fn after_handshake<'a>(
+        &'a self,
+        conn: &'a iroh::endpoint::Connection,
+    ) -> iroh::endpoint::AfterHandshakeOutcome {
+        let node = to_verifying_key(conn.remote_id());
+        let role = match conn.side() {
+            Side::Server => ConnectionRole::Acceptor,
+            Side::Client => ConnectionRole::Initiator,
+        };
+
+        if self.can_connect(node).await {
+            self.send_event(ConnectionAuthoriserEvent::Allowed { node, role })
+                .await;
+
+            AfterHandshakeOutcome::Accept
+        } else {
+            let event = ConnectionAuthoriserEvent::Blocked { node, role };
+            warn!("{}", event);
+            self.send_event(event).await;
+
+            AfterHandshakeOutcome::Reject {
+                error_code: 403u32.into(),
+                reason: b"not authorised".into(),
+            }
         }
     }
 }
