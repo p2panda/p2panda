@@ -4,11 +4,10 @@
 
 use std::collections::HashSet;
 
+use p2panda_core::traits::OperationId;
 use petgraph::algo::has_path_connecting;
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
-
-use crate::traits::OperationId;
 
 /// Recursively identify all operations concurrent with the given target operation.
 fn concurrent_bubble<OP>(
@@ -139,9 +138,6 @@ mod tests {
     use petgraph::{graph::DiGraph, prelude::DiGraphMap};
 
     use crate::graph::concurrent_bubbles;
-    use crate::traits::OperationId;
-
-    impl OperationId for &str {}
 
     #[test]
     fn test_linear_chain_no_concurrency() {

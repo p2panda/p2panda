@@ -13,6 +13,7 @@ Highlights are marked with a pancake 🥞
 
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
 - sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
+- auth: Replace `IdentityHandle` and `OperationId` with traits from `p2panda-core` [#1193](https://github.com/p2panda/p2panda/pull/1193)
 
 ### Fixed
 

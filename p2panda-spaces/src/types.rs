@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Types used across p2panda-spaces.
-
 use p2panda_auth::group::GroupCrdtInnerState as AuthInnerState;
 use p2panda_auth::traits::{Conditions, Resolver};
 use p2panda_encryption::key_manager::KeyManager;

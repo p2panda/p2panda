@@ -28,6 +28,7 @@ test_utils = [
   "dep:tokio",
   "dep:tracing-subscriber",
   "serde",
+  "p2panda-core/test_utils"
 ]
 serde = [
   "dep:serde",

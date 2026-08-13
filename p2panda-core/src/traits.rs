@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
 use crate::identity::Author;
 
 /// Identifier of a single operation.
-pub trait OperationId: Copy + Clone + PartialEq + Eq + StdHash {}
+pub trait OperationId: Copy + Clone + Debug + PartialEq + Eq + Ord + StdHash {}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl OperationId for u32 {}
+#[cfg(any(test, feature = "test_utils"))]
+impl OperationId for &str {}
 
 /// Returns (unique) hash digest, which can be used as identifier of this published data type.
 pub trait Digest<ID>
