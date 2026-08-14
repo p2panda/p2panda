@@ -164,10 +164,9 @@ impl Group {
     // build multi-device applications.
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<ActorId> for Group {
-    fn into(self) -> ActorId {
-        self.inner.id()
+impl From<Group> for ActorId {
+    fn from(value: Group) -> Self {
+        value.inner.id()
     }
 }
 
@@ -191,10 +190,9 @@ impl Future for GroupFuture {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<ActorId> for GroupFuture {
-    fn into(self) -> ActorId {
-        self.group_id
+impl From<GroupFuture> for ActorId {
+    fn from(value: GroupFuture) -> Self {
+        value.group_id
     }
 }
 

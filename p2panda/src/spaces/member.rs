@@ -19,10 +19,9 @@ impl Member {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<ActorId> for Member {
-    fn into(self) -> ActorId {
-        self.inner.id()
+impl From<Member> for ActorId {
+    fn from(value: Member) -> Self {
+        value.inner.id()
     }
 }
 
@@ -75,10 +74,9 @@ impl From<Group> for GroupActor {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<ActorId> for GroupActor {
-    fn into(self) -> ActorId {
-        self.id
+impl From<GroupActor> for ActorId {
+    fn from(value: GroupActor) -> Self {
+        value.id
     }
 }
 
