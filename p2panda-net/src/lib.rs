@@ -315,7 +315,7 @@ pub const DEFAULT_NETWORK_ID: NetworkId = [
 ];
 
 /// Hash the concatenation of the given protocol- and network identifiers.
-fn hash_protocol_id_with_network_id(
+pub fn hash_protocol_id_with_network_id(
     protocol_id: impl AsRef<[u8]>,
     network_id: NetworkId,
 ) -> Vec<u8> {
