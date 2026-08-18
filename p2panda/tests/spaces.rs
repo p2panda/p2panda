@@ -3,7 +3,7 @@
 use p2panda::{NetworkId, Node};
 use serde::{Deserialize, Serialize};
 
-async fn spawn(network_id: NetworkId) -> Node {
+async fn spawn_node(network_id: NetworkId) -> Node {
     p2panda::builder()
         .network_id(network_id)
         .spawn()
@@ -28,7 +28,7 @@ mod spaces_api {
     use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn};
+    use super::{SecretData, spawn_node};
 
     #[tokio::test]
     async fn create_space_for_multiple_members() -> Result<(), Box<dyn std::error::Error>> {
@@ -36,7 +36,7 @@ mod spaces_api {
 
         let network_id = Topic::random().into();
 
-        let panda = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
         let mut panda_system_rx = panda.event_stream().await?;
 
         // Spaces behave like topic-streams, just that they're encrypted towards members.
@@ -57,8 +57,8 @@ mod spaces_api {
         }
 
         // We can manage (nested) groups (useful for multi-device, etc.)
-        let penguin_laptop = spawn(network_id).await;
-        let penguin_mobile = spawn(network_id).await;
+        let penguin_laptop = spawn_node(network_id).await;
+        let penguin_mobile = spawn_node(network_id).await;
         let mut penguin_mobile_system_rx = penguin_mobile.event_stream().await?;
 
         // Penguin subscribes to the space in order to publish some key bundles.
@@ -292,8 +292,8 @@ mod spaces_api {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
-        let penguin = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
+        let penguin = spawn_node(network_id).await;
 
         // Penguin subscribes to the space (and publishes a key bundle).
         let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
@@ -384,7 +384,7 @@ mod spaces_repair_task {
     use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn};
+    use super::{SecretData, spawn_node};
 
     #[tokio::test]
     async fn sync_repair_space() {
@@ -393,9 +393,9 @@ mod spaces_repair_task {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
-        let penguin = spawn(network_id).await;
+        let penguin = spawn_node(network_id).await;
         let mut penguin_system_rx = penguin.event_stream().await.unwrap();
 
         // Penguin creates a group before subscribing to the space.
@@ -475,9 +475,9 @@ mod spaces_repair_task {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
-        let penguin = spawn(network_id).await;
+        let penguin = spawn_node(network_id).await;
 
         // Penguin subscribes to the space.
         let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -552,7 +552,7 @@ mod spaces_api_validation {
     use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn};
+    use super::{SecretData, spawn_node};
 
     #[tokio::test]
     async fn api_validation() {
@@ -561,7 +561,7 @@ mod spaces_api_validation {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
 
         let (panda_space, mut panda_rx) = panda.create_space::<String>(topic).await.unwrap();
 
@@ -588,7 +588,7 @@ mod spaces_api_validation {
         );
 
         // Tiger subscribes to the space.
-        let tiger = spawn(network_id).await;
+        let tiger = spawn_node(network_id).await;
         let (tiger_space, mut tiger_rx) = tiger.space::<String>(topic).await.unwrap();
 
         while let Some(event) = panda_rx.next().await {
@@ -646,9 +646,9 @@ mod spaces_api_validation {
 
         let network_id = Topic::random().into();
 
-        let panda = spawn(network_id).await;
-        let lion = spawn(network_id).await;
-        let tiger = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
+        let lion = spawn_node(network_id).await;
+        let tiger = spawn_node(network_id).await;
 
         let topic = Topic::random();
 
@@ -752,7 +752,7 @@ mod spaces_events {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn};
+    use super::{SecretData, spawn_node};
 
     #[tokio::test]
     async fn group_events() {
@@ -760,17 +760,17 @@ mod spaces_events {
 
         let network_id = Topic::random().into();
 
-        let panda = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
 
         let topic = Topic::random();
 
         // Create a space with only us inside. Having a space in this test is only required to sync
         // the group operations.
-        let (_panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
-        let penguin_laptop = spawn(network_id).await;
-        let penguin_mobile = spawn(network_id).await;
+        let penguin_laptop = spawn_node(network_id).await;
+        let penguin_mobile = spawn_node(network_id).await;
         let mut penguin_laptop_system_rx = penguin_laptop.event_stream().await.unwrap();
 
         let (_penguin_laptop_space, _penguin_laptop_rx) =
@@ -824,11 +824,13 @@ mod spaces_events {
 
         // Penguin receives the team group event on their system stream.
         loop {
+            let event = penguin_laptop_system_rx.next().await;
+
             if let Some(SystemEvent::Groups {
                 group_id,
                 inner: InnerGroupEvent::Created { .. },
                 ..
-            }) = penguin_laptop_system_rx.next().await
+            }) = event
             {
                 if group_id == team_group.id() {
                     break;
@@ -918,7 +920,7 @@ mod filtered_messages {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn};
+    use super::{SecretData, spawn_node};
 
     #[tokio::test]
     async fn concurrently_removed_members_filtered() {
@@ -930,8 +932,8 @@ mod filtered_messages {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
-        let penguin = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
+        let penguin = spawn_node(network_id).await;
 
         // Panda creates a space.
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
@@ -1051,9 +1053,9 @@ mod filtered_messages {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let panda = spawn(network_id).await;
-        let penguin = spawn(network_id).await;
-        let tiger = spawn(network_id).await;
+        let panda = spawn_node(network_id).await;
+        let penguin = spawn_node(network_id).await;
+        let tiger = spawn_node(network_id).await;
 
         // Panda creates a space.
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
@@ -1149,7 +1151,7 @@ mod members {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use crate::spawn;
+    use crate::spawn_node;
 
     // 1. Node A creates space S with {A, B, C, D} inside
     // 2. Node B removes C from S
@@ -1164,10 +1166,10 @@ mod members {
         let network_id = Topic::random().into();
         let topic = Topic::random();
 
-        let node_a = spawn(network_id).await;
-        let node_b = spawn(network_id).await;
-        let node_c = spawn(network_id).await;
-        let node_d = spawn(network_id).await;
+        let node_a = spawn_node(network_id).await;
+        let node_b = spawn_node(network_id).await;
+        let node_c = spawn_node(network_id).await;
+        let node_d = spawn_node(network_id).await;
 
         let (node_a_space, mut node_a_rx) = node_a.create_space::<String>(topic).await.unwrap();
 
