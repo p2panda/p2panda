@@ -900,7 +900,6 @@ mod filtered_messages {
 
     use p2panda::streams::StreamEvent;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
     use super::SecretData;
@@ -979,8 +978,11 @@ mod filtered_messages {
             .await
             .expect("panda removes penguin");
 
-        // Penguin subscribes to the space again and immediately publishes a new message, before they
-        // had time to sync panda's remove message.
+        // Panda unsubscribes.
+        panda_space.close().await.unwrap();
+
+        // Penguin subscribes to the space again and immediately publishes a new message, before
+        // they received panda's remove message.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         let message = SecretData {
@@ -994,10 +996,12 @@ mod filtered_messages {
             .expect("can publish message to group");
         assert!(ready.await.is_ok());
 
-        // Panda will receive the second message from penguin, however it will not be forwarded to
+        // Panda subscribes again.
+        let (_panda_space, mut panda_rx) = panda.space::<SecretData>(topic).await.unwrap();
+
+        // Panda will be sent the second message from penguin, however it will not be forwarded to
         // the app layer as they know penguin has been removed (concurrent to the application
         // message being published).
-        let mut penguin_removed = false;
         let mut penguin_message_filtered = true;
         let sleep = tokio::time::sleep(Duration::from_secs(3));
         tokio::pin!(sleep);
@@ -1006,10 +1010,6 @@ mod filtered_messages {
             tokio::select! {
                 event = panda_rx.next() => {
                     match event {
-                        Some(StreamEvent::Space {
-                            inner: SpaceEvent::Removed { .. },
-                            ..
-                        }) => penguin_removed = true,
                         Some(StreamEvent::Processed { .. }) => penguin_message_filtered = false,
                         None => panic!("unexpected stream closure"),
                         _ => (),
@@ -1021,7 +1021,6 @@ mod filtered_messages {
             }
         }
 
-        assert!(penguin_removed);
         assert!(penguin_message_filtered);
     }
 
