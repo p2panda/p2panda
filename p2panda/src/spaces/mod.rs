@@ -34,7 +34,7 @@ pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceFuture,
     SpaceSubscription,
 };
-pub use types::{InnerGroupEvent, SpacesManagerError};
+pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
