@@ -32,7 +32,7 @@ pub use space::{
     SpaceFuture, SpaceSubscription,
 };
 pub(crate) use space::{dispatch_spaces_events, spaces_stream};
-pub use types::{InnerGroupEvent, SpacesManagerError};
+pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
