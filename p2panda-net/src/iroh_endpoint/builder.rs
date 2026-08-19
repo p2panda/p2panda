@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use p2panda_core::SigningKey;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
@@ -15,8 +15,7 @@ pub struct Builder {
     network_id: Option<NetworkId>,
     signing_key: Option<SigningKey>,
     config: Option<IrohConfig>,
-    relay_urls: HashSet<iroh::RelayUrl>,
-    relay_auth_token: Option<String>,
+    relays: HashMap<iroh::RelayUrl, Option<String>>,
     address_book: AddressBook,
 }
 
@@ -27,8 +26,7 @@ impl Builder {
             signing_key: None,
             config: None,
             address_book,
-            relay_urls: HashSet::new(),
-            relay_auth_token: None,
+            relays: HashMap::new(),
         }
     }
 
@@ -66,12 +64,12 @@ impl Builder {
     /// If no relay is given other nodes can only connect to us if a directly reachable IP address
     /// is available and known to them.
     pub fn relay_url(mut self, url: iroh::RelayUrl) -> Self {
-        self.relay_urls.insert(url);
+        self.relays.insert(url, None);
         self
     }
 
-    pub fn relay_auth_token(mut self, token: impl Into<String>) -> Self {
-        self.relay_auth_token = Some(token.into());
+    pub fn relay_url_with_token(mut self, url: iroh::RelayUrl, token: impl Into<String>) -> Self {
+        self.relays.insert(url, Some(token.into()));
         self
     }
 
@@ -79,11 +77,14 @@ impl Builder {
         let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
         let signing_key = self.signing_key.unwrap_or_default();
         let config = self.config.unwrap_or_default();
-        let relay_map = iroh::RelayMap::from_iter(self.relay_urls);
-        let relay_map = match self.relay_auth_token {
-            Some(token) => relay_map.with_auth_token(token),
-            None => relay_map,
-        };
+        let relay_map = self
+            .relays
+            .into_iter()
+            .map(|(url, token)| match token {
+                Some(token) => iroh::RelayConfig::from(url).with_auth_token(token),
+                None => iroh::RelayConfig::from(url),
+            })
+            .collect();
         (
             network_id,
             signing_key,
