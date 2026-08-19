@@ -46,7 +46,7 @@ use crate::streams::{Event, Pipeline, SystemEvent};
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
 /// the sync backend.
-const BUFFER_SIZE: usize = 16;
+const BUFFER_SIZE: usize = 128;
 
 /// Number of items which can stay in the buffer before processing kicks in for locally published
 /// items. If buffer runs full, creating new operations will apply backpressure.
