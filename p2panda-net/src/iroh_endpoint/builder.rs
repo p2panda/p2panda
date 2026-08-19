@@ -16,6 +16,7 @@ pub struct Builder {
     signing_key: Option<SigningKey>,
     config: Option<IrohConfig>,
     relay_urls: HashSet<iroh::RelayUrl>,
+    relay_auth_token: Option<String>,
     address_book: AddressBook,
 }
 
@@ -27,6 +28,7 @@ impl Builder {
             config: None,
             address_book,
             relay_urls: HashSet::new(),
+            relay_auth_token: None,
         }
     }
 
@@ -68,11 +70,20 @@ impl Builder {
         self
     }
 
+    pub fn relay_auth_token(mut self, token: impl Into<String>) -> Self {
+        self.relay_auth_token = Some(token.into());
+        self
+    }
+
     pub(crate) fn build_args(self) -> IrohEndpointArgs {
         let network_id = self.network_id.unwrap_or(DEFAULT_NETWORK_ID);
         let signing_key = self.signing_key.unwrap_or_default();
         let config = self.config.unwrap_or_default();
         let relay_map = iroh::RelayMap::from_iter(self.relay_urls);
+        let relay_map = match self.relay_auth_token {
+            Some(token) => relay_map.with_auth_token(token),
+            None => relay_map,
+        };
         (
             network_id,
             signing_key,
