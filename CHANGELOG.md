@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- net: Support bearer authentication for iroh relays
+
 ### Changed
 
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
