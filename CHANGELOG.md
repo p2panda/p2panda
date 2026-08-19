@@ -11,7 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
-- net: Support bearer authentication for iroh relays
+- net: Support bearer authentication for iroh relays [#1361](https://github.com/p2panda/p2panda/pull/1361)
 
 ### Changed
 
