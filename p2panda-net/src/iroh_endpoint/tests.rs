@@ -4,13 +4,40 @@ use iroh::protocol::ProtocolHandler;
 use p2panda_core::test_utils::setup_logging;
 
 use crate::address_book::AddressBook;
-use crate::iroh_endpoint::Endpoint;
+use crate::iroh_endpoint::{Builder, Endpoint};
 use crate::test_utils::test_args;
 
 const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 
 #[derive(Debug)]
 struct EchoProtocol;
+
+#[tokio::test]
+async fn configure_relay_authentication() {
+    const AUTH_TOKEN: &str = "very-secret-token";
+
+    let relay_url: iroh::RelayUrl = "https://relay.example.com".parse().unwrap();
+    let address_book = AddressBook::builder().spawn().await.unwrap();
+    let (_, _, _, relay_map, _) = Builder::new(address_book)
+        .relay_url(relay_url.clone())
+        .relay_auth_token(AUTH_TOKEN)
+        .build_args();
+
+    let relay_config = relay_map.get(&relay_url).unwrap();
+    assert_eq!(relay_config.auth_token.as_deref(), Some(AUTH_TOKEN));
+}
+
+#[tokio::test]
+async fn relay_authentication_is_optional() {
+    let relay_url: iroh::RelayUrl = "https://relay.example.com".parse().unwrap();
+    let address_book = AddressBook::builder().spawn().await.unwrap();
+    let (_, _, _, relay_map, _) = Builder::new(address_book)
+        .relay_url(relay_url.clone())
+        .build_args();
+
+    let relay_config = relay_map.get(&relay_url).unwrap();
+    assert_eq!(relay_config.auth_token, None);
+}
 
 impl ProtocolHandler for EchoProtocol {
     async fn accept(
