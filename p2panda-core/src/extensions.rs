@@ -72,11 +72,8 @@
 //! assert_eq!(header.hash(), log_id.0);
 //! assert_eq!(extensions.expires.0, expiry.0);
 //! ```
-use std::fmt::Debug;
-
-use serde::{Deserialize, Serialize};
-
 use crate::Header;
+use crate::traits::Extensions;
 
 /// Trait definition of a single header extension type.
 pub trait Extension<T>: Extensions {
@@ -85,9 +82,3 @@ pub trait Extension<T>: Extensions {
         None
     }
 }
-
-/// Super-trait defining trait bounds required by custom extensions types.
-pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
-
-/// Blanket implementation of `Extensions` trait any type with the required bounds satisfied.
-impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}

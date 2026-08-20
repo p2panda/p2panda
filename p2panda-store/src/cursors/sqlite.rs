@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::identity::Author;
+use p2panda_core::traits::Author;
 use p2panda_core::{Cursor, LogId};
 use sqlx::{query, query_scalar};
 

@@ -3,8 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::Display;
 
-use p2panda_core::identity::Author;
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::algo::toposort;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::{DiGraph, NodeIndex};

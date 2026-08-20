@@ -6,8 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use p2panda_core::identity::Author;
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
@@ -70,14 +69,14 @@ pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<I
     derive(Deserialize, Serialize),
     serde(bound(
         deserialize = "
-            OP: Deserialize<'de>, 
-            M: Deserialize<'de>, 
-            C: Deserialize<'de>, 
+            OP: Deserialize<'de>,
+            M: Deserialize<'de>,
+            C: Deserialize<'de>,
         ",
         serialize = "
-            OP: Serialize, 
-            M: Serialize, 
-            C: Serialize, 
+            OP: Serialize,
+            M: Serialize,
+            C: Serialize,
         "
     ))
 )]

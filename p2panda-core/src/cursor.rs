@@ -2,8 +2,8 @@
 
 use std::hash::Hash as StdHash;
 
-use crate::identity::Author;
 use crate::logs::{LogHeights, LogId, LogRanges, SeqNum, compare};
+use crate::traits::Author;
 
 /// Cursor to track log heights (state vector).
 ///

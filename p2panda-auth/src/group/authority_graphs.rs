@@ -2,8 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use p2panda_core::identity::Author;
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::DiGraphMap;
 
@@ -39,7 +38,7 @@ type Node<ID, OP> = (ID, OP);
 ///      1  2  3
 ///            |
 ///            4
-///   
+///
 /// 0: Initial group state {Alice, Bob, Claire}
 /// 1: Alice removes Bob
 /// 2: Bob removes Claire

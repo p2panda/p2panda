@@ -82,7 +82,7 @@ pub mod topic;
 pub mod traits;
 
 pub use cursor::Cursor;
-pub use extensions::{Extension, Extensions};
+pub use extensions::Extension;
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, Signature, SigningKey, VerifyingKey};
 pub use logs::{LogId, SeqNum};
@@ -93,3 +93,4 @@ pub use operation::{
 pub use prune::PruneFlag;
 pub use timestamp::Timestamp;
 pub use topic::Topic;
+pub use traits::{Author, Extensions, OperationId};

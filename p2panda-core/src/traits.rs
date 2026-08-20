@@ -3,9 +3,16 @@
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
-use crate::identity::Author;
-use crate::operation::PayloadSize;
-use crate::{Body, SeqNum};
+use serde::{Deserialize, Serialize};
+
+use crate::logs::SeqNum;
+use crate::operation::{Body, PayloadSize};
+
+/// Identifier of an operation author.
+pub trait Author:
+    Copy + Clone + Debug + PartialEq + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
+{
+}
 
 /// Identifier of a single operation.
 pub trait OperationId: Copy + Clone + Debug + PartialEq + Eq + Ord + StdHash {}
@@ -53,3 +60,8 @@ pub trait Offchain<ID> {
 
     fn payload_size(&self) -> PayloadSize;
 }
+
+/// Super-trait defining trait bounds required by custom extensions types.
+pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
+
+impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}

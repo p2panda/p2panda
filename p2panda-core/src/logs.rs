@@ -5,7 +5,7 @@ use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
 
-use crate::identity::Author;
+use crate::traits::Author;
 
 /// Uniquely identify a single-author log.
 ///
@@ -124,7 +124,7 @@ mod tests {
 
     type Author = u8;
 
-    impl crate::identity::Author for Author {}
+    impl crate::traits::Author for Author {}
 
     const ALICE: Author = 0;
     const BOB: Author = 1;

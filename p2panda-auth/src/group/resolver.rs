@@ -2,10 +2,10 @@
 
 //! Strong remove group resolver implementation.
 use std::collections::{HashMap, HashSet};
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
+use std::marker::PhantomData;
 
-use p2panda_core::identity::Author;
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{IntoNodeIdentifiers, Topo};
 
@@ -16,14 +16,14 @@ use crate::traits::{Conditions, Operation, Resolver};
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.
 ///
-/// Concurrent operations are identified and processed, any which should be invalidated are added
-/// to the operation filter and not applied to the group state. Once an operation has been
-/// filtered, any operations which depended on any resulting state will not be applied to group
-/// state either. Ruleset for Concurrent Operations
+/// Concurrent operations are identified and processed, any which should be invalidated are added to
+/// the operation filter and not applied to the group state. Once an operation has been filtered,
+/// any operations which depended on any resulting state will not be applied to group state either.
+/// Ruleset for Concurrent Operations
 ///
 /// The following ruleset is applied when choosing which operations to "filter" when concurrent
-/// operations are processed. It can be assumed that the behavior is equivalent for an admin
-/// member being removed, or demoted from admin to a lower access level.
+/// operations are processed. It can be assumed that the behavior is equivalent for an admin member
+/// being removed, or demoted from admin to a lower access level.
 ///
 /// ## Strong Remove Concurrency Rules
 ///
