@@ -17,37 +17,35 @@
 //! - Authors can maintain one or many logs
 //! - Single-writer logs which can be combined to support multi-writer collaboration
 //! - Compatible with any application data and CRDT
-//! - Various ordering algorithms
-//! - Supports efficient, partial sync
-//! - Compatible with any networking scenario (even broadcast-only, for example for packet radio)
+//! - Compatible with any networking scenario (for example packet radio or mesh-networks)
 //! - Fork-tolerant
+//! - Off-chain handling of payloads, can be deleted independently of log structure
 //! - Pruning of outdated messages
 //! - Highly extensible with custom features, for example prefix-deletion, ephemeral
 //!   "self-destructing" messages, etc.
 //!
 //! p2panda logs are made up of [`Operation`]s. Authors sign operations using their cryptographic
-//! key pair and append them to a log. An author may have one or many logs. The precise means of
-//! identifying logs is not defined by this crate (see extensions).
+//! key (Ed25519) and append them to a hash-chain of operations. An author may have one or many
+//! logs. The precise means of identifying logs is not defined by this crate (see extensions).
 //!
-//! A common challenge in distributed systems is how to order operations written concurrently by
-//! different authors and/or processes. Operations contain information which can be used for
-//! establishing order depending on one's use case:
-//! - `timestamp`: UNIX timestamp describing when the operation was created.
+//! An operation is constructed from a [`Header`] and a [`Body`], the `Header` contains all metadata
+//! associated with the particular operation, and the `Body` contains the actual application message
+//! bytes. This separation allows "off-chain" handling, where the important bits in the headers are
+//! transmitted via an prioritised channel and secondary information, such as the body, can be
+//! loaded "lazily". Additionally it allows deletion of payloads without breaking the integrity of
+//! the append-only log.
+//!
+//! ## Extensions
 //!
 //! Custom extension fields can be defined by users of this library to introduce additional
-//! functionality depending on their particular use cases. p2panda provides our own extensions
-//! which are required when using our other crates offering more advanced functionality needed for
+//! functionality depending on their particular use cases. p2panda provides our own extensions which
+//! are required when using our other crates offering more advanced functionality needed for
 //! application building (CRDTs, access control, encryption, ephemeral data, garbage collection,
 //! etc.), but it's entirely possible for users to define their own extensions as well.
 //!
-//! An operation is constructed from a [`Header`] and a [`Body`], the `Header` contains all
-//! metadata associated with the particular operation, and the `Body` contains the actual
-//! application message bytes. This allows "off-chain" handling, where the important bits in the
-//! headers are transmitted via an prioritised channel and secondary information can be loaded
-//! "lazily". Additionally it allows deletion of payloads without breaking the integrity of the
-//! append-only log.
+//! ## Examples
 //!
-//! ## Example
+//! **Create and sign operations**
 //!
 //! ```
 //! use p2panda_core::{Body, Header, SigningKey};
@@ -65,6 +63,32 @@
 //!     .body(&body)
 //!     // Sign the header with the author's private key. From now on it's ready to be sent!
 //!     .build(&signing_key, ());
+//! ```
+//!
+//! **Extend operations with custom features**
+//!
+//! ```rust
+//! use p2panda_core::{Header, SigningKey};
+//! use serde::{Serialize, Deserialize};
+//!
+//! // Extend operations with an "expiry" field we can use to implement  "ephemeral messages"
+//! // in our application, which get automatically deleted after the expiration timestamp is due.
+//! #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Serialize, Deserialize)]
+//! pub struct Expiry(u64);
+//!
+//! // Multiple extensions can be combined in a custom type.
+//! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+//! struct CustomExtensions {
+//!     expiry: Expiry,
+//! }
+//!
+//! let signing_key = SigningKey::generate();
+//!
+//! let header = Header::builder()
+//!     .body(b"Hello, Panda!")
+//!     .build(&signing_key, CustomExtensions {
+//!         expiry: Expiry(1787246716),
+//!     });
 //! ```
 pub mod cbor;
 pub mod cursor;

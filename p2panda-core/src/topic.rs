@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Identifiers for gossip- or sync topics.
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;

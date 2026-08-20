@@ -17,10 +17,13 @@ pub type Version = u16;
 /// Number of bytes of the body of this operation.
 pub type PayloadSize = u32;
 
-/// Header of a p2panda operation.
+/// Header of a p2panda operation with known extensions type.
 ///
 /// The header holds all metadata required to cryptographically secure and authenticate a message
-/// [`Body`] and extensions.
+/// [`Body`] and it's custom extensions.
+///
+/// See [`AnyHeader`] for dealing with headers when you don't care about the concrete extensions
+/// type (`E`).
 ///
 /// ## Example
 ///
@@ -93,14 +96,17 @@ impl<E> Header<E>
 where
     E: Extensions,
 {
+    /// Returns builder to create & sign new header.
     pub fn builder() -> Builder<E> {
         Builder::new()
     }
 
+    /// Convert to header with known extension type.
     pub fn from_any(any_header: AnyHeader) -> Result<Self, HeaderError> {
         Self::try_from(any_header)
     }
 
+    /// Encodes header to byte-representation (CBOR).
     pub fn encode(&self) -> Vec<u8> {
         encode_header(
             self.version,
@@ -114,6 +120,9 @@ where
         )
     }
 
+    /// Attempts decoding header from bytes.
+    ///
+    /// This might fail if integrity checks failed or header formatting is invalid.
     pub fn decode(bytes: &[u8]) -> Result<Self, HeaderError> {
         // Decode header.
         let any_header = AnyHeader::decode(bytes)?;
@@ -122,7 +131,7 @@ where
         Self::from_any(any_header)
     }
 
-    /// BLAKE3 hash of the header bytes.
+    /// BLAKE3 hash digest of the header bytes.
     ///
     /// This hash is used as the unique identifier of an operation, aka the Operation Id.
     pub fn hash(&self) -> Hash {
@@ -250,6 +259,18 @@ pub(crate) fn encode_header(
         cbor.append(backlink.as_bytes());
     }
 
+    // TODO: We're currently serializing from the AST using cbor_core. If decoding an extension from
+    // another code-base (which was generated using another CBOR encoder with different rules) and
+    // encoding it here again, we might end up with a different byte sequence and thus hash digest.
+    //
+    // This can for example happen if the given extension uses non-canonical CBOR encoding,
+    // ambigious map ordering etc.
+    //
+    // Since there is no other p2panda implementation around right now this is not broken (yet) but
+    // we want to change this in the future to manually append the original extension bytes to the
+    // CBOR result.
+    //
+    // See related issue: <https://github.com/p2panda/p2panda/issues/1373>
     if let Some(extensions) = extensions {
         cbor.append(extensions.to_owned());
     }

@@ -25,9 +25,9 @@
 Highly extensible data-types of the p2panda protocol for secure, distributed and efficient exchange
 of data, supporting networks from the internet to packet radio, LoRa or BLE.
 
-The primary data structure is an append-only implementation which supports history deletion,
-multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
-extensible depending on your application requirements.
+The primary data structure is an append-only log implementation which supports history deletion,
+multi-writer causal-ordering, fork-tolerance, compatibility with any CRDT and is extensible
+depending on your application requirements.
 
 > 🚧 This library is under active development and the APIs are not yet considered stable for
 > production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
@@ -39,10 +39,9 @@ extensible depending on your application requirements.
 - Authors can maintain one or many logs
 - Single-writer logs which can be combined to support multi-writer collaboration
 - Compatible with any application data and CRDT
-- Various ordering algorithms
-- Supports efficient, partial sync
-- Compatible with any networking scenario (even broadcast-only, for example for packet radio)
+- Compatible with any networking scenario (for example packet radio or mesh-networks)
 - Fork-tolerant
+- Off-chain handling of payloads, can be deleted independently of log structure
 - Pruning of outdated messages
 - Highly extensible with custom features, for example prefix-deletion, ephemeral "self-destructing"
   messages, etc.
@@ -64,7 +63,7 @@ let header = Header::builder()
 ### Custom extensions
 
 Custom functionality can be added using extensions, for example, access-control tokens,
-self-destructing messages, or encryption schemas.
+self-destructing messages, or key-agreement schemes for group encryption.
 
 ```rust
 use p2panda_core::{Header, SigningKey};

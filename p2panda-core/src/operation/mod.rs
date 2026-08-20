@@ -4,8 +4,8 @@
 //!
 //! Operations are used to carry any data from one peer to another (distributed), while assuming no
 //! reliable network connection (offline-first) and untrusted machines (cryptographically secure).
-//! The author of an operation uses it's [`SigningKey`] to cryptographically sign every operation.
-//! This can be verified and used for authentication by any other peer.
+//! The author of an operation uses it's [`SigningKey`](crate::SigningKey) to cryptographically sign
+//! every operation. This can be verified and used for authentication by any other peer.
 //!
 //! Every operation consists of a [`Header`] and an optional [`Body`]. The body holds arbitrary
 //! bytes (up to the application to decide what should be inside). The header is used to
@@ -16,9 +16,9 @@
 //! list of operations, where every subsequent operation points to the previous one by referencing
 //! its cryptographically secured hash.
 //!
-//! [Header extensions](crate::extensions) can be used to add additional information, like
-//! "pruning" points for removing old or unwanted data, "tombstones" for explicit deletion,
-//! capabilities or group encryption schemes or custom application-related features etc.
+//! Header extensions can be used to add additional information, like "pruning" points for removing
+//! old or unwanted data, "tombstones" for explicit deletion, capabilities or group encryption
+//! schemes or custom application-related features etc.
 //!
 //! Operations are encoded in CBOR format and use Ed25519 key pairs for digital signatures and
 //! BLAKE3 for hashing.
