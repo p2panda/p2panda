@@ -23,6 +23,10 @@ impl<E> Operation<E>
 where
     E: Extensions,
 {
+    /// Assembles an operation from it's header and optional body parts.
+    ///
+    /// Please note that this method does _not_ verify if the given body belongs to the header. Use
+    /// [`validate_operation`](crate::operation::validate_operation) if in doubt.
     pub fn from_parts(header: Header<E>, body: Option<Body>) -> Self {
         Self {
             hash: header.hash(),

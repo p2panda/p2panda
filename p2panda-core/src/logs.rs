@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Identify append-only logs and compute their differences.
 use std::collections::BTreeMap;
 use std::hash::Hash as StdHash;
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0tra
 
+//! Traits expressing core features of peer-to-peer data types.
 use std::fmt::Debug;
 use std::hash::Hash as StdHash;
 
@@ -27,6 +28,7 @@ pub trait Digest<ID>
 where
     ID: OperationId,
 {
+    /// Hash digest of peer-to-peer data-type which can be used as the identifier.
     fn hash(&self) -> ID;
 }
 
@@ -35,8 +37,10 @@ pub trait Provenance<A>
 where
     A: Author,
 {
+    /// Identity of the author of data-type.
     fn author(&self) -> A;
 
+    /// Checks if data-type and given author is authentic.
     fn verify(&self) -> bool;
 }
 
@@ -54,18 +58,24 @@ pub trait Chain<ID> {
 
 /// Additional data which can be removed from the on-chain data-type.
 pub trait Offchain<ID> {
+    /// Authenticated payload.
+    ///
+    /// Can be requested or removed independently from the peer-to-peer data-type (off-chain). Don't
+    /// expect this to always be available.
     fn payload(&self) -> Option<&Body>;
 
+    /// Hash digest of the payload.
     fn payload_hash(&self) -> Option<ID>;
 
+    /// Size in bytes of the payload.
     fn payload_size(&self) -> PayloadSize;
 }
 
-/// Custom extensions types.
+/// Custom header extensions type.
 ///
-/// User-defined extensions can be added to an operation's `Header` in order to extend the basic
-/// functionality of the core p2panda data types or to encode application-specific fields which
-/// should not be contained in the [`Body`](crate::Body).
+/// User-defined extensions can be added to an operation's [`Header`](crate::Header) in order to
+/// extend the basic functionality of the core p2panda data types or to encode application-specific
+/// fields which should not be contained in the [`Body`].
 ///
 /// This might be system-specific information relating to capabilities or key-agreement schemes
 /// which is required to enforce access-control restrictions during sync. Alternatively, extensions

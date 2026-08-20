@@ -8,6 +8,17 @@ use crate::operation::header::encode_header;
 use crate::operation::{Body, Header, PayloadSize, RawOperation, Version};
 use crate::traits::{Chain, Digest, Extensions, Offchain, Provenance};
 
+/// Combined [`AnyHeader`], [`Body`] and operation [`struct@Hash`] (Operation Id).
+///
+/// ## Extensions
+///
+/// `AnyOperation` does not know the concrete extensions type. On this level it is only concerned
+/// with the validity and integrity of the append-only log type itself which is enough for most
+/// low-level protocols, such as the sync protocol.
+///
+/// Applications usually want to attach custom extensions to the operation, if you need to know the
+/// type you can easily convert from `AnyOperation` to [`Operation`](crate::Operation) with an
+/// explicit `E` extensions type.
 #[derive(Clone, Debug)]
 pub struct AnyOperation {
     pub hash: Hash,
@@ -70,27 +81,108 @@ impl TryFrom<RawOperation> for AnyOperation {
     }
 }
 
+/// Header of a p2panda operation.
+///
+/// The header holds all metadata required to cryptographically secure and authenticate a message
+/// [`Body`] and it's custom extensions.
+///
+/// ## Extensions
+///
+/// `AnyHeader` does not know the concrete extensions type. On this level it is only concerned with
+/// the validity and integrity of the append-only log type itself which is enough for most low-level
+/// protocols, such as the sync protocol.
+///
+/// Applications usually want to attach custom extensions to the header, if you need to know the
+/// type you can easily convert from `AnyHeader` to [`Header`] with an explicit `E` extensions
+/// type.
+///
+/// ```rust
+/// # fn example() -> Result<(), p2panda_core::HeaderError> {
+/// use p2panda_core::{AnyHeader, Hash, Header, SigningKey};
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// struct MyExtensions {
+///     dependencies: Vec<Hash>,
+/// }
+///
+/// let signing_key = SigningKey::generate();
+///
+/// // Create a Header with concrete extension type `MyExtensions`.
+/// let header = Header::builder()
+///     .build(&signing_key, MyExtensions {
+///         dependencies: vec![Hash::from([0; 32])],
+///     });
+///
+/// // Encode it to CBOR bytes, this is how we transmit operations over the network.
+/// let bytes = header.encode();
+///
+/// // Convert it to `AnyHeader` which doesn't know the extensions type.
+/// let any_header = AnyHeader::decode(&bytes)?;
+///
+/// // Bring it back to a concrete Header type with `MyExtensions`.
+/// let header_again = Header::try_from(any_header)?;
+/// assert_eq!(header, header_again);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Please note that at this stage we can only verify the integrity and authenticity of the attached
+/// extensions, we _don't know_ if the extensions themselves are valid. We can only find out if this
+/// is correct if we know the concrete E type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AnyHeader {
+    /// Operation format version, allowing backwards compatibility when specification changes.
     pub version: Version,
+
+    /// Author of this operation.
     pub verifying_key: VerifyingKey,
+
+    /// Signature by author over all fields in header, providing authenticity.
     pub signature: Signature,
+
+    /// Number of bytes of the body of this operation, must be zero if no body is given.
     pub payload_size: PayloadSize,
+
+    /// Hash of the body of this operation, must be included if payload_size is non-zero and
+    /// omitted otherwise.
+    ///
+    /// Keeping the hash here allows us to delete the payload (off-chain data) while retaining the
+    /// ability to check the signature of the header.
     pub payload_hash: Option<Hash>,
+
+    /// Number of operations this author has published to this log, begins with 0 and is always
+    /// incremented by 1 with each new operation by the same author.
     pub seq_num: SeqNum,
+
+    /// Hash of the previous operation of the same author and log. Can be omitted if first
+    /// operation in log.
     pub backlink: Option<Hash>,
+
+    /// Size of header in encoded CBOR bytes.
     pub(crate) size: u32,
+
+    /// BLAKE3 hash digest of header.
     pub(crate) digest: Hash,
+
+    /// Custom additional data.
+    ///
+    /// We don't know the exact Rust type of the extensions here, only the AST representation of
+    /// CBOR. To decode the value to an extensions Rust type `E` use
+    /// `Header::<E>::try_from`(crate::Header::try_from).
     pub(crate) extensions: Option<cbor_core::Value<'static>>,
 }
 
 impl AnyHeader {
+    /// Attempts decoding header from bytes.
+    ///
+    /// This fails if integrity checks failed or header formatting is invalid.
     pub fn decode(bytes: &[u8]) -> Result<Self, HeaderError> {
         // Attempt decoding bytes as CBOR.
         //
         // The bytes are decoded in a zero-copy manner, only reading from the given byte slice.
         let cbor = {
-            let strict = cbor_core::DecodeOptions::new()
+            let codec = cbor_core::DecodeOptions::new()
                 // Reduce strictness as we can't enforce it for all possible ways users will encode
                 // their extensions. On top we want to uphold the robustness principle: "be
                 // conservative in what you do, be liberal in what you accept from others"
@@ -111,7 +203,7 @@ impl AnyHeader {
                 .length_limit(512) // 0.5kb
                 .oom_mitigation(64);
 
-            strict.decode(bytes).map_err(HeaderError::DecodingHeader)?
+            codec.decode(bytes).map_err(HeaderError::DecodingHeader)?
         };
 
         // Validate each field in header based on p2panda specification and extract Rust types.
@@ -276,6 +368,7 @@ impl AnyHeader {
         })
     }
 
+    /// Encodes header to byte-representation (CBOR).
     pub fn encode(&self) -> Vec<u8> {
         encode_header(
             self.version,

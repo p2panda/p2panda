@@ -11,6 +11,7 @@ use crate::operation::header::encode_header;
 use crate::operation::{Header, PayloadSize};
 use crate::traits::Extensions;
 
+/// Build & sign operations.
 pub struct Builder<E> {
     payload_size: PayloadSize,
     payload_hash: Option<Hash>,
@@ -42,6 +43,7 @@ where
         }
     }
 
+    /// Attach payload to operation.
     pub fn body(mut self, bytes: impl AsRef<[u8]>) -> Self {
         let bytes = bytes.as_ref();
 
@@ -55,6 +57,7 @@ where
         self
     }
 
+    /// Sets the "hash chain" values of this operation: sequence number and backlink.
     pub fn chain(mut self, seq_num: SeqNum, backlink: Hash) -> Self {
         self.seq_num = seq_num;
 
@@ -68,16 +71,24 @@ where
         self
     }
 
+    /// Number of operations this author has published to this log, begins with 0 and is always
+    /// incremented by 1 with each new operation by the same author.
     pub fn seq_num(mut self, seq_num: SeqNum) -> Self {
         self.seq_num = seq_num;
         self
     }
 
+    /// Hash of the previous operation of the same author and log. Can be omitted if first
+    /// operation in log.
     pub fn backlink(mut self, backlink: Option<Hash>) -> Self {
         self.backlink = backlink;
         self
     }
 
+    /// Encodes, signs and returns final header of operation.
+    ///
+    /// A custom header extensions type can be set here as well when required. It will be embedded
+    /// in the header. Set this to `()` (unit-type) when extensions are not necessary.
     pub fn build(self, signing_key: &SigningKey, extensions: E) -> Header<E> {
         let version = 1;
 

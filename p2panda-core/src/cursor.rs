@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! State vector to track and compare logs.
 use std::hash::Hash as StdHash;
 
 use crate::logs::{LogHeights, LogId, LogRanges, SeqNum, compare};
