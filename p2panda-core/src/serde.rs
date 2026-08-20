@@ -270,7 +270,7 @@ mod tests {
         let bytes: Vec<u8> = vec![67, 1, 2, 3];
 
         // For CBOR the bytes just get deserialized straight away as an array as it is not a human
-        // readable encoding
+        // readable encoding.
         let test: Test = decode_cbor(&bytes[..]).unwrap();
         assert_eq!(test.0, vec![1, 2, 3]);
     }

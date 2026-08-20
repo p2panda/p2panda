@@ -328,7 +328,7 @@ where
 
         let verifying_key = signing_key.verifying_key();
 
-        let extensions_cbor = if Header::<E>::has_non_zero_sized_extensions() {
+        let extensions_cbor = if !Header::<E>::has_zero_sized_extensions() {
             let extensions_cbor = Value::serialized(&extensions).expect("serializable extensions");
             Some(extensions_cbor)
         } else {
@@ -567,12 +567,12 @@ where
 }
 
 impl<E> Header<E> {
-    pub(crate) const fn has_non_zero_sized_extensions() -> bool {
-        std::mem::size_of::<E>() > 0
+    pub(crate) const fn has_zero_sized_extensions() -> bool {
+        std::mem::size_of::<E>() == 0
     }
 
     pub(crate) fn zero_sized_extensions() -> E {
-        assert!(!Self::has_non_zero_sized_extensions());
+        assert!(Self::has_zero_sized_extensions());
 
         // SAFETY: The assertion guarantees E is a zero-sized type.
         //
@@ -628,7 +628,7 @@ where
     type Error = HeaderError;
 
     fn try_from(value: Header<E>) -> Result<Self, Self::Error> {
-        let extensions = if Header::<E>::has_non_zero_sized_extensions() {
+        let extensions = if !Header::<E>::has_zero_sized_extensions() {
             Some(
                 cbor_core::Value::serialized(&value.extensions)
                     .map_err(HeaderError::EncodingExtensions)?,
@@ -1007,7 +1007,7 @@ where
             Some(ref cbor) => {
                 // For ZST extension types we don't expect the extensions field in the header to be
                 // set. Since we now know E we can assure that this is the case.
-                if !Header::<E>::has_non_zero_sized_extensions() {
+                if Header::<E>::has_zero_sized_extensions() {
                     return Err(HeaderError::UnexpectedExtensions);
                 }
 
@@ -1017,7 +1017,7 @@ where
                     .map_err(HeaderError::DecodingExtensions)?
             }
             None => {
-                if Header::<E>::has_non_zero_sized_extensions() {
+                if !Header::<E>::has_zero_sized_extensions() {
                     return Err(HeaderError::MissingExtensions);
                 } else {
                     Header::<E>::zero_sized_extensions()
@@ -1489,12 +1489,12 @@ mod tests {
     fn zst_size_matches_mem_checks() {
         struct ZstExtensions;
         assert_eq!(std::mem::size_of::<ZstExtensions>(), 0);
-        assert!(!Header::<ZstExtensions>::has_non_zero_sized_extensions());
+        assert!(Header::<ZstExtensions>::has_zero_sized_extensions());
 
         #[allow(unused)]
         struct NonZstExtensions(u32);
         assert_ne!(std::mem::size_of::<NonZstExtensions>(), 0);
-        assert!(Header::<NonZstExtensions>::has_non_zero_sized_extensions());
+        assert!(!Header::<NonZstExtensions>::has_zero_sized_extensions());
     }
 
     #[test]
