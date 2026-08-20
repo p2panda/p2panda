@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
+- net: Support bearer authentication for iroh relays [#1361](https://github.com/p2panda/p2panda/pull/1361)
+
 ### Changed
 
 - core: New forwards-compatible, safer and faster API to create, encode and decode operations [#1200](https://github.com/p2panda/p2panda/pull/1200)
