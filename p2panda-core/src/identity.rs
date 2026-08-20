@@ -22,15 +22,15 @@
 //! ```
 use std::fmt;
 use std::fmt::Debug;
-use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use ed25519_dalek::Signer;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::traits::Author;
 
 /// The length of an Ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
@@ -40,11 +40,6 @@ pub const SIGNING_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 
 /// The length of an Ed25519 `VerifyingKey`, in bytes.
 pub const VERIFYING_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
-
-pub trait Author:
-    Copy + Debug + Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
-{
-}
 
 #[cfg(any(test, feature = "test_utils"))]
 impl Author for char {}

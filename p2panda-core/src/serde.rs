@@ -10,10 +10,11 @@ use serde_bytes::{ByteBuf as SerdeByteBuf, Bytes as SerdeBytes};
 
 use crate::cursor::Cursor;
 use crate::hash::{Hash, HashError};
-use crate::identity::{Author, IdentityError, Signature, SigningKey, VerifyingKey};
+use crate::identity::{IdentityError, Signature, SigningKey, VerifyingKey};
 use crate::logs::{LogHeights, LogId};
 use crate::operation::Body;
 use crate::topic::{Topic, TopicError};
+use crate::traits::Author;
 
 /// Helper method for `serde` to serialize bytes into a hex string when using a human readable
 /// encoding (JSON, GraphQL), otherwise it serializes the bytes directly (CBOR).
@@ -139,7 +140,7 @@ impl Serialize for Body {
     where
         S: serde::Serializer,
     {
-        serialize_hex(&self.0, serializer)
+        serialize_hex(self.as_bytes(), serializer)
     }
 }
 
@@ -149,7 +150,7 @@ impl<'de> Deserialize<'de> for Body {
         D: serde::Deserializer<'de>,
     {
         let bytes = deserialize_hex(deserializer)?;
-        Ok(Body(bytes.to_vec()))
+        Ok(Body::from_bytes(bytes))
     }
 }
 

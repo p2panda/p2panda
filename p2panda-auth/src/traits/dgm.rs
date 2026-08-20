@@ -3,8 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use p2panda_core::identity::Author;
-use p2panda_core::traits::OperationId;
+use p2panda_core::traits::{Author, OperationId};
 
 use crate::Access;
 use crate::group::GroupMember;
