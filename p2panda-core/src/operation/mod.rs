@@ -40,7 +40,7 @@
 //! ### Custom extensions
 //!
 //! ```
-//! use p2panda_core::{Body, Extension, Header, SigningKey, PruneFlag};
+//! use p2panda_core::{Body, Header, SigningKey, PruneFlag};
 //! use serde::{Serialize, Deserialize};
 //!
 //! let signing_key = SigningKey::generate();
@@ -48,12 +48,6 @@
 //! #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 //! struct CustomExtensions {
 //!     prune_flag: PruneFlag,
-//! }
-//!
-//! impl Extension<PruneFlag> for CustomExtensions {
-//!     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-//!         Some(header.extensions.prune_flag.clone())
-//!     }
 //! }
 //!
 //! let extensions = CustomExtensions {
@@ -65,8 +59,7 @@
 //!     .body(&body)
 //!     .build(&signing_key, extensions);
 //!
-//! let prune_flag: PruneFlag = header.extension().unwrap();
-//! assert!(prune_flag.is_set())
+//! assert!(header.extensions.prune_flag.is_set())
 //! ```
 mod any;
 mod body;

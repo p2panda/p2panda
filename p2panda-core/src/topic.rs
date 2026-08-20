@@ -36,7 +36,7 @@ impl Topic {
         Self(rng.r#gen())
     }
 
-    pub fn from_bytes(&self, bytes: &[u8]) -> Result<Self, TopicError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TopicError> {
         Self::try_from(bytes)
     }
 

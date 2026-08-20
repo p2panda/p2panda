@@ -16,6 +16,8 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - core: New forwards-compatible, safer and faster API to create, encode and decode operations [#1200](https://github.com/p2panda/p2panda/pull/1200)
+- core: Remove `Extension` trait [#1370](https://github.com/p2panda/p2panda/pull/1370)
+- sync: Use Borrow<GroupsArgs> in groups processor instead [#1370](https://github.com/p2panda/p2panda/pull/1370)
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
 - sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
 - auth: Replace `IdentityHandle` and `OperationId` with traits from `p2panda-core` [#1193](https://github.com/p2panda/p2panda/pull/1193)

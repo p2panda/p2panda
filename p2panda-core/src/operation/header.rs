@@ -9,7 +9,7 @@ use crate::identity::{Signature, VerifyingKey};
 use crate::logs::SeqNum;
 use crate::operation::{AnyHeader, Builder};
 use crate::traits::{Chain, Digest, Extensions, Offchain, Provenance};
-use crate::{Body, Extension, HeaderError};
+use crate::{Body, HeaderError};
 
 /// Operation format version.
 pub type Version = u16;
@@ -142,14 +142,6 @@ where
         }
 
         self.size
-    }
-
-    /// Extract an extension value from the header.
-    pub fn extension<T>(&self) -> Option<T>
-    where
-        E: Extension<T>,
-    {
-        E::extract(self)
     }
 }
 

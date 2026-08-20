@@ -68,7 +68,6 @@
 //! ```
 pub mod cbor;
 pub mod cursor;
-pub mod extensions;
 pub mod hash;
 pub mod identity;
 pub mod logs;
@@ -82,7 +81,6 @@ pub mod topic;
 pub mod traits;
 
 pub use cursor::Cursor;
-pub use extensions::Extension;
 pub use hash::{Hash, HashError};
 pub use identity::{IdentityError, Signature, SigningKey, VerifyingKey};
 pub use logs::{LogId, SeqNum};
