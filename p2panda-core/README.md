@@ -67,7 +67,7 @@ Custom functionality can be added using extensions, for example, access-control 
 self-destructing messages, or encryption schemas.
 
 ```rust
-use p2panda_core::{Extension, Header};
+use p2panda_core::{Header, SigningKey};
 use serde::{Serialize, Deserialize};
 
 // Extend our operations with an "expiry" field we can use to implement
@@ -82,13 +82,13 @@ struct CustomExtensions {
     expiry: Expiry,
 }
 
-// Implement `Extension<T>` for each extension we want to add to our
-// header.
-impl Extension<Expiry> for CustomExtensions {
-    fn extract(header: &Header<Self>) -> Option<Expiry> {
-        Some(header.extensions.expiry.clone())
-    }
-}
+let signing_key = SigningKey::generate();
+
+let header = Header::builder()
+    .body(b"Hello, Panda!")
+    .build(&signing_key, CustomExtensions {
+        expiry: Expiry(1787246716),
+    });
 ```
 
 ## License

@@ -61,7 +61,54 @@ pub trait Offchain<ID> {
     fn payload_size(&self) -> PayloadSize;
 }
 
-/// Super-trait defining trait bounds required by custom extensions types.
+/// Custom extensions types.
+///
+/// User-defined extensions can be added to an operation's `Header` in order to extend the basic
+/// functionality of the core p2panda data types or to encode application-specific fields which
+/// should not be contained in the [`Body`](crate::Body).
+///
+/// This might be system-specific information relating to capabilities or key-agreement schemes
+/// which is required to enforce access-control restrictions during sync. Alternatively, extensions
+/// might be used to set expiration timestamps and deletion flags in order to facilitate garbage
+/// collection of stale data from the network. The core p2panda data types intentionally don't
+/// enforce a single approach to such areas where there are rightly many different approaches, with
+/// the most suitable being dependent on specific use-case requirements.
+///
+/// Interfaces which use p2panda core data types can require certain extensions to be present on any
+/// headers that their APIs accept using trait bounds. `p2panda-stream`, for example, uses the
+/// [`PruneFlag`](crate::PruneFlag) in order to implement automatic network-wide garbage collection.
+///
+/// Extensions are encoded on a header and sent over the wire. We need to satisfy all trait
+/// requirements that `Header` requires, including `Serialize` and `Deserialize`.
+///
+/// ## Example
+///
+/// ```
+/// use p2panda_core::{Hash, Header, SigningKey};
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Clone, Debug, Serialize, Deserialize)]
+/// struct LogId(Hash);
+///
+/// #[derive(Clone, Debug, Serialize, Deserialize)]
+/// struct CustomExtensions {
+///     log_id: Option<LogId>,
+///     expires: u64,
+/// }
+///
+/// let extensions = CustomExtensions {
+///     log_id: None,
+///     expires: 1787246796,
+/// };
+///
+/// let signing_key = SigningKey::generate();
+///
+/// let header = Header::builder()
+///     .body("Hello, Sloth".as_bytes())
+///     .build(&signing_key, extensions.clone());
+///
+/// assert_eq!(header.extensions.expires, 1787246796);
+/// ```
 pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 
 impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
