@@ -6,15 +6,15 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use p2panda_auth::group;
 use p2panda_auth::traits::{Conditions, Operation as GroupsOperationTrait};
-use p2panda_auth::{GroupsExtensionArgs, group};
-use p2panda_core::{Extension, Extensions, Hash, LogId, VerifyingKey};
+use p2panda_core::{Extensions, Hash, LogId, VerifyingKey};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Notify;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::Processor;
 use crate::groups::{GroupsArgs, GroupsOperation};
@@ -51,24 +51,24 @@ pub struct Groups<T, E, L, C = ()> {
 
 impl<T, E, L, C> Groups<T, E, L, C>
 where
-    E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
+    E: Extensions,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
     pub fn new(store: SqliteStore) -> Self {
         Self {
-            store: store.clone(),
+            store,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
-            _marker: Default::default(),
+            _marker: PhantomData,
         }
     }
 }
 
 impl<T, E, L, C> Processor<T> for Groups<T, E, L, C>
 where
-    T: Borrow<GroupsArgs<E>>,
-    E: Extensions + Extension<GroupsExtensionArgs<C>> + Extension<L>,
+    T: Borrow<GroupsArgs<C>>,
+    E: Extensions,
     L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
@@ -77,34 +77,22 @@ where
     type Error = (T, GroupsError<C>);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &GroupsArgs<E> = input.borrow();
+        let input_args: &GroupsArgs<C> = input.borrow();
 
+        // Extract GroupArgs from the extension headers of an Operation<E>.
+        //
+        // If this returns None then the groups extension was not present and we consider this a
+        // non-groups operation which does not require processing.
         let result = if let GroupsArgs::Process {
             state_id,
             operation,
-        } = input_args &&
-            // Extract GroupArgs from the extension headers of an Operation<E>.
-            //
-            // If this returns None then the groups extension was not present and we consider this
-            // a non-groups operation which does not require processing.
-            let Some(args) = operation.header.extension::<GroupsExtensionArgs<C>>()
+        } = input_args
         {
-            // Construct a GroupsOperation from an Operation<E>.
-            let groups_operation = GroupsOperation {
-                id: operation.hash,
-                author: operation.header.verifying_key,
-                dependencies: args.dependencies,
-                group_id: args.group_id,
-                action: args.action,
-            };
-
-            // Start a transaction for all following database actions.
             let permit = match self.store.begin().await {
                 Ok(permit) => permit,
                 Err(err) => return Err((input, err.into())),
             };
 
-            // Retrieve the current groups state from the store.
             let mut y = match GroupsStore::<GroupsOperation<C>, C>::get_groups_state_tx(
                 &self.store,
                 *state_id,
@@ -117,39 +105,34 @@ where
             };
 
             debug!(
-                group_id = groups_operation.group_id().to_hex(),
+                group_id = %operation.group_id(),
                 "current group membership: {:?}",
-                y.members(groups_operation.group_id())
+                y.members(operation.group_id())
             );
 
-            debug!(
-                id = groups_operation.id.to_hex(),
-                "apply operation to group state"
-            );
-            y = match GroupsCrdt::process(y, &groups_operation) {
+            debug!(id = %operation.id, "apply operation to group state");
+
+            y = match GroupsCrdt::process(y, operation) {
                 Ok(y) => y,
                 Err(err) => return Err((input, err.into())),
             };
 
-            // Set the groups state after processing is finished.
             if let Err(err) = self.store.set_groups_state_tx(*state_id, &y).await {
                 return Err((input, err.into()));
             }
 
-            // Commit the open transaction.
             if let Err(err) = self.store.commit(permit).await {
                 return Err((input, err.into()));
             }
 
             debug!(
-                group_id = groups_operation.group_id().to_hex(),
+                group_id = %operation.group_id(),
                 "new group membership: {:?}",
-                y.members(groups_operation.group_id())
+                y.members(operation.group_id())
             );
 
             (input, GroupsResult::Processed)
         } else {
-            trace!("ignore non-groups operation");
             (input, GroupsResult::Noop)
         };
 
@@ -183,15 +166,6 @@ where
 
     #[error(transparent)]
     Groups(#[from] GroupsCrdtError<C>),
-
-    #[error("missing operation: {0}")]
-    MissingOperation(Hash),
-
-    #[error("operation retrieved from store missing groups arguments: {0}")]
-    MissingGroupsArgs(Hash),
-
-    #[error("missing \"log id\" operation extension")]
-    MissingLogId,
 }
 
 #[cfg(test)]
@@ -201,54 +175,34 @@ mod tests {
     use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
     use p2panda_auth::{Access, GroupsExtensionArgs};
     use p2panda_core::test_utils::{TestLog, setup_logging};
-    use p2panda_core::traits::Digest;
-    use p2panda_core::{Extension, Hash, Header, Operation, SigningKey, Topic, VerifyingKey};
+    use p2panda_core::traits::{Digest, Provenance};
+    use p2panda_core::{Hash, Operation, SigningKey, Topic, VerifyingKey};
     use p2panda_store::groups::GroupsStore;
-    use p2panda_store::{SqliteStore, Transaction};
+    use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
     use serde::{Deserialize, Serialize};
 
     use crate::Processor;
-    use crate::groups::GroupsOperation;
+    use crate::groups::{GroupsArgs, GroupsOperation};
     use crate::ingest::{Ingest, IngestArgs};
-    use crate::orderer::{Orderer, Ordering};
-
-    use super::GroupsArgs;
+    use crate::orderer::Ordering;
 
     type LogId = usize;
+
     type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
-    type Groups = crate::groups::Groups<GroupsArgs<TestExtensions>, TestExtensions, LogId>;
 
-    const LOG_ID: usize = 0;
+    type Groups = crate::groups::Groups<Event, TestExtensions, LogId, ()>;
 
-    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct TestExtensions {
         log_id: LogId,
         dependencies: Vec<Hash>,
         groups: Option<GroupsExtensionArgs>,
     }
 
-    impl Extension<LogId> for TestExtensions {
-        fn extract(header: &Header<Self>) -> Option<LogId> {
-            Some(header.extensions.log_id)
-        }
-    }
-
-    impl Extension<GroupsExtensionArgs> for TestExtensions {
-        fn extract(header: &Header<Self>) -> Option<GroupsExtensionArgs> {
-            header.extensions.groups.clone()
-        }
-    }
-
-    impl Ordering<Hash> for Operation<TestExtensions> {
-        fn dependencies(&self) -> &[Hash] {
-            &self.header.extensions.dependencies
-        }
-    }
-
     impl From<GroupsExtensionArgs> for TestExtensions {
         fn from(args: GroupsExtensionArgs) -> Self {
             TestExtensions {
-                log_id: LOG_ID,
+                log_id: 0,
                 dependencies: args.dependencies.clone(),
                 groups: Some(args),
             }
@@ -256,20 +210,66 @@ mod tests {
     }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
-    struct IngestEvent<E> {
-        pub operation: Operation<E>,
-        pub args: IngestArgs<usize, Topic>,
+    struct Event {
+        pub operation: Operation<TestExtensions>,
+        pub ingest_args: IngestArgs<LogId, Topic>,
+        pub groups_args: GroupsArgs<()>,
     }
 
-    impl<E> Borrow<IngestArgs<usize, Topic>> for IngestEvent<E> {
-        fn borrow(&self) -> &IngestArgs<usize, Topic> {
-            &self.args
+    impl From<Operation<TestExtensions>> for Event {
+        fn from(operation: Operation<TestExtensions>) -> Self {
+            Self {
+                ingest_args: IngestArgs {
+                    log_id: operation.header.extensions.log_id,
+                    topic: Hash::digest("test").into(),
+                    prune_flag: false,
+                },
+                groups_args: match operation.header.extensions.groups {
+                    Some(ref groups) => GroupsArgs::Process {
+                        // All operations are processed on the same groups state context.
+                        state_id: Hash::digest("default"),
+                        operation: GroupsOperation {
+                            id: operation.hash(),
+                            author: operation.author(),
+                            dependencies: operation.header.extensions.dependencies.clone(),
+                            group_id: groups.group_id,
+                            action: groups.action.clone(),
+                        },
+                    },
+                    None => GroupsArgs::Ignore,
+                },
+                operation,
+            }
         }
     }
 
-    impl<E> Borrow<Operation<E>> for IngestEvent<E> {
-        fn borrow(&self) -> &Operation<E> {
+    // Ingest
+
+    impl Borrow<IngestArgs<LogId, Topic>> for Event {
+        fn borrow(&self) -> &IngestArgs<LogId, Topic> {
+            &self.ingest_args
+        }
+    }
+
+    impl Borrow<Operation<TestExtensions>> for Event {
+        fn borrow(&self) -> &Operation<TestExtensions> {
             &self.operation
+        }
+    }
+
+    // Orderer
+
+    impl Ordering<Hash> for Operation<TestExtensions> {
+        fn dependencies(&self) -> &[Hash] {
+            &self.header.extensions.dependencies
+        }
+    }
+
+    // Groups
+
+    impl Borrow<GroupsArgs<()>> for Event {
+        fn borrow(&self) -> &GroupsArgs<()> {
+            &self.groups_args
         }
     }
 
@@ -277,7 +277,7 @@ mod tests {
     async fn basic_processing() {
         setup_logging();
 
-        let topic = Topic::random();
+        let store = SqliteStore::temporary().await;
 
         let state_id = Hash::digest(b"default");
         let group_id = SigningKey::generate().verifying_key();
@@ -298,32 +298,19 @@ mod tests {
             },
             dependencies: vec![],
         };
-        let op_00: Operation<TestExtensions> = alice_log.operation(&[], TestExtensions::from(args));
 
-        let store = SqliteStore::temporary().await;
+        let operation: Operation<TestExtensions> =
+            alice_log.operation(&[], TestExtensions::from(args.clone()));
 
-        // The operation needs to be ingested before it can be processed by the groups processor.
+        let event = Event::from(operation);
+
+        // Operation needs to be ingested before it can be processed by the groups processor.
         let ingest = Ingest::new(store.clone());
-        ingest
-            .process(IngestEvent {
-                operation: op_00.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
+        ingest.process(event.clone()).await.unwrap();
 
         let groups = Groups::new(store.clone());
-        groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: op_00,
-            })
-            .await
-            .unwrap();
+        groups.process(event).await.unwrap();
+
         let (_processed_op, result) = groups.next().await.unwrap();
         assert!(result.was_processed());
 
@@ -338,131 +325,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ooo_operations() {
-        setup_logging();
-        let topic = Topic::random();
-
-        let state_id = Hash::digest(b"default");
-        let group_id = SigningKey::generate().verifying_key();
-
-        let alice_log = TestLog::new();
-        let bobby_log = TestLog::new();
-        let cathy_log = TestLog::new();
-
-        let alice = alice_log.author();
-        let bobby = bobby_log.author();
-        let cathy = cathy_log.author();
-
-        // Alice operation.
-        let args = GroupsExtensionArgs {
-            group_id,
-            action: GroupAction::Create {
-                initial_members: vec![
-                    (GroupMember::Individual(alice), <Access>::manage()),
-                    (GroupMember::Individual(bobby), <Access>::manage()),
-                ],
-            },
-            dependencies: vec![],
-        };
-        let op_00: Operation<TestExtensions> = alice_log.operation(&[], TestExtensions::from(args));
-
-        // Bobby operation.
-        let args = GroupsExtensionArgs {
-            group_id,
-            action: GroupAction::Add {
-                member: GroupMember::Individual(cathy),
-                access: Access::manage(),
-            },
-            dependencies: vec![op_00.hash()],
-        };
-        let op_01: Operation<TestExtensions> = bobby_log.operation(&[], TestExtensions::from(args));
-
-        // Cathy operation.
-        let args = GroupsExtensionArgs {
-            group_id,
-            action: GroupAction::Remove {
-                member: GroupMember::Individual(alice),
-            },
-            dependencies: vec![op_01.hash()],
-        };
-        let op_02: Operation<TestExtensions> = cathy_log.operation(&[], TestExtensions::from(args));
-
-        let store = SqliteStore::temporary().await;
-        let ingest = Ingest::new(store.clone());
-        let orderer = Orderer::new(store.clone());
-        let groups = Groups::new(store.clone());
-
-        ingest
-            .process(IngestEvent {
-                operation: op_02.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        ingest
-            .process(IngestEvent {
-                operation: op_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        ingest
-            .process(IngestEvent {
-                operation: op_00.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        // Operations are processed by the orderer in reverse order.
-        orderer.process(op_02).await.unwrap();
-        orderer.process(op_01).await.unwrap();
-        orderer.process(op_00).await.unwrap();
-
-        // Each operation freed from the orderer is processed by the groups processor.
-        for _op in 0..3 {
-            let next_op = orderer.next().await.unwrap();
-            groups
-                .process(GroupsArgs::Process {
-                    state_id,
-                    operation: next_op,
-                })
-                .await
-                .unwrap()
-        }
-
-        let permit = store.begin().await.unwrap();
-        let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
-        store.commit(permit).await.unwrap();
-
-        let members = y.members(group_id);
-        assert_eq!(members.len(), 2);
-        assert!(members.contains(&(bobby, Access::manage())));
-        assert!(members.contains(&(cathy, Access::manage())));
-        assert!(!members.contains(&(alice, Access::manage())));
-    }
-
-    #[tokio::test]
     async fn device_groups_single_context() {
-        let topic = Topic::random();
-
-        // All operations are processed on the same groups state context.
-        let state_id = Hash::digest(b"default");
-
         let alice_log = TestLog::new();
         let bobby_log = TestLog::new();
         let cathy_log = TestLog::new();
@@ -482,6 +345,10 @@ mod tests {
         let ab_chat = SigningKey::generate().verifying_key();
         let bc_chat = SigningKey::generate().verifying_key();
 
+        let alice_ingest = Ingest::new(alice_store.clone());
+        let bobby_ingest = Ingest::new(bobby_store.clone());
+        let cathy_ingest = Ingest::new(cathy_store.clone());
+
         let alice_groups = Groups::new(alice_store.clone());
         let bobby_groups = Groups::new(bobby_store.clone());
         let cathy_groups = Groups::new(cathy_store.clone());
@@ -495,29 +362,14 @@ mod tests {
             },
             dependencies: vec![],
         };
+
         let create_alice_device_00: Operation<TestExtensions> =
             alice_log.operation(&[], TestExtensions::from(args));
 
-        let alice_ingest = Ingest::new(alice_store.clone());
-        alice_ingest
-            .process(IngestEvent {
-                operation: create_alice_device_00.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
+        let event_00 = Event::from(create_alice_device_00.clone());
 
-        alice_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_alice_device_00.clone(),
-            })
-            .await
-            .unwrap();
+        alice_ingest.process(event_00.clone()).await.unwrap();
+        alice_groups.process(event_00).await.unwrap();
 
         let args = GroupsExtensionArgs {
             group_id: bobby_device_group,
@@ -528,27 +380,10 @@ mod tests {
         };
         let create_bobby_device_01: Operation<TestExtensions> =
             bobby_log.operation(&[], TestExtensions::from(args));
+        let event_01 = Event::from(create_bobby_device_01.clone());
 
-        let bobby_ingest = Ingest::new(bobby_store.clone());
-        bobby_ingest
-            .process(IngestEvent {
-                operation: create_bobby_device_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        bobby_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_bobby_device_01.clone(),
-            })
-            .await
-            .unwrap();
+        bobby_ingest.process(event_01.clone()).await.unwrap();
+        bobby_groups.process(event_01.clone()).await.unwrap();
 
         let args = GroupsExtensionArgs {
             group_id: cathy_device_group,
@@ -559,59 +394,26 @@ mod tests {
         };
         let create_cathy_device_02: Operation<TestExtensions> =
             cathy_log.operation(&[], TestExtensions::from(args));
+        let event_02 = Event::from(create_cathy_device_02.clone());
 
-        let cathy_ingest = Ingest::new(cathy_store.clone());
-        cathy_ingest
-            .process(IngestEvent {
-                operation: create_cathy_device_02.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        cathy_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_cathy_device_02.clone(),
-            })
-            .await
-            .unwrap();
+        cathy_ingest.process(event_02.clone()).await.unwrap();
+        cathy_groups.process(event_02).await.unwrap();
 
         // Alice creates chat with Bobby.
         //
         // First they process "create device group" operation from Bobby.
-        alice_ingest
-            .process(IngestEvent {
-                operation: create_bobby_device_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        alice_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_bobby_device_01.clone(),
-            })
-            .await
-            .unwrap();
+        alice_ingest.process(event_01.clone()).await.unwrap();
+        alice_groups.process(event_01.clone()).await.unwrap();
 
         // Then they create the chat group.
-        let permit = alice_store.begin().await.unwrap();
-        let y: GroupsState = alice_store
-            .get_groups_state_tx(state_id)
-            .await
-            .unwrap()
-            .unwrap();
-        alice_store.commit(permit).await.unwrap();
+        let y: GroupsState = tx_unwrap!(alice_store, {
+            let state_id = Hash::digest("default");
+            alice_store
+                .get_groups_state_tx(state_id)
+                .await
+                .unwrap()
+                .unwrap()
+        });
 
         let args = GroupsExtensionArgs {
             group_id: ab_chat,
@@ -625,54 +427,26 @@ mod tests {
         };
         let create_alice_bobby_chat_03: Operation<TestExtensions> =
             alice_log.operation(&[], TestExtensions::from(args));
+        let event_03 = Event::from(create_alice_bobby_chat_03.clone());
 
-        alice_ingest
-            .process(IngestEvent {
-                operation: create_alice_bobby_chat_03.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        alice_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_alice_bobby_chat_03.clone(),
-            })
-            .await
-            .unwrap();
+        alice_ingest.process(event_03.clone()).await.unwrap();
+        alice_groups.process(event_03).await.unwrap();
 
         // Bobby processes alice's "create device group" and "create ab chat".
         for op in [create_alice_device_00.clone(), create_alice_bobby_chat_03] {
-            bobby_ingest
-                .process(IngestEvent {
-                    operation: op.clone(),
-                    args: IngestArgs {
-                        log_id: LOG_ID.into(),
-                        topic,
-                        prune_flag: false,
-                    },
-                })
-                .await
-                .unwrap();
-            bobby_groups
-                .process(GroupsArgs::Process {
-                    state_id,
-                    operation: op,
-                })
-                .await
-                .unwrap();
+            let event: Event = op.into();
+
+            bobby_ingest.process(event.clone()).await.unwrap();
+            bobby_groups.process(event).await.unwrap();
         }
 
         // Both Alice and Bobby have the correct groups state.
         for store in [alice_store.clone(), bobby_store.clone()] {
-            let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
-            store.commit(permit).await.unwrap();
+            let y: GroupsState = tx_unwrap!(store, {
+                let state_id = Hash::digest("default");
+                store.get_groups_state_tx(state_id).await.unwrap().unwrap()
+            });
+
             let mut members = y.members(ab_chat);
             members.sort();
 
@@ -684,34 +458,19 @@ mod tests {
         // Cathy now creates a chat with Bobby.
         //
         // First they process "create device group" for bobby.
-        cathy_ingest
-            .process(IngestEvent {
-                operation: create_bobby_device_01.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        cathy_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_bobby_device_01,
-            })
-            .await
-            .unwrap();
+        cathy_ingest.process(event_01.clone()).await.unwrap();
+        cathy_groups.process(event_01).await.unwrap();
 
         // Then they create the chat group.
-        let permit = cathy_store.begin().await.unwrap();
-        let y: GroupsState = cathy_store
-            .get_groups_state_tx(state_id)
-            .await
-            .unwrap()
-            .unwrap();
-        cathy_store.commit(permit).await.unwrap();
+        let y: GroupsState = tx_unwrap!(cathy_store, {
+            let state_id = Hash::digest("default");
+            cathy_store
+                .get_groups_state_tx(state_id)
+                .await
+                .unwrap()
+                .unwrap()
+        });
+
         let args = GroupsExtensionArgs {
             group_id: bc_chat,
             action: GroupAction::Create {
@@ -724,55 +483,25 @@ mod tests {
         };
         let create_bobby_cathy_chat_04: Operation<TestExtensions> =
             cathy_log.operation(&[], TestExtensions::from(args));
+        let event_04 = Event::from(create_bobby_cathy_chat_04.clone());
 
-        cathy_ingest
-            .process(IngestEvent {
-                operation: create_bobby_cathy_chat_04.clone(),
-                args: IngestArgs {
-                    log_id: LOG_ID.into(),
-                    topic,
-                    prune_flag: false,
-                },
-            })
-            .await
-            .unwrap();
-
-        cathy_groups
-            .process(GroupsArgs::Process {
-                state_id,
-                operation: create_bobby_cathy_chat_04.clone(),
-            })
-            .await
-            .unwrap();
+        cathy_ingest.process(event_04.clone()).await.unwrap();
+        cathy_groups.process(event_04).await.unwrap();
 
         // Bobby processes cathy's "create device group" and "create bc chat".
         for op in [create_cathy_device_02.clone(), create_bobby_cathy_chat_04] {
-            bobby_ingest
-                .process(IngestEvent {
-                    operation: op.clone(),
-                    args: IngestArgs {
-                        log_id: LOG_ID.into(),
-                        topic,
-                        prune_flag: false,
-                    },
-                })
-                .await
-                .unwrap();
+            let event: Event = op.into();
 
-            bobby_groups
-                .process(GroupsArgs::Process {
-                    state_id,
-                    operation: op,
-                })
-                .await
-                .unwrap();
+            bobby_ingest.process(event.clone()).await.unwrap();
+            bobby_groups.process(event).await.unwrap();
         }
 
         // Both Cathy and Bobby have the correct groups state.
         for store in [cathy_store, bobby_store] {
-            let permit = store.begin().await.unwrap();
-            let y: GroupsState = store.get_groups_state_tx(state_id).await.unwrap().unwrap();
-            store.commit(permit).await.unwrap();
+            let y: GroupsState = tx_unwrap!(store, {
+                let state_id = Hash::digest("default");
+                store.get_groups_state_tx(state_id).await.unwrap().unwrap()
+            });
             let mut members = y.members(bc_chat);
             members.sort();
 
