@@ -2,12 +2,12 @@
 
 use std::time::Duration;
 
+use p2panda_auth::group::GroupAction;
+use p2panda_core::Topic;
 use p2panda_core::traits::{Provenance, ShortFormat};
-use p2panda_core::{Hash, Topic};
 use p2panda_net::connection_authoriser::ConnectionAuthoriser;
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
-use p2panda_store::groups::GroupsStore;
+use p2panda_spaces::space::GroupsScope;
+use p2panda_spaces::{Event, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
@@ -21,7 +21,9 @@ use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
 use crate::spaces::authoriser::update_authoriser;
-use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
+use crate::spaces::types::{
+    AuthCapabilities, InnerSpace, InnerSpaceError, SpacesArgs, SpacesManager, SpacesStore,
+};
 use crate::spaces::{SpacesManagerError, group_log_id};
 use crate::streams::{
     ImportLocalTx, LocalStreamFuture, ToOutputTx, to_stream_event, to_system_event,
@@ -74,7 +76,7 @@ pub enum RepairStrategy {
 ///
 /// All new messages will be sent into the topic stream to be processed and forwarded to other
 /// peers.
-pub(crate) async fn repair_space<M>(
+pub(crate) async fn sync_and_repair_space<M>(
     space_id: SpaceId,
     strategy: &RepairStrategy,
     manager: &SpacesManager,
@@ -83,142 +85,38 @@ pub(crate) async fn repair_space<M>(
     to_output_tx: &ToOutputTx<M>,
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
     connection_authoriser: &ConnectionAuthoriser,
-) -> Result<bool, RepairError> {
+) -> Result<(), RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
-    // Collect all missing groups operations. These will be imported into the space and forwarded
-    // to live-mode peers.
-    let permit = store.begin().await?;
-
-    let Some(space_y): Option<SpacesStoreState<AuthCapabilities>> =
-        spaces_store.get_space_state_tx(&space_id).await?
-    else {
+    let Some(space) = manager.space(space_id).await? else {
         // This can happen if we didn't receive any space control messages yet.
         trace!(
             node_id = manager.id().fmt_short(),
             space_id = space_id.fmt_short(),
             "space not yet materialised"
         );
-        store.commit(permit).await?;
-        return Ok(false);
+        return Ok(());
     };
 
-    let groups_y: AuthGroupState<AuthCapabilities> = spaces_store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-        .await?
-        .unwrap_or_default();
-
-    store.commit(permit).await?;
-
-    let group_ids = match strategy {
-        RepairStrategy::Global => groups_y.groups_global(),
-        RepairStrategy::Partial(group_ids) => group_ids.clone(),
+    // TODO: This is a simple conversion between types, we could even get rid of RepairStrategy in
+    // favour of using GroupsScope.
+    let scope = match strategy {
+        RepairStrategy::Global => GroupsScope::Global,
+        RepairStrategy::Partial(_) => unimplemented!(),
     };
 
-    let repair = match manager.space_repair_required(space_id, &group_ids).await {
-        Ok(ids) => ids,
-        Err(err) => {
-            return Err(err.into());
-        }
-    };
+    // Identify and send missing group operations to the pipeline.
+    send_missing_group_operations(&space, store, &scope, import_local_tx).await?;
 
-    if !repair {
-        return Ok(false);
-    }
+    // Incorporate missing group operations into the space.
+    let events = repair_space(&space, &spaces_store, &scope, import_local_tx).await?;
 
-    // Collect all missing groups operations. These will be imported into the space and forwarded to
-    // live-mode peers.
-    let permit = store.begin().await?;
-
-    let mut groups_operations = vec![];
-    for id in groups_y.inner.toposort(&group_ids) {
-        if space_y.groups_y.inner.operations.contains_key(&id) {
-            continue;
-        }
-
-        let Some(operation): Option<Operation> = store.get_operation_tx(&id).await? else {
-            warn!("missing expected auth groups operation");
-            continue;
-        };
-
-        // Ignore non-groups operations.
-        let Some(SpacesArgs::Group {
-            group_id,
-            group_action,
-            ..
-        }) = operation.header.extensions.spaces_args()
-        else {
-            warn!("expected auth groups operation");
-            continue;
-        };
-
-        // If this is a create operation then associate the groups log with this space topic.
-        if group_action.is_create() {
-            store
-                .associate(
-                    &Topic::from(space_id),
-                    &operation.author(),
-                    &group_log_id(group_id),
-                )
-                .await?;
-        }
-
-        groups_operations.push(operation)
-    }
-
-    store.commit(permit).await?;
-
-    // Attempt to repair the space. As we pass in an array containing a single space id there will
-    // be only ever max one result returned.
+    // Update authoriser state.
     //
-    // Forging these spaces messages will also associate any group logs with this space topic.
-    //
-    // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
-    // everything part of one transaction on this level yet. It isn't a source of bugs though so
-    // for now this is ok.
-    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &group_ids).await?;
-
-    // If no space messages were forged during repairing then no state change occurred and we
-    // don't need to persist here. This occurs when we are not a _read_ member of the space (yet).
-    //
-    // @TODO: Once control messages are encrypted it will not be possible for non-read members to
-    // receives any control messages and so this logic can be refactored.
-    if !spaces_messages.is_empty() {
-        let permit = store.begin().await?;
-
-        let space_id = space_y.space_id;
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
-            .await?;
-
-        store.commit(permit).await?;
-    }
-
-    // If there are no messages to send then exit here.
-    if spaces_messages.is_empty() && groups_operations.is_empty() {
-        return Ok(false);
-    }
-
-    // Send all resulting operations into the stream.
-    let op_count = groups_operations.len() + spaces_messages.len();
-    let operations = groups_operations.into_iter().chain(
-        spaces_messages
-            .into_iter()
-            .map(|message| message.into_operation()),
-    );
-    let stream = Box::pin(futures_util::stream::iter(operations));
-    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-    import_local_tx
-        .send((stream, ready_tx))
-        .await
-        .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
-
-    // Await processing of operations to be complete.
-    ready_rx.await?;
-
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
     update_authoriser(connection_authoriser, &events).await;
 
+    // Send resulting enriched space events to the user.
     let events = events
         .into_iter()
         .filter_map(|event| match event {
@@ -233,14 +131,128 @@ pub(crate) async fn repair_space<M>(
         .await
         .map_err(|_| RepairError::AppSend)?;
 
-    debug!(
-        node_id = manager.id().fmt_short(),
-        space_id = space_id.fmt_short(),
-        operations = op_count,
-        "space repaired"
-    );
+    Ok(())
+}
 
-    Ok(true)
+/// Identify group operations which are present in the global groups state but not incorporated
+/// into the space and send them to the pipeline.
+///
+/// We need any running sync sessions to receive these and to associate the group logs with the
+/// space topic.
+async fn send_missing_group_operations(
+    space: &InnerSpace,
+    store: &SqliteStore,
+    scope: &GroupsScope,
+    import_local_tx: &ImportLocalTx,
+) -> Result<(), RepairError> {
+    let missing_group_messages = space.missing_group_messages(scope).await?;
+
+    if missing_group_messages.is_empty() {
+        return Ok(());
+    }
+
+    // Collect all missing groups operations. These will be imported into the space and forwarded to
+    // live-mode peers.
+    let permit = store.begin().await?;
+
+    let mut group_operations = vec![];
+    for id in missing_group_messages {
+        let Some(operation): Option<Operation> = store.get_operation_tx(&id).await? else {
+            warn!("missing expected groups operation");
+            continue;
+        };
+
+        debug!(id=%operation.hash, seq_num=operation.header.seq_num, "import group operation into space topic");
+
+        // TODO: This can happen in spaces processor.
+        associate_group_log(space.id(), store, &operation).await?;
+
+        group_operations.push(operation)
+    }
+
+    store.commit(permit).await?;
+
+    let stream = Box::pin(futures_util::stream::iter(group_operations));
+    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
+    import_local_tx
+        .send((stream, ready_tx))
+        .await
+        .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
+
+    // Await processing of operations to be complete.
+    ready_rx.await?;
+
+    Ok(())
+}
+
+async fn associate_group_log(
+    space_id: SpaceId,
+    store: &SqliteStore,
+    operation: &Operation,
+) -> Result<(), SqliteError> {
+    // Only make the association for "create" operations
+    let Some(SpacesArgs::Group {
+        group_id,
+        group_action: GroupAction::Create { .. },
+        ..
+    }) = operation.header.extensions.spaces_args()
+    else {
+        return Ok(());
+    };
+
+    // If this is a create operation then associate the groups log with this space topic.
+    store
+        .associate(
+            &Topic::from(space_id),
+            &operation.author(),
+            &group_log_id(group_id),
+        )
+        .await?;
+    Ok(())
+}
+
+/// Forge SpaceMembership messages for any group operations missing from the space state.
+///
+/// Resulting operations are sent to the pipeline.
+async fn repair_space(
+    space: &InnerSpace,
+    store: &SpacesStore,
+    scope: &GroupsScope,
+    import_local_tx: &ImportLocalTx,
+) -> Result<Vec<Event<AuthCapabilities>>, RepairError> {
+    let (space_y, spaces_messages, events) = space.repair(scope).await?;
+    let operations: Vec<_> = spaces_messages
+        .into_iter()
+        .map(|message| message.into_operation())
+        .collect();
+
+    // If no space messages were forged during repairing then no state change occurred and we can
+    // return here.
+    if operations.is_empty() {
+        return Ok(vec![]);
+    };
+
+    let permit = store.begin().await?;
+
+    let space_id = space_y.space_id;
+    store
+        .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+        .await?;
+
+    store.commit(permit).await?;
+
+    // Send all resulting operations into the stream.
+    let stream = Box::pin(futures_util::stream::iter(operations));
+    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
+    import_local_tx
+        .send((stream, ready_tx))
+        .await
+        .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
+
+    // Await processing of operations to be complete.
+    ready_rx.await?;
+
+    Ok(events)
 }
 
 pub type RepairTaskSender = mpsc::UnboundedSender<RepairTaskCommand>;
@@ -277,7 +289,7 @@ impl RepairTask {
                     biased;
 
                     _ = interval.tick() => {
-                        let result = repair_space(
+                        let result = sync_and_repair_space(
                             space_id,
                             &strategy,
                             &manager,
@@ -302,7 +314,7 @@ impl RepairTask {
 
                         match command {
                             RepairTaskCommand::Repair(reply_tx) => {
-                                let result = repair_space(
+                                let result = sync_and_repair_space(
                                     space_id,
                                     &strategy,
                                     &manager,
@@ -329,11 +341,11 @@ impl RepairTask {
         Self { tx }
     }
 
-    pub async fn repair(&self) -> Result<bool, RepairError> {
+    pub async fn repair(&self) -> Result<(), RepairError> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(RepairTaskCommand::Repair(tx))?;
-        let repaired = rx.await??;
-        Ok(repaired)
+        rx.await??;
+        Ok(())
     }
 }
 
@@ -341,7 +353,7 @@ impl RepairTask {
 #[derive(Debug)]
 pub enum RepairTaskCommand {
     /// Repair a space already registered with the task.
-    Repair(Sender<Result<bool, RepairError>>),
+    Repair(Sender<Result<(), RepairError>>),
 }
 
 #[derive(Debug, Error)]
@@ -352,6 +364,9 @@ pub enum RepairError {
 
     #[error(transparent)]
     SpacesManager(#[from] SpacesManagerError),
+
+    #[error(transparent)]
+    Space(#[from] InnerSpaceError),
 
     #[error("could not send to processor pipeline: {0}")]
     SendToProcessor(String),

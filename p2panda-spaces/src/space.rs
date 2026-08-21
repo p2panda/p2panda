@@ -642,28 +642,149 @@ where
         Ok(Some((y, events)))
     }
 
+    /// Returns group messages (in topological order) which are present on the global groups state
+    /// but not yet incorporated into the space. This is useful when we want to merge these
+    /// messages into the space and forward them to other space subscribers.
+    ///
+    /// This would be required in the following scenarios 1) messages for a member group were
+    /// created concurrently to the space creation 2) we want to add a "not-yet-incorporated"
+    /// group to the space as a member 3) we want to pro-actively "push" groups into a space in
+    /// order to aid group discovery.
+    ///
+    /// The query can be filtered to a sub-set of all groups based on a [`GroupsScope`]. This
+    /// method can be used by any coordination layer to understand which messages already on our
+    /// global groups state should be merged into a space.
+    ///
+    /// When managing a space the following requirements should be considered:
+    ///
+    /// 1) For a current member group: all known group messages must be incorporated
+    /// 2) For a to-be-added member group: all known group messages must be incorporated
+    /// 3) For a non-member group: all known group messages can optionally be incorporated to aid
+    ///    group discovery
+    ///
+    /// These statements assume that all transitive group member's messages are first
+    /// incorporated.
+    ///
+    /// With above statements in mind, one can see how the this method can be useful in several
+    /// cases.
+    ///
+    /// ## 1) keep the space up-to-date with known group changes.
+    ///
+    /// ```text
+    /// Global Groups   : [A, B]
+    /// Space 1 Members : [A, B]
+    ///
+    /// ==== Group C was created and added to Group B concurrently ====
+    ///
+    /// Global Groups : [A, B, C]
+    /// Space Members : [A, B] <- now missing group C operations
+    ///
+    /// Any group member aware of these concurrent changes should send the group messages to
+    /// subscribers and incorporate them into the space.
+    /// ```
+    ///
+    /// ## 2) add a new group to the space.
+    ///
+    /// ```text
+    /// Global Groups : [A, B]
+    /// Space Members : [A] <- doesn't need group B operations yet
+    ///
+    /// ==== Group B to be added to Space ====
+    ///
+    /// Before adding B then all it's messages must be incorporated into the space.
+    /// ```
+    ///
+    /// ## 3) highly-discoverable groups
+    ///
+    /// ```text
+    /// Global Groups : [A, B, C, D, E]
+    /// Space Members : [A] <- doesn't need other group operations except for discovery
+    ///  
+    /// ==== Any group may be added to a space by any member ====
+    ///
+    /// In order to make groups automatically discoverable their messages should be proactively
+    /// forwarded and incorporated into a space.
+    /// ```
+    pub async fn missing_group_messages(
+        &self,
+        scope: &GroupsScope,
+    ) -> Result<Vec<OperationId>, SpaceError<F, C>> {
+        let y = self.state().await?;
+        let groups_y = self.manager.get_groups_state().await?;
+
+        let group_ids = match scope {
+            GroupsScope::Global => groups_y.groups_global(),
+            GroupsScope::Group(id) => vec![*id],
+            GroupsScope::Space => vec![y.group_id],
+        };
+
+        let mut groups_operations = vec![];
+        for id in groups_y.inner.toposort(&group_ids) {
+            if y.groups_y.inner.operations.contains_key(&id) {
+                continue;
+            }
+            groups_operations.push(id)
+        }
+
+        Ok(groups_operations)
+    }
+
+    /// Publish a reference to any global groups messages missing from a space.
+    ///
+    /// Each space holds a copy of the shared groups state by publishing a reference to each group
+    /// control message it witnesses. A space can get out-of-sync with this shared state if group
+    /// messages were published without the local peer knowing about a space, either because they
+    /// are not a member or because they were yet to learn about it. Group membership changes will
+    /// not be reflected in the space until this reference message is published.
+    ///
+    /// ## Out-of-sync Space
+    ///
+    /// ```text
+    /// Shared Groups State   Space State
+    ///
+    ///       [x]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    /// ```
+    ///
+    /// On identifying that a space needs "repairing" by calling space_repair_required(), _any_
+    /// current space member can publish a message into the space referencing the missing group
+    /// message.
+    ///
+    /// It is recommended that repair does not occur after every call to process() as this would
+    /// cause peers to publish redundant pointers into the spaces graph. Although these duplicates
+    /// do not introduce any buggy or unexpected behavior, repairing after every processed message
+    /// would introduce an undesirable level of redundancy.
+    ///
+    /// ## Redundant pointers
+    ///
+    /// ```text
+    /// Shared Groups State   Space State
+    ///
+    ///       [x] <-----------[z1][z2][z3]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    ///       [x] <-------------- [z]
+    /// ```
+    ///
+    /// A sensible approach to detecting and repairing spaces will involve processing messages in
+    /// logical batches and only detecting and repairing any out-of-sync spaces after a batch has
+    /// been processed. Alternatively some scheduling or throttling logic could be employed.
     pub async fn repair(
         &self,
-        groups: &[GroupId],
+        scope: &GroupsScope,
     ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
+        let missing_group_messages = self.missing_group_messages(scope).await?;
         let groups_y = self.manager.get_groups_state().await?;
         let mut space_y = self.state().await?;
 
         let mut messages = vec![];
         let mut events = vec![];
-        // @TODO: we can optimize here by calculating the diff between the current space auth
-        // graph tips and the global auth graph tips. Then we could apply only the diff, rather
-        // than processing all operations as we do here.
-        let sorted = groups_y.inner.toposort(groups);
-        for id in sorted {
-            // This auth message has already been processed by the space.
-            if space_y.groups_y.inner.operations.contains_key(&id) {
-                continue;
-            };
-
-            let operation = groups_y.inner.operations.get(&id).unwrap();
+        for id in missing_group_messages.iter() {
+            let group_message = groups_y.inner.operations.get(id).unwrap();
             let (space_y_i, space_message, space_events) =
-                Space::process_auth_message(self.manager.clone(), space_y, operation).await?;
+                Space::process_auth_message(self.manager.clone(), space_y, group_message).await?;
 
             space_y = space_y_i;
 
@@ -907,6 +1028,18 @@ where
     }
 }
 
+/// Enum used for specifying the scope which can be used to filter operations in the groups graph.
+pub enum GroupsScope {
+    /// All groups in the global state.
+    Global,
+
+    /// A single group.
+    Group(GroupId),
+
+    /// The space group.
+    Space,
+}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl<S, F, C> Space<S, F, C>
 where
@@ -1008,9 +1141,9 @@ where
 
     pub async fn repair_persisted(
         &self,
-        groups: &[GroupId],
+        scope: &GroupsScope,
     ) -> Result<(Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
-        let (space_y, messages, events) = self.repair(groups).await?;
+        let (space_y, messages, events) = self.repair(scope).await?;
         self.manager
             .set_space_state(&self.id(), &space_y.into())
             .await?;

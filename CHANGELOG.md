@@ -49,6 +49,8 @@ Highlights are marked with a pancake 🥞
 - node: Move repair task out of stream [#1347](https://github.com/p2panda/p2panda/pull/1347)
 - node: Increase stream buffer size [#1360](https://github.com/p2panda/p2panda/pull/1360)
 - node: Use random network ids in tests [#1360](https://github.com/p2panda/p2panda/pull/1360)
+- node: Refactor RepairTask into clear functions [#1377](https://github.com/p2panda/p2panda/pull/1377)
+- spaces: Introduce Space::missing_group_messages method [#1377](https://github.com/p2panda/p2panda/pull/1377)
 
 ### Fixed
 

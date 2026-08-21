@@ -377,9 +377,9 @@ where
 
     /// Incorporate missing groups messages into the space, any resulting operations are published
     /// live into the space topic.
-    pub(crate) async fn repair(&self) -> Result<bool, RepairError> {
-        let repaired = self.repair_task.repair().await?;
-        Ok(repaired)
+    pub(crate) async fn repair(&self) -> Result<(), RepairError> {
+        self.repair_task.repair().await?;
+        Ok(())
     }
 }
 

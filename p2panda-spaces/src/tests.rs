@@ -20,7 +20,7 @@ use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, Sp
 use crate::manager::ManagerError;
 use crate::member::Member;
 use crate::message::SpacesArgs;
-use crate::space::{Space, SpaceError};
+use crate::space::{GroupsScope, Space, SpaceError};
 use crate::test_utils::{TestPeer, TestSpaceError};
 use crate::types::AuthGroupAction;
 
@@ -1223,10 +1223,11 @@ async fn shared_auth_state() {
         .unwrap();
 
     // Make Space 0 and Space 1 aware of this change.
-    let (messages, events) = space_0.repair_persisted(&[group.id()]).await.unwrap();
+    let scope = GroupsScope::Group(group.id());
+    let (messages, events) = space_0.repair_persisted(&scope).await.unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(events.len(), 0);
-    let (messages, events) = space_1.repair_persisted(&[group.id()]).await.unwrap();
+    let (messages, events) = space_1.repair_persisted(&scope).await.unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(events.len(), 0);
 
@@ -1255,13 +1256,14 @@ async fn shared_auth_state() {
         .unwrap();
 
     // Both Space 0 and Space 1 need to be made aware of this change.
-    let (messages, events) = space_0.repair_persisted(&[group.id()]).await.unwrap();
+    let scope = GroupsScope::Group(group.id());
+    let (messages, events) = space_0.repair_persisted(&scope).await.unwrap();
     assert_eq!(messages.len(), 1);
     // This change brings claire into the space membership group so we expect one space event
     // signaling this change.
     assert_eq!(events.len(), 1);
 
-    let (messages, events) = space_1.repair_persisted(&[group.id()]).await.unwrap();
+    let (messages, events) = space_1.repair_persisted(&scope).await.unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(events.len(), 1);
 
@@ -1596,14 +1598,11 @@ async fn repair_space() {
         .unwrap();
 
     // Trigger repair of the space.
-    let messages = alice_manager
-        .repair_spaces_persisted(&vec![space_id])
-        .await
-        .unwrap();
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let (messages, _) = space.repair_persisted(&GroupsScope::Space).await.unwrap();
     let message_05 = messages[0].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
     let expected_members = vec![
@@ -1713,14 +1712,11 @@ async fn duplicate_auth_state_references() {
         .unwrap();
 
     // Trigger repair of the space.
-    let messages = alice_manager
-        .repair_spaces_persisted(&vec![space_id])
-        .await
-        .unwrap();
+    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let (messages, _) = space.repair_persisted(&GroupsScope::Space).await.unwrap();
     let message_05 = messages[0].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let members = space.members().await.unwrap();
     let expected_members = vec![
         (alice_id, Access::manage()),
@@ -1742,10 +1738,8 @@ async fn duplicate_auth_state_references() {
     // ~~~~~~~~~~~~
 
     // Trigger repair of the space.
-    let messages = bob_manager
-        .repair_spaces_persisted(&vec![space_id])
-        .await
-        .unwrap();
+    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let (messages, _) = space.repair_persisted(&GroupsScope::Space).await.unwrap();
     let _ = messages[0].clone();
 
     // Bob: processes Alice's (duplicate) auth state pointer.
@@ -1755,7 +1749,6 @@ async fn duplicate_auth_state_references() {
     bob_manager.process_persisted(&message_05).await.unwrap();
 
     // Bob arrived at the expected state without error.
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, expected_members);
 }
