@@ -7,7 +7,9 @@ use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{
+    Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum, VerifyingKey,
+};
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -303,7 +305,7 @@ where
                                     .map_err(|err| LogSyncError::MessageStream(format!("{err:?}")))?;
 
                                 match message {
-                                    LogSyncMessage::Operation(header, body) => {
+                                    LogSyncMessage::Operation((header, body)) => {
                                         metrics.received_bytes += {
                                             header.len()
                                                 + body.as_ref().map(|bytes| bytes.len()).unwrap_or_default()
@@ -396,8 +398,8 @@ where
                                             "send operation",
                                         );
 
-                                        sink.send(LogSyncMessage::Operation(header_bytes, body.as_ref().map(|body|
-                                            body.to_bytes())))
+                                        sink.send(LogSyncMessage::Operation((header_bytes, body.as_ref().map(|body|
+                                            body.to_bytes()))))
                                             .instrument(span.clone())
                                             .await
                                             .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send operation"))
@@ -483,7 +485,7 @@ where
         total_operations: u32,
         total_bytes: u32,
     },
-    Operation(Vec<u8>, Option<Vec<u8>>),
+    Operation(RawOperation),
     Done,
 }
 
@@ -495,7 +497,7 @@ where
         let value = match self {
             LogSyncMessage::Have(_) => "have",
             LogSyncMessage::PreSync { .. } => "pre_sync",
-            LogSyncMessage::Operation(_, _) => "operation",
+            LogSyncMessage::Operation(_) => "operation",
             LogSyncMessage::Done => "done",
         };
 
@@ -699,21 +701,21 @@ mod tests {
             }
         );
 
-        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[2] else {
+        let TestLogSyncMessage::Operation((header, Some(body_inner))) = &messages[2] else {
             panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[2]);
         };
         let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_0);
         assert_eq!(Body::from_bytes(&body_inner), body);
 
-        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[3] else {
+        let TestLogSyncMessage::Operation((header, Some(body_inner))) = &messages[3] else {
             panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[3]);
         };
         let (header, body_inner) = (header.clone(), body_inner.clone());
         assert_eq!(header, header_bytes_1);
         assert_eq!(Body::from_bytes(&body_inner), body);
 
-        let TestLogSyncMessage::Operation(header, Some(body_inner)) = &messages[4] else {
+        let TestLogSyncMessage::Operation((header, Some(body_inner))) = &messages[4] else {
             panic!("Not a TestLogSyncMessage::Operation: {:?}", &messages[4]);
         };
         let (header, body_inner) = (header.clone(), body_inner.clone());
@@ -843,7 +845,7 @@ mod tests {
 
         let messages = vec![
             TestLogSyncMessage::Have(BTreeMap::from([(peer.id(), BTreeMap::from([(LOG_ID, 0)]))])),
-            TestLogSyncMessage::Operation(header_bytes.clone(), Some(body.to_bytes())),
+            TestLogSyncMessage::Operation((header_bytes.clone(), Some(body.to_bytes()))),
             TestLogSyncMessage::PreSync {
                 total_operations: 1,
                 total_bytes: 100,
