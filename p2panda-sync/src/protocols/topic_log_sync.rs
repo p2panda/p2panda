@@ -10,7 +10,9 @@ use std::task::{Context, Poll};
 
 use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::{Body, Extensions, Hash, Header, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{
+    Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum, VerifyingKey,
+};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
@@ -226,10 +228,10 @@ where
                                     );
 
                                     let result = sink
-                                        .send(TopicLogSyncMessage::Live(
+                                        .send(TopicLogSyncMessage::Live((
                                             operation.header.encode(),
                                             operation.body.map(|body| body.to_bytes()),
-                                        ))
+                                        )))
                                         .await
                                         .map_err(|err| TopicLogSyncChannelError::MessageSink(format!("{err:?}")).into());
 
@@ -271,7 +273,7 @@ where
                                         break Ok(());
                                     };
 
-                                    let TopicLogSyncMessage::Live(header, body) = message else {
+                                    let TopicLogSyncMessage::Live((header, body)) = message else {
                                         break Err(TopicLogSyncError::UnexpectedProtocolMessage(
                                             message.to_string(),
                                         ));
@@ -483,8 +485,8 @@ pub enum TopicLogSyncEvent<E = ()> {
     /// This event is always sent and will be followed by `SyncStarted` or `Failed` events.
     SessionStarted,
 
-    /// We have exchanged initial session metrics with the remote and the sync phase of this
-    /// session has started.
+    /// We have exchanged initial session metrics with the remote and the sync phase of this session
+    /// has started.
     ///
     /// This event will be followed by any number of `OperationReceived` events, or a `SyncFinished` or `Failed`.
     SyncStarted { metrics: Metrics },
@@ -543,7 +545,7 @@ where
     L: LogId,
 {
     Sync(LogSyncMessage<L>),
-    Live(Vec<u8>, Option<Vec<u8>>),
+    Live(RawOperation),
     Close,
 }
 
@@ -554,7 +556,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             TopicLogSyncMessage::Sync(_) => "sync",
-            TopicLogSyncMessage::Live(_, _) => "live",
+            TopicLogSyncMessage::Live(_) => "live",
             TopicLogSyncMessage::Close => "close",
         };
         write!(f, "{value}")
@@ -749,10 +751,10 @@ pub mod tests {
                     )
                 }
                 2 => {
-                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation((
                         header,
                         Some(body_inner),
-                    )) = message
+                    ))) = message
                     else {
                         panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
                     };
@@ -760,10 +762,10 @@ pub mod tests {
                     assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 3 => {
-                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation((
                         header,
                         Some(body_inner),
-                    )) = message
+                    ))) = message
                     else {
                         panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
                     };
@@ -771,10 +773,10 @@ pub mod tests {
                     assert_eq!(Body::from_bytes(&body_inner), body)
                 }
                 4 => {
-                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                    let TestTopicSyncMessage::Sync(LogSyncMessage::Operation((
                         header,
                         Some(body_inner),
-                    )) = message
+                    ))) = message
                     else {
                         panic!("Not a TestTopicSyncMessage::Sync: {message:?}");
                     };
@@ -921,12 +923,12 @@ pub mod tests {
                     total_operations: 1,
                     total_bytes: total_bytes as u32,
                 }),
-                TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                TestTopicSyncMessage::Sync(LogSyncMessage::Operation((
                     header_bytes_0,
                     Some(body.to_bytes()),
-                )),
+                ))),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Done),
-                TestTopicSyncMessage::Live(header_1.encode(), Some(body.to_bytes())),
+                TestTopicSyncMessage::Live((header_1.encode(), Some(body.to_bytes()))),
                 TestTopicSyncMessage::Close,
             ],
         )
@@ -974,7 +976,7 @@ pub mod tests {
                     std::assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
                 }
                 2 => {
-                    let TestTopicSyncMessage::Live(header, Some(body_inner)) = message else {
+                    let TestTopicSyncMessage::Live((header, Some(body_inner))) = message else {
                         panic!("Not a TestTopicSyncMessage::Live");
                     };
                     assert_eq!(header, header_2.encode());
@@ -1043,16 +1045,16 @@ pub mod tests {
                     total_operations: 1,
                     total_bytes: total_bytes as u32,
                 }),
-                TestTopicSyncMessage::Sync(LogSyncMessage::Operation(
+                TestTopicSyncMessage::Sync(LogSyncMessage::Operation((
                     header_bytes_0,
                     Some(body.to_bytes()),
-                )),
+                ))),
                 TestTopicSyncMessage::Sync(LogSyncMessage::Done),
-                TestTopicSyncMessage::Live(header_1.encode(), Some(body.to_bytes())),
+                TestTopicSyncMessage::Live((header_1.encode(), Some(body.to_bytes()))),
                 // Duplicate of message sent during sync.
-                TestTopicSyncMessage::Live(header_0.encode(), Some(body.to_bytes())),
+                TestTopicSyncMessage::Live((header_0.encode(), Some(body.to_bytes()))),
                 // Duplicate of message sent earlier in live-mode.
-                TestTopicSyncMessage::Live(header_1.encode(), Some(body.to_bytes())),
+                TestTopicSyncMessage::Live((header_1.encode(), Some(body.to_bytes()))),
                 TestTopicSyncMessage::Close,
             ],
         )
@@ -1100,8 +1102,8 @@ pub mod tests {
                     std::assert_matches!(message, TestTopicSyncMessage::Sync(LogSyncMessage::Done))
                 }
                 2 => {
-                    std::assert_matches!(message, TestTopicSyncMessage::Live(_, Some(_)));
-                    let TestTopicSyncMessage::Live(header, Some(body_inner)) = message else {
+                    std::assert_matches!(message, TestTopicSyncMessage::Live((_, Some(_))));
+                    let TestTopicSyncMessage::Live((header, Some(body_inner))) = message else {
                         unreachable!();
                     };
                     assert_eq!(header, header_2.encode());
