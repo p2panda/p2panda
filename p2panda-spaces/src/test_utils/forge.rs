@@ -52,28 +52,15 @@ impl Forge<TestConditions> for TestForge {
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
-            let mut header = Header {
-                version: 1,
-                verifying_key: self.signing_key.verifying_key(),
-                signature: None,
-                payload_size: 0,
-                payload_hash: None,
-                seq_num,
-                backlink,
-                extensions: args,
-            };
+            let header = Header::builder()
+                .seq_num(seq_num)
+                .backlink(backlink)
+                .build(&self.signing_key, args);
 
-            header.sign(&self.signing_key);
-            let hash = header.hash();
-
-            let operation = TestOperation {
-                hash,
-                header,
-                body: None,
-            };
+            let operation = TestOperation::from_parts(header, None);
 
             self.store
-                .insert_operation(&hash, &operation, &DEFAULT_LOG_ID)
+                .insert_operation(&operation.hash, &operation, &DEFAULT_LOG_ID)
                 .await?;
 
             operation

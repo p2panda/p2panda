@@ -25,9 +25,9 @@
 Highly extensible data-types of the p2panda protocol for secure, distributed and efficient exchange
 of data, supporting networks from the internet to packet radio, LoRa or BLE.
 
-The primary data structure is an append-only implementation which supports history deletion,
-multi-writer ordering, fork-tolerance, efficient partial sync, compatibility with any CRDT and is
-extensible depending on your application requirements.
+The primary data structure is an append-only log implementation which supports history deletion,
+multi-writer causal-ordering, fork-tolerance, compatibility with any CRDT and is extensible
+depending on your application requirements.
 
 > 🚧 This library is under active development and the APIs are not yet considered stable for
 > production use. Core data types and user-facing APIs may still undergo breaking changes. Stability
@@ -39,10 +39,9 @@ extensible depending on your application requirements.
 - Authors can maintain one or many logs
 - Single-writer logs which can be combined to support multi-writer collaboration
 - Compatible with any application data and CRDT
-- Various ordering algorithms
-- Supports efficient, partial sync
-- Compatible with any networking scenario (even broadcast-only, for example for packet radio)
+- Compatible with any networking scenario (for example packet radio or mesh-networks)
 - Fork-tolerant
+- Off-chain handling of payloads, can be deleted independently of log structure
 - Pruning of outdated messages
 - Highly extensible with custom features, for example prefix-deletion, ephemeral "self-destructing"
   messages, etc.
@@ -52,32 +51,22 @@ extensible depending on your application requirements.
 ### Create and sign operation
 
 ```rust
-use p2panda_core::{Body, Header, SigningKey};
+use p2panda_core::{Header, SigningKey};
 
 let signing_key = SigningKey::generate();
 
-let body = Body::new("Hello, Panda!".as_bytes());
-let mut header = Header {
-    version: 1,
-    verifying_key: signing_key.verifying_key(),
-    signature: None,
-    payload_size: body.size(),
-    payload_hash: Some(body.hash()),
-    seq_num: 0,
-    backlink: None,
-    extensions: (),
-};
-
-header.sign(&signing_key);
+let header = Header::builder()
+    .body(b"Hello, Panda!")
+    .build(&signing_key, ());
 ```
 
 ### Custom extensions
 
 Custom functionality can be added using extensions, for example, access-control tokens,
-self-destructing messages, or encryption schemas.
+self-destructing messages, or key-agreement schemes for group encryption.
 
 ```rust
-use p2panda_core::{Extension, Header};
+use p2panda_core::{Header, SigningKey};
 use serde::{Serialize, Deserialize};
 
 // Extend our operations with an "expiry" field we can use to implement
@@ -92,13 +81,13 @@ struct CustomExtensions {
     expiry: Expiry,
 }
 
-// Implement `Extension<T>` for each extension we want to add to our
-// header.
-impl Extension<Expiry> for CustomExtensions {
-    fn extract(header: &Header<Self>) -> Option<Expiry> {
-        Some(header.extensions.expiry.clone())
-    }
-}
+let signing_key = SigningKey::generate();
+
+let header = Header::builder()
+    .body(b"Hello, Panda!")
+    .build(&signing_key, CustomExtensions {
+        expiry: Expiry(1787246716),
+    });
 ```
 
 ## License

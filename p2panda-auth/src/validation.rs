@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Validation methods for group membership actions.
+use std::collections::HashSet;
+use std::fmt::Debug;
 
-use std::{collections::HashSet, fmt::Debug};
-
+use p2panda_core::{Author, OperationId};
 use thiserror::Error;
 
 use crate::AccessLevel;
 use crate::group::{GroupCrdt, GroupCrdtInnerState, GroupCrdtState};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, Operation, Resolver};
 
 pub(crate) fn is_manager<ID>(actor: ID, members: &[(ID, AccessLevel)]) -> bool
 where
@@ -46,8 +47,8 @@ pub(crate) fn members_at<ID, OP, M, C, RS>(
     heads: HashSet<OP>,
 ) -> Result<Vec<(ID, AccessLevel)>, MembersAtError>
 where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
+    ID: Author,
+    OP: OperationId,
     M: Operation<ID, OP, C> + Clone,
     C: Conditions,
     RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
@@ -236,7 +237,7 @@ where
 /// this validation passes it does not mean the author _still_ has write access. Their access
 /// could have since, or concurrently, been removed.
 ///
-/// Checks for these cases should be performed in further validation steps.  
+/// Checks for these cases should be performed in further validation steps.
 pub fn verify_claimed_write_access<ID, OP, M, C, RS>(
     y: &GroupCrdtState<ID, OP, M, C>,
     actor: ID,
@@ -244,8 +245,8 @@ pub fn verify_claimed_write_access<ID, OP, M, C, RS>(
     heads: HashSet<OP>,
 ) -> Result<(), VerifyClaimedWriteError>
 where
-    ID: IdentityHandle,
-    OP: OperationId + Ord,
+    ID: Author,
+    OP: OperationId,
     M: Operation<ID, OP, C> + Clone,
     C: Conditions,
     RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,

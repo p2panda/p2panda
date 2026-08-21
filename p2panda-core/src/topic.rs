@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Identifiers for gossip- or sync topics.
 use std::fmt::Display;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
@@ -36,7 +37,7 @@ impl Topic {
         Self(rng.r#gen())
     }
 
-    pub fn from_bytes(&self, bytes: &[u8]) -> Result<Self, TopicError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TopicError> {
         Self::try_from(bytes)
     }
 

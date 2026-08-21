@@ -4,11 +4,10 @@
 
 use std::collections::HashSet;
 
+use p2panda_core::traits::OperationId;
 use petgraph::algo::has_path_connecting;
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{Dfs, Reversed};
-
-use crate::traits::OperationId;
 
 /// Recursively identify all operations concurrent with the given target operation.
 fn concurrent_bubble<OP>(
@@ -17,7 +16,7 @@ fn concurrent_bubble<OP>(
     processed: &mut HashSet<OP>,
 ) -> HashSet<OP>
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     let mut bubble = HashSet::new();
     bubble.insert(target);
@@ -36,7 +35,7 @@ where
 /// Walk the graph and identify all sets of concurrent operations.
 pub fn concurrent_bubbles<OP>(graph: &DiGraphMap<OP, ()>) -> Vec<HashSet<OP>>
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     let mut processed: HashSet<OP> = HashSet::new();
     let mut bubbles = Vec::new();
@@ -59,7 +58,7 @@ where
 /// target operation.
 fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     // Get all successors.
     let mut successors = HashSet::new();
@@ -89,7 +88,7 @@ pub fn split_bubble<OP>(
     target: OP,
 ) -> (HashSet<OP>, HashSet<OP>, Vec<OP>)
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     // Get all successors.
     let mut concurrent = bubble.clone();
@@ -117,7 +116,7 @@ where
 /// This indicates whether `to` is a successor of `from`.
 pub fn has_path<OP>(graph: &DiGraphMap<OP, ()>, from: OP, to: OP) -> bool
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     from != to && has_path_connecting(graph, from, to, None)
 }
@@ -127,7 +126,7 @@ where
 /// This indicates whether or not the given operations occurred concurrently.
 pub fn is_concurrent<OP>(graph: &DiGraphMap<OP, ()>, a: OP, b: OP) -> bool
 where
-    OP: OperationId + Ord,
+    OP: OperationId,
 {
     a != b && !has_path(graph, a, b) && !has_path(graph, b, a)
 }
@@ -139,9 +138,6 @@ mod tests {
     use petgraph::{graph::DiGraph, prelude::DiGraphMap};
 
     use crate::graph::concurrent_bubbles;
-    use crate::traits::OperationId;
-
-    impl OperationId for &str {}
 
     #[test]
     fn test_linear_chain_no_concurrency() {

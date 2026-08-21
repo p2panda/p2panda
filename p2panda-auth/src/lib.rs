@@ -87,10 +87,3 @@ pub mod validation;
 pub use access::{Access, AccessError, AccessLevel};
 pub use extension::GroupsExtensionArgs;
 pub use operation::GroupsOperation;
-
-use p2panda_core::{Hash, VerifyingKey};
-
-use crate::traits::{IdentityHandle, OperationId};
-
-impl IdentityHandle for VerifyingKey {}
-impl OperationId for Hash {}

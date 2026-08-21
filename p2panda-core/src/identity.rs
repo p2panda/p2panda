@@ -21,17 +21,16 @@
 //! assert!(verifying_key.verify(bytes, &signature))
 //! ```
 use std::fmt;
-use std::hash::Hash as StdHash;
+use std::fmt::Debug;
 use std::str::FromStr;
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 use ed25519_dalek::Signer as _;
 use rand::rngs::OsRng;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::traits::ShortFormat;
+use crate::traits::{Author, ShortFormat};
 
 /// The length of an Ed25519 `Signature`, in bytes.
 pub const SIGNATURE_LEN: usize = ed25519_dalek::SIGNATURE_LENGTH;
@@ -42,10 +41,8 @@ pub const SIGNING_KEY_LEN: usize = ed25519_dalek::SECRET_KEY_LENGTH;
 /// The length of an Ed25519 `VerifyingKey`, in bytes.
 pub const VERIFYING_KEY_LEN: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 
-pub trait Author:
-    Clone + PartialEq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
-{
-}
+#[cfg(any(test, feature = "test_utils"))]
+impl Author for char {}
 
 /// Private Ed25519 key used for digital signatures.
 #[derive(Clone, Eq, PartialEq)]
@@ -148,6 +145,10 @@ impl TryFrom<&[u8]> for SigningKey {
 impl Signer for SigningKey {
     fn sign(&self, bytes: &[u8]) -> Signature {
         self.sign(bytes)
+    }
+
+    fn verifying_key(&self) -> VerifyingKey {
+        self.verifying_key()
     }
 }
 
@@ -269,6 +270,12 @@ impl FromStr for VerifyingKey {
 
 impl Author for VerifyingKey {}
 
+impl ShortFormat for VerifyingKey {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..10].to_string()
+    }
+}
+
 #[cfg(feature = "arbitrary")]
 impl<'a> Arbitrary<'a> for VerifyingKey {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
@@ -276,12 +283,6 @@ impl<'a> Arbitrary<'a> for VerifyingKey {
         let verifying_key =
             VerifyingKey::from_bytes(&bytes).map_err(|_| arbitrary::Error::IncorrectFormat)?;
         Ok(verifying_key)
-    }
-}
-
-impl ShortFormat for VerifyingKey {
-    fn fmt_short(&self) -> String {
-        self.to_hex()[0..10].to_string()
     }
 }
 
@@ -402,6 +403,8 @@ pub enum IdentityError {
 
 pub trait Signer {
     fn sign(&self, bytes: &[u8]) -> Signature;
+
+    fn verifying_key(&self) -> VerifyingKey;
 }
 
 #[cfg(test)]

@@ -767,7 +767,7 @@ mod spaces_events {
 
         // Create a space with only us inside. Having a space in this test is only required to sync
         // the group operations.
-        let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (_panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         let penguin_laptop = spawn_node(network_id).await;
         let penguin_mobile = spawn_node(network_id).await;

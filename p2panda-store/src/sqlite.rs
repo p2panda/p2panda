@@ -464,7 +464,10 @@ pub enum SqliteError {
 #[derive(Debug, Error)]
 pub enum DecodeError {
     #[error(transparent)]
-    DecodeCbor(#[from] p2panda_core::cbor::DecodeError),
+    Cbor(#[from] p2panda_core::cbor::DecodeError),
+
+    #[error(transparent)]
+    Header(#[from] p2panda_core::operation::HeaderError),
 
     #[error(transparent)]
     Hash(#[from] p2panda_core::hash::HashError),

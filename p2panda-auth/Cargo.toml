@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-auth"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -28,6 +28,7 @@ test_utils = [
   "dep:tokio",
   "dep:tracing-subscriber",
   "serde",
+  "p2panda-core/test_utils"
 ]
 serde = [
   "dep:serde",

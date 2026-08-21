@@ -2,11 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::prelude::DiGraphMap;
 
 use crate::graph::{has_path, is_concurrent};
-use crate::traits::{IdentityHandle, OperationId};
 
 /// Removal graph edge (remover, removed, operation id).
 type Removal<ID, OP> = (ID, ID, OP);
@@ -38,7 +38,7 @@ type Node<ID, OP> = (ID, OP);
 ///      1  2  3
 ///            |
 ///            4
-///   
+///
 /// 0: Initial group state {Alice, Bob, Claire}
 /// 1: Alice removes Bob
 /// 2: Bob removes Claire
@@ -71,7 +71,7 @@ type Node<ID, OP> = (ID, OP);
 #[derive(Debug)]
 pub struct AuthorityGraphs<ID, OP>
 where
-    ID: IdentityHandle + Ord,
+    ID: Author + Ord,
     OP: OperationId + Ord,
 {
     deps_graph: DiGraphMap<OP, ()>,
@@ -83,7 +83,7 @@ where
 
 impl<ID, OP> AuthorityGraphs<ID, OP>
 where
-    ID: IdentityHandle + Ord,
+    ID: Author + Ord,
     OP: OperationId + Ord,
 {
     pub fn new(deps_graph: DiGraphMap<OP, ()>) -> Self {

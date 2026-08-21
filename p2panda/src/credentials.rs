@@ -76,6 +76,10 @@ impl Signer for Credentials {
     fn sign(&self, bytes: &[u8]) -> p2panda_core::Signature {
         self.0.signing_key.sign(bytes)
     }
+
+    fn verifying_key(&self) -> VerifyingKey {
+        self.0.signing_key.verifying_key()
+    }
 }
 
 impl From<&Credentials> for p2panda_spaces::Credentials {

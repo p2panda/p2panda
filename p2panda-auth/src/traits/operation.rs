@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use p2panda_core::{Author, OperationId};
+
 use crate::group::GroupAction;
-use crate::traits::IdentityHandle;
 
 /// Interface to express required information from operations processed by any auth graph
 /// implementation.
@@ -10,7 +11,8 @@ use crate::traits::IdentityHandle;
 /// operation.
 pub trait Operation<ID, OP, C = ()>
 where
-    ID: IdentityHandle,
+    ID: Author,
+    OP: OperationId,
 {
     /// Id of this operation.
     fn id(&self) -> OP;

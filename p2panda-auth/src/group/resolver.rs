@@ -1,26 +1,29 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Strong remove group resolver implementation.
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::marker::PhantomData;
+
+use p2panda_core::traits::{Author, OperationId};
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::{IntoNodeIdentifiers, Topo};
-use std::collections::{HashMap, HashSet};
-use std::{fmt::Debug, marker::PhantomData};
 
 use crate::graph::{concurrent_bubbles, split_bubble};
 use crate::group::crdt::{GroupCrdtInnerError, apply_remove_unsafe};
 use crate::group::{AuthorityGraphs, GroupAction, GroupCrdtInnerState, GroupMember, apply_action};
-use crate::traits::{Conditions, IdentityHandle, Operation, OperationId, Resolver};
+use crate::traits::{Conditions, Operation, Resolver};
 
 /// An implementation of `Resolver` trait which follows strong remove ruleset.
 ///
-/// Concurrent operations are identified and processed, any which should be invalidated are added
-/// to the operation filter and not applied to the group state. Once an operation has been
-/// filtered, any operations which depended on any resulting state will not be applied to group
-/// state either. Ruleset for Concurrent Operations
+/// Concurrent operations are identified and processed, any which should be invalidated are added to
+/// the operation filter and not applied to the group state. Once an operation has been filtered,
+/// any operations which depended on any resulting state will not be applied to group state either.
+/// Ruleset for Concurrent Operations
 ///
 /// The following ruleset is applied when choosing which operations to "filter" when concurrent
-/// operations are processed. It can be assumed that the behavior is equivalent for an admin
-/// member being removed, or demoted from admin to a lower access level.
+/// operations are processed. It can be assumed that the behavior is equivalent for an admin member
+/// being removed, or demoted from admin to a lower access level.
 ///
 /// ## Strong Remove Concurrency Rules
 ///
@@ -52,7 +55,7 @@ pub struct StrongRemove<ID, OP, M, C> {
 
 impl<ID, OP, M, C> Resolver<ID, OP, M, C> for StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -103,7 +106,7 @@ where
 
 impl<ID, OP, M, C> StrongRemove<ID, OP, M, C>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -311,7 +314,7 @@ where
 /// manager access.
 fn removed_or_demoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,
@@ -337,7 +340,7 @@ where
 /// manager access.
 fn added_or_promoted_manager<ID, OP, M, C>(operation: &M) -> Option<ID>
 where
-    ID: IdentityHandle,
+    ID: Author,
     OP: OperationId,
     M: Clone + Operation<ID, OP, C>,
     C: Conditions,

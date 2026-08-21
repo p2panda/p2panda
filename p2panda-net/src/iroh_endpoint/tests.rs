@@ -8,7 +8,7 @@ use p2panda_core::test_utils::setup_logging;
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::address_book::AddressBook;
-use crate::iroh_endpoint::Endpoint;
+use crate::iroh_endpoint::{Builder, Endpoint};
 use crate::test_utils::test_args;
 use crate::utils::to_verifying_key;
 
@@ -16,6 +16,50 @@ const ECHO_PROTOCOL_ID: &[u8] = b"test/echo/v1";
 
 #[derive(Debug)]
 struct EchoProtocol;
+
+#[tokio::test]
+async fn configure_authentication_per_relay() {
+    const FIRST_AUTH_TOKEN: &str = "first-secret-token";
+    const SECOND_AUTH_TOKEN: &str = "second-secret-token";
+
+    let first_relay_url: iroh::RelayUrl = "https://first-relay.example.com".parse().unwrap();
+    let second_relay_url: iroh::RelayUrl = "https://second-relay.example.com".parse().unwrap();
+    let public_relay_url: iroh::RelayUrl = "https://public-relay.example.com".parse().unwrap();
+
+    let address_book = AddressBook::builder().spawn().await.unwrap();
+    let (_, _, _, relay_map, _, _) = Builder::new(address_book)
+        .relay_url_with_token(first_relay_url.clone(), FIRST_AUTH_TOKEN)
+        .relay_url_with_token(second_relay_url.clone(), SECOND_AUTH_TOKEN)
+        .relay_url(public_relay_url.clone())
+        .build_args();
+
+    let first_relay_config = relay_map.get(&first_relay_url).unwrap();
+    assert_eq!(
+        first_relay_config.auth_token.as_deref(),
+        Some(FIRST_AUTH_TOKEN)
+    );
+
+    let second_relay_config = relay_map.get(&second_relay_url).unwrap();
+    assert_eq!(
+        second_relay_config.auth_token.as_deref(),
+        Some(SECOND_AUTH_TOKEN)
+    );
+
+    let public_relay_config = relay_map.get(&public_relay_url).unwrap();
+    assert_eq!(public_relay_config.auth_token, None);
+}
+
+#[tokio::test]
+async fn relay_authentication_is_optional() {
+    let relay_url: iroh::RelayUrl = "https://relay.example.com".parse().unwrap();
+    let address_book = AddressBook::builder().spawn().await.unwrap();
+    let (_, _, _, relay_map, _, _) = Builder::new(address_book)
+        .relay_url(relay_url.clone())
+        .build_args();
+
+    let relay_config = relay_map.get(&relay_url).unwrap();
+    assert_eq!(relay_config.auth_token, None);
+}
 
 impl ProtocolHandler for EchoProtocol {
     async fn accept(

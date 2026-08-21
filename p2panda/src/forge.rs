@@ -62,10 +62,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         body: Option<Vec<u8>>,
         extensions: Extensions,
     ) -> Result<Operation, Self::Error> {
-        // Perform prerequisite computations outside of the locked transaction.
-        let payload_size = body.as_ref().map(|bytes| bytes.len()).unwrap_or(0) as u32;
         let body: Option<Body> = body.map(|bytes| bytes.into());
-        let payload_hash = body.as_ref().map(|body| body.hash());
 
         // Acquire a lock on the store for the duration of the read to write cycle.
         //
@@ -88,24 +85,14 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
             .unwrap_or((0, None));
 
-            let mut header = Header {
-                version: 1,
-                verifying_key: self.credentials.verifying_key(),
-                signature: None,
-                payload_size,
-                payload_hash,
-                seq_num,
-                backlink,
-                extensions,
-            };
+            let header = {
+                let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
 
-            header.sign(&self.credentials);
-            let hash = header.hash();
+                if let Some(ref body) = body {
+                    builder = builder.body(body);
+                }
 
-            let operation = Operation {
-                hash,
-                header: header.clone(),
-                body,
+                builder.build(&self.credentials, extensions)
             };
 
             if let Some(topic) = topic {
@@ -118,8 +105,10 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 .await?;
             }
 
+            let operation = Operation::from_parts(header, body);
+
             self.store
-                .insert_operation(&hash, &operation, &log_id)
+                .insert_operation(&operation.hash, &operation, &log_id)
                 .await?;
 
             trace!(
