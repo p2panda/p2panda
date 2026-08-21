@@ -246,3 +246,46 @@ fn forwards_compatible_checks() {
     assert_eq!(header.extensions.timestamp, 1780572316919.into());
     assert_eq!(header.extensions.prune_flag, false.into()); // set to default when not given
 }
+
+#[test]
+fn non_canonical_extensions() {
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct MyExtensions {
+        field_a: u8,
+        field_b: u8,
+    }
+
+    // [
+    //   1,
+    //   h'...',
+    //   h'...',
+    //   0,
+    //   0,
+    //   {
+    //      "field_a": 12,
+    //      "field_b": 17,
+    //   }
+    // ]
+    let bytes = hex::decode("860158208b8a1a22ce4d22984c5eca66cb55d5a2679f42b7667e9b7838a15d0049b2bcea58409053796ef0724b493d2ddf0c240504ca7a8d3b80af5cd7eaf633622d7dea0469949cc4252017341171d8cdbaad2829aa27754425e041d198027a7c48150d2b0e0000a2676669656c645f610c676669656c645f6211").unwrap();
+
+    // [
+    //   1,
+    //   h'...',
+    //   h'...',
+    //   0,
+    //   0,
+    //   {
+    //      "field_b": 17, <-- the order of fields changed
+    //      "field_a": 12,
+    //   }
+    // ]
+    let non_canonical_bytes = hex::decode("860158208b8a1a22ce4d22984c5eca66cb55d5a2679f42b7667e9b7838a15d0049b2bcea58409053796ef0724b493d2ddf0c240504ca7a8d3b80af5cd7eaf633622d7dea0469949cc4252017341171d8cdbaad2829aa27754425e041d198027a7c48150d2b0e0000a2676669656c645f6211676669656c645f6111").unwrap();
+
+    let result = Header::<MyExtensions>::decode(&bytes);
+    assert!(result.is_ok(), "decoding canonical representation works");
+
+    // Decoding the non-canonical version should fail on CBOR decoder level (and _not_ when we check
+    // the integrity of the header since the signature is technically correct).
+    let result = Header::<MyExtensions>::decode(&non_canonical_bytes);
+    std::assert_matches!(result, Err(HeaderError::DecodingExtensions(_)));
+}
