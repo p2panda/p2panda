@@ -3,9 +3,12 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 
+use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
-use p2panda_core::Hash;
+use p2panda_core::traits::Provenance;
+use p2panda_core::{Hash, VerifyingKey};
 use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError};
 use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_spaces::{Forge, SpacesArgs};
@@ -14,6 +17,7 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
+use p2panda_store::topics::TopicStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Notify;
@@ -26,34 +30,37 @@ pub type SpacesManager<S, F, C> = Manager<S, F, C>;
 pub type SpacesManagerError<F, C> = ManagerError<F, C>;
 
 /// Processor for spaces operations.
-pub struct Spaces<T, S, F, C> {
+pub struct Spaces<T, S, F, C, L, TP> {
     store: S,
     manager: SpacesManager<S, F, C>,
     notify: Notify,
     queue: RefCell<VecDeque<(T, SpacesResult<C>)>>,
+    _phantom: PhantomData<(L, TP)>,
 }
 
-impl<T, S, F, C> Spaces<T, S, F, C> {
+impl<T, S, F, C, L, TP> Spaces<T, S, F, C, L, TP> {
     pub fn new(store: S, manager: SpacesManager<S, F, C>) -> Self {
         Self {
             store,
             manager,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
+            _phantom: PhantomData,
         }
     }
 }
 
-impl<T, S, F, C> Processor<T> for Spaces<T, S, F, C>
+impl<T, S, F, C, L, TP> Processor<T> for Spaces<T, S, F, C, L, TP>
 where
-    T: Borrow<SpacesProcessorArgs<C>>,
+    T: Borrow<SpacesProcessorArgs<L, TP, C>>,
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
         + SpacesMessageStore<SpacesArgs<C>>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
-        + Transaction,
+        + Transaction
+        + TopicStore<TP, VerifyingKey, L>,
     F: Forge<C>,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
@@ -62,9 +69,32 @@ where
     type Error = (T, SpacesError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &SpacesProcessorArgs<C> = input.borrow();
+        let input_args: &SpacesProcessorArgs<L, TP, C> = input.borrow();
 
-        let result = if let SpacesProcessorArgs::Process { msg } = input_args {
+        let result = if let SpacesProcessorArgs::Process { topic, log_id, msg } = input_args {
+            // If this is a create operation then associate the group log with this space topic.
+            //
+            // Only performing this association on "create" messages is based on the assumption
+            // that all operations for the same group are stored in one log.
+            if let SpacesArgs::Group {
+                group_action: GroupAction::Create { .. },
+                ..
+            } = msg.args
+            {
+                let permit = match self.store.begin().await {
+                    Ok(permit) => permit,
+                    Err(err) => return Err((input, SpacesError::Store(err.to_string()))),
+                };
+
+                if let Err(err) = self.store.associate(topic, &msg.author(), log_id).await {
+                    return Err((input, SpacesError::Store(err.to_string())));
+                };
+
+                if let Err(err) = self.store.commit(permit).await {
+                    return Err((input, SpacesError::Store(err.to_string())));
+                }
+            }
+
             // Process incoming event.
             let (groups_y, space_y, mut events) = match self.manager.process(msg).await {
                 Ok(result) => result,

@@ -671,8 +671,8 @@ where
     /// ## 1) keep the space up-to-date with known group changes.
     ///
     /// ```text
-    /// Global Groups   : [A, B]
-    /// Space 1 Members : [A, B]
+    /// Global Groups : [A, B]
+    /// Space Members : [A, B]
     ///
     /// ==== Group C was created and added to Group B concurrently ====
     ///

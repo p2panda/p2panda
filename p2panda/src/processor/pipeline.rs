@@ -212,7 +212,7 @@ where
                         LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
                     let spaces = {
                         let spaces_store = SqliteSpacesStore::new(store);
-                        SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
+                        SpacesProcessor::<Event<L, E, TP>, L, TP>::new(spaces_store, spaces_manager)
                     };
 
                     // Receive incoming events through mpsc channel.

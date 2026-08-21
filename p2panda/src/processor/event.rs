@@ -58,7 +58,7 @@ pub struct Event<L, E, TP> {
     pub log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
 
     /// Input arguments for the "spaces" processor.
-    pub spaces_args: SpacesProcessorArgs<AuthCapabilities>,
+    pub spaces_args: SpacesProcessorArgs<L, TP, AuthCapabilities>,
 
     /// Status of the "spaces" processor.
     pub spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
@@ -66,6 +66,7 @@ pub struct Event<L, E, TP> {
 
 impl<L, E, TP> Event<L, E, TP>
 where
+    TP: Clone,
     L: LogId,
 {
     pub(crate) fn new(
@@ -79,7 +80,7 @@ where
         Self {
             ingest_args: IngestArgs {
                 log_id: log_id.clone(),
-                topic,
+                topic: topic.clone(),
                 prune_flag: prune_flag.is_set(),
             },
             ingest: ProcessorStatus::Pending,
@@ -95,7 +96,7 @@ where
                 if prune_flag.is_set() && spaces_args.is_none() {
                     LogPruneArgs::PruneEntriesUntil {
                         author: operation.header.verifying_key,
-                        log_id,
+                        log_id: log_id.clone(),
                         seq_num: operation.header.seq_num,
                     }
                 } else {
@@ -105,6 +106,8 @@ where
             log_prune: ProcessorStatus::Pending,
             spaces_args: match spaces_args {
                 Some(args) => SpacesProcessorArgs::Process {
+                    topic,
+                    log_id,
                     msg: p2panda_spaces::SpacesMessage {
                         id: operation.hash,
                         author: operation.header.verifying_key,
@@ -230,7 +233,7 @@ where
         let prune_flag = PruneFlag::new(self.ingest_args.prune_flag);
         let spaces_args = match &self.spaces_args {
             SpacesProcessorArgs::Ignore => None,
-            SpacesProcessorArgs::Process { msg } => Some(msg.args.clone()),
+            SpacesProcessorArgs::Process { msg, .. } => Some(msg.args.clone()),
         };
         let ingest = self.ingest.clone();
         let source = self.source.clone();
@@ -318,12 +321,12 @@ where
     }
 }
 
-impl<L, E, TP> Borrow<SpacesProcessorArgs<AuthCapabilities>> for Event<L, E, TP>
+impl<L, E, TP> Borrow<SpacesProcessorArgs<L, TP, AuthCapabilities>> for Event<L, E, TP>
 where
     L: LogId,
     TP: Clone,
 {
-    fn borrow(&self) -> &SpacesProcessorArgs<AuthCapabilities> {
+    fn borrow(&self) -> &SpacesProcessorArgs<L, TP, AuthCapabilities> {
         &self.spaces_args
     }
 }

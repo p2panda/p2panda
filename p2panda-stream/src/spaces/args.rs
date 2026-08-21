@@ -4,8 +4,10 @@ use p2panda_spaces::SpacesMessage;
 
 #[derive(Clone, Debug, Default)]
 #[allow(clippy::large_enum_variant)]
-pub enum SpacesProcessorArgs<C> {
+pub enum SpacesProcessorArgs<L, TP, C> {
     Process {
+        topic: TP,
+        log_id: L,
         msg: SpacesMessage<C>,
     },
     #[default]

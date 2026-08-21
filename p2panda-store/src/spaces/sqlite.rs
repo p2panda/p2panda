@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
 use p2panda_auth::group::GroupCrdtState;
 use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Extensions, Hash, Operation, VerifyingKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, VerifyingKey};
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ use crate::operations::OperationStore;
 use crate::spaces::traits::SpacesMessageStore;
 use crate::spaces::{SpacesMessage, SpacesStore};
 use crate::sqlite::TransactionPermit;
+use crate::topics::TopicStore;
 use crate::{SqliteError, SqliteStore};
 
 #[derive(Clone, Debug)]
@@ -253,5 +255,35 @@ impl<E> crate::traits::Transaction for SqliteSpacesStore<E> {
 
     async fn commit(&self, permit: TransactionPermit) -> Result<(), SqliteError> {
         self.store.commit(permit).await
+    }
+}
+
+impl<T, L, E> TopicStore<T, VerifyingKey, L> for SqliteSpacesStore<E>
+where
+    T: Serialize + for<'de> Deserialize<'de>,
+    L: LogId,
+{
+    type Error = SqliteError;
+
+    async fn associate(
+        &self,
+        topic: &T,
+        author: &VerifyingKey,
+        data_id: &L,
+    ) -> Result<bool, SqliteError> {
+        self.store.associate(topic, author, data_id).await
+    }
+
+    async fn remove(
+        &self,
+        topic: &T,
+        author: &VerifyingKey,
+        data_id: &L,
+    ) -> Result<bool, SqliteError> {
+        self.store.remove(topic, author, data_id).await
+    }
+
+    async fn resolve(&self, topic: &T) -> Result<BTreeMap<VerifyingKey, Vec<L>>, Self::Error> {
+        self.store.resolve(topic).await
     }
 }

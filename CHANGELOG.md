@@ -51,6 +51,7 @@ Highlights are marked with a pancake 🥞
 - node: Use random network ids in tests [#1360](https://github.com/p2panda/p2panda/pull/1360)
 - node: Refactor RepairTask into clear functions [#1377](https://github.com/p2panda/p2panda/pull/1377)
 - spaces: Introduce Space::missing_group_messages method [#1377](https://github.com/p2panda/p2panda/pull/1377)
+- stream: Perform group log to space topic association in SpacesProcessor [#1379](https://github.com/p2panda/p2panda/pull/1379)
 
 ### Fixed
 

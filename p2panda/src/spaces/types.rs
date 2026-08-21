@@ -19,8 +19,8 @@ pub type SpacesArgs = p2panda_spaces::SpacesArgs<AuthCapabilities>;
 
 pub type SpacesStore = p2panda_store::spaces::SqliteSpacesStore<Extensions>;
 
-pub type SpacesProcessor<T> =
-    p2panda_stream::spaces::Spaces<T, SpacesStore, OperationForge, AuthCapabilities>;
+pub type SpacesProcessor<T, L, TP> =
+    p2panda_stream::spaces::Spaces<T, SpacesStore, OperationForge, AuthCapabilities, L, TP>;
 
 pub type SpacesManagerError =
     p2panda_spaces::manager::ManagerError<OperationForge, AuthCapabilities>;

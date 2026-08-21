@@ -2,15 +2,12 @@
 
 use std::time::Duration;
 
-use p2panda_auth::group::GroupAction;
-use p2panda_core::Topic;
-use p2panda_core::traits::{Provenance, ShortFormat};
+use p2panda_core::traits::ShortFormat;
 use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_spaces::space::GroupsScope;
 use p2panda_spaces::{Event, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
-use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
@@ -20,11 +17,11 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
 use crate::operation::Operation;
+use crate::spaces::SpacesManagerError;
 use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::types::{
-    AuthCapabilities, InnerSpace, InnerSpaceError, SpacesArgs, SpacesManager, SpacesStore,
+    AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManager, SpacesStore,
 };
-use crate::spaces::{SpacesManagerError, group_log_id};
 use crate::streams::{
     ImportLocalTx, LocalStreamFuture, ToOutputTx, to_stream_event, to_system_event,
 };
@@ -164,9 +161,6 @@ async fn send_missing_group_operations(
 
         debug!(id=%operation.hash, seq_num=operation.header.seq_num, "import group operation into space topic");
 
-        // TODO: This can happen in spaces processor.
-        associate_group_log(space.id(), store, &operation).await?;
-
         group_operations.push(operation)
     }
 
@@ -182,32 +176,6 @@ async fn send_missing_group_operations(
     // Await processing of operations to be complete.
     ready_rx.await?;
 
-    Ok(())
-}
-
-async fn associate_group_log(
-    space_id: SpaceId,
-    store: &SqliteStore,
-    operation: &Operation,
-) -> Result<(), SqliteError> {
-    // Only make the association for "create" operations
-    let Some(SpacesArgs::Group {
-        group_id,
-        group_action: GroupAction::Create { .. },
-        ..
-    }) = operation.header.extensions.spaces_args()
-    else {
-        return Ok(());
-    };
-
-    // If this is a create operation then associate the groups log with this space topic.
-    store
-        .associate(
-            &Topic::from(space_id),
-            &operation.author(),
-            &group_log_id(group_id),
-        )
-        .await?;
     Ok(())
 }
 
