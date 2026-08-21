@@ -254,18 +254,15 @@ pub(crate) fn encode_header(
         cbor.append(backlink.as_bytes());
     }
 
-    // TODO: We're currently serializing from the AST using cbor_core. If decoding an extension from
-    // another code-base (which was generated using another CBOR encoder with different rules) and
-    // encoding it here again, we might end up with a different byte sequence and thus hash digest.
+    // We're serializing from the AST using cbor_core. If decoding an extension from another
+    // code-base (which was generated using another CBOR encoder with different rules) and encoding
+    // it here again, we might end up with a different byte sequence and thus hash digest.
     //
     // This can for example happen if the given extension uses non-canonical CBOR encoding,
     // ambigious map ordering etc.
     //
-    // Since there is no other p2panda implementation around right now this is not broken (yet) but
-    // we want to change this in the future to manually append the original extension bytes to the
-    // CBOR result.
-    //
-    // See related issue: <https://github.com/p2panda/p2panda/issues/1373>
+    // To mitigate this from happening we're enforcing a strict, canonical CBOR encoding when
+    // decoding the extensions bytes.
     if let Some(extensions) = extensions {
         cbor.append(extensions.to_owned());
     }
