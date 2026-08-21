@@ -19,7 +19,8 @@ Highlights are marked with a pancake 🥞
 - core: Enforce strict, canonical CBOR when decoding headers and their extensions [#1374](https://github.com/p2panda/p2panda/pull/1374)
 - core: Remove `Extension` trait [#1370](https://github.com/p2panda/p2panda/pull/1370)
 - sync: Use Borrow<GroupsArgs> in groups processor instead [#1370](https://github.com/p2panda/p2panda/pull/1370)
-- net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
+- net: Update ractor to v0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)
+- net: Update iroh to v1.0.3 [#1375](https://github.com/p2panda/p2panda/pull/1375)
 - sync: Tracing for sync state machine using instrument span [#1289](https://github.com/p2panda/p2panda/pull/1289)
 - auth: Replace `IdentityHandle` and `OperationId` with traits from `p2panda-core` [#1193](https://github.com/p2panda/p2panda/pull/1193)
 
