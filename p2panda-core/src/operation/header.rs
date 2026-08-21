@@ -101,11 +101,6 @@ where
         Builder::new()
     }
 
-    /// Convert to header with known extension type.
-    pub fn from_any(any_header: AnyHeader) -> Result<Self, HeaderError> {
-        Self::try_from(any_header)
-    }
-
     /// Encodes header to byte-representation (CBOR).
     pub fn encode(&self) -> Vec<u8> {
         encode_header(
@@ -128,7 +123,7 @@ where
         let any_header = AnyHeader::decode(bytes)?;
 
         // Decode extensions.
-        Self::from_any(any_header)
+        Self::try_from(any_header)
     }
 
     /// BLAKE3 hash digest of the header bytes.

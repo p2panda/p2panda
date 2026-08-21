@@ -43,7 +43,7 @@ fn paths_leading_to_same_encoding() {
     assert_eq!(header.hash(), any_header.hash());
     assert_eq!(header.size(), any_header.size());
 
-    let header_again = Header::<()>::from_any(any_header.clone()).unwrap();
+    let header_again = Header::<()>::try_from(any_header.clone()).unwrap();
     assert_eq!(header, header_again);
 }
 
@@ -235,7 +235,7 @@ fn forwards_compatible_checks() {
     assert_eq!(new_header_hash, any_header.hash());
 
     // It can even parse the extensions, will omit the unknown prune_flag field.
-    let header = Header::<LegacyExtensionsFormat>::from_any(any_header).unwrap();
+    let header = Header::<LegacyExtensionsFormat>::try_from(any_header).unwrap();
     assert_eq!(header.extensions.timestamp, 1780572316919.into());
     assert_eq!(new_header_hash, header.hash());
     assert!(header.verify());
