@@ -183,22 +183,11 @@ impl AnyHeader {
         // The bytes are decoded in a zero-copy manner, only reading from the given byte slice.
         let cbor = {
             let codec = cbor_core::DecodeOptions::new()
-                // Reduce strictness as we can't enforce it for all possible ways users will encode
-                // their extensions. On top we want to uphold the robustness principle: "be
-                // conservative in what you do, be liberal in what you accept from others"
-                .strictness(cbor_core::Strictness {
-                    // We're fine with non-canonical encodings.
-                    allow_non_shortest_integers: true,
-                    allow_non_shortest_floats: true,
-                    allow_oversized_bigints: true,
-                    allow_unsorted_map_keys: true,
-                    // Can lead to undefined behaviour and is simply wrong.
-                    allow_duplicate_map_keys: false,
-                    // Respect length limit right from the beginning.
-                    allow_indefinite_length: false,
-                })
-                // Still, we want to make sure some attacks are mitigated and set rather low
-                // / pessimistic thresholds.
+                // Enforce a strict, canonical CBOR encoding, otherwise integrity checks would fail
+                // when decoding & encoding the headers again on our end. See `encode_header` for
+                // details.
+                .strictness(cbor_core::Strictness::STRICT)
+                // Make sure some attacks are mitigated and set rather low / pessimistic thresholds.
                 .recursion_limit(64)
                 .length_limit(512) // 0.5kb
                 .oom_mitigation(64);

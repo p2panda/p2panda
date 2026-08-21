@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - core: New forwards-compatible, safer and faster API to create, encode and decode operations [#1200](https://github.com/p2panda/p2panda/pull/1200)
+- core: Enforce strict, canonical CBOR when decoding headers and their extensions [#1374](https://github.com/p2panda/p2panda/pull/1374)
 - core: Remove `Extension` trait [#1370](https://github.com/p2panda/p2panda/pull/1370)
 - sync: Use Borrow<GroupsArgs> in groups processor instead [#1370](https://github.com/p2panda/p2panda/pull/1370)
 - net: Update ractor to 0.16.2 [#1324](https://github.com/p2panda/p2panda/pull/1324)

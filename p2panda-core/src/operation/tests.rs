@@ -287,5 +287,10 @@ fn non_canonical_extensions() {
     // Decoding the non-canonical version should fail on CBOR decoder level (and _not_ when we check
     // the integrity of the header since the signature is technically correct).
     let result = Header::<MyExtensions>::decode(&non_canonical_bytes);
-    std::assert_matches!(result, Err(HeaderError::DecodingExtensions(_)));
+    std::assert_matches!(
+        result,
+        Err(HeaderError::DecodingHeader(
+            cbor_core::Error::NonDeterministic
+        ))
+    );
 }
