@@ -28,6 +28,30 @@ pub enum AccessLevel {
     Manage,
 }
 
+impl AccessLevel {
+    #[inline]
+    pub fn can_pull(&self) -> bool {
+        true
+    }
+
+    #[inline]
+    pub fn can_read(&self) -> bool {
+        matches!(self, AccessLevel::Read)
+            || matches!(self, AccessLevel::Write)
+            || matches!(self, AccessLevel::Manage)
+    }
+
+    #[inline]
+    pub fn can_write(&self) -> bool {
+        matches!(self, AccessLevel::Write) || matches!(self, AccessLevel::Manage)
+    }
+
+    #[inline]
+    pub fn can_manage(&self) -> bool {
+        matches!(self, AccessLevel::Manage)
+    }
+}
+
 impl Display for AccessLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
