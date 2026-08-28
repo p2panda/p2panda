@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+use std::io::Write;
 
 use p2panda_auth::group::GroupAction;
 use p2panda_core::cbor::encode_cbor;
@@ -18,11 +19,38 @@ use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 pub(crate) const MEMBER_CONTROL_MESSAGE: &[u8] = b"member_control/v1";
 
-const GROUP_CONTROL_MESSAGE: &[u8] = b"group_control/v1";
+const GROUP_CONTROL_MESSAGE: &[u8; 16] = b"group_control/v1";
 
-const SPACE_CONTROL_MESSAGE: &[u8] = b"space_control/v1";
+const SPACE_CONTROL_MESSAGE: &[u8; 16] = b"space_control/v1";
 
-const SPACE_APPLICATION_MESSAGE: &[u8] = b"space_application/v1";
+const SPACE_APPLICATION_MESSAGE: &[u8; 20] = b"space_application/v1";
+
+// Internal helper to build a LogId::digest() from two slices:
+//
+// * A payload ($slice1) that is of constant length that we have to pass
+// * and a $slice2 which is one of the above constants
+macro_rules! logid_digest_from_slices {
+    ($slice1:expr => $slice1len:expr, $slice2:ident) => {{
+        let bytes: [u8; _] = {
+            let mut bytes = [0; $slice1len + $slice2.len()];
+
+            {
+                let mut writer = &mut bytes[..];
+
+                writer
+                    .write_all($slice1)
+                    .expect("stack slice to be big enough");
+
+                writer
+                    .write_all($slice2)
+                    .expect("stack slice to be big enough");
+            }
+            bytes
+        };
+
+        LogId::digest(&bytes)
+    }};
+}
 
 /// This forge maintains space, member (key-bundles) and group logs which are organised
 /// independently.
@@ -184,12 +212,10 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 let _body = ciphertext.clone();
 
                 // Every author maintains their own log of application messages _per_ space.
-                let log_id = LogId::digest(&{
-                    let mut bytes = Vec::new();
-                    bytes.extend_from_slice(space_id.as_bytes());
-                    bytes.extend_from_slice(SPACE_APPLICATION_MESSAGE);
-                    bytes
-                });
+                let log_id = logid_digest_from_slices! (
+                    space_id.as_bytes() => p2panda_core::hash::HASH_LEN,
+                    SPACE_APPLICATION_MESSAGE
+                );
 
                 let extensions = Extensions::builder(log_id).build_space(args);
 
@@ -210,25 +236,19 @@ pub(crate) fn member_log_id() -> LogId {
 }
 
 fn space_log_id(space_id: SpaceId) -> LogId {
-    LogId::digest(&{
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(space_id.as_bytes());
-        // The group id would be enough to indicate the log id, we hash it here together with a
-        // constant value to prevent possible collisions with logs of same id but different purpose.
-        bytes.extend_from_slice(SPACE_CONTROL_MESSAGE);
-        bytes
-    })
+    logid_digest_from_slices!(
+        space_id.as_bytes() => p2panda_core::hash::HASH_LEN,
+        SPACE_CONTROL_MESSAGE
+    )
 }
 
 pub(crate) fn group_log_id(group_id: VerifyingKey) -> LogId {
-    LogId::digest(&{
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(group_id.as_bytes());
-        // The group id would be enough to indicate the log id, we hash it here together with a
-        // constant value to prevent possible collisions with logs of same id but different purpose.
-        bytes.extend_from_slice(GROUP_CONTROL_MESSAGE);
-        bytes
-    })
+    // The group id would be enough to indicate the log id, we hash it here together with a
+    // constant value to prevent possible collisions with logs of same id but different purpose.
+    logid_digest_from_slices!(
+        group_id.as_bytes() => p2panda_core::identity::VERIFYING_KEY_LEN,
+        GROUP_CONTROL_MESSAGE
+    )
 }
 
 pub(crate) async fn make_space_group_log_associations(
