@@ -7,7 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::stream::BoxStream;
+use futures_util::stream::{BoxStream, FuturesUnordered};
 use futures_util::{FutureExt, Stream, StreamExt};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
 use p2panda_core::traits::Digest;
@@ -181,10 +181,18 @@ where
             // =========================
 
             let mut aggregator = Aggregator::new();
+            let mut sync_processing = FuturesUnordered::new();
             loop {
                 let event = tokio::select! {
+                    Some(event) = sync_processing.next() => {
+                        let Some(event) = event else {
+                            continue;
+                        };
+                        event
+                    }
+
                     // Received incoming operation from remote source.
-                    item = sync_stream.next() => {
+                    item = sync_stream.next(), if sync_processing.len() < PUBLISH_BUFFER_SIZE => {
                         let Some(result) = item else {
                             // Log sync stream seized, we stop the task as well.
                             break;
@@ -207,18 +215,19 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => event.into(),
                             sync_metrics::SyncEvent::SyncEnded { .. } => event.into(),
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                let Some(event) = process_operation::<M>(
-                                    *operation,
-                                    topic,
-                                    &pipeline,
-                                    ack_policy,
-                                    &acked,
-                                    source
-                                ).await else {
-                                    continue;
-                                };
-
-                                event
+                                let pipeline = pipeline.clone();
+                                let acked = acked.clone();
+                                sync_processing.push(async move {
+                                    process_operation::<M>(
+                                        *operation,
+                                        topic,
+                                        &pipeline,
+                                        ack_policy,
+                                        &acked,
+                                        source,
+                                    ).await
+                                });
+                                continue;
                             },
                         }
                     }
