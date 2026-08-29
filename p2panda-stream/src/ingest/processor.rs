@@ -16,7 +16,10 @@ use crate::Processor;
 use crate::ingest::args::IngestArgs;
 use crate::ingest::operation::{IngestError, ingest_operation};
 
-const MAX_PENDING_OPERATIONS: usize = 4096;
+// Live operations from concurrent sessions should only be separated by a small scheduling skew.
+// Keeping this window deliberately tight prevents a truly missing predecessor from suppressing an
+// author's entire stream indefinitely; overflow is surfaced so the sync layer can recover.
+const MAX_PENDING_OPERATIONS: usize = 64;
 
 type IngestOutput<T> = Result<(T, IngestResult), (T, IngestError)>;
 
