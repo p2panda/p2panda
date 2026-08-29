@@ -49,7 +49,7 @@ const PUBLISH_BUFFER_SIZE: usize = 128;
 /// Number of streams which can stay in the import buffer. If the buffer runs full importing of
 /// new streams will have backpressure applied.
 const IMPORT_BUFFER_SIZE: usize = 16;
-const SYNC_REORDER_BUFFER_SIZE: usize = 64;
+const SYNC_REORDER_BUFFER_SIZE: usize = 4096;
 
 /// Returns publish and subscribe halfs of an eventually consistent messaging stream for a given
 /// topic.
