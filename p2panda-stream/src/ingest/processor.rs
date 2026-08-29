@@ -92,7 +92,7 @@ where
         }
     }
 
-    async fn drain_pending(&self)
+    async fn drain_pending(&self, author: VerifyingKey, log_id: L)
     where
         T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
     {
@@ -106,6 +106,12 @@ where
             let mut made_progress = false;
 
             while let Some(input) = pending.pop_front() {
+                let operation: &Operation<E> = input.borrow();
+                let args: &IngestArgs<L, TP> = input.borrow();
+                if operation.header.verifying_key != author || args.log_id != log_id {
+                    deferred.push_back(input);
+                    continue;
+                }
                 match self.try_ingest(&input).await {
                     Ok(result) => {
                         made_progress = true;
@@ -149,8 +155,12 @@ where
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         match self.try_ingest(&input).await {
             Ok(result) => {
+                let operation: &Operation<E> = input.borrow();
+                let author = operation.header.verifying_key;
+                let args: &IngestArgs<L, TP> = input.borrow();
+                let log_id = args.log_id.clone();
                 self.enqueue(Ok((input, result)));
-                self.drain_pending().await;
+                self.drain_pending(author, log_id).await;
             }
             Err(error)
                 if Self::can_defer(&input, &error)
