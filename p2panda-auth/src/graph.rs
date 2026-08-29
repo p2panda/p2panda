@@ -56,7 +56,7 @@ where
 ///
 /// Operations are considered concurrent if they are neither predecessors nor successors of the
 /// target operation.
-fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
+pub fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId,
 {

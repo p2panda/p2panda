@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::access::Access;
+use crate::graph::concurrent_operations;
 use crate::group::{GroupAction, GroupMember, GroupMembersState, GroupMembershipError};
 use crate::traits::{Conditions, Operation, Resolver};
 
@@ -404,6 +405,10 @@ where
         }
 
         false
+    }
+
+    pub fn concurrent_operations(&self, id: OP) -> HashSet<OP> {
+        concurrent_operations(&self.graph, id)
     }
 }
 
