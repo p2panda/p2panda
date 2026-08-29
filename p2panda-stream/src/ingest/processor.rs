@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{Extensions, Hash, LogId, Operation, OperationError, SeqNum, VerifyingKey};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -16,10 +16,15 @@ use crate::Processor;
 use crate::ingest::args::IngestArgs;
 use crate::ingest::operation::{IngestError, ingest_operation};
 
+const MAX_PENDING_OPERATIONS: usize = 4096;
+
+type IngestOutput<T> = Result<(T, IngestResult), (T, IngestError)>;
+
 pub struct Ingest<S, T, L, E, TP> {
     store: S,
     notify: Notify,
-    queue: RefCell<VecDeque<(T, IngestResult)>>,
+    queue: RefCell<VecDeque<IngestOutput<T>>>,
+    pending: RefCell<VecDeque<T>>,
     _marker: PhantomData<(L, E, TP)>,
 }
 
@@ -37,7 +42,89 @@ where
             store,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
+            pending: RefCell::new(VecDeque::new()),
             _marker: PhantomData,
+        }
+    }
+
+    fn enqueue(&self, output: IngestOutput<T>) {
+        self.queue.borrow_mut().push_back(output);
+        self.notify.notify_one();
+    }
+
+    fn can_defer(input: &T, error: &IngestError) -> bool
+    where
+        T: Borrow<Operation<E>>,
+    {
+        match error {
+            IngestError::InvalidOperation(OperationError::SeqNumNonIncremental(expected, found)) => {
+                found > expected
+            }
+            IngestError::InvalidOperation(OperationError::BacklinkMissing) => {
+                let operation: &Operation<E> = input.borrow();
+                operation.header.seq_num > 0
+            }
+            _ => false,
+        }
+    }
+
+    async fn try_ingest(&self, input: &T) -> Result<IngestResult, IngestError>
+    where
+        T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
+    {
+        let operation: &Operation<E> = input.borrow();
+        let args: &IngestArgs<L, TP> = input.borrow();
+
+        match ingest_operation(
+            &self.store,
+            operation,
+            &args.log_id,
+            &args.topic,
+            args.prune_flag,
+        )
+        .await?
+        {
+            true => Ok(IngestResult::Inserted),
+            false => Ok(IngestResult::AlreadyExists),
+        }
+    }
+
+    async fn drain_pending(&self)
+    where
+        T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
+    {
+        loop {
+            let mut pending = self.pending.replace(VecDeque::new());
+            if pending.is_empty() {
+                return;
+            }
+
+            let mut deferred = VecDeque::new();
+            let mut made_progress = false;
+
+            while let Some(input) = pending.pop_front() {
+                match self.try_ingest(&input).await {
+                    Ok(result) => {
+                        made_progress = true;
+                        self.enqueue(Ok((input, result)));
+                    }
+                    Err(error) if Self::can_defer(&input, &error) => {
+                        deferred.push_back(input);
+                    }
+                    Err(error) => self.enqueue(Err((input, error))),
+                }
+            }
+
+            // `process` and `drain_pending` run on the local processor task, but preserve any
+            // operations which might have been queued re-entrantly while awaits yielded.
+            let mut newly_pending = self.pending.borrow_mut();
+            deferred.append(&mut newly_pending);
+            drop(newly_pending);
+            self.pending.replace(deferred);
+
+            if !made_progress {
+                return;
+            }
         }
     }
 }
@@ -57,42 +144,32 @@ where
     type Error = (T, IngestError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let operation: &Operation<E> = input.borrow();
-        let args: &IngestArgs<L, TP> = input.borrow();
-
-        let result = ingest_operation(
-            &self.store,
-            operation,
-            &args.log_id,
-            &args.topic,
-            args.prune_flag,
-        )
-        .await;
-
-        let result = match result {
-            Ok(true) => IngestResult::Inserted,
-            Ok(false) => IngestResult::AlreadyExists,
-            Err(err) => {
-                // Return the input arguments next to the error to allow mapping it back to it's
-                // source.
-                return Err((input, err));
+        match self.try_ingest(&input).await {
+            Ok(result) => {
+                self.enqueue(Ok((input, result)));
+                self.drain_pending().await;
             }
-        };
-
-        self.queue.borrow_mut().push_back((input, result));
-        self.notify.notify_one(); // Wake up any pending recv.
+            Err(error)
+                if Self::can_defer(&input, &error)
+                    && self.pending.borrow().len() < MAX_PENDING_OPERATIONS =>
+            {
+                self.pending.borrow_mut().push_back(input);
+            }
+            Err(error) => self.enqueue(Err((input, error))),
+        }
 
         Ok(())
     }
 
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         loop {
+            // Register before checking the queue so a notification cannot be lost between the
+            // empty check and awaiting it.
+            let notified = self.notify.notified();
             if let Some(item) = self.queue.borrow_mut().pop_front() {
-                return Ok(item);
+                return item;
             }
-
-            // Wait for notification that an item was added.
-            self.notify.notified().await;
+            notified.await;
         }
     }
 }
@@ -137,6 +214,17 @@ mod tests {
         }
     }
 
+    fn event(operation: Operation, log_id: usize, topic: Topic) -> Event {
+        Event {
+            operation,
+            args: IngestArgs {
+                log_id,
+                topic,
+                prune_flag: false,
+            },
+        }
+    }
+
     #[tokio::test]
     async fn ingest_incoming_operations() {
         let log = TestLog::new();
@@ -150,35 +238,47 @@ mod tests {
                 let operation_0 = log.operation(b"Hi", ());
                 let operation_1 = log.operation(b"Ha", ());
                 let operation_2 = log.operation(b"Ho", ());
-
-                let log_id = 0;
                 let topic = Topic::random();
 
                 let mut stream = stream::iter(vec![
-                    Event {
-                        operation: operation_0.clone(),
-                        args: IngestArgs {
-                            log_id,
-                            topic,
-                            prune_flag: false,
-                        },
-                    },
-                    Event {
-                        operation: operation_1.clone(),
-                        args: IngestArgs {
-                            log_id,
-                            topic,
-                            prune_flag: false,
-                        },
-                    },
-                    Event {
-                        operation: operation_2.clone(),
-                        args: IngestArgs {
-                            log_id,
-                            topic,
-                            prune_flag: false,
-                        },
-                    },
+                    event(operation_0.clone(), 0, topic),
+                    event(operation_1.clone(), 0, topic),
+                    event(operation_2.clone(), 0, topic),
+                ])
+                .layer(ingest);
+
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_0);
+
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_1);
+
+                let (event, _) = stream.next().await.unwrap().unwrap();
+                assert_eq!(event.operation, operation_2);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn defers_future_operation_until_predecessor_arrives() {
+        let log = TestLog::new();
+        let local = task::LocalSet::new();
+
+        local
+            .run_until(async move {
+                let store = SqliteStore::temporary().await;
+                let ingest: Ingest<SqliteStore, Event, _, _, _> = Ingest::new(store);
+
+                let operation_0 = log.operation(b"0", ());
+                let operation_1 = log.operation(b"1", ());
+                let operation_2 = log.operation(b"2", ());
+                let topic = Topic::random();
+
+                // Concurrent sync sessions can interleave one author's live operations this way.
+                let mut stream = stream::iter(vec![
+                    event(operation_0.clone(), 0, topic),
+                    event(operation_2.clone(), 0, topic),
+                    event(operation_1.clone(), 0, topic),
                 ])
                 .layer(ingest);
 
