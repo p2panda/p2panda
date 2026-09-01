@@ -150,10 +150,11 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
             p2panda_spaces::SpacesArgs::Group { group_id, .. } => {
                 // Every author maintains their own log of control messages _per_ group.
                 let log_id = group_log_id(group_id);
+                let topic = Topic::from(group_id);
 
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                self.create_operation(None, log_id, None, extensions)
+                self.create_operation(Some(topic), log_id, None, extensions)
                     .await?
             }
 
