@@ -113,23 +113,18 @@ where
 
     /// Await this task until it is ready and we've received the result.
     pub async fn ready(&self) -> T {
-        // Check if an result already exists and return it directly.
-        {
-            let ready_result = self.ready_result.lock().await;
-            if ready_result.is_some() {
-                return ready_result
-                    .clone()
-                    .expect("result exists after ready signal was fired");
+        loop {
+            // Register before checking the result so completion cannot occur between the empty
+            // check and waiter registration.
+            let notified = self.ready_signal.notified();
+            {
+                let ready_result = self.ready_result.lock().await;
+                if let Some(result) = ready_result.clone() {
+                    return result;
+                }
             }
+            notified.await;
         }
-
-        // If not, we wait until we got notified that an result exists.
-        self.ready_signal.notified().await;
-
-        let ready_result = self.ready_result.lock().await;
-        ready_result
-            .clone()
-            .expect("result exists after ready signal was fired")
     }
 }
 
@@ -200,5 +195,21 @@ mod tests {
         // Result is ready, even if we await it _after_ it was marked as such.
         let result = task_a.ready().await;
         assert_eq!(result, "yay, we did it".to_string());
+    }
+
+    #[tokio::test]
+    async fn completion_racing_with_wait_does_not_lose_wakeup() {
+        for id in 0..1000 {
+            let tasks = TaskTracker::<usize, usize>::new();
+            let task = tasks.track(id).await;
+            let waiter = tokio::spawn(async move { task.ready().await });
+            tokio::task::yield_now().await;
+            tasks.mark_as_done(id, id).await;
+            let result = tokio::time::timeout(Duration::from_secs(1), waiter)
+                .await
+                .expect("task waiter lost its completion notification")
+                .unwrap();
+            assert_eq!(result, id);
+        }
     }
 }
