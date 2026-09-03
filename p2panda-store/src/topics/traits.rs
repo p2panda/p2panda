@@ -66,4 +66,7 @@ pub trait TopicStore<T, A, D> {
         author: &A,
         data_id: &D,
     ) -> impl Future<Output = Result<Vec<T>, Self::Error>>;
+
+    /// Retrieve all topics for which active associations exist.
+    fn topics(&self) -> impl Future<Output = Result<Vec<T>, Self::Error>>;
 }
