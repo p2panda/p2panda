@@ -50,6 +50,7 @@ test_utils = [
   "dep:rand",
   "dep:rand_chacha",
   "sqlite",
+  "p2panda-encryption/test_utils",
 ]
 
 [dependencies]
