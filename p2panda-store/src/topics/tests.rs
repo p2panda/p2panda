@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use p2panda_core::{SigningKey, Topic};
+use p2panda_core::{SigningKey, Topic, VerifyingKey};
 
 use crate::topics::TopicStore;
 use crate::{SqliteStore, Transaction};
@@ -140,4 +140,46 @@ async fn remove_association() {
 
     let logs = store.resolve(&topic).await.unwrap();
     assert_eq!(logs, expected_logs);
+}
+
+#[tokio::test]
+async fn query_associated_topics() {
+    let store = SqliteStore::temporary().await;
+
+    let topic_1 = Topic::random();
+    let topic_2 = Topic::random();
+    let topic_3 = Topic::random();
+
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
+    let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
+    let cat = SigningKey::from_bytes(&[3u8; 32]).verifying_key();
+
+    let log_id: String = "kittens".into();
+
+    let permit = store.begin().await.unwrap();
+
+    let result = store.associate(&topic_1, &alice, &log_id).await.unwrap();
+    assert!(result);
+
+    let result = store.associate(&topic_2, &alice, &log_id).await.unwrap();
+    assert!(result);
+
+    let result = store.associate(&topic_2, &bob, &log_id).await.unwrap();
+    assert!(result);
+
+    let result = store.associate(&topic_3, &cat, &log_id).await.unwrap();
+    assert!(result);
+
+    store.commit(permit).await.unwrap();
+
+    let expected_topics = Vec::from([topic_1, topic_2, topic_3]);
+
+    let topics: Vec<Topic> =
+        <SqliteStore as TopicStore<Topic, VerifyingKey, String>>::topics(&store)
+            .await
+            .unwrap();
+
+    for topic in expected_topics {
+        assert!(topics.contains(&topic));
+    }
 }

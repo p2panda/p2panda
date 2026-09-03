@@ -14,6 +14,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - net: Support bearer authentication for iroh relays [#1361](https://github.com/p2panda/p2panda/pull/1361)
+- store: Add method on TopicStore to get all topics - [#1388](https://github.com/p2panda/p2panda/pull/1388)
 
 ### Changed
 

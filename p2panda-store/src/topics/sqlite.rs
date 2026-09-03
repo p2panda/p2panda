@@ -135,4 +135,33 @@ where
 
         Ok(result)
     }
+
+    /// Retrieve all topics for which active associations exist.
+    async fn topics(&self) -> Result<Vec<T>, Self::Error> {
+        let topics = self
+            .execute(async |pool| {
+                query_as::<_, (Vec<u8>,)>(
+                    "
+                    SELECT DISTINCT
+                        topic
+                    FROM
+                        topics_v1
+                    ",
+                )
+                .fetch_all(pool)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        let mut result: Vec<T> = Vec::new();
+
+        for (topic,) in topics {
+            let topic = decode_cbor(&topic[..])
+                .map_err(|err| SqliteError::Decode("topic".into(), err.into()))?;
+            result.push(topic);
+        }
+
+        Ok(result)
+    }
 }
