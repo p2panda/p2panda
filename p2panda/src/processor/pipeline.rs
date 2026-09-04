@@ -208,8 +208,7 @@ where
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
                     let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone());
-                    let log_prune =
-                        LogPrune::<SqliteStore, Event<L, E, TP>, L, E>::new(store.clone());
+                    let log_prune = LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
                     let spaces = {
                         let spaces_store = SqliteSpacesStore::new(store);
                         SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)

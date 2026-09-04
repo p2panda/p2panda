@@ -119,19 +119,13 @@ impl Peer {
         body: &Body,
         log_id: TestLogId,
     ) -> (Header<TestExtensions>, Vec<u8>) {
-        let (seq_num, backlink) = <SqliteStore as LogStore<
-            Operation<TestExtensions>,
-            VerifyingKey,
-            TestLogId,
-            SeqNum,
-            p2panda_core::Hash,
-        >>::get_latest_entry(
-            &self.store, &self.signing_key.verifying_key(), &log_id
-        )
-        .await
-        .unwrap()
-        .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-        .unwrap_or((0, None));
+        let (seq_num, backlink) = self
+            .store
+            .get_latest_entry(&self.signing_key.verifying_key(), &log_id)
+            .await
+            .unwrap()
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+            .unwrap_or((0, None));
 
         let (header, header_bytes) =
             create_operation(&self.signing_key, body, seq_num, backlink, log_id);
