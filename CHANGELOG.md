@@ -16,6 +16,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - core: Infallible conversion from Operation<E> into AnyOperation [#1389](https://github.com/p2panda/p2panda/pull/1389)
+- store: Use `AnyOperation` on `LogStore` [#1391](https://github.com/p2panda/p2panda/pull/1391)
 
 ## [0.7.1] - 21/08/2026
 

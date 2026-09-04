@@ -7,7 +7,7 @@ mod tests;
 use std::collections::BTreeMap;
 
 use p2panda_core::cbor::encode_cbor;
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use sqlx::{query, query_as};
 
 use crate::logs::LogStore;
@@ -29,9 +29,8 @@ const GET_LATEST_ENTRY: &str = "
         seq_num DESC LIMIT 1
 ";
 
-impl<L, E> LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> for SqliteStore
+impl<L> LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> for SqliteStore
 where
-    E: Extensions,
     L: LogId,
 {
     type Error = SqliteError;
@@ -41,7 +40,7 @@ where
         &self,
         author: &VerifyingKey,
         log_id: &L,
-    ) -> Result<Option<Operation<E>>, Self::Error> {
+    ) -> Result<Option<AnyOperation>, Self::Error> {
         if let Some(latest) = query_as::<_, OperationRow>(GET_LATEST_ENTRY)
             .bind(author.to_string())
             .bind(
@@ -71,7 +70,7 @@ where
         &self,
         author: &VerifyingKey,
         log_id: &L,
-    ) -> Result<Option<Operation<E>>, Self::Error> {
+    ) -> Result<Option<AnyOperation>, Self::Error> {
         let result = self
             .tx(async |tx| {
                 query_as::<_, OperationRow>(GET_LATEST_ENTRY)
@@ -207,7 +206,7 @@ where
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
-    ) -> Result<Option<Vec<(Operation<E>, Vec<u8>)>>, Self::Error> {
+    ) -> Result<Option<Vec<(AnyOperation, Vec<u8>)>>, Self::Error> {
         // We need to use an inclusive greater-than to ensure our
         // query includes the operation with sequence number 0.
         let after_operator = if after.is_none() { ">=" } else { ">" };

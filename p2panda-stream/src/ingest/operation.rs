@@ -5,7 +5,8 @@ use std::borrow::Borrow;
 
 use p2panda_core::prune::validate_prunable_backlink;
 use p2panda_core::{
-    Extensions, Hash, LogId, Operation, OperationError, SeqNum, VerifyingKey, validate_operation,
+    AnyOperation, Extensions, Hash, LogId, Operation, OperationError, SeqNum, VerifyingKey,
+    validate_operation,
 };
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
@@ -27,7 +28,7 @@ pub async fn ingest_operation<S, T, L, E, TP>(
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash>
-        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>>,
     L: LogId,
@@ -67,7 +68,14 @@ where
 
     // If no pruning flag is set, we expect the log to have integrity with the previously given
     // operation.
-    validate_prunable_backlink(past_header.as_ref(), &operation.header, prune_flag)?;
+    //
+    // TODO: We can remove the header Clone and Into here once we update OperationStore to use
+    // AnyOperation https://github.com/p2panda/p2panda/issues/1018.
+    validate_prunable_backlink(
+        past_header.as_ref(),
+        &operation.header.clone().into(),
+        prune_flag,
+    )?;
 
     // Insert operation into store and associate its log with the given topic.
     let verifying_key = operation.header.verifying_key;
@@ -105,7 +113,7 @@ pub enum IngestError {
 #[cfg(test)]
 mod tests {
     use p2panda_core::test_utils::TestLog;
-    use p2panda_core::{Hash, Header, Operation, SeqNum, SigningKey, VerifyingKey};
+    use p2panda_core::{Hash, Header, Operation, SigningKey, VerifyingKey};
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
     use p2panda_store::topics::TopicStore;
@@ -185,16 +193,11 @@ mod tests {
         assert_eq!(*authors.get(&log_0.author()).unwrap(), [0]);
         assert_eq!(*authors.get(&log_1.author()).unwrap(), [1]);
 
-        let operation = <SqliteStore as LogStore<
-            Operation<()>,
-            VerifyingKey,
-            usize,
-            SeqNum,
-            Hash,
-        >>::get_latest_entry(&store, &log_0.author(), &0)
-        .await
-        .unwrap()
-        .unwrap();
+        let operation = store
+            .get_latest_entry(&log_0.author(), &0)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(operation.header.seq_num, 1);
 
         // Topic "cats" contains one log: 2 with four operations.
@@ -204,16 +207,11 @@ mod tests {
                 .unwrap();
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
-        let operation = <SqliteStore as LogStore<
-            Operation<()>,
-            VerifyingKey,
-            usize,
-            SeqNum,
-            Hash,
-        >>::get_latest_entry(&store, &log_2.author(), &2)
-        .await
-        .unwrap()
-        .unwrap();
+        let operation = store
+            .get_latest_entry(&log_2.author(), &2)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(operation.header.seq_num, 2);
     }
 

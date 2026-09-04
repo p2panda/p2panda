@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use tracing::debug;
 
 use crate::node::AckPolicy;
-use crate::operation::{Extensions, LogId, Operation};
+use crate::operation::{Extensions, LogId};
 use crate::processor::Pipeline;
 use crate::streams::StreamEvent;
 use crate::streams::acked::Acked;
@@ -70,7 +70,7 @@ where
 
     for (author, logs) in log_ranges {
         for (log_id, (after, until)) in logs {
-            let Some(operations): Option<Vec<(Operation, _)>> = store
+            let Some(operations) = store
                 .get_log_entries(&author, &log_id, after, until)
                 .await?
             else {
@@ -81,6 +81,9 @@ where
             };
 
             for (operation, _) in operations {
+                let operation = operation
+                    .try_into()
+                    .expect("values from the database are valid");
                 match process_operation::<M>(
                     operation,
                     topic,

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use p2panda_core::logs::{LogHeights, LogRanges};
-use p2panda_core::{Cursor, Hash, SeqNum, Topic, VerifyingKey};
+use p2panda_core::{AnyOperation, Cursor, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::cursors::CursorStore;
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
@@ -13,7 +13,7 @@ use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 
-use crate::operation::{Header, LogId, Operation};
+use crate::operation::{Header, LogId};
 use crate::streams::StreamFrom;
 
 pub type Logs = BTreeMap<VerifyingKey, Vec<LogId>>;
@@ -161,7 +161,7 @@ async fn get_log_heights(
 
     for (verifying_key, log_ids) in logs {
         let Some(log_heights) =
-            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
+            LogStore::<AnyOperation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
                 store,
                 verifying_key,
                 log_ids,

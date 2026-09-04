@@ -20,7 +20,7 @@ use crate::traits::{Chain, Digest, Offchain, Provenance};
 /// Applications usually want to attach custom extensions to the operation, if you need to know the
 /// type you can easily convert from `AnyOperation` to [`Operation`](crate::Operation) with an
 /// explicit `E` extensions type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AnyOperation {
     pub hash: Hash,
     pub header: AnyHeader,

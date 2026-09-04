@@ -68,14 +68,8 @@
 //! // Here we acquire a store permit, query the latest log entry, associate the topic with
 //! // the log, insert the operation and commit the transaction before dropping the permit.
 //! let operation = tx!(store, {
-//!     let (seq_num, backlink) = <SqliteStore as LogStore<
-//!         Operation<()>,
-//!         VerifyingKey,
-//!         u64,
-//!         SeqNum,
-//!         Hash,
-//!     >>::get_latest_entry_tx(
-//!         &store, &signing_key.verifying_key(), &log_id
+//!     let (seq_num, backlink) = store.get_latest_entry_tx(
+//!         &signing_key.verifying_key(), &log_id
 //!     )
 //!     .await?
 //!     .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
