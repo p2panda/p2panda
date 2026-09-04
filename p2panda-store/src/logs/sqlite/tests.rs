@@ -2,10 +2,11 @@
 
 use std::collections::BTreeMap;
 
+use futures_util::StreamExt;
 use p2panda_core::SigningKey;
 use p2panda_core::test_utils::TestLog;
 
-use crate::logs::LogStore;
+use crate::logs::{LogStore, StreamItem};
 use crate::operations::OperationStore;
 use crate::sqlite::SqliteStore;
 use crate::traits::Transaction;
@@ -181,21 +182,23 @@ async fn get_log_entries() {
 
     store.commit(permit).await.unwrap();
 
-    let log_entries = store
-        .get_log_entries(&log.author(), &log.id(), None, None)
-        .await
+    let mut log_entries = store
+        .log_entries(&log.author(), &log.id(), None, None)
         .expect("no errors");
 
-    assert!(log_entries.is_some());
-    let log_entries = log_entries.unwrap();
+    let expected = [
+        operation_1,
+        operation_2,
+        operation_3,
+        operation_4,
+        operation_5,
+    ];
+    for index in 0..=4 {
+        let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+        assert_eq!(entry, expected[index].clone().into());
+    }
 
-    assert_eq!(log_entries.len(), 5);
-
-    assert_eq!(log_entries[0].0, operation_1.into());
-    assert_eq!(log_entries[1].0, operation_2.into());
-    assert_eq!(log_entries[2].0, operation_3.into());
-    assert_eq!(log_entries[3].0, operation_4.into());
-    assert_eq!(log_entries[4].0, operation_5.into());
+    assert!(log_entries.next().await.is_none());
 }
 
 #[tokio::test]
@@ -251,17 +254,17 @@ async fn prune_entries() {
 
     assert_eq!(prune_entries_num, 3);
 
-    let log_entries = store
-        .get_log_entries(&log.author(), &log.id(), None, None)
-        .await
+    let mut log_entries = store
+        .log_entries(&log.author(), &log.id(), None, None)
         .expect("no errors");
-
-    assert!(log_entries.is_some());
-    let log_entries = log_entries.unwrap();
 
     // Three entries were pruned; the two most recently published entries should
     // remain.
-    assert_eq!(log_entries.len(), 2);
-    assert_eq!(log_entries[0].0, operation_4.into());
-    assert_eq!(log_entries[1].0, operation_5.into());
+    let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+    assert_eq!(entry, operation_4.into());
+
+    let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+    assert_eq!(entry, operation_5.into());
+
+    assert!(log_entries.next().await.is_none());
 }

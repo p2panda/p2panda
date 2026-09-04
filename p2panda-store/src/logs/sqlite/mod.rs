@@ -6,12 +6,15 @@ mod tests;
 
 use std::collections::BTreeMap;
 
+use async_stream::try_stream;
+use futures_util::TryStreamExt;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use sqlx::{QueryBuilder, query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
+use crate::logs::traits::{LogStream, StreamItem};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
@@ -29,9 +32,29 @@ const GET_LATEST_ENTRY: &str = "
         seq_num DESC LIMIT 1
 ";
 
+const GET_LOG_ENTRIES: &str = "
+    SELECT
+        hash,
+        header,
+        body
+    FROM
+        operations_v1
+    WHERE
+        verifying_key = $1
+        AND log_id = $2
+        AND (
+            ($3 == true AND seq_num >= $4)
+            OR
+            ($3 == false AND seq_num > $4)
+        )
+        AND seq_num <= $5
+    ORDER BY
+        seq_num
+";
+
 impl<L> LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> for SqliteStore
 where
-    L: LogId,
+    L: LogId + Send + 'static,
 {
     type Error = SqliteError;
 
@@ -186,56 +209,41 @@ where
         )))
     }
 
-    /// Retrieve log entries representing operations from an author's log.
-    async fn get_log_entries(
+    /// Stream all entries in a log after an optional starting point. This is the memory efficient
+    /// equivalent to `get_log_entries` and should only keep one entry in memory at a time.
+    fn log_entries(
         &self,
         author: &VerifyingKey,
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
-    ) -> Result<Option<Vec<(AnyOperation, Vec<u8>)>>, Self::Error> {
-        let operations = query_as::<_, OperationRow>(
-            "
-            SELECT
-                hash,
-                header,
-                body
-            FROM
-                operations_v1
-            WHERE
-                verifying_key = $1
-                AND log_id = $2
-                AND (
-                    ($3 == true AND seq_num >= $4)
-                    OR
-                    ($3 == false AND seq_num > $4)
-                )
-                AND seq_num <= $5
-            ORDER BY
-                seq_num
-            ",
-        )
-        .bind(author.to_string())
-        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
-        // We need to use an inclusive greater-than to ensure our
-        // query includes the operation with sequence number 0.
-        .bind(after.is_none())
-        .bind(after.unwrap_or(0).to_string())
-        .bind(until.unwrap_or(SeqNum::MAX).to_string())
-        .fetch_all(&self.pool)
-        .await?;
+    ) -> Result<LogStream<AnyOperation, L, Self::Error>, Self::Error> {
+        let author = author.to_string();
+        let log_id = log_id.clone();
+        let log_id_bytes =
+            encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
+        let after_is_none = after.is_none();
+        let after_value = after.unwrap_or(0).to_string();
+        let until_value = until.unwrap_or(SeqNum::MAX).to_string();
+        let pool = self.pool.clone();
 
-        let mut entries = Vec::new();
-        for operation in operations {
-            let header = operation.header.clone();
-            entries.push((operation.try_into()?, header))
-        }
+        let stream = try_stream! {
+            let mut rows = query_as::<_, OperationRow>(GET_LOG_ENTRIES)
+                .bind(author)
+                .bind(log_id_bytes)
+                .bind(after_is_none)
+                .bind(after_value)
+                .bind(until_value)
+                .fetch(&pool);
 
-        if entries.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(entries))
-        }
+            while let Some(row) = rows.try_next().await? {
+                let header = row.header.clone();
+                let operation: AnyOperation = row.try_into()?;
+                yield StreamItem { entry: operation, log_id: log_id.clone(), bytes: header };
+            }
+        };
+
+        Ok(Box::pin(stream))
     }
 
     /// Prune entries from an author's log.

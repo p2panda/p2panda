@@ -14,13 +14,14 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use p2panda_core::logs::{LogHeights, LogRanges, compare};
+use futures_util::stream::StreamExt;
+use p2panda_core::logs::{LogHeights, compare};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteStore, tx};
+use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_sync::api::{OperationStream, StreamItem, log_heights, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 
@@ -106,30 +107,12 @@ impl Node {
         &self,
         announcement: Announcement,
         topic: Topic,
-    ) -> Result<Vec<AnyOperation>> {
+    ) -> Result<OperationStream<LogId, SqliteError>> {
         let their_log_heights = &announcement.log_heights;
         let our_log_heights = get_topic_log_heights(&self.store, &topic).await?;
 
-        let log_ranges: LogRanges<VerifyingKey, LogId> =
-            compare(&our_log_heights, &their_log_heights);
-
-        let mut operations = Vec::new();
-
-        for (_author, log_heights) in log_ranges {
-            for (log_id, (after, until)) in log_heights {
-                let log_operations = self
-                    .store
-                    .get_log_entries(&self.id(), &log_id, after, until)
-                    .await?
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(operation, _)| operation);
-
-                operations.extend(log_operations);
-            }
-        }
-
-        Ok(operations)
+        let diff = compare(&our_log_heights, &their_log_heights);
+        Ok(log_ranges(&self.store, diff))
     }
 
     /// Insert an operation into the store and associate the log with the given topic.
@@ -188,14 +171,17 @@ async fn main() -> Result<()> {
 
     // Node B processes the announcement then sends operations and an announcement.
 
-    let log_operations_b = node_b.process_announcement(announcement_a, topic).await?;
+    let mut log_operations_b = node_b.process_announcement(announcement_a, topic).await?;
     let announcement_b = node_b.generate_announcement(topic).await?;
 
     println!("--------");
 
     // Node A processes the operations and announcement from node B then sends operations.
 
-    for operation in log_operations_b {
+    while let Some(result) = log_operations_b.next().await {
+        let StreamItem {
+            entry: operation, ..
+        } = result?;
         println!(
             "{}: ingest remote operation {}",
             node_a.id().fmt_short(),
@@ -211,14 +197,17 @@ async fn main() -> Result<()> {
         announcement_b.hash().fmt_short()
     );
 
-    let log_operations_a = node_a.process_announcement(announcement_b, topic).await?;
+    let mut log_operations_a = node_a.process_announcement(announcement_b, topic).await?;
 
     println!("--------");
 
     // Node B processes the operations from node A.
 
     // We only expect operations at this stage; no more announcements.
-    for operation in log_operations_a {
+    while let Some(result) = log_operations_a.next().await {
+        let StreamItem {
+            entry: operation, ..
+        } = result?;
         println!(
             "{}: ingest remote operation {}",
             node_b.id().fmt_short(),
@@ -254,25 +243,7 @@ async fn get_topic_log_heights(
     topic: &Topic,
 ) -> Result<LogHeights<VerifyingKey, LogId>> {
     let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = get_log_heights(&store, &logs).await?;
+    let log_heights = log_heights(store, &logs).await?;
 
     Ok(log_heights)
-}
-
-// TODO: This function may be a good candidate for inclusion in the `p2panda-store` API.
-async fn get_log_heights(
-    store: &SqliteStore,
-    logs: &LogIds,
-) -> Result<LogHeights<VerifyingKey, LogId>> {
-    let mut result = BTreeMap::new();
-
-    for (verifying_key, log_ids) in logs {
-        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
-            continue;
-        };
-
-        result.insert(*verifying_key, log_heights);
-    }
-
-    Ok(result)
 }

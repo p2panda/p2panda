@@ -39,6 +39,8 @@ Highlights are marked with a pancake 🥞
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
 - node: ConnectionAuthoriserHook updating authoriser based on space membership [#1359](https://github.com/p2panda/p2panda/pull/1359)
 - node: E2EE CLI chat example using spaces API [#1288](https://github.com/p2panda/p2panda/pull/1288)
+- sync: `api` module with useful methods to hack your own sync protocols [#1393](https://github.com/p2panda/p2panda/pull/1393)
+- sync: Method for streaming log ranges from the store [#1393](https://github.com/p2panda/p2panda/pull/1393)
 
 ### Changed
 

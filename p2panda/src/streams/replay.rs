@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
+use futures_util::StreamExt;
 use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, Topic, VerifyingKey};
 use p2panda_net::sync::SyncHandle;
-use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::{StreamItem, log_ranges};
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,12 +53,12 @@ pub(crate) async fn replay_log_ranges<M>(
     to_output_tx: &mpsc::Sender<Vec<ForwardEvent<M>>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
     sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-    log_ranges: LogRanges<VerifyingKey, LogId>,
+    ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let total_operations = total_operations(&log_ranges);
+    let total_operations = total_operations(&ranges);
     debug!("replay {total_operations} operations");
 
     if total_operations == 0 {
@@ -69,26 +70,23 @@ where
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
-    for (author, logs) in log_ranges {
-        for (log_id, (after, until)) in logs {
-            let Some(operations) = store
-                .get_log_entries(&author, &log_id, after, until)
-                .await?
-            else {
-                // If the log was concurrently deleted since calling TopicStore::resolve then None
-                // is returned here. This is not considered an error, as no log integrity is broken
-                // and deletes should be immediately respected.
-                continue;
-            };
+    let mut operations = log_ranges(store, ranges);
 
-            for (operation, _) in operations {
-                let operation = operation
-                    .try_into()
-                    .expect("values from the database are valid");
-                process_operation_in(operation, Source::LocalStore, topic, pipeline, sync_handle)
-                    .await;
-            }
-        }
+    while let Some(result) = operations.next().await {
+        let StreamItem {
+            entry: operation, ..
+        } = result?;
+
+        process_operation_in(
+            operation
+                .try_into()
+                .expect("values from the database are valid"),
+            Source::LocalStore,
+            topic,
+            pipeline,
+            sync_handle,
+        )
+        .await;
     }
 
     to_output_tx
