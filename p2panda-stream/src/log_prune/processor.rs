@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use thiserror::Error;
 use tokio::sync::Notify;
@@ -13,18 +13,17 @@ use tokio::sync::Notify;
 use crate::Processor;
 use crate::log_prune::LogPruneArgs;
 
-pub struct LogPrune<S, T, L, E> {
+pub struct LogPrune<S, T, L> {
     store: S,
     notify: Notify,
     queue: RefCell<VecDeque<(T, LogPruneResult)>>,
-    _marker: PhantomData<(L, E)>,
+    _marker: PhantomData<L>,
 }
 
-impl<S, T, L, E> LogPrune<S, T, L, E>
+impl<S, T, L> LogPrune<S, T, L>
 where
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
     L: LogId,
-    E: Extensions,
 {
     pub fn new(store: S) -> Self {
         Self {
@@ -36,12 +35,11 @@ where
     }
 }
 
-impl<S, T, L, E> Processor<T> for LogPrune<S, T, L, E>
+impl<S, T, L> Processor<T> for LogPrune<S, T, L>
 where
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
     T: Borrow<LogPruneArgs<VerifyingKey, L, SeqNum>>,
     L: LogId,
-    E: Extensions,
 {
     type Output = (T, LogPruneResult);
 

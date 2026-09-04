@@ -5,7 +5,7 @@ use std::thread;
 
 use futures_util::StreamExt;
 use p2panda_core::traits::Digest;
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{AnyOperation, Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -85,7 +85,7 @@ where
         S: Clone
             + Transaction
             + OperationStore<Operation<E>, Hash>
-            + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+            + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
             + TopicStore<TP, VerifyingKey, L>
             + Send
             + 'static,
@@ -106,7 +106,7 @@ where
                 local.spawn_local(async move {
                     // Prepare event processing pipeline.
                     let ingest = Ingest::<S, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                    let log_prune = LogPrune::<S, Event<L, E, TP>, L, E>::new(store);
+                    let log_prune = LogPrune::<S, Event<L, E, TP>, L>::new(store);
 
                     // Receive incoming events through mpsc channel.
                     let pipeline = ReceiverStream::new(pipeline_rx)

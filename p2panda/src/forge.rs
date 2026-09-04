@@ -3,7 +3,7 @@
 use std::error::Error as StdError;
 use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Body, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -89,18 +89,12 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         // Here we acquire a store permit, query the latest log entry, associate the topic with
         // the log, insert the operation and commit the transaction before dropping the permit.
         let operation = tx!(self.store, {
-            let (seq_num, backlink) = <SqliteStore as LogStore<
-                Operation,
-                VerifyingKey,
-                LogId,
-                SeqNum,
-                Hash,
-            >>::get_latest_entry_tx(
-                &self.store, &self.signing_key.verifying_key(), &log_id
-            )
-            .await?
-            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-            .unwrap_or((0, None));
+            let (seq_num, backlink) = self
+                .store
+                .get_latest_entry_tx(&self.signing_key.verifying_key(), &log_id)
+                .await?
+                .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+                .unwrap_or((0, None));
 
             let header = {
                 let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
@@ -143,7 +137,7 @@ pub enum ForgeError {
 mod tests {
     use std::collections::BTreeMap;
 
-    use p2panda_core::{Operation, Topic};
+    use p2panda_core::Topic;
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
 
@@ -181,13 +175,10 @@ mod tests {
             .await
             .unwrap();
 
-        let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_heights(
-            &store,
-            &forge.verifying_key(),
-            &[log_id],
-        )
-        .await
-        .unwrap();
+        let result = store
+            .get_log_heights(&forge.verifying_key(), &[log_id])
+            .await
+            .unwrap();
 
         let expected_result = BTreeMap::from([(log_id, 1)]);
 
