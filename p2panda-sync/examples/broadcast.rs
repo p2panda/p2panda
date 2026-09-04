@@ -381,18 +381,11 @@ async fn create_operation(
     let extensions = CustomExtensions { log_id };
 
     let operation = tx!(store, {
-        let (seq_num, backlink) = <SqliteStore as LogStore<
-            Operation,
-            VerifyingKey,
-            LogId,
-            SeqNum,
-            Hash,
-        >>::get_latest_entry_tx(
-            &store, &signing_key.verifying_key(), &log_id
-        )
-        .await?
-        .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-        .unwrap_or((0, None));
+        let (seq_num, backlink) = store
+            .get_latest_entry_tx(&signing_key.verifying_key(), &log_id)
+            .await?
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+            .unwrap_or((0, None));
 
         let header = {
             let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
@@ -472,26 +465,12 @@ async fn compute_diff(
 
     for (author, log_heights) in log_ranges {
         for (log_id, (after, until)) in log_heights {
-            let log_operations = <SqliteStore as LogStore<
-                Operation<CustomExtensions>,
-                _,
-                _,
-                _,
-                _,
-            >>::get_log_entries(
-                &store, &author, &log_id, after, until
-            )
-            .await?
-            .unwrap_or_default();
+            let log_operations = store
+                .get_log_entries(&author, &log_id, after, until)
+                .await?
+                .unwrap_or_default();
 
             for (operation, _) in log_operations {
-                let operation = AnyOperation {
-                    hash: operation.hash,
-                    // TODO: This is wrong in p2panda-core and should not be fallible.
-                    header: operation.header.try_into().unwrap(),
-                    body: operation.body,
-                };
-
                 operations.push(operation);
             }
         }
@@ -517,14 +496,7 @@ async fn get_log_heights(
     let mut result = BTreeMap::new();
 
     for (verifying_key, log_ids) in logs {
-        let Some(log_heights) =
-            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
-                store,
-                verifying_key,
-                log_ids,
-            )
-            .await?
-        else {
+        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
             continue;
         };
 

@@ -132,27 +132,13 @@ impl Node {
 
         for (_author, log_heights) in log_ranges {
             for (log_id, (after, until)) in log_heights {
-                let log_operations = <SqliteStore as LogStore<
-                    Operation<CustomExtensions>,
-                    _,
-                    _,
-                    _,
-                    _,
-                >>::get_log_entries(
-                    &self.store, &self.id(), &log_id, after, until
-                )
-                .await?
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(operation, _)| AnyOperation {
-                    hash: operation.hash,
-                    header: operation
-                        .header
-                        .try_into()
-                        .expect("shouldn't be an error in p2panda-core"),
-                    body: operation.body,
-                })
-                .collect::<Vec<AnyOperation>>();
+                let log_operations = self
+                    .store
+                    .get_log_entries(&self.id(), &log_id, after, until)
+                    .await?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(operation, _)| operation);
 
                 operations.extend(log_operations);
             }
@@ -316,14 +302,7 @@ async fn get_log_heights(
     let mut result = BTreeMap::new();
 
     for (verifying_key, log_ids) in logs {
-        let Some(log_heights) =
-            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
-                store,
-                verifying_key,
-                log_ids,
-            )
-            .await?
-        else {
+        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
             continue;
         };
 

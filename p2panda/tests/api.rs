@@ -27,9 +27,10 @@ mod api {
     use std::time::Duration;
 
     use mock_instant::thread_local::MockClock;
-    use p2panda::operation::{Extensions, LogId, Operation};
+    use p2panda::operation::{Extensions, LogId};
     use p2panda::streams::{EphemeralMessage, ProcessedOperation, StreamEvent, SystemEvent};
     use p2panda::{Credentials, Topic};
+    use p2panda_core::AnyOperation;
     use p2panda_core::cbor::encode_cbor;
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_net::discovery::DiscoveryEvent;
@@ -208,7 +209,7 @@ mod api {
 
         // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
         let log_id = LogId::from_topic(topic);
-        let panda_result: Vec<(Operation, Vec<u8>)> = panda
+        let panda_result: Vec<(AnyOperation, Vec<u8>)> = panda
             .store()
             .get_log_entries(&panda.id(), &log_id, None, None)
             .await
@@ -216,7 +217,7 @@ mod api {
             .expect("result to be Some");
         assert_eq!(panda_result.iter().count(), 1);
 
-        let icebear_result: Vec<(Operation, Vec<u8>)> = icebear
+        let icebear_result: Vec<(AnyOperation, Vec<u8>)> = icebear
             .store()
             .get_log_entries(&panda.id(), &log_id, None, None)
             .await

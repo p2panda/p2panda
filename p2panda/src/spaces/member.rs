@@ -449,21 +449,15 @@ mod tests {
 
     use crate::Credentials;
     use crate::forge::OperationForge;
-    use crate::operation::Operation;
     use crate::spaces::forge::member_log_id;
 
     use super::{KeyBundleTask, KeyBundleTaskCommand};
 
     async fn get_op_count(store: &SqliteStore, verifying_key: VerifyingKey) -> u32 {
-        let result = <SqliteStore as LogStore<Operation, _, _, _, _>>::get_log_size(
-            store,
-            &verifying_key,
-            &member_log_id(),
-            None,
-            None,
-        )
-        .await
-        .unwrap();
+        let result = store
+            .get_log_size(&verifying_key, &member_log_id(), None, None)
+            .await
+            .unwrap();
         result.map(|(op_count, _)| op_count).unwrap_or_default()
     }
 

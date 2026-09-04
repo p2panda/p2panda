@@ -71,7 +71,7 @@ where
 
     for (author, logs) in log_ranges {
         for (log_id, (after, until)) in logs {
-            let Some(operations): Option<Vec<(Operation, _)>> = store
+            let Some(operations) = store
                 .get_log_entries(&author, &log_id, after, until)
                 .await?
             else {
@@ -82,6 +82,9 @@ where
             };
 
             for (operation, _) in operations {
+                let operation = operation
+                    .try_into()
+                    .expect("values from the database are valid");
                 process_operation_in(operation, Source::LocalStore, topic, pipeline, sync_handle)
                     .await;
             }

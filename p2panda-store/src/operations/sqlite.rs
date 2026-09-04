@@ -2,7 +2,7 @@
 
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::hash::{Hash, HashError};
-use p2panda_core::{Extensions, Header, LogId, Operation};
+use p2panda_core::{AnyHeader, AnyOperation, Extensions, Header, LogId, Operation};
 use sqlx::{FromRow, query, query_as};
 
 use crate::operations::OperationStore;
@@ -216,6 +216,22 @@ where
                 .parse()
                 .map_err(|err: HashError| SqliteError::Decode("hash".to_string(), err.into()))?,
             header: Header::<E>::decode(&row.header)
+                .map_err(|err| SqliteError::Decode("header".into(), err.into()))?,
+            body: row.body.map(|body| body.into()),
+        })
+    }
+}
+
+impl TryFrom<OperationRow> for AnyOperation {
+    type Error = SqliteError;
+
+    fn try_from(row: OperationRow) -> Result<Self, Self::Error> {
+        Ok(AnyOperation {
+            hash: row
+                .hash
+                .parse()
+                .map_err(|err: HashError| SqliteError::Decode("hash".to_string(), err.into()))?,
+            header: AnyHeader::decode(&row.header)
                 .map_err(|err| SqliteError::Decode("header".into(), err.into()))?,
             body: row.body.map(|body| body.into()),
         })

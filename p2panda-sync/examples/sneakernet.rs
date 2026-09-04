@@ -184,27 +184,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // TODO: This is ugly.
         for (author, log_heights) in &all_log_heights {
             for log_id in log_heights.keys() {
-                let log_operations = <SqliteStore as LogStore<
-                    Operation<CustomExtensions>,
-                    _,
-                    _,
-                    _,
-                    _,
-                >>::get_log_entries(
-                    &store_a, &node_id_a, log_id, None, None
-                )
-                .await?
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(operation, _)| AnyOperation {
-                    hash: operation.hash,
-                    // TODO: This is maybe wrong in p2panda-core: We should be able to convert from
-                    // Header<E> to AnyHeader without any errors (the extensions are already in CBOR
-                    // AST representation).
-                    header: operation.header.try_into().unwrap(),
-                    body: operation.body,
-                })
-                .collect::<Vec<AnyOperation>>();
+                let log_operations = store_a
+                    .get_log_entries(&node_id_a, log_id, None, None)
+                    .await?
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(operation, _)| operation)
+                    .collect::<Vec<AnyOperation>>();
 
                 let entry = operations.entry(*topic);
                 let logs = entry.or_default();
@@ -414,24 +400,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             for (author, log_heights) in log_ranges {
                 for (log_id, (after, until)) in log_heights {
-                    let log_operations = <SqliteStore as LogStore<
-                        Operation<CustomExtensions>,
-                        _,
-                        _,
-                        _,
-                        _,
-                    >>::get_log_entries(
-                        &store_b, &node_id_b, &log_id, after, until
-                    )
-                    .await?
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(operation, _)| AnyOperation {
-                        hash: operation.hash,
-                        header: operation.header.try_into().unwrap(),
-                        body: operation.body,
-                    })
-                    .collect::<Vec<AnyOperation>>();
+                    let log_operations = store_a
+                        .get_log_entries(&node_id_a, &log_id, after, until)
+                        .await?
+                        .unwrap_or_default();
 
                     // NOTE: We could have a flag here to control if we want to already publish
                     // operations of topics nobody published an announcement for.
@@ -439,7 +411,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let entry = operations.entry(topic);
                     let logs = entry.or_default();
 
-                    for operation in log_operations {
+                    for (operation, _) in log_operations {
                         let log_entry = logs.entry((author, log_id));
                         let log = log_entry.or_default();
 
@@ -545,14 +517,7 @@ async fn get_log_heights(
     let mut result = BTreeMap::new();
 
     for (verifying_key, log_ids) in logs {
-        let Some(log_heights) =
-            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
-                store,
-                verifying_key,
-                log_ids,
-            )
-            .await?
-        else {
+        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
             continue;
         };
 

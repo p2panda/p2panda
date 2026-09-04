@@ -8,7 +8,8 @@ use std::marker::PhantomData;
 use futures_util::{Sink, SinkExt, Stream, StreamExt, stream};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
 use p2panda_core::{
-    Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum, VerifyingKey,
+    AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
+    VerifyingKey,
 };
 use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
@@ -96,7 +97,7 @@ impl<L, E, S, Evt> Protocol for LogSync<L, E, S, Evt>
 where
     L: LogId + Debug + Send + 'static,
     E: Extensions + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
     Evt: Debug + From<LogSyncEvent<E>> + Send + 'static,
 {
     type Error = LogSyncError;
@@ -450,13 +451,13 @@ where
 }
 
 /// Return the local log heights of all passed logs.
-async fn get_log_heights<L, E, S>(
+async fn get_log_heights<L, S>(
     store: &S,
     logs: &Logs<L>,
 ) -> Result<LogHeights<VerifyingKey, L>, LogSyncError>
 where
     L: LogId,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
 {
     let mut result = BTreeMap::new();
     for (verifying_key, log_ids) in logs {
