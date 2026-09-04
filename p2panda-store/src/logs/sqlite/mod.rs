@@ -31,7 +31,7 @@ const GET_LATEST_ENTRY: &str = "
 
 impl<L> LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> for SqliteStore
 where
-    L: LogId,
+    L: LogId + Send + Sync + 'static,
 {
     type Error = SqliteError;
 

@@ -65,7 +65,7 @@ pub trait LogStore<T, A, L, S, ID> {
         log_id: &L,
         after: Option<S>,
         until: Option<S>,
-    ) -> impl Future<Output = Result<Option<LogEntries<T>>, Self::Error>>;
+    ) -> impl Future<Output = Result<Option<LogEntries<T>>, Self::Error>> + Send;
 
     /// Prune all entries in a log until the provided sequence number.
     ///
