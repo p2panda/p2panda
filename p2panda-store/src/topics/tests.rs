@@ -45,6 +45,30 @@ async fn update_and_resolve_topic_mapping() {
 }
 
 #[tokio::test]
+async fn resolve_topics_from_association() {
+    let store = SqliteStore::temporary().await;
+
+    let topic = Topic::random();
+    let log_id = topic;
+
+    let alice = SigningKey::from_bytes(&[1u8; 32]).verifying_key();
+    let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
+
+    let permit = store.begin().await.unwrap();
+    let result = store.associate(&topic, &alice, &log_id).await.unwrap();
+    assert!(result);
+    store.commit(permit).await.unwrap();
+
+    // Resolving a known association returns the topic.
+    let resolved: Vec<Topic> = store.resolve_topics(&alice, &log_id).await.unwrap();
+    assert_eq!(resolved, vec![topic]);
+
+    // An unknown author/data id pair returns None.
+    let resolved: Vec<Topic> = store.resolve_topics(&bob, &log_id).await.unwrap();
+    assert_eq!(resolved, vec![]);
+}
+
+#[tokio::test]
 async fn path_based_log_ids() {
     let store = SqliteStore::temporary().await;
 

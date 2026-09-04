@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{LogId, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, query_scalar};
 
 use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 use crate::topics::TopicStore;
@@ -134,5 +134,46 @@ where
         }
 
         Ok(result)
+    }
+
+    /// Given a prior association, return the associated topics.
+    async fn resolve_topics(
+        &self,
+        author: &VerifyingKey,
+        data_id: &L,
+    ) -> Result<Vec<T>, Self::Error> {
+        let topics = self
+            .execute(async |pool| {
+                query_scalar::<_, Vec<u8>>(
+                    "
+                    SELECT
+                        topic
+                    FROM
+                        topics_v1
+                    WHERE
+                        author = ?
+                        AND data_id = ?
+                    ",
+                )
+                .bind(author.to_string())
+                .bind(
+                    encode_cbor(&data_id)
+                        .map_err(|err| SqliteError::Encode("data_id".to_string(), err))?,
+                )
+                .fetch_all(pool)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        let topics = topics
+            .into_iter()
+            .map(|topic| {
+                decode_cbor(&topic[..])
+                    .map_err(|err| SqliteError::Decode("topic".into(), err.into()))
+            })
+            .collect::<Result<Vec<T>, SqliteError>>()?;
+
+        Ok(topics)
     }
 }
