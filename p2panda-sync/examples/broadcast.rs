@@ -33,13 +33,14 @@ mod common;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
-use p2panda_core::logs::{LogHeights, LogRanges, compare};
+use futures_util::StreamExt;
+use p2panda_core::logs::{LogHeights, compare};
 use p2panda_core::traits::{Digest, Provenance};
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_sync::api::{OperationStream, StreamItem, log_heights, log_ranges};
 use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
@@ -268,7 +269,7 @@ impl Node {
                                 let _ = ingest_operation(&store, *topic, operation.clone()).await;
                             }
                             Message::Announcement(announcement) => {
-                                let Ok(operations) = compute_diff(
+                                let Ok(mut operations) = compute_diff(
                                     &store,
                                     announcement.topic,
                                     &announcement.log_heights,
@@ -278,7 +279,10 @@ impl Node {
                                     continue;
                                 };
 
-                                for operation in operations {
+                                while let Some(result) = operations.next().await {
+                                    let StreamItem {
+                                        entry: operation, ..
+                                    } = result.unwrap();
                                     mesh.flood(Message::Operation(*topic, operation)).await;
                                 }
                             }
@@ -405,25 +409,10 @@ async fn compute_diff(
     store: &SqliteStore,
     topic: Topic,
     their_log_heights: &LogHeights<VerifyingKey, LogId>,
-) -> Result<Vec<AnyOperation>> {
+) -> Result<OperationStream<LogId, SqliteError>> {
     let our_log_heights = get_topic_log_heights(&store, &topic).await?;
-    let log_ranges: LogRanges<VerifyingKey, LogId> = compare(&our_log_heights, &their_log_heights);
-    let mut operations = Vec::new();
-
-    for (author, log_heights) in log_ranges {
-        for (log_id, (after, until)) in log_heights {
-            let log_operations = store
-                .get_log_entries(&author, &log_id, after, until)
-                .await?
-                .unwrap_or_default();
-
-            for (operation, _) in log_operations {
-                operations.push(operation);
-            }
-        }
-    }
-
-    Ok(operations)
+    let diff = compare(&our_log_heights, &their_log_heights);
+    Ok(log_ranges(store, diff))
 }
 
 async fn get_topic_log_heights(
@@ -431,24 +420,7 @@ async fn get_topic_log_heights(
     topic: &Topic,
 ) -> std::result::Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
     let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = get_log_heights(&store, &logs).await?;
+    let log_heights = log_heights(store, &logs).await?;
 
     Ok(log_heights)
-}
-
-async fn get_log_heights(
-    store: &SqliteStore,
-    logs: &LogIds,
-) -> std::result::Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
-    let mut result = BTreeMap::new();
-
-    for (verifying_key, log_ids) in logs {
-        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
-            continue;
-        };
-
-        result.insert(*verifying_key, log_heights);
-    }
-
-    Ok(result)
 }

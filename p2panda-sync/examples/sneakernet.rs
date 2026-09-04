@@ -77,12 +77,15 @@ mod common;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use futures_util::StreamExt;
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
+use p2panda_core::traits::Provenance;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_sync::api::{StreamItem, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -164,33 +167,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut operations: HashMap<Topic, Logs> = HashMap::new();
 
     for topic in &topics_a {
-        let all_log_heights = get_topic_log_heights(&store_a, &topic).await?;
+        let local_log_heights = get_topic_log_heights(&store_a, &topic).await?;
+        let remote_log_heights = LogHeights::default();
+        let diff = compare(&local_log_heights, &remote_log_heights);
+        let mut operation_stream = log_ranges(&store_a, diff);
 
-        // TODO: This is ugly.
-        for (author, log_heights) in &all_log_heights {
-            for log_id in log_heights.keys() {
-                let log_operations = store_a
-                    .get_log_entries(&node_id_a, log_id, None, None)
-                    .await?
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(operation, _)| operation)
-                    .collect::<Vec<AnyOperation>>();
-
-                let entry = operations.entry(*topic);
-                let logs = entry.or_default();
-
-                // This overwrites what was there before but that's not a problem if we've ingested
-                // everything from the USB stick before writing.
-                logs.insert((*author, *log_id), log_operations);
-            }
+        if let Some(result) = operation_stream.next().await {
+            let StreamItem {
+                entry: operation,
+                log_id,
+                ..
+            } = result?;
+            let logs = operations.entry(*topic).or_default();
+            logs.entry((operation.author(), log_id))
+                .or_default()
+                .push(operation);
         }
 
         // NOTE: Should sign this announcement.
         let announcement = Announcement {
             topic: *topic,
             node_id: node_id_a,
-            log_heights: all_log_heights,
+            log_heights: local_log_heights,
         };
 
         announcements.push(announcement);
@@ -269,7 +267,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Determine the operations we need from the stick.
-            let log_ranges: LogRanges<VerifyingKey, LogId> =
+            let diff: LogRanges<VerifyingKey, LogId> =
                 // NOTE: we reverse the roles here, "their" and "our", because we are determining
                 // what they should "send" to us...not what we should send to them.
                 //
@@ -287,7 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             //
             // TODO: Operations will eventually need validation; in the future we might forward them
             // and ingest on a higher layer which also validates (in stream).
-            for (node_id, log_heights) in log_ranges {
+            for (node_id, log_heights) in diff {
                 for (log_id, (after, _until)) in log_heights {
                     let after = after.unwrap_or_default() as usize;
                     let operations_we_need = &operations.get(&(node_id, log_id)).unwrap()[after..];
@@ -338,32 +336,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_default()
             };
 
-            let log_ranges: LogRanges<VerifyingKey, LogId> =
-                compare(&our_log_heights, &their_log_heights);
+            let diff = compare(&our_log_heights, &their_log_heights);
+            let mut operation_stream = log_ranges(&store_a, diff);
 
-            for (author, log_heights) in log_ranges {
-                for (log_id, (after, until)) in log_heights {
-                    let log_operations = store_a
-                        .get_log_entries(&node_id_a, &log_id, after, until)
-                        .await?
-                        .unwrap_or_default();
+            if let Some(result) = operation_stream.next().await {
+                let StreamItem {
+                    entry: operation,
+                    log_id,
+                    ..
+                } = result?;
+                let logs = operations.entry(topic).or_default();
 
-                    // NOTE: We could have a flag here to control if we want to already publish
-                    // operations of topics nobody published an announcement for.
-
-                    let entry = operations.entry(topic);
-                    let logs = entry.or_default();
-
-                    for (operation, _) in log_operations {
-                        let log_entry = logs.entry((author, log_id));
-                        let log = log_entry.or_default();
-
-                        // NOTE: Appending only the "latest" operations to the log allows us to
-                        // build some ring-buffer logic here where we would drop old operations when
-                        // running full.
-                        log.push(operation);
-                    }
-                }
+                // NOTE: Appending only the "latest" operations to the log allows us to
+                // build some ring-buffer logic here where we would drop old operations when
+                // running full.
+                logs.entry((operation.author(), log_id))
+                    .or_default()
+                    .push(operation);
             }
 
             // Write out our own state.

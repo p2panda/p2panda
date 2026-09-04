@@ -57,6 +57,8 @@ test_utils = [
 ]
 
 [dependencies]
+async-stream = "0.3.6"
+futures-util = { workspace = true, features = ["alloc"]}
 p2panda-auth = { workspace = true, default-features = false, features = ["serde"], optional = true }
 p2panda-core = { workspace = true }
 p2panda-encryption = { workspace = true, default-features = true, optional = true }

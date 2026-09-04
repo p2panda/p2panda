@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use p2panda_core::identity::Signer;
-use p2panda_core::{AnyOperation, Body, Extensions, Hash, Header, Operation, Topic, VerifyingKey};
+use p2panda_core::{AnyOperation, Body, Hash, Header, Operation, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;

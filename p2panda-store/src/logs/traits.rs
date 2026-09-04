@@ -3,14 +3,23 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
-type LogEntries<T> = Vec<(T, Vec<u8>)>;
+use futures_util::stream::BoxStream;
+
+pub(crate) type LogStream<T, L, E> = BoxStream<'static, Result<StreamItem<T, L>, E>>;
+
+#[derive(Debug, Clone)]
+pub struct StreamItem<T, L> {
+    pub entry: T,
+    pub log_id: L,
+    pub bytes: Vec<u8>,
+}
 
 /// Store methods for aiding efficient comparison of log-based data types.
 ///
 /// The concrete message type contained on each log "entry" is not known in this API. It is
 /// assumed there is another store for retrieving these during sync (eg. OperationStore).
 pub trait LogStore<T, A, L, S, ID> {
-    type Error: Error;
+    type Error: Error + Send;
 
     /// Get the latest entry in a log.
     ///
@@ -56,16 +65,17 @@ pub trait LogStore<T, A, L, S, ID> {
         until: Option<S>,
     ) -> impl Future<Output = Result<Option<(u32, u32)>, Self::Error>>;
 
-    /// Get all entries in a log after an optional starting point.
+    /// Stream all entries in a log after an optional starting point. This is the memory efficient
+    /// equivalent to `get_log_entries` and should only keep one entry in memory at a time.
     ///
     /// `after` and `to` fields can be provided to select only a range of the log.
-    fn get_log_entries(
+    fn log_entries(
         &self,
         author: &A,
         log_id: &L,
         after: Option<S>,
         until: Option<S>,
-    ) -> impl Future<Output = Result<Option<LogEntries<T>>, Self::Error>>;
+    ) -> Result<LogStream<T, L, Self::Error>, Self::Error>;
 
     /// Prune all entries in a log until the provided sequence number.
     ///

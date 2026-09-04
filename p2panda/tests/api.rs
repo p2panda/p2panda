@@ -30,7 +30,6 @@ mod api {
     use p2panda::operation::{Extensions, LogId};
     use p2panda::streams::{EphemeralMessage, ProcessedOperation, StreamEvent, SystemEvent};
     use p2panda::{Credentials, Topic};
-    use p2panda_core::AnyOperation;
     use p2panda_core::cbor::encode_cbor;
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_net::discovery::DiscoveryEvent;
@@ -209,21 +208,19 @@ mod api {
 
         // There should only be 1 message in Panda's and Icebear's database as the log was pruned.
         let log_id = LogId::from_topic(topic);
-        let panda_result: Vec<(AnyOperation, Vec<u8>)> = panda
+        let mut panda_result = panda
             .store()
-            .get_log_entries(&panda.id(), &log_id, None, None)
-            .await
-            .expect("no store failure")
-            .expect("result to be Some");
-        assert_eq!(panda_result.iter().count(), 1);
+            .log_entries(&panda.id(), &log_id, None, None)
+            .expect("no store failure");
+        assert!(panda_result.next().await.unwrap().is_ok());
+        assert!(panda_result.next().await.is_none());
 
-        let icebear_result: Vec<(AnyOperation, Vec<u8>)> = icebear
+        let mut icebear_result = icebear
             .store()
-            .get_log_entries(&panda.id(), &log_id, None, None)
-            .await
-            .expect("no store failure")
-            .expect("result to be Some");
-        assert_eq!(icebear_result.iter().count(), 1);
+            .log_entries(&panda.id(), &log_id, None, None)
+            .expect("no store failure");
+        assert!(icebear_result.next().await.unwrap().is_ok());
+        assert!(icebear_result.next().await.is_none());
     }
 
     #[tokio::test]
