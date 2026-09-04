@@ -9,7 +9,13 @@ Highlights are marked with a pancake 🥞
 
 ## [Unreleased]
 
+### Added
+
 - store: Add `resolve_topics` method to `TopicStore` trait [#1261](https://github.com/p2panda/p2panda/pull/1261)
+
+### Changed
+
+- core: Infallible conversion from Operation<E> into AnyOperation [#1389](https://github.com/p2panda/p2panda/pull/1389)
 
 ## [0.7.1] - 21/08/2026
 

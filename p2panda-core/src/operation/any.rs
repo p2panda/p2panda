@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use crate::Operation;
 use crate::hash::{HASH_LEN, Hash};
 use crate::identity::{SIGNATURE_LEN, Signature, VERIFYING_KEY_LEN, VerifyingKey};
 use crate::logs::SeqNum;
 use crate::operation::HeaderError;
 use crate::operation::header::encode_header;
 use crate::operation::{Body, Header, PayloadSize, RawOperation, Version};
-use crate::traits::{Chain, Digest, Extensions, Offchain, Provenance};
+use crate::traits::{Chain, Digest, Offchain, Provenance};
 
 /// Combined [`AnyHeader`], [`Body`] and operation [`struct@Hash`] (Operation Id).
 ///
@@ -78,6 +79,16 @@ impl TryFrom<RawOperation> for AnyOperation {
             header,
             body: body_bytes.map(Body::from),
         })
+    }
+}
+
+impl<E> From<Operation<E>> for AnyOperation {
+    fn from(value: Operation<E>) -> Self {
+        AnyOperation {
+            hash: value.hash,
+            header: value.header.into(),
+            body: value.body,
+        }
     }
 }
 
@@ -441,23 +452,9 @@ impl TryFrom<Vec<u8>> for AnyHeader {
     }
 }
 
-impl<E> TryFrom<Header<E>> for AnyHeader
-where
-    E: Extensions,
-{
-    type Error = HeaderError;
-
-    fn try_from(value: Header<E>) -> Result<Self, Self::Error> {
-        let extensions = if !Header::<E>::has_zero_sized_extensions() {
-            Some(
-                cbor_core::Value::serialized(&value.extensions)
-                    .map_err(HeaderError::EncodingExtensions)?,
-            )
-        } else {
-            None
-        };
-
-        Ok(AnyHeader {
+impl<E> From<Header<E>> for AnyHeader {
+    fn from(value: Header<E>) -> Self {
+        AnyHeader {
             version: value.version,
             verifying_key: value.verifying_key,
             signature: value.signature,
@@ -467,7 +464,7 @@ where
             backlink: value.backlink,
             size: value.size,
             digest: value.digest,
-            extensions,
-        })
+            extensions: value.extensions_cbor,
+        }
     }
 }
