@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Two-party sync protocol over append-only logs.
-use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::logs::{LogHeights, LogRanges, compare};
+use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare};
 use p2panda_core::{
     AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
     VerifyingKey,
@@ -18,12 +17,9 @@ use tokio::select;
 use tokio::sync::broadcast;
 use tracing::{Instrument, debug, trace};
 
-use crate::api::stream_log_ranges;
+use crate::api::{get_log_heights, stream_log_ranges};
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
-
-/// A map of author logs.
-pub type Logs<L> = BTreeMap<VerifyingKey, Vec<L>>;
 
 /// Sync session life-cycle states.
 #[derive(Debug, Default)]
@@ -65,7 +61,7 @@ enum State<L> {
 #[derive(Debug)]
 pub struct LogSync<L, E, S, Evt> {
     state: State<L>,
-    logs: Logs<L>,
+    logs: Logs<VerifyingKey, L>,
     store: S,
     event_tx: broadcast::Sender<Evt>,
     buffer_capacity: usize,
@@ -73,13 +69,13 @@ pub struct LogSync<L, E, S, Evt> {
 }
 
 impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
-    pub fn new(store: S, logs: Logs<L>, event_tx: broadcast::Sender<Evt>) -> Self {
+    pub fn new(store: S, logs: Logs<VerifyingKey, L>, event_tx: broadcast::Sender<Evt>) -> Self {
         Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
     }
 
     pub fn new_with_capacity(
         store: S,
-        logs: Logs<L>,
+        logs: Logs<VerifyingKey, L>,
         event_tx: broadcast::Sender<Evt>,
         buffer_capacity: usize,
     ) -> Self {
@@ -125,7 +121,8 @@ where
                     let span = tracing::error_span!(parent: &state_machine_span, "send-have");
                     let local = get_log_heights(&self.store, &self.logs)
                         .instrument(span.clone())
-                        .await?;
+                        .await
+                        .map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                     sink.send(LogSyncMessage::<L>::Have(local.clone()))
                         .instrument(span.clone())
@@ -421,30 +418,6 @@ where
 
         Ok((dedup, metrics))
     }
-}
-
-/// Return the local log heights of all passed logs.
-async fn get_log_heights<L, S>(
-    store: &S,
-    logs: &Logs<L>,
-) -> Result<LogHeights<VerifyingKey, L>, LogSyncError>
-where
-    L: LogId,
-    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
-{
-    let mut result = BTreeMap::new();
-    for (verifying_key, log_ids) in logs {
-        let Some(log_heights) = store
-            .get_log_heights(verifying_key, log_ids)
-            .await
-            .map_err(|err| LogSyncError::LogStore(format!("{err}")))?
-        else {
-            continue;
-        };
-        result.insert(*verifying_key, log_heights);
-    }
-
-    Ok(result)
 }
 
 /// Protocol messages.

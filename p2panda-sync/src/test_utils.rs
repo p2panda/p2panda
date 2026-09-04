@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use futures_channel::mpsc;
 use futures_util::{FutureExt, SinkExt, Stream, StreamExt};
+use p2panda_core::logs::Logs;
 use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -18,7 +19,7 @@ use tokio::sync::broadcast;
 use crate::ToSync;
 use crate::manager::TopicSyncManager;
 use crate::protocols::{
-    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, Logs, TopicLogSync, TopicLogSyncError,
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
 };
 use crate::traits::Protocol;
@@ -81,7 +82,7 @@ impl Peer {
     /// Return a log sync protocol.
     pub fn log_sync_protocol(
         &mut self,
-        logs: &Logs<TestLogId>,
+        logs: &Logs<VerifyingKey, TestLogId>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = broadcast::channel(512);
         let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);

@@ -39,6 +39,9 @@ impl<T> LogId for T where T: Clone + Eq + Ord + StdHash + Serialize + for<'de> D
 /// Sequence number of an entry in an append-only log.
 pub type SeqNum = u32;
 
+/// Author logs mapping.
+pub type Logs<A, L> = BTreeMap<A, Vec<L>>;
+
 /// Map of log heights grouped by author.
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
 

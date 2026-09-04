@@ -3,13 +3,36 @@
 use std::pin::Pin;
 
 use futures_util::{Stream, TryStreamExt, stream};
-use p2panda_core::logs::LogRanges;
+use p2panda_core::logs::{LogHeights, LogRanges, Logs};
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 
 type OperationStream<Error> =
     Pin<Box<dyn Stream<Item = Result<(AnyOperation, Vec<u8>), Error>> + Send>>;
 
+/// Compute log heights of all passed author logs based on what is known in the local store.
+pub async fn get_log_heights<L, S>(
+    store: &S,
+    logs: &Logs<VerifyingKey, L>,
+) -> Result<LogHeights<VerifyingKey, L>, S::Error>
+where
+    L: LogId,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
+{
+    let mut result = LogHeights::new();
+    for (verifying_key, log_ids) in logs {
+        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
+            continue;
+        };
+        result.insert(*verifying_key, log_heights);
+    }
+
+    Ok(result)
+}
+
+/// Construct a stream which returns all operations in the provided log ranges.
+///
+/// Operations are queried per-log so as to avoid holding all operations in memory at one time.
 pub fn stream_log_ranges<S, L>(
     store: &S,
     ranges: LogRanges<VerifyingKey, L>,
