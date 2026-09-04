@@ -45,6 +45,9 @@ spaces = [
   "groups",
   "encryption",
 ]
+processor = [
+  "sqlite"
+]
 macros = []
 test_utils = [
   "dep:rand",
@@ -60,7 +63,7 @@ p2panda-encryption = { workspace = true, default-features = true, optional = tru
 rand = { workspace = true, optional = true }
 rand_chacha = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"], optional = true }
+sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite"], optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, default-features = true, features = ["sync"], optional = true }
 

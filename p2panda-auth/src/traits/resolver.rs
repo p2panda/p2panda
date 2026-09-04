@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::fmt::Debug;
+use std::error::Error;
 
 use p2panda_core::traits::{Author, OperationId};
 
@@ -12,7 +12,7 @@ where
 {
     type State;
 
-    type Error: Debug;
+    type Error: Error;
 
     /// Check if this message requires that a full state re-build takes place. This would usually be
     /// due to concurrent operations arriving which require special handling.

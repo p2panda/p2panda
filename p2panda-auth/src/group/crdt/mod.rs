@@ -7,8 +7,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_core::traits::{Author, OperationId};
+use petgraph::algo::toposort;
 use petgraph::prelude::DiGraphMap;
-use petgraph::visit::{Bfs, DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
+use petgraph::visit::{DfsPostOrder, IntoNodeIdentifiers, NodeIndexable, Reversed};
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -33,11 +34,10 @@ pub enum GroupCrdtInnerError<OP> {
 
 /// Error types for GroupCrdt.
 #[derive(Debug, Error)]
-pub enum GroupCrdtError<ID, OP, M, C, RS>
+pub enum GroupCrdtError<ID, OP>
 where
     ID: Author,
-    OP: OperationId + Ord,
-    RS: Resolver<ID, OP, M, C>,
+    OP: OperationId,
 {
     #[error(transparent)]
     Inner(#[from] GroupCrdtInnerError<OP>),
@@ -45,25 +45,33 @@ where
     #[error("duplicate operation {0} processed in group {1}")]
     DuplicateOperation(OP, ID),
 
+    #[error("missing dependency {0} for operation {1}")]
+    MissingDependencies(OP, OP),
+
+    #[error("non-create operation received for unknown group: {0}")]
+    UnknownGroup(ID),
+
     #[error("group cycle detected adding {0} to {1} operation={2}")]
     GroupCycle(ID, ID, OP),
 
-    #[error("state change error processing operation {0}: {1:?}")]
+    #[error("state change error processing operation {0}: {1}")]
     StateChangeError(OP, GroupMembershipError<GroupMember<ID>>),
 
     #[error("attempted to add group {0} with manage access")]
     ManagerGroupsNotAllowed(ID),
 
     #[error("resolver error: {0}")]
-    Resolver(RS::Error),
+    Resolver(String),
 }
 
 pub(crate) type GroupStates<ID, C> = HashMap<ID, GroupMembersState<GroupMember<ID>, C>>;
 
-/// Inner state object for `GroupCrdt` which contains the actual groups state,
-/// including operation graph and membership snapshots.
-#[derive(Debug)]
-#[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
+/// Inner state object for `GroupCrdt` which contains the actual groups state, including operation
+/// graph and membership snapshots.
+///
+/// TODO: We no longer need a separation between the inner and outer state objects, they can be
+/// merged into one.
+#[derive(Clone, Debug)]
 #[cfg_attr(
     any(test, feature = "serde"),
     derive(Deserialize, Serialize),
@@ -124,8 +132,8 @@ where
     M: Operation<ID, OP, C>,
     C: Conditions,
 {
-    /// Current tips for the groups operation graph.
-    pub fn heads(&self) -> HashSet<OP> {
+    /// Current tips for all groups in the operation graph.
+    pub(crate) fn heads_global(&self) -> HashSet<OP> {
         self.graph
             // TODO: clone required here when converting the GraphMap into a Graph. We do this
             // because the GraphMap api does not include the "externals" method, where as the
@@ -141,35 +149,78 @@ where
             .collect::<HashSet<_>>()
     }
 
-    /// Get graph tips filtered to only those which included "create" operation for passed group
-    /// ids in their causal history.
-    pub fn heads_filtered(&self, groups: &[ID]) -> HashSet<OP> {
-        let global_heads = self.heads();
-        global_heads
-            .into_iter()
-            .filter(|id| {
-                let reversed = Reversed(&self.graph);
-                let mut bfs = Bfs::new(&reversed, *id);
-                while let Some(inner_id) = bfs.next(&reversed) {
-                    let operation = self
-                        .operations
-                        .get(&inner_id)
-                        .expect("operation is present in map");
-                    if operation.action().is_create() && groups.contains(&operation.group_id()) {
-                        return true;
-                    }
-                }
-                false
-            })
-            .collect()
+    /// Returns graph tips for a section of the operation graph covering only the passed groups
+    /// (and their dependencies).
+    pub fn heads(&self, groups: &[ID]) -> HashSet<OP> {
+        let graph = self.filtered_graph(groups);
+        graph
+            .clone()
+            .into_graph::<usize>()
+            .externals(petgraph::Direction::Outgoing)
+            .map(|idx| graph.from_index(idx.index()))
+            .collect::<HashSet<_>>()
+    }
+
+    /// Returns a vector of operation ids in their topologically sorted order where only
+    /// operations relating to the passed groups (and their dependencies) are included.
+    pub fn toposort(&self, groups: &[ID]) -> Vec<OP> {
+        let graph = self.filtered_graph(groups);
+        toposort(&graph, None).expect("graph has a cycle")
+    }
+
+    /// Returns a graph filtered to only the operations which contain actions effecting the passed
+    /// groups (and their dependencies). This is required when selectively merging changes from
+    /// one groups graph into another.
+    pub(crate) fn filtered_graph(&self, groups: &[ID]) -> DiGraphMap<OP, ()> {
+        let mut group_dependencies = HashSet::new();
+        for group_id in groups {
+            group_dependencies.insert(*group_id);
+            group_dependencies.extend(self.groups(*group_id).into_iter().map(|(id, _)| id));
+        }
+
+        let mut graph = self.graph.clone();
+        for (id, operation) in self.operations.iter() {
+            if !group_dependencies.contains(&operation.group_id()) {
+                graph.remove_node(*id);
+            }
+        }
+        graph
+    }
+
+    /// Return a graph with only predecessor nodes of the passed heads included. This is required
+    /// when wanting to validate an operation against a specific point in the groups graph
+    /// history.
+    pub(crate) fn trimmed_graph(&self, heads: &HashSet<OP>) -> DiGraphMap<OP, ()> {
+        // Collect predecessors of the given heads.
+        let mut graph = self.graph.clone();
+        let mut predecessors = HashSet::new();
+        for dependency in heads {
+            let reversed = Reversed(&graph);
+            let mut dfs_rev = DfsPostOrder::new(&reversed, *dependency);
+            while let Some(id) = dfs_rev.next(&reversed) {
+                predecessors.insert(id);
+            }
+        }
+
+        // Remove all other nodes from the graph.
+        let to_remove: Vec<_> = graph
+            .node_identifiers()
+            .filter(|n| !predecessors.contains(n))
+            .collect();
+
+        for node in &to_remove {
+            graph.remove_node(*node);
+        }
+
+        graph
     }
 
     /// Current group states.
     ///
     /// This method gets the state at all graph tips and then merges them together into one new
-    /// state which represents the current state of the groups.
+    /// state which represents the current membership of all groups.
     pub fn current_state(&self) -> GroupStates<ID, C> {
-        self.merge_states(&self.heads())
+        self.merge_states(&self.heads_global())
             .expect("states exist for processed operations")
     }
 
@@ -268,6 +319,22 @@ where
         }
     }
 
+    /// Get all ancestor groups of the passed target group.
+    ///
+    /// A ancestor group is any group that the target group is a transitive child of. Said another
+    /// way, if the membership of the target group changed, a ancestor is any group which would be
+    /// effected by this change.
+    pub fn ancestors(&self, target: ID) -> Vec<ID> {
+        let mut ancestors = vec![];
+        for (id, _) in self.current_state() {
+            let children = self.groups(id);
+            if children.iter().any(|(id, _)| id == &target) {
+                ancestors.push(id)
+            }
+        }
+        ancestors
+    }
+
     /// Get all current individual members of a group.
     pub fn members(&self, group_id: ID) -> Vec<(ID, Access<C>)> {
         self.traverse_members(group_id, 0)
@@ -340,8 +407,7 @@ where
     }
 }
 
-/// State object for `GroupCrdt` containing an orderer state and the inner
-/// state.
+/// State object for `GroupCrdt`.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test_utils"), derive(Clone))]
 #[cfg_attr(
@@ -414,6 +480,24 @@ where
         self.inner.members(group_id)
     }
 
+    /// All groups which exist in the groups context.
+    ///
+    /// This includes groups which have no parent -> child relation to each other, as opposed to
+    /// the groups() method which traverses all sub-groups of a single parent.
+    pub fn groups_global(&self) -> Vec<ID> {
+        self.inner
+            .operations
+            .values()
+            .filter_map(|message| {
+                if let GroupAction::Create { .. } = message.action() {
+                    Some(message.group_id())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Get all transitive groups inside a group.
     ///
     /// This method recurses into all sub-groups and returns a resolved list of nested group members
@@ -435,15 +519,10 @@ where
         self.inner.current_state().contains_key(&group_id)
     }
 
-    /// Current tips for the groups operation graph.
-    pub fn heads(&self) -> Vec<OP> {
-        self.inner.heads().into_iter().collect()
-    }
-
-    /// Get graph tips filtered to only those which included "create" operation for passed group
-    /// ids in their causal history.
-    pub fn heads_filtered(&self, groups: &[ID]) -> Vec<OP> {
-        self.inner.heads_filtered(groups).into_iter().collect()
+    /// Returns graph tips for a section of the operation graph covering only the passed groups
+    /// (and their dependencies).
+    pub fn heads(&self, groups: &[ID]) -> Vec<OP> {
+        self.inner.heads(groups).into_iter().collect()
     }
 }
 
@@ -484,8 +563,6 @@ where
 /// - RS : generic resolver which contains logic for deciding when group state
 ///   rebuilds are required, and how concurrent actions are handled. See the
 ///   `resolver` module for different implementations.
-/// - ORD: orderer which exposes an API for creating and processing operations
-///   with meta-data which allow them to be processed in partial order.
 #[derive(Clone, Debug, Default)]
 pub struct GroupCrdt<ID, OP, M, C, RS> {
     _phantom: PhantomData<(ID, OP, M, C, RS)>,
@@ -505,18 +582,44 @@ where
         }
     }
 
+    /// Calculate the graph heads which are required dependencies of a group action.
+    ///
+    /// This looks at the groups which are effected by the passed action, filters the global graph
+    /// to only operations for these groups, and then calculates the heads. This is required when
+    /// constructing a new operation to be processed and appended to the graph.
+    pub fn heads(
+        y: &GroupCrdtState<ID, OP, M, C>,
+        group_id: ID,
+        action: &GroupAction<ID, C>,
+    ) -> Vec<OP> {
+        // Compute the auth graph heads to include as dependencies based on the groups included in
+        // this action. This means any groups being added / removed in the action, plus the id of
+        // the parent group itself.
+        let mut include = action.required_groups();
+        include.push(group_id);
+        y.inner.heads(&include).into_iter().collect()
+    }
+
     /// Process an operation created locally or received from a remote peer.
     #[allow(clippy::type_complexity)]
     pub fn process(
         mut y: GroupCrdtState<ID, OP, M, C>,
         operation: &M,
-    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
+    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+        for dependency in operation.dependencies() {
+            if !y.inner.operations.contains_key(&dependency) {
+                return Err(GroupCrdtError::MissingDependencies(
+                    dependency,
+                    operation.id(),
+                ));
+            }
+        }
         let operation_id = operation.id();
         let actor = operation.author();
         let dependencies = HashSet::from_iter(operation.dependencies().clone());
         let group_id = operation.group_id();
-        let rebuild_required =
-            RS::rebuild_required(&y.inner, operation).map_err(GroupCrdtError::Resolver)?;
+        let rebuild_required = RS::rebuild_required(&y.inner, operation)
+            .map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
 
         // Validate that the author of this operation had the required access rights at the point
         // in the auth graph which they claim as their last state (the state at "dependencies").
@@ -524,17 +627,22 @@ where
         // about) mean that they have lost that access level. This case is dealt with later, here
         // we want to catch malicious or invalid operations which should _never_ be attached to
         // the graph.
-        y = GroupCrdt::validate(y, operation)?;
+        Self::validate(&y, operation)?;
         y = Self::add_operation(y, operation);
 
         if rebuild_required {
-            y.inner = RS::process(y.inner).map_err(GroupCrdtError::Resolver)?;
+            y.inner =
+                RS::process(y.inner).map_err(|err| GroupCrdtError::Resolver(err.to_string()))?;
             return Ok(y);
         }
 
         // We don't need to check the state change result as validation was already performed
         // above.
         let mut groups_y = y.inner.state_at(&dependencies)?;
+        if !operation.action().is_create() && !groups_y.contains_key(&group_id) {
+            return Err(GroupCrdtError::UnknownGroup(group_id));
+        }
+
         groups_y = apply_action(
             groups_y,
             group_id,
@@ -551,7 +659,8 @@ where
         Ok(y)
     }
 
-    /// Validate an action by applying it to the group state build to it's previous pointers.
+    /// Validate an action by applying it to the group state built to it's previous pointers if
+    /// they don't match the current heads.
     ///
     /// When processing a new operation we need to validate that the contained action is valid
     /// before including it in the graph. By valid we mean that the author who composed the action
@@ -559,14 +668,11 @@ where
     /// requirements. To check this we need to re-build the group state to the operations claimed
     /// previous state. This process involves pruning any operations which are not predecessors of
     /// the new operation resolving the group state again.
-    ///
-    /// This is a relatively expensive computation and should only be used when a re-build is
-    /// actually required.
     #[allow(clippy::type_complexity)]
     pub(crate) fn validate(
-        y: GroupCrdtState<ID, OP, M, C>,
+        y: &GroupCrdtState<ID, OP, M, C>,
         operation: &M,
-    ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP, M, C, RS>> {
+    ) -> Result<(), GroupCrdtError<ID, OP>> {
         // Detect already processed operations.
         if y.inner.operations.contains_key(&operation.id()) {
             // The operation has already been processed.
@@ -591,48 +697,8 @@ where
             _ => (),
         };
 
-        let last_graph = y.inner.graph.clone();
-        let last_ignore = y.inner.ignore.clone();
-        let last_mutual_removes = y.inner.mutual_removes.clone();
-        let last_states = y.inner.states.clone();
-
-        let dependencies = HashSet::from_iter(operation.dependencies().clone());
-
-        // If this operation is concurrent to our current local state we need to rebuild the graph
-        // to the operations' claimed dependencies in order to validate it correctly.
-        let temp_y = if y.inner.heads() != dependencies {
-            let mut temp_y = y;
-
-            // Collect predecessors of the new operation.
-            let mut predecessors = HashSet::new();
-            for dependency in operation.dependencies() {
-                let reversed = Reversed(&temp_y.inner.graph);
-                let mut dfs_rev = DfsPostOrder::new(&reversed, dependency);
-                while let Some(id) = dfs_rev.next(&reversed) {
-                    predecessors.insert(id);
-                }
-            }
-
-            // Remove all other nodes from the graph.
-            let to_remove: Vec<_> = temp_y
-                .inner
-                .graph
-                .node_identifiers()
-                .filter(|n| !predecessors.contains(n))
-                .collect();
-
-            for node in &to_remove {
-                temp_y.inner.graph.remove_node(*node);
-            }
-
-            temp_y.inner = RS::process(temp_y.inner).map_err(GroupCrdtError::Resolver)?;
-            temp_y
-        } else {
-            y
-        };
-
         // Detect if this operation would cause a nested group cycle.
-        if temp_y.inner.would_create_cycle(operation) {
+        if y.inner.would_create_cycle(operation) {
             let parent_group = operation.group_id();
 
             // Only adds cause a cycle, we just access the member id here.
@@ -650,14 +716,27 @@ where
             ));
         }
 
+        let heads = HashSet::from_iter(operation.dependencies().clone());
+
+        // If this operation is not being appended directly to our current local state we need to
+        // remove any operations from the graph which are concurrent or sequentially later to the
+        // operations' claimed dependencies.
+        let (groups_y, ignore) = if y.inner.heads(&operation.required_groups()) != heads {
+            // @TODO: Can we avoid cloning here?
+            let inner = Self::rebuild_at(y.inner.clone(), heads)?;
+            (inner.current_state(), inner.ignore)
+        } else {
+            (y.inner.current_state(), y.inner.ignore.clone())
+        };
+
         // Apply the operation onto the temporary state.
         let result = apply_action(
-            temp_y.inner.current_state(),
+            groups_y,
             operation.group_id(),
             operation.id(),
             operation.author(),
             &operation.action(),
-            &temp_y.inner.ignore,
+            &ignore,
         );
 
         match result {
@@ -673,13 +752,35 @@ where
             }
         };
 
-        let mut y = temp_y;
-        y.inner.graph = last_graph;
-        y.inner.ignore = last_ignore;
-        y.inner.mutual_removes = last_mutual_removes;
-        y.inner.states = last_states;
+        Ok(())
+    }
 
-        Ok(y)
+    /// Rebuild the auth groups graph to a specific point in it's history.
+    ///
+    /// This is required for validating an operation which doesn't point at the current graph
+    /// heads. This method is optimized to only actually perform the rebuild if the request
+    /// rebuild point (heads) is not equal to the current graph heads.
+    pub(crate) fn rebuild_at(
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+    ) -> Result<GroupCrdtInnerState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+        y.graph = y.trimmed_graph(&heads);
+        RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))
+    }
+
+    /// Get group members and access levels at a specific point in a groups history.
+    #[allow(clippy::type_complexity)]
+    pub fn members_at(
+        y: &GroupCrdtState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+        group_id: ID,
+    ) -> Result<Vec<(ID, Access<C>)>, GroupCrdtError<ID, OP>> {
+        if y.inner.heads(&[group_id]) != heads {
+            let inner = Self::rebuild_at(y.inner.clone(), heads)?;
+            Ok(inner.members(group_id))
+        } else {
+            Ok(y.members(group_id))
+        }
     }
 
     /// Add an operation to the auth graph and operation map.
@@ -1810,5 +1911,187 @@ pub(crate) mod tests {
         // Assert members are the same.
         let members = y_i_de.members(G1);
         assert_eq!(members, vec![(ALICE, Access::manage())]);
+    }
+
+    #[test]
+    fn partitioned_group_graphs() {
+        let y = TestGroupState::new();
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        let op2 = create_group(
+            BOB,
+            1,
+            G2,
+            vec![(GroupMember::Individual(BOB), Access::manage())],
+            vec![],
+        );
+
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_ii.members(G2);
+        members.sort();
+        assert_eq!(members, vec![(BOB, Access::manage())]);
+
+        let op3 = add_member(
+            ALICE,
+            2,
+            G1,
+            GroupMember::Group(G2),
+            Access::read(),
+            vec![op1.id(), op2.id()],
+        );
+
+        let y_iii = TestGroup::process(y_ii, &op3).unwrap();
+        let mut individuals = y_iii.members(G1);
+        individuals.sort();
+        assert_eq!(
+            individuals,
+            vec![(ALICE, Access::manage()), (BOB, Access::read())]
+        );
+
+        let mut groups = y_iii.groups(G1);
+        groups.sort();
+        assert_eq!(groups, vec![(G2, Access::read())]);
+
+        let heads = y_iii.heads(&[G1, G2]);
+        assert_eq!(heads, vec![op3.id()]);
+
+        let op4 = create_group(
+            BOB,
+            3,
+            G3,
+            vec![(GroupMember::Individual(BOB), Access::manage())],
+            vec![],
+        );
+
+        // Heads and sorted operations for group 1 & 2
+        let y_iv = TestGroup::process(y_iii, &op4).unwrap();
+        let heads = y_iv.heads(&[G1, G2]);
+        assert_eq!(heads, vec![op3.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G1, G2]);
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2]);
+
+        // Heads and sorted operations for group 1 & 2
+        let heads = y_iv.heads(&[G3]);
+        assert_eq!(heads, vec![op4.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G3]);
+        sorted.sort();
+        assert_eq!(sorted, vec![3]);
+
+        let mut heads = y_iv.heads(&[G1, G2, G3]);
+        heads.sort();
+        assert_eq!(heads, vec![op3.id(), op4.id()]);
+        let mut sorted = y_iv.inner.toposort(&[G1, G2, G3]);
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn promote_demote_group() {
+        let y = TestGroupState::new();
+
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![
+                (GroupMember::Individual(ALICE), Access::manage()),
+                (GroupMember::Individual(BOB), Access::write()),
+                (GroupMember::Individual(CLAIRE), Access::read()),
+            ],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::manage()),
+                (BOB, Access::write()),
+                (CLAIRE, Access::read()),
+            ]
+        );
+
+        let op2 = create_group(
+            DAN,
+            1,
+            G2,
+            vec![
+                (GroupMember::Individual(DAN), Access::manage()),
+                (GroupMember::Group(G1), Access::read()),
+            ],
+            vec![op1.id()],
+        );
+
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_ii.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::read()),
+                (BOB, Access::read()),
+                (CLAIRE, Access::read()),
+                (DAN, Access::manage())
+            ]
+        );
+
+        let op3 = promote_member(
+            DAN,
+            2,
+            G2,
+            GroupMember::Group(G1),
+            Access::write(),
+            vec![op2.id()],
+        );
+
+        let y_iii = TestGroup::process(y_ii, &op3).unwrap();
+        let mut members = y_iii.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::write()),
+                (BOB, Access::write()),
+                (CLAIRE, Access::read()),
+                (DAN, Access::manage())
+            ]
+        );
+
+        let op4 = demote_member(
+            DAN,
+            3,
+            G2,
+            GroupMember::Group(G1),
+            Access::pull(),
+            vec![op3.id()],
+        );
+
+        let y_iv = TestGroup::process(y_iii, &op4).unwrap();
+        let mut members = y_iv.members(G2);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::pull()),
+                (BOB, Access::pull()),
+                (CLAIRE, Access::pull()),
+                (DAN, Access::manage())
+            ]
+        );
     }
 }

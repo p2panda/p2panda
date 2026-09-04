@@ -65,7 +65,12 @@ pub trait AckedGroupMembership<ID, OP> {
 /// This is the DGM interface for p2panda's "data encryption" scheme.
 #[cfg(any(test, feature = "data_scheme"))]
 pub trait GroupMembership<ID, OP> {
-    type State: Clone + std::fmt::Debug + serde::Serialize + for<'a> serde::Deserialize<'a>;
+    type State: Clone
+        + std::fmt::Debug
+        + PartialEq
+        + Eq
+        + serde::Serialize
+        + for<'a> serde::Deserialize<'a>;
 
     type Error: std::error::Error;
 

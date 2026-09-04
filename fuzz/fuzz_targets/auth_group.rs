@@ -34,8 +34,11 @@ const ROOT_GROUP_ID: char = '0';
 /// Max number of "rounds" in which members can publish operations.
 const MAX_ACTION_ROUNDS: usize = 6;
 
+/// Min operations per actor, per round.
+const MIN_ACTOR_OPERATIONS_PER_ROUND: u8 = 2;
+
 /// Max operations per actor, per round.
-const MAX_ACTOR_OPERATIONS_PER_ROUND: u8 = 6;
+const MAX_ACTOR_OPERATIONS_PER_ROUND: u8 = 8;
 
 /// Max concurrent branches.
 const MAX_BRANCHES: u8 = 6;
@@ -241,7 +244,8 @@ impl Member {
             initial_members: initial_members.clone(),
         };
 
-        let dependencies = self.groups_y.inner.heads();
+        let include = action.required_groups();
+        let dependencies = self.groups_y.inner.heads(&include);
         let operation = TestOperation {
             id: rand::random(),
             author: self.id(),
@@ -251,8 +255,13 @@ impl Member {
         };
 
         self.groups_y = TestGroup::process(self.groups_y.clone(), &operation).unwrap();
-        self.auth_heads_ref
-            .replace(self.groups_y.inner.heads().into_iter().collect());
+        self.auth_heads_ref.replace(
+            self.groups_y
+                .inner
+                .heads(&operation.required_groups())
+                .into_iter()
+                .collect(),
+        );
 
         let suggestion = Suggestion::Valid(TestGroupAction::Action(GroupAction::Create {
             initial_members,
@@ -308,7 +317,10 @@ impl Member {
         let result = match action {
             TestGroupAction::Noop => Ok(None),
             TestGroupAction::Action(action) => {
-                let dependencies = self.groups_y.inner.heads();
+                let mut include = action.required_groups();
+                include.push(group_id);
+
+                let dependencies = self.groups_y.inner.heads(&include);
                 let operation = TestOperation {
                     id: rand::random(),
                     author: self.id(),
@@ -333,7 +345,7 @@ impl Member {
                 };
                 self.groups_y = groups_y_i;
                 self.auth_heads_ref
-                    .replace(self.groups_y.inner.heads().into_iter().collect());
+                    .replace(self.groups_y.inner.heads(&include).into_iter().collect());
 
                 Ok(Some(operation))
             }
@@ -393,8 +405,13 @@ impl Member {
                 }
             }
         };
-        self.auth_heads_ref
-            .replace(self.groups_y.inner.heads().into_iter().collect());
+        self.auth_heads_ref.replace(
+            self.groups_y
+                .inner
+                .heads(&operation.required_groups())
+                .into_iter()
+                .collect(),
+        );
 
         self.processed.push(operation.id());
 
@@ -711,7 +728,11 @@ fuzz_target!(|seed: [u8; 32]| {
 
         // Each member suggests a next operations and pushes them to the global partition queue.
         for partition_members in partition_map.values() {
-            for _ in 0..random_range(1, MAX_ACTOR_OPERATIONS_PER_ROUND, &mut rng) {
+            for _ in 0..random_range(
+                MIN_ACTOR_OPERATIONS_PER_ROUND,
+                MAX_ACTOR_OPERATIONS_PER_ROUND,
+                &mut rng,
+            ) {
                 for partition_member in partition_members {
                     let (suggestion, group_id) = {
                         let member = members.get(partition_member).unwrap();

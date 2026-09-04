@@ -7,15 +7,16 @@ use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt, ready};
 use p2panda_core::cbor::{DecodeError, EncodeError, decode_cbor, encode_cbor};
+use p2panda_core::identity::Signer;
 use p2panda_core::timestamp::{HybridTimestamp, LamportTimestamp, Timestamp};
-use p2panda_core::{Signature, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Signature, Topic, VerifyingKey};
 use p2panda_net::gossip::{GossipHandle, GossipSubscription};
 use pin_project::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::warn;
 
-use crate::forge::{Forge, OperationForge};
+use crate::credentials::Credentials;
 
 /// Message specification version to create and encode messages for ephemeral streams.
 const MESSAGE_VERSION: u64 = 1;
@@ -54,10 +55,10 @@ where
     pub fn new(
         body: M,
         timestamp: HybridTimestamp,
-        signing_key: &SigningKey,
+        credentials: &Credentials,
     ) -> Result<Self, EncodeError> {
-        let verifying_key = signing_key.verifying_key();
-        let signature = Self::sign(signing_key, verifying_key, timestamp, &body)?;
+        let verifying_key = credentials.verifying_key();
+        let signature = Self::sign(credentials, verifying_key, timestamp, &body)?;
 
         Ok(Self {
             version: MESSAGE_VERSION,
@@ -135,8 +136,8 @@ where
         Ok(())
     }
 
-    fn sign(
-        signing_key: &SigningKey,
+    fn sign<S: Signer>(
+        signer: &S,
         verifying_key: VerifyingKey,
         timestamp: HybridTimestamp,
         body: &M,
@@ -144,7 +145,7 @@ where
         let (timestamp, logical) = timestamp.to_parts();
         let message = (MESSAGE_VERSION, verifying_key, timestamp, logical, body);
         let bytes = encode_cbor(&message)?;
-        Ok(signing_key.sign(&bytes))
+        Ok(signer.sign(&bytes))
     }
 }
 
@@ -204,14 +205,14 @@ where
 /// Returns publish and subscribe halfs of an ephemeral messaging stream for a given topic.
 pub(crate) fn ephemeral_stream<M>(
     topic: Topic,
-    forge: OperationForge,
+    credentials: Credentials,
     handle: GossipHandle,
 ) -> (EphemeralStreamPublisher<M>, EphemeralStreamSubscription<M>) {
     let subscription = handle.subscribe();
 
     let tx = EphemeralStreamPublisher {
         topic,
-        forge,
+        credentials,
         inner: handle,
         timestamp: Arc::new(Mutex::new(HybridTimestamp::now())),
         _marker: PhantomData,
@@ -263,7 +264,7 @@ pub(crate) fn ephemeral_stream<M>(
 #[derive(Clone, Debug)]
 pub struct EphemeralStreamPublisher<M> {
     topic: Topic,
-    forge: OperationForge,
+    credentials: Credentials,
     inner: GossipHandle,
     timestamp: Arc<Mutex<HybridTimestamp>>,
     _marker: PhantomData<M>,
@@ -298,7 +299,7 @@ where
         };
 
         let bytes = {
-            let wrapped = WrappedMessage::new(message, timestamp, self.forge.signing_key())?;
+            let wrapped = WrappedMessage::new(message, timestamp, &self.credentials)?;
             wrapped.to_bytes()?
         };
 
@@ -400,20 +401,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::SigningKey;
     use p2panda_core::timestamp::HybridTimestamp;
+
+    use crate::credentials::Credentials;
 
     use super::WrappedMessage;
 
     #[test]
     fn encoding() {
-        let signing_key = SigningKey::generate();
+        let credentials = Credentials::generate();
         let timestamp = HybridTimestamp::now();
 
         let message_1 = WrappedMessage::new(
             "This message is signed!".to_string(),
             timestamp,
-            &signing_key,
+            &credentials,
         )
         .unwrap();
 
@@ -425,13 +427,13 @@ mod tests {
 
     #[test]
     fn signatures() {
-        let signing_key = SigningKey::generate();
+        let credentials = Credentials::generate();
         let timestamp = HybridTimestamp::now();
 
         let message = WrappedMessage::new(
             "This message is signed!".to_string(),
             timestamp,
-            &signing_key,
+            &credentials,
         )
         .unwrap();
 

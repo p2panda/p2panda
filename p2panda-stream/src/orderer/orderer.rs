@@ -91,12 +91,12 @@ where
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
-    pub async fn process(&self, key: ID, dependencies: &[ID]) -> Result<(), S::Error> {
+    pub async fn process(&self, key: ID, dependencies: &[ID]) -> Result<bool, S::Error> {
         if !self.store.ready(dependencies).await? {
             self.store
                 .mark_pending(key.clone(), dependencies.to_vec())
                 .await?;
-            return Ok(());
+            return Ok(false);
         }
 
         self.store.mark_ready(key.clone()).await?;
@@ -105,7 +105,7 @@ where
         // which depend on it as they may now have transitioned into a ready state.
         self.process_pending(key).await?;
 
-        Ok(())
+        Ok(true)
     }
 
     /// Recursively check if any pending items now have their dependencies met.

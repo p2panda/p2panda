@@ -12,7 +12,7 @@ use crate::traits::Conditions;
 
 /// The four basic access levels which can be assigned to an actor. Greater access levels are
 /// assumed to also contain all lower ones.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(any(test, feature = "serde"), derive(Deserialize, Serialize))]
 pub enum AccessLevel {
     /// Permission to sync a data set.
@@ -26,6 +26,43 @@ pub enum AccessLevel {
 
     /// Permission to apply membership changes to a group.
     Manage,
+}
+
+impl AccessLevel {
+    #[inline]
+    pub fn can_pull(&self) -> bool {
+        true
+    }
+
+    #[inline]
+    pub fn can_read(&self) -> bool {
+        matches!(self, AccessLevel::Read)
+            || matches!(self, AccessLevel::Write)
+            || matches!(self, AccessLevel::Manage)
+    }
+
+    #[inline]
+    pub fn can_write(&self) -> bool {
+        matches!(self, AccessLevel::Write) || matches!(self, AccessLevel::Manage)
+    }
+
+    #[inline]
+    pub fn can_manage(&self) -> bool {
+        matches!(self, AccessLevel::Manage)
+    }
+}
+
+impl Display for AccessLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            AccessLevel::Pull => "pull",
+            AccessLevel::Read => "read",
+            AccessLevel::Write => "write",
+            AccessLevel::Manage => "manage",
+        };
+
+        write!(f, "{s}")
+    }
 }
 
 /// A level of access with optional conditions which can be assigned to an actor.
@@ -46,14 +83,7 @@ pub struct Access<C = ()> {
 
 impl<C> Display for Access<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self.level {
-            AccessLevel::Pull => "pull",
-            AccessLevel::Read => "read",
-            AccessLevel::Write => "write",
-            AccessLevel::Manage => "manage",
-        };
-
-        write!(f, "{s}")
+        write!(f, "{}", self.level)
     }
 }
 

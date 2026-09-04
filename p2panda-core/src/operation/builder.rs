@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use cbor_core::Value;
 
 use crate::hash::Hash;
-use crate::identity::SigningKey;
+use crate::identity::Signer;
 use crate::logs::SeqNum;
 use crate::operation::header::encode_header;
 use crate::operation::{Header, PayloadSize};
@@ -89,7 +89,7 @@ where
     ///
     /// A custom header extensions type can be set here as well when required. It will be embedded
     /// in the header. Set this to `()` (unit-type) when extensions are not necessary.
-    pub fn build(self, signing_key: &SigningKey, extensions: E) -> Header<E> {
+    pub fn build<S: Signer>(self, signing_key: &S, extensions: E) -> Header<E> {
         let version = 1;
 
         let verifying_key = signing_key.verifying_key();

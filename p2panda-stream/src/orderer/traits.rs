@@ -8,5 +8,5 @@
 /// what messages need to be processed before we can process this messsage and give us causal /
 /// partial ordering.
 pub trait Ordering<ID> {
-    fn dependencies(&self) -> &[ID];
+    fn dependencies(&self) -> Vec<ID>;
 }

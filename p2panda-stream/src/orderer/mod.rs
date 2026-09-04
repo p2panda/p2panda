@@ -8,6 +8,6 @@ mod processor;
 mod tests;
 mod traits;
 
-use orderer::CausalOrderer;
-pub use processor::{Orderer, OrdererError};
+pub use orderer::CausalOrderer;
+pub use processor::{Orderer, OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
 pub use traits::Ordering;

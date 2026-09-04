@@ -38,4 +38,27 @@ where
     pub fn is_create(&self) -> bool {
         matches!(self, GroupAction::Create { .. })
     }
+
+    /// Returns groups which are dependant on being able to process this action.
+    ///
+    /// This calculation looks into the members being added / removed by the action and returns
+    /// only the members which are groups.
+    pub fn required_groups(&self) -> Vec<ID> {
+        let members = match self {
+            GroupAction::Create { initial_members } => {
+                initial_members.iter().map(|(member, _)| member).collect()
+            }
+            GroupAction::Add { member, .. }
+            | GroupAction::Remove { member }
+            | GroupAction::Promote { member, .. }
+            | GroupAction::Demote { member, .. } => vec![member],
+        };
+        members
+            .iter()
+            .filter_map(|member| match member {
+                crate::group::GroupMember::Individual(_) => None,
+                crate::group::GroupMember::Group(id) => Some(*id),
+            })
+            .collect::<Vec<_>>()
+    }
 }

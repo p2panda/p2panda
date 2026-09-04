@@ -22,7 +22,7 @@ use crate::traits::Conditions;
 
 /// Invalid group state modification attempts due to group membership state and member access
 /// levels.
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum GroupMembershipError<ID> {
     #[error("attempted to add a member who is already active in the group: {0}")]
     AlreadyAdded(ID),

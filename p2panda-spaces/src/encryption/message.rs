@@ -15,7 +15,7 @@ use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::message::{ApplicationMessage, SpaceMembershipMessage};
 use crate::types::{AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage};
-use crate::utils::removed_members;
+use crate::utils::removed_secret_members;
 use crate::{MemberId, OperationId};
 
 /// Arguments which are returned from p2panda-encryption APIs.
@@ -87,8 +87,8 @@ impl EncryptionMessage {
         space_message: &SpaceMembershipMessage,
         my_id: MemberId,
         auth_message: &AuthMessage<C>,
-        current_members: &Vec<MemberId>,
-        next_members: &Vec<MemberId>,
+        current_members: &[MemberId],
+        next_members: &[MemberId],
     ) -> Self
     where
         C: Conditions,
@@ -106,7 +106,7 @@ impl EncryptionMessage {
         assert_eq!(auth_message.id(), *auth_message_id);
 
         // Check if there are any direct messages for me.
-        let hash_my_direct_messages = direct_messages
+        let has_my_direct_message = direct_messages
             .iter()
             .any(|message| message.recipient == my_id);
 
@@ -123,13 +123,13 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "add", if there is a direct message for us then use our VerifyingKey
-            // for the added member, otherwise use the added members VerifyingKey. Even if this is a
-            // group being added, meaning they won't actual be known to the DCGKA, we can use
-            // their id as the only thing we care about is making sure the direct messages are
-            // processed.
-            AuthGroupAction::Add { member, .. } => {
-                let control_message = if hash_my_direct_messages {
+            // The auth message is "add" or "promote", if there is a direct message for us then
+            // use our VerifyingKey for the added/promoted member, otherwise use the
+            // added/promoted members VerifyingKey. Even if this is a group being added/promoted,
+            // meaning they won't actual be known to the DCGKA, we can use their id as the only
+            // thing we care about is making sure the direct messages are processed.
+            AuthGroupAction::Add { member, .. } | AuthGroupAction::Promote { member, .. } => {
+                let control_message = if has_my_direct_message {
                     EncryptionControlMessage::Add { added: my_id }
                 } else {
                     EncryptionControlMessage::Add { added: member.id() }
@@ -140,11 +140,12 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            // The auth message is "remove", if we were removed, then use our VerifyingKey for the
-            // removed member, otherwise use the VerifyingKey of the actual removed member (which may
-            // be an individual or group).
-            AuthGroupAction::Remove { member } => {
-                let removed = removed_members(current_members.to_owned(), next_members.to_owned());
+            // The auth message is "remove" or "demote" which could result in a member losing
+            // "read" access. If we were removed then use our VerifyingKey for the removed
+            // member, otherwise use the VerifyingKey of the actual removed member (which may be
+            // an individual or group).
+            AuthGroupAction::Remove { member } | AuthGroupAction::Demote { member, .. } => {
+                let removed = removed_secret_members(current_members, next_members);
                 let control_message = if removed.contains(&my_id) {
                     EncryptionControlMessage::Remove { removed: my_id }
                 } else {
@@ -158,7 +159,6 @@ impl EncryptionMessage {
                     direct_messages: direct_messages.clone(),
                 }
             }
-            _ => unimplemented!(),
         };
 
         EncryptionMessage::Forged {

@@ -12,7 +12,6 @@ use p2panda_store::{SqliteError, SqliteStore, tx_unwrap};
 use crate::manager::Manager;
 use crate::space::SpaceError;
 use crate::test_utils::forge::DEFAULT_LOG_ID;
-use crate::types::StrongRemoveResolver;
 use crate::{Config, Credentials, SpacesArgs};
 
 pub use forge::TestForge;
@@ -33,15 +32,9 @@ impl Borrow<SpacesArgs<TestConditions>> for TestOperation {
     }
 }
 
-pub type TestManager = Manager<
-    SqliteSpacesStore<TestExtensions>,
-    TestForge,
-    TestConditions,
-    StrongRemoveResolver<TestConditions>,
->;
+pub type TestManager = Manager<SqliteSpacesStore<TestExtensions>, TestForge, TestConditions>;
 
-pub type TestSpaceError =
-    SpaceError<TestForge, TestConditions, StrongRemoveResolver<TestConditions>>;
+pub type TestSpaceError = SpaceError<TestForge, TestConditions>;
 
 pub struct TestPeer {
     pub id: TestPeerId,
@@ -55,13 +48,13 @@ impl TestPeer {
         let rng = Rng::from_seed([peer_id; 32]);
         let credentials = Credentials::from_rng(&rng).unwrap();
         let config = Config::default();
-        Self::new_with_config(peer_id, credentials, &config, rng).await
+        Self::new_with_config(peer_id, credentials, config, rng).await
     }
 
     pub async fn new_with_config(
         peer_id: TestPeerId,
         credentials: Credentials,
-        config: &Config,
+        config: Config,
         rng: Rng,
     ) -> Self {
         let store = SqliteStore::temporary().await;

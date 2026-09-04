@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures_util::{Stream, StreamExt};
 use p2panda_core::Topic;
 use p2panda_sync::FromSync;
 use ractor::{ActorRef, call};
 use thiserror::Error;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, oneshot};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 
@@ -25,6 +26,7 @@ where
     topic: Topic,
     manager_ref: ActorRef<ToSyncManager<M, E>>,
     topic_manager_ref: ActorRef<ToTopicManager<M>>,
+    has_closed: AtomicBool,
 }
 
 impl<M, E> SyncHandle<M, E>
@@ -41,6 +43,7 @@ where
             topic,
             manager_ref,
             topic_manager_ref,
+            has_closed: AtomicBool::new(false),
         }
     }
 
@@ -84,6 +87,23 @@ where
             .send_message(ToSyncManager::InitiateSync(self.topic, node_id))
             .unwrap();
     }
+
+    /// Close the associated sync session gracefully.
+    ///
+    /// This method can be awaited to ensure that all sync-related state has been cleaned up.
+    pub async fn close(&self) -> Result<(), SyncHandleError<M, E>> {
+        let (reply, reply_rx) = oneshot::channel();
+
+        self.manager_ref
+            .send_message(ToSyncManager::Close(self.topic, reply))
+            .map_err(Box::new)?;
+
+        // Await the termination completion signal.
+        let _ = reply_rx.await;
+        self.has_closed.store(true, Ordering::Relaxed);
+
+        Ok(())
+    }
 }
 
 impl<M, E> Drop for SyncHandle<M, E>
@@ -92,10 +112,27 @@ where
     E: Clone + Send + 'static,
 {
     fn drop(&mut self) {
-        // Ignore error here as the actor might already be dropped.
-        let _ = self
-            .manager_ref
-            .send_message(ToSyncManager::Close(self.topic));
+        let (reply, _reply_rx) = oneshot::channel();
+
+        // Sending `ToSyncManager::Close` twice for the same topic in quick succession can cause
+        // an error in the `TopicManager` actor; this occurs if a new topic stream is created
+        // immediately after sending the `Close` instruction.
+        //
+        // The error case is clearer if we consider this example of the TopicManager queue:
+        //
+        // Close     -> cleans up all state for the topic
+        // Create    -> sets up state for the topic
+        // Close     -> cleans up all state for the topic
+        // Subscribe -> returns an error because the expected state doesn't exist
+        //
+        // Only send the message here if a graceful closure has not been initiated from a higher
+        // level.
+        if !self.has_closed.load(Ordering::Relaxed) {
+            // Ignore error here as the actor might already be dropped.
+            let _ = self
+                .manager_ref
+                .send_message(ToSyncManager::Close(self.topic, reply));
+        }
     }
 }
 
@@ -150,4 +187,7 @@ pub enum SyncHandleError<M, E> {
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,
+
+    #[error(transparent)]
+    Close(#[from] Box<ractor::MessagingErr<ToSyncManager<M, E>>>),
 }

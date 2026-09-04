@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::error::Error as StdError;
-use std::sync::Arc;
 
-use p2panda_core::{Body, Hash, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{Body, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_sync::protocols::ShortFormat;
 use thiserror::Error;
+use tracing::trace;
 
+use crate::credentials::Credentials;
 use crate::operation::{Extensions, Header, LogId, Operation};
 
 /// Interface for obtaining a keypair and creating signed operations.
 pub trait Forge<TP, C, E> {
     type Error: StdError;
 
-    fn signing_key(&self) -> &SigningKey;
-
     fn verifying_key(&self) -> VerifyingKey;
 
     fn create_operation(
         &self,
-        topic: TP,
+        topic: Option<TP>,
         collection_id: C,
         body: Option<Vec<u8>>,
         extensions: E,
@@ -31,38 +31,21 @@ pub trait Forge<TP, C, E> {
 
 #[derive(Clone, Debug)]
 pub struct OperationForge {
-    signing_key: Arc<SigningKey>,
-    store: SqliteStore,
+    credentials: Credentials,
+    pub(crate) store: SqliteStore,
 }
 
 impl OperationForge {
-    /// Create a forge for inserting signed operations into the database and associating topics
-    /// with logs.
-    ///
-    /// The forge holds the private key used to sign operations. This method generates a new key
-    /// using CSPRNG from the system.
-    pub fn new(store: SqliteStore) -> Self {
-        Self::from_signing_key(SigningKey::generate(), store)
-    }
-
-    /// Create a forge using an existing private key.
-    pub fn from_signing_key(signing_key: SigningKey, store: SqliteStore) -> Self {
-        Self {
-            signing_key: Arc::new(signing_key),
-            store,
-        }
+    pub fn new(credentials: Credentials, store: SqliteStore) -> Self {
+        Self { credentials, store }
     }
 }
 
 impl Forge<Topic, LogId, Extensions> for OperationForge {
     type Error = ForgeError;
 
-    fn signing_key(&self) -> &SigningKey {
-        &self.signing_key
-    }
-
     fn verifying_key(&self) -> VerifyingKey {
-        self.signing_key.verifying_key()
+        self.credentials.verifying_key()
     }
 
     /// Create a signed operation and insert it into the store.
@@ -74,7 +57,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
     /// single transaction, thereby ensuring atomicity.
     async fn create_operation(
         &self,
-        topic: Topic,
+        topic: Option<Topic>,
         log_id: LogId,
         body: Option<Vec<u8>>,
         extensions: Extensions,
@@ -96,7 +79,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                 SeqNum,
                 Hash,
             >>::get_latest_entry_tx(
-                &self.store, &self.signing_key.verifying_key(), &log_id
+                &self.store, &self.credentials.verifying_key(), &log_id
             )
             .await?
             .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
@@ -109,22 +92,32 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
                     builder = builder.body(body);
                 }
 
-                builder.build(&self.signing_key, extensions)
+                builder.build(&self.credentials, extensions)
             };
 
-            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                &self.store,
-                &topic,
-                &self.signing_key.verifying_key(),
-                &log_id,
-            )
-            .await?;
+            if let Some(topic) = topic {
+                <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
+                    &self.store,
+                    &topic,
+                    &self.credentials.verifying_key(),
+                    &log_id,
+                )
+                .await?;
+            }
 
             let operation = Operation::from_parts(header, body);
 
             self.store
                 .insert_operation(&operation.hash, &operation, &log_id)
                 .await?;
+
+            trace!(
+                id = operation.hash.fmt_short(),
+                author = self.credentials.verifying_key().fmt_short(),
+                log_id = Hash::from(log_id.as_bytes()).fmt_short(),
+                seq = operation.header.seq_num,
+                "operation created"
+            );
 
             operation
         });
@@ -147,6 +140,7 @@ mod tests {
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
 
+    use crate::credentials::Credentials;
     use crate::forge::Forge;
     use crate::operation::{Extensions, LogId};
 
@@ -155,7 +149,8 @@ mod tests {
     #[tokio::test]
     async fn operation_forge() {
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
 
         let topic = Topic::random();
         let log_id = LogId::from_topic(topic);
@@ -163,7 +158,7 @@ mod tests {
 
         forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some("spring!".as_bytes().to_vec()),
                 extensions.clone(),
@@ -173,7 +168,7 @@ mod tests {
 
         forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some("summer!".as_bytes().to_vec()),
                 extensions,

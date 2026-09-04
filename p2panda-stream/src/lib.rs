@@ -27,6 +27,8 @@
 //! `Sync` types. Users need to make sure to run this code in a "local" tokio runtime.
 #[cfg(feature = "groups")]
 pub mod groups;
+#[cfg(feature = "hooks")]
+pub mod hooks;
 #[cfg(feature = "ingest")]
 pub mod ingest;
 #[cfg(feature = "log_prune")]

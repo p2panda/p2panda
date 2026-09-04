@@ -22,7 +22,7 @@ use crate::spaces::{SpacesMessage, SpacesStore};
 use crate::sqlite::TransactionPermit;
 use crate::{SqliteError, SqliteStore};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SqliteSpacesStore<E> {
     store: SqliteStore,
     _phantom: PhantomData<E>,
@@ -34,6 +34,10 @@ impl<E> SqliteSpacesStore<E> {
             store,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn inner(&self) -> SqliteStore {
+        self.store.clone()
     }
 }
 

@@ -10,6 +10,7 @@ use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 
 use crate::Processor;
@@ -97,7 +98,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IngestResult {
     AlreadyExists,
     Inserted,

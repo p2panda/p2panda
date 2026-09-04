@@ -22,7 +22,7 @@ use std::str::FromStr;
 use arbitrary::Arbitrary;
 use thiserror::Error;
 
-use crate::traits::OperationId;
+use crate::traits::{OperationId, ShortFormat};
 
 /// The length of a BLAKE3 hash in bytes.
 pub const HASH_LEN: usize = blake3::KEY_LEN;
@@ -147,6 +147,12 @@ impl<'a> Arbitrary<'a> for Hash {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         let bytes = <[u8; HASH_LEN] as Arbitrary>::arbitrary(u)?;
         Ok(Hash::from_bytes(bytes))
+    }
+}
+
+impl ShortFormat for Hash {
+    fn fmt_short(&self) -> String {
+        self.to_hex()[0..5].to_string()
     }
 }
 
