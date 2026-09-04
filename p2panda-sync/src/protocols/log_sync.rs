@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use futures_util::{Sink, SinkExt, Stream, StreamExt, stream};
+use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
 use p2panda_core::{
     AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
@@ -16,8 +16,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::broadcast;
-use tracing::{Instrument, debug, trace, warn};
+use tracing::{Instrument, debug, trace};
 
+use crate::api::stream_log_ranges;
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
 
@@ -290,13 +291,11 @@ where
                     remote_needs,
                     mut metrics,
                 } => {
-                    let mut send_logs_len = remote_needs.len();
-                    let span =
-                        tracing::error_span!(parent: &state_machine_span, "sync", send_logs_len);
-                    let mut remote_needs = stream::iter(remote_needs);
-                    // We perform a loop awaiting futures on both the receiving stream and the list
-                    // of log ranges we have to send. This means that processing of both streams is
-                    // done concurrently.
+                    let span = tracing::error_span!(parent: &state_machine_span, "sync");
+                    let mut operations = stream_log_ranges(&self.store, remote_needs);
+
+                    // We perform a loop awaiting futures on both the receiving and sending
+                    // stream. This means that processing of both streams is done concurrently.
                     loop {
                         select! {
                             Some(message) = stream.next().instrument(span.clone()), if !sync_done_received => {
@@ -358,63 +357,10 @@ where
                                     }
                                 }
                             },
-                            Some((author, log_ranges)) = remote_needs.next().instrument(span.clone()) => {
-                                for (log_id, (after, until)) in log_ranges {
-                                    // Get all entries from the log we should send to the remote.
-                                    let Some(result) = self
-                                    .store
-                                    .get_log_entries(&author, &log_id, after, until)
-                                    .instrument(span.clone())
-                                    .await
-                                    .map_err(|err| LogSyncError::OperationStore(format!("{err}")))? else {
-                                        warn!(
-                                            parent: &span,
-                                            author = author.fmt_short(),
-                                            log_id = ?log_id,
-                                            after = after,
-                                            until = until,
-                                            "expected log missing from store"
-                                        );
-                                        continue;
-                                    };
-
-                                    for (operation, header_bytes) in result {
-                                        let header = operation.header;
-                                        let body = operation.body;
-                                        let hash = operation.hash;
-
-                                        metrics.sent_bytes += { header_bytes.len() +
-                                            body.as_ref().map(|body|
-                                        body.to_bytes().len()).unwrap_or_default() } as u32;
-                                        metrics.sent_operations += 1;
-
-                                        trace!(
-                                            parent: &span,
-                                            verifying_key = %author.fmt_short(),
-                                            log_id = ?log_id,
-                                            seq_num = header.seq_num,
-                                            id = %hash.fmt_short(),
-                                            sent_ops = metrics.sent_operations,
-                                            sent_bytes = metrics.sent_bytes,
-                                            "send operation",
-                                        );
-
-                                        sink.send(LogSyncMessage::Operation((header_bytes, body.as_ref().map(|body|
-                                            body.to_bytes()))))
-                                            .instrument(span.clone())
-                                            .await
-                                            .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send operation"))
-                                            .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
-
-                                        dedup.insert(hash);
-                                    }
-                                }
-                                // We've finished sending all logs, send sync done message.
-                                send_logs_len -= 1;
-                                if send_logs_len == 0 {
+                            result = operations.next().instrument(span.clone()), if !sync_done_sent => {
+                                let Some(result) = result else {
                                     trace!(
                                         parent: &span,
-                                        verifying_key = %author.fmt_short(),
                                         "send sync done message",
                                     );
                                     sink.send(LogSyncMessage::Done)
@@ -423,17 +369,44 @@ where
                                         .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send LogSyncMessage::Done"))
                                         .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
                                     sync_done_sent = true;
-                                }
+                                    continue;
+                                };
+
+                                let (operation, header_bytes) = result.map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
+
+                                let header = operation.header;
+                                let body = operation.body;
+                                let hash = operation.hash;
+                                let author = header.verifying_key;
+
+                                metrics.sent_bytes += { header_bytes.len() +
+                                    body.as_ref().map(|body|
+                                body.to_bytes().len()).unwrap_or_default() } as u32;
+                                metrics.sent_operations += 1;
+
+                                trace!(
+                                    parent: &span,
+                                    verifying_key = %author.fmt_short(),
+                                    seq_num = header.seq_num,
+                                    id = %hash.fmt_short(),
+                                    sent_ops = metrics.sent_operations,
+                                    sent_bytes = metrics.sent_bytes,
+                                    "send operation",
+                                );
+
+                                sink.send(LogSyncMessage::Operation((header_bytes, body.as_ref().map(|body|
+                                    body.to_bytes()))))
+                                    .instrument(span.clone())
+                                    .await
+                                    .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send operation"))
+                                    .map_err(|err| LogSyncError::MessageSink(format!("{err:?}")))?;
+
+                                dedup.insert(hash);
                             },
                             else => {
-                                // If both streams are empty (they return None), or we received a
-                                // sync done message and we sent all our pending operations, exit
-                                // the loop.
-                                if sync_done_received && sync_done_sent {
-                                    trace!(parent: &span, "sync done sent and received");
-                                    break;
-                                }
-                            }
+                                trace!(parent: &span, "sync session gracefully closed");
+                                break;
+                        }
                         }
                     }
                     self.state = State::End { metrics };

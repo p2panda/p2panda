@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use futures_util::StreamExt;
 use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, Topic, VerifyingKey};
-use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::stream_log_ranges;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -68,41 +69,29 @@ where
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
-    for (author, logs) in log_ranges {
-        for (log_id, (after, until)) in logs {
-            let Some(operations) = store
-                .get_log_entries(&author, &log_id, after, until)
-                .await?
-            else {
-                // If the log was concurrently deleted since calling TopicStore::resolve then None
-                // is returned here. This is not considered an error, as no log integrity is broken
-                // and deletes should be immediately respected.
-                continue;
-            };
+    let mut operations = stream_log_ranges(store, log_ranges);
 
-            for (operation, _) in operations {
-                let operation = operation
-                    .try_into()
-                    .expect("values from the database are valid");
-                match process_operation::<M>(
-                    operation,
-                    topic,
-                    pipeline,
-                    ack_policy,
-                    acked,
-                    Source::LocalStore,
-                )
-                .await
-                {
-                    Some(event) => {
-                        app_tx
-                            .send(event)
-                            .await
-                            .map_err(|_| ReplayError::CriticalError)?;
-                    }
-                    None => continue,
-                }
+    while let Some(result) = operations.next().await {
+        let (operation, _) = result?;
+        match process_operation::<M>(
+            operation
+                .try_into()
+                .expect("values from the database are valid"),
+            topic,
+            pipeline,
+            ack_policy,
+            acked,
+            Source::LocalStore,
+        )
+        .await
+        {
+            Some(event) => {
+                app_tx
+                    .send(event)
+                    .await
+                    .map_err(|_| ReplayError::CriticalError)?;
             }
+            None => continue,
         }
     }
 
