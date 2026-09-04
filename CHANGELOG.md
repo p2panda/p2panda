@@ -49,6 +49,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Only emit membership change events if local user is space member [#1304](https://github.com/p2panda/p2panda/pull/1304)
 - spaces: Remove auth resolver generic parameter [#1298](https://github.com/p2panda/p2panda/pull/1298)
 - store: sqlx 0.9.0, use safer query builder [#1322](https://github.com/p2panda/p2panda/pull/1322)
+- core: Infallible conversion from Operation<E> into AnyOperation [#1389](https://github.com/p2panda/p2panda/pull/1389)
 
 ### Fixes
 
