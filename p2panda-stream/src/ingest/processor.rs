@@ -19,8 +19,8 @@ use crate::ingest::operation::{IngestError, IngestResult, ingest_operation};
 pub struct Ingest<S, T, L, E, TP> {
     store: S,
     notify: Notify,
-    queue: RefCell<VecDeque<(T, IngestResult)>>,
-    _marker: PhantomData<(L, E, TP)>,
+    queue: RefCell<VecDeque<(T, IngestResult<E>)>>,
+    _marker: PhantomData<(L, TP)>,
 }
 
 impl<S, T, L, E, TP> Ingest<S, T, L, E, TP>
@@ -52,7 +52,7 @@ where
     L: LogId,
     E: Extensions,
 {
-    type Output = (T, IngestResult);
+    type Output = (T, IngestResult<E>);
 
     type Error = (T, IngestError);
 
@@ -62,6 +62,7 @@ where
 
         let result = ingest_operation(
             &self.store,
+            None,
             operation,
             &args.log_id,
             &args.topic,
@@ -72,8 +73,7 @@ where
         let result = match result {
             Ok(result) => result,
             Err(err) => {
-                // Return the input arguments next to the error to allow mapping it back to it's
-                // source.
+                // Return input arguments next to error to allow mapping it back to it's source.
                 return Err((input, err));
             }
         };
