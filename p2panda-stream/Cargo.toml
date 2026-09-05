@@ -35,7 +35,9 @@ groups = [
   "p2panda-store/groups",
   "dep:serde",
 ]
-ingest = []
+ingest = [
+    "dep:indexmap",
+]
 log_prune = []
 orderer = [
   "p2panda-store/processor",
@@ -51,6 +53,7 @@ hooks = []
 
 [dependencies]
 futures-util = { workspace = true }
+indexmap = { version = "2.14.2", optional = true }
 p2panda-auth = { workspace = true, optional = true }
 p2panda-core = { workspace = true, default-features = true }
 p2panda-spaces = { workspace = true, default-features = true, optional = true }

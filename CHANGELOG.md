@@ -37,6 +37,7 @@ Highlights are marked with a pancake 🥞
 - stream: Filter out spaces application messages from concurrently removed members [#1291](https://github.com/p2panda/p2panda/pull/1291)
 - stream: Hooks processor to register event callbacks in streaming pipeline [#1339](https://github.com/p2panda/p2panda/pull/1339)
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
+- stream: Out-of-order buffer for validating & inserting operations [#1402](https://github.com/p2panda/p2panda/pull/1402)
 - node: ConnectionAuthoriserHook updating authoriser based on space membership [#1359](https://github.com/p2panda/p2panda/pull/1359)
 - node: E2EE CLI chat example using spaces API [#1288](https://github.com/p2panda/p2panda/pull/1288)
 
