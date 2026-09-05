@@ -35,6 +35,11 @@ where
 {
     let operation: &Operation<E> = operation.borrow();
 
+    // Check if hash associated to struct ("checksum") is matching the header's digest.
+    if operation.hash != operation.header.hash() {
+        return Err(IngestError::HashMismatch);
+    }
+
     // Validate operation format.
     validate_operation(operation).map_err(|err| IngestError::InvalidOperation(err))?;
 
@@ -104,6 +109,9 @@ pub enum IngestError {
     /// the p2panda specification.
     #[error("invalid operation: {0}")]
     InvalidOperation(#[from] p2panda_core::OperationError),
+
+    #[error("hash associated with operation does not match header digest")]
+    HashMismatch,
 
     /// Critical storage failure occurred. This is usually a reason to panic.
     #[error("critical storage failure: {0}")]
