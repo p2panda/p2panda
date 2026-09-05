@@ -43,7 +43,7 @@ pub struct Event<L, E, TP> {
     pub ingest_args: IngestArgs<L, TP>,
 
     /// Status of the "ingest" processor.
-    pub ingest: ProcessorStatus<IngestResult, IngestError>,
+    pub ingest: ProcessorStatus<IngestResult<E>, IngestError>,
 
     /// Input arguments for the "orderer" processor.
     pub orderer_args: OrdererArgs,
