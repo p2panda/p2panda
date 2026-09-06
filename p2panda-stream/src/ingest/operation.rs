@@ -11,7 +11,6 @@ use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
@@ -37,7 +36,7 @@ where
     let operation: &Operation<E> = operation.borrow();
 
     // Validate operation format.
-    validate_operation(operation).map_err(|err| IngestError::InvalidOperation(err.to_string()))?;
+    validate_operation(operation).map_err(|err| IngestError::InvalidOperation(err))?;
 
     let permit = store
         .begin()
@@ -76,7 +75,7 @@ where
         &operation.header.clone().into(),
         prune_flag,
     )
-    .map_err(|err| IngestError::InvalidOperation(err.to_string()))?;
+    .map_err(|err| IngestError::InvalidOperation(err))?;
 
     // Insert operation into store and associate its log with the given topic.
     let verifying_key = operation.header.verifying_key;
@@ -99,12 +98,12 @@ where
 }
 
 /// Errors which can occur due to invalid operations or critical storage failures.
-#[derive(Clone, Debug, Error, Serialize, Deserialize)]
+#[derive(Clone, Debug, Error)]
 pub enum IngestError {
     /// Operation can not be authenticated, has broken log- or payload integrity or doesn't follow
     /// the p2panda specification.
     #[error("invalid operation: {0}")]
-    InvalidOperation(String),
+    InvalidOperation(#[from] p2panda_core::OperationError),
 
     /// Critical storage failure occurred. This is usually a reason to panic.
     #[error("critical storage failure: {0}")]
