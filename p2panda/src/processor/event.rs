@@ -211,8 +211,6 @@ pub struct EventMetadata<L, TP> {
     log_id: L,
     prune_flag: PruneFlag,
     spaces_args: Option<SpacesArgs>,
-    // TODO: Store all processors results, not only ingest.
-    ingest: ProcessorStatus<IngestResult, IngestError>,
     source: Source,
 }
 
@@ -232,7 +230,6 @@ where
             SpacesProcessorArgs::Ignore => None,
             SpacesProcessorArgs::Process { msg } => Some(msg.args.clone()),
         };
-        let ingest = self.ingest.clone();
         let source = self.source.clone();
 
         EventMetadata {
@@ -240,7 +237,6 @@ where
             topic,
             prune_flag,
             spaces_args,
-            ingest,
             source,
         }
     }
