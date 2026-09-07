@@ -401,7 +401,7 @@ async fn create_operation(
                 builder = builder.body(body);
             }
 
-            builder.build(&signing_key, extensions)
+            builder.build(signing_key, extensions)
         };
 
         <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
