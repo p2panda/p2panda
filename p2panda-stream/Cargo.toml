@@ -35,9 +35,7 @@ groups = [
   "p2panda-store/groups",
   "dep:serde",
 ]
-ingest = [
-    "dep:serde",
-]
+ingest = []
 log_prune = []
 orderer = [
   "p2panda-store/processor",
