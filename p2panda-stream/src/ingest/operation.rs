@@ -13,6 +13,12 @@ use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use thiserror::Error;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IngestResult {
+    AlreadyExists,
+    Inserted,
+}
+
 /// Checks an incoming operation for log integrity and persists it into the store when valid.
 ///
 /// Returns true if the operation was inserted to the store, false if the operation is valid but
@@ -23,7 +29,7 @@ pub async fn ingest_operation<S, T, L, E, TP>(
     log_id: &L,
     topic: &TP,
     prune_flag: bool,
-) -> Result<bool, IngestError>
+) -> Result<IngestResult, IngestError>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash>
@@ -55,12 +61,7 @@ where
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
     if already_exists {
-        store
-            .rollback(permit)
-            .await
-            .map_err(|err| IngestError::StoreError(err.to_string()))?;
-
-        return Ok(false);
+        return Ok(IngestResult::AlreadyExists);
     }
 
     // Validate log integrity.
@@ -99,7 +100,7 @@ where
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
-    Ok(true)
+    Ok(IngestResult::Inserted)
 }
 
 /// Errors which can occur due to invalid operations or critical storage failures.
@@ -126,7 +127,7 @@ mod tests {
     use p2panda_store::logs::LogStore;
     use p2panda_store::topics::TopicStore;
 
-    use super::ingest_operation;
+    use super::{IngestResult, ingest_operation};
 
     #[tokio::test]
     async fn valid_log() {
@@ -149,13 +150,13 @@ mod tests {
         let result = ingest_operation(&store, &operation, &1, &1, false)
             .await
             .unwrap();
-        assert!(result);
+        std::assert_matches!(result, IngestResult::Inserted);
 
         // Inserting duplicates is ok and are silently ignored.
         let result = ingest_operation(&store, &operation, &1, &1, false)
             .await
             .unwrap();
-        assert!(!result);
+        std::assert_matches!(result, IngestResult::AlreadyExists);
     }
 
     #[tokio::test]

@@ -6,5 +6,5 @@ mod operation;
 mod processor;
 
 pub use args::IngestArgs;
-pub use operation::{IngestError, ingest_operation};
-pub use processor::{Ingest, IngestResult};
+pub use operation::{IngestError, IngestResult, ingest_operation};
+pub use processor::Ingest;

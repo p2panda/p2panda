@@ -10,12 +10,11 @@ use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 
 use crate::Processor;
 use crate::ingest::args::IngestArgs;
-use crate::ingest::operation::{IngestError, ingest_operation};
+use crate::ingest::operation::{IngestError, IngestResult, ingest_operation};
 
 pub struct Ingest<S, T, L, E, TP> {
     store: S,
@@ -71,8 +70,7 @@ where
         .await;
 
         let result = match result {
-            Ok(true) => IngestResult::Inserted,
-            Ok(false) => IngestResult::AlreadyExists,
+            Ok(result) => result,
             Err(err) => {
                 // Return the input arguments next to the error to allow mapping it back to it's
                 // source.
@@ -96,12 +94,6 @@ where
             self.notify.notified().await;
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum IngestResult {
-    AlreadyExists,
-    Inserted,
 }
 
 #[cfg(test)]
