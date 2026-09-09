@@ -42,7 +42,7 @@ use tokio_stream::StreamExt;
 
 type Message = String;
 
-const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh.link/.";
+const RELAY_URLS: &[&str] = &["https://euc1-1.relay.n0.iroh.link/."];
 
 const NETWORK_ID: &str = "chat";
 
@@ -73,10 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut builder = p2panda::builder().network_id(Hash::digest(NETWORK_ID).into());
 
         if let Some(bootstrap) = bootstrap {
-            let relay_url: RelayUrl = RELAY_URL.parse().unwrap();
-            builder = builder
-                .relay_url(relay_url.clone())
-                .bootstrap(bootstrap, relay_url);
+            for url in RELAY_URLS {
+                let relay_url: RelayUrl = url.parse().unwrap();
+
+                builder = builder
+                    .relay_url(relay_url.clone())
+                    .bootstrap(bootstrap, relay_url);
+            }
         }
 
         builder.spawn().await?
