@@ -35,9 +35,7 @@ use std::sync::Arc;
 
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
 use p2panda_core::traits::{Digest, Provenance};
-use p2panda_core::{
-    AnyOperation, Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey,
-};
+use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
@@ -46,6 +44,8 @@ use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock, mpsc};
+
+use crate::common::create_operation;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -370,61 +370,6 @@ impl Node {
 }
 
 // TODO: A lot of methods we probably want to move somewhere else:
-
-async fn create_operation(
-    store: &SqliteStore,
-    signing_key: &SigningKey,
-    topic: Topic,
-    body: &[u8],
-) -> Result<AnyOperation> {
-    let body: Option<Body> = Some(Body::from_bytes(body));
-
-    let log_id = LogId::digest(topic.as_bytes());
-    let extensions = CustomExtensions { log_id };
-
-    let operation = tx!(store, {
-        let (seq_num, backlink) = store
-            .get_latest_entry_tx(&signing_key.verifying_key(), &log_id)
-            .await?
-            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-            .unwrap_or((0, None));
-
-        let header = {
-            let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
-
-            if let Some(ref body) = body {
-                builder = builder.body(body);
-            }
-
-            builder.build(signing_key, extensions)
-        };
-
-        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-            &store,
-            &topic,
-            &signing_key.verifying_key(),
-            &log_id,
-        )
-        .await?;
-
-        let operation = Operation::from_parts(header, body);
-
-        store
-            .insert_operation(&operation.hash, &operation, &log_id)
-            .await?;
-
-        operation
-    });
-
-    Ok(AnyOperation {
-        hash: operation.hash,
-        header: operation
-            .header
-            .try_into()
-            .expect("shouldn't be an error in p2panda-core"),
-        body: operation.body,
-    })
-}
 
 async fn ingest_operation(
     store: &SqliteStore,

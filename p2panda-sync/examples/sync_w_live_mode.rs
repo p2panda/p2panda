@@ -15,7 +15,6 @@ mod common;
 use std::collections::BTreeMap;
 
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::test_utils::TestLog;
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
@@ -77,35 +76,19 @@ impl Node {
     }
 
     /// Create a new log, populate it with five operations and associate it with the topic.
-    async fn populate_log(&self, topic: Topic) -> Result<TestLog> {
-        let log = TestLog::from_signing_key(self.signing_key.clone());
+    async fn populate_log(&self, topic: Topic) -> Result<()> {
+        for op_i in 0..5 {
+            let body = (op_i as usize).to_be_bytes();
+            self.create_operation(topic, &body).await?;
+        }
 
-        tx!(self.store, {
-            let log_id = LogId::digest(topic.as_bytes());
+        Ok(())
+    }
 
-            for op_i in 0..5 {
-                let body = (op_i as usize).to_be_bytes();
-                let operation = log.operation(&body, CustomExtensions { log_id });
-
-                <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                    &self.store,
-                    &operation.hash,
-                    &operation,
-                    &log_id,
-                )
-                .await?;
-            }
-
-            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                &self.store,
-                &topic,
-                &self.id(),
-                &log_id,
-            )
-            .await?;
-        });
-
-        Ok(log)
+    async fn create_operation(&self, topic: Topic, body: &[u8]) -> Result<AnyOperation> {
+        let operation =
+            crate::common::create_operation(&self.store, &self.signing_key, topic, &body).await?;
+        Ok(operation)
     }
 
     /// Query the local log heights for the topic and return an announcement.
@@ -184,11 +167,11 @@ async fn main() -> Result<()> {
     // Node A and B populate their logs with operations.
 
     let node_a = Node::new().await;
-    let _log_a = node_a.populate_log(topic).await?;
+    node_a.populate_log(topic).await?;
     println!("{}: node a", node_a.id().fmt_short());
 
     let node_b = Node::new().await;
-    let log_b = node_b.populate_log(topic).await?;
+    node_b.populate_log(topic).await?;
     println!("{}: node b", node_b.id().fmt_short());
 
     println!("--------");
@@ -249,29 +232,9 @@ async fn main() -> Result<()> {
 
     // Live mode.
     //
-    // Node B directly sends a new operation to node A without first sending an updated announcement.
-    let operation_b = tx!(node_b.store, {
-        let log_id = LogId::digest(topic.as_bytes());
-
-        let operation = log_b.operation(b"we're in sync!", CustomExtensions { log_id });
-
-        <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-            &node_b.store,
-            &operation.hash,
-            &operation,
-            &log_id,
-        )
-        .await?;
-
-        AnyOperation {
-            hash: operation.hash,
-            header: operation
-                .header
-                .try_into()
-                .expect("shouldn't be an error in p2panda-core"),
-            body: operation.body,
-        }
-    });
+    // Node B directly sends a new operation to node A without first sending an updated
+    // announcement.
+    let operation_b = node_b.create_operation(topic, b"we're in sync!").await?;
 
     // Node A processes the new operation.
     println!(
