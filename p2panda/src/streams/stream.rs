@@ -109,11 +109,15 @@ pub(crate) async fn processed_stream<M>(
     pipeline: Pipeline,
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
+    custom_acked: Option<Acked>,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let acked = Acked::new(store.clone(), topic);
+    let acked = match custom_acked {
+        Some(cursor) => cursor,
+        None => Acked::new(store.clone(), topic),
+    };
 
     // Sync handle is used on the publisher and when importing from external streams.
     let sync_handle = Arc::new(sync_handle);
