@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use p2panda_core::{AnyHeader, Extensions, Hash, LogId, Operation};
 use tokio::sync::Mutex;
 
+/// Result of processing an operation with the [`OooBuffer`].
 #[derive(Debug)]
 pub enum OooResult<'a, E> {
     /// Operation is already in-order and doesn't need buffering.

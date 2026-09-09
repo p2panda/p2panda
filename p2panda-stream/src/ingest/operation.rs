@@ -13,6 +13,8 @@ use thiserror::Error;
 
 use crate::ingest::ooo::{OooBuffer, OooResult};
 
+/// Result of _ingesting_ an operation (validation, de-duplication, optional ooo-buffering and
+/// writing to store) using [`ingest_operation`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum IngestResult<E> {
     /// Validated and inserted operation into store.
