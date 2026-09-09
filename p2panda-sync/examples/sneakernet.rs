@@ -78,13 +78,13 @@ mod common;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use futures_util::StreamExt;
-use p2panda_core::logs::{LogHeights, LogRanges, compare_logs};
 use p2panda_core::traits::Provenance;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{ingest_operation, log_ranges};
+use p2panda_sync::api::{
+    LogHeights, compare_logs, ingest_operation, log_heights, log_ranges, topic_log_heights,
+};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -119,9 +119,6 @@ impl UsbStick {
 
 type LogId = Hash;
 
-// TODO: Find a place.
-pub type LogIds = BTreeMap<VerifyingKey, Vec<LogId>>;
-
 type Logs = HashMap<(VerifyingKey, LogId), Vec<AnyOperation>>;
 
 #[derive(Debug)]
@@ -147,12 +144,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_id_a = signing_key_a.verifying_key();
     let store_a = SqliteStore::temporary().await;
 
-    // TODO: We want a method on TopicStore to give us _all_ topics.
-    let mut topics_a = HashSet::<Topic>::new();
-
     for _ in 0..5 {
         let topic = Topic::random();
-        topics_a.insert(topic);
+        subscribe(&store_a, &signing_key_a, topic).await?;
 
         for op_i in 0..5 {
             let body = (op_i as usize).to_be_bytes();
@@ -165,11 +159,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut announcements: Vec<Announcement> = Vec::new();
     let mut operations: HashMap<Topic, Logs> = HashMap::new();
 
+    let topics_a =
+        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&store_a).await?;
+
+    // For every topic we want to export our announcement and all logs onto the USB stick.
     for topic in &topics_a {
-        let local_log_heights = get_topic_log_heights(&store_a, &topic).await?;
-        let remote_log_heights = LogHeights::default();
-        let diff = compare_logs(&local_log_heights, &remote_log_heights);
-        let mut operation_stream = log_ranges(&store_a, diff);
+        let local_log_heights = topic_log_heights(&store_a, topic).await?;
+        // Use default (empty) log heights for remote as we want to export everything.
+        let mut operation_stream = log_ranges(
+            &store_a,
+            compare_logs(&local_log_heights, &LogHeights::default()),
+        );
 
         if let Some(Ok(log)) = operation_stream.next().await {
             let operation = log.entry;
@@ -217,12 +217,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_id_b = signing_key_b.verifying_key();
     let store_b = SqliteStore::temporary().await;
 
-    let mut topics_b = HashSet::<Topic>::new();
-
     // B creates some data.
 
     let topic_only_b = Topic::random();
-    topics_b.insert(topic_only_b);
+    subscribe(&store_b, &signing_key_b, topic_only_b).await?;
 
     for op_i in 0..5 {
         let body = (op_i as usize).to_be_bytes();
@@ -231,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // B shares one topic with A.
     let topic_a_and_b = topics_a.iter().next().unwrap().clone();
-    topics_b.insert(topic_a_and_b);
+    subscribe(&store_b, &signing_key_b, topic_a_and_b).await?;
 
     for op_i in 0..2 {
         let body = (op_i as usize).to_be_bytes();
@@ -239,6 +237,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Import data.
+    let topics_b =
+        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&store_a).await?;
 
     {
         let stick = stick.0.lock().await;
@@ -257,16 +257,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let topic = announcement.topic;
             let their_log_heights = &announcement.log_heights;
             let our_log_heights = {
-                let logs: LogIds = store_b.resolve(&topic).await?;
-                get_log_heights(&store_b, &logs).await?
+                let logs = store_b.resolve(&topic).await?;
+                log_heights(&store_b, &logs).await?
             };
 
             // Determine the operations we need from the stick.
-            let diff: LogRanges<VerifyingKey, LogId> =
+            let diff =
                 // NOTE: we reverse the roles here, "their" and "our", because we are determining
                 // what they should "send" to us...not what we should send to them.
                 //
-                // The docs for `compare()` could maybe be updated to reflect this bidirectional
+                // The docs for `compare_logs()` could maybe be updated to reflect this bidirectional
                 // nature.
                 compare_logs(&their_log_heights, &our_log_heights);
 
@@ -304,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut operations: HashMap<Topic, Logs> = HashMap::new();
 
         for topic in topics_b {
-            let our_log_heights = get_topic_log_heights(&store_b, &topic).await?;
+            let our_log_heights = topic_log_heights(&store_b, &topic).await?;
 
             // Write out diff of operations others don't have yet.
 
@@ -317,8 +317,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_default()
             };
 
-            let diff = compare_logs(&our_log_heights, &their_log_heights);
-            let mut operation_stream = log_ranges(&store_a, diff);
+            let mut operation_stream =
+                log_ranges(&store_a, compare_logs(&our_log_heights, &their_log_heights));
 
             if let Some(Ok(log)) = operation_stream.next().await {
                 let operation = log.entry;
@@ -406,31 +406,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// TODO: Find a place.
-async fn get_topic_log_heights(
+async fn subscribe(
     store: &SqliteStore,
-    topic: &Topic,
-) -> Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
-    let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = get_log_heights(&store, &logs).await?;
-
-    Ok(log_heights)
-}
-
-// TODO: Find a place.
-async fn get_log_heights(
-    store: &SqliteStore,
-    logs: &LogIds,
-) -> Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
-    let mut result = BTreeMap::new();
-
-    for (verifying_key, log_ids) in logs {
-        let Some(log_heights) = store.get_log_heights(verifying_key, log_ids).await? else {
-            continue;
-        };
-
-        result.insert(*verifying_key, log_heights);
-    }
-
-    Ok(result)
+    signing_key: &SigningKey,
+    topic: Topic,
+) -> Result<(), SqliteError> {
+    store
+        .associate(
+            &topic,
+            &signing_key.verifying_key(),
+            &Hash::digest(topic.as_bytes()),
+        )
+        .await?;
+    Ok(())
 }

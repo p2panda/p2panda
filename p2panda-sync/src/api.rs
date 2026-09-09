@@ -87,7 +87,7 @@ where
     L: LogId,
     S: TopicStore<T, VerifyingKey, L> + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
 {
-    let logs: Logs<VerifyingKey, L> = store
+    let logs = store
         .resolve(topic)
         .await
         .map_err(|err| StoreError::TopicStore(err))?;
