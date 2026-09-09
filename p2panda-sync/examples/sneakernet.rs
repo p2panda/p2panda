@@ -73,6 +73,8 @@
 //! We probably also want to offer an API where we can query all known topics from the database,
 //! however this implies that you will sync over _everything_ you ever announced interested in,
 //! which is sometimes not desirable.
+mod common;
+
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use p2panda_core::logs::{LogHeights, LogRanges, compare};

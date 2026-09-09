@@ -28,6 +28,8 @@
 //! 4. Announcement messages should be signed.
 //! 5. Message framing might be required to allow sending larger messages for transports with
 //!    limited packet sizes.
+mod common;
+
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
