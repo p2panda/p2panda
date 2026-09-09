@@ -7,11 +7,15 @@ use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 #[cfg(feature = "ingest")]
-pub use p2panda_stream::ingest::ingest_operation;
+pub use p2panda_stream::ingest::{
+    IngestError, IngestResult, OooBuffer, OooResult, ingest_operation,
+};
 use thiserror::Error;
 
+/// Item delivered from a [`LogStream`].
 pub type LogEntry<L> = p2panda_store::logs::LogEntry<AnyOperation, L>;
 
+/// Stream of operations in a log range.
 pub type LogStream<L, E> = p2panda_store::logs::LogStream<AnyOperation, L, E>;
 
 /// Compute log heights of all passed author logs based on what is known in the local store.
