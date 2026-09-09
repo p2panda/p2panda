@@ -66,7 +66,7 @@ pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNu
 /// them to the remote. If both local and remote replicas do this then they will arrive at the
 /// same state. If pruned logs are being replicated and a range has been returned from this
 /// method, then it is expected only the remaining "frontier" will be replicated for each log.
-pub fn compare<A, L>(local: &LogHeights<A, L>, remote: &LogHeights<A, L>) -> LogRanges<A, L>
+pub fn compare_logs<A, L>(local: &LogHeights<A, L>, remote: &LogHeights<A, L>) -> LogRanges<A, L>
 where
     A: Author,
     L: LogId,
@@ -124,7 +124,7 @@ where
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::logs::compare;
+    use crate::logs::compare_logs;
 
     type Author = u8;
 
@@ -137,7 +137,7 @@ mod tests {
     fn both_empty() {
         let local: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
         let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -149,7 +149,7 @@ mod tests {
 
         let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(None, Some(5))));
@@ -164,7 +164,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&2), Some(&(None, Some(10))));
@@ -179,7 +179,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 10)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(Some(10), Some(20))));
@@ -193,7 +193,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 30)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -205,7 +205,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 20)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -217,7 +217,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&2), Some(&(None, Some(10))));
@@ -234,7 +234,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&BOB).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(None, Some(5))));

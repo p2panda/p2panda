@@ -78,7 +78,7 @@ mod common;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use futures_util::StreamExt;
-use p2panda_core::logs::{LogHeights, LogRanges, compare};
+use p2panda_core::logs::{LogHeights, LogRanges, compare_logs};
 use p2panda_core::traits::Provenance;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
@@ -168,7 +168,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for topic in &topics_a {
         let local_log_heights = get_topic_log_heights(&store_a, &topic).await?;
         let remote_log_heights = LogHeights::default();
-        let diff = compare(&local_log_heights, &remote_log_heights);
+        let diff = compare_logs(&local_log_heights, &remote_log_heights);
         let mut operation_stream = log_ranges(&store_a, diff);
 
         if let Some(Ok(log)) = operation_stream.next().await {
@@ -268,7 +268,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //
                 // The docs for `compare()` could maybe be updated to reflect this bidirectional
                 // nature.
-                compare(&their_log_heights, &our_log_heights);
+                compare_logs(&their_log_heights, &our_log_heights);
 
             // Get all stick operations for the announcement topic.
             let mut operations = HashMap::new();
@@ -317,7 +317,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .unwrap_or_default()
             };
 
-            let diff = compare(&our_log_heights, &their_log_heights);
+            let diff = compare_logs(&our_log_heights, &their_log_heights);
             let mut operation_stream = log_ranges(&store_a, diff);
 
             if let Some(Ok(log)) = operation_stream.next().await {

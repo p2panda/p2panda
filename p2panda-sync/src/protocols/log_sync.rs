@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare};
+use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare_logs};
 use p2panda_core::{
     AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
     VerifyingKey,
@@ -150,7 +150,7 @@ where
                         return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                     };
 
-                    let remote_needs = compare(&local, &remote);
+                    let remote_needs = compare_logs(&local, &remote);
 
                     self.state = State::SendPreSync { remote_needs };
                     trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
