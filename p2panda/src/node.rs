@@ -37,7 +37,7 @@ use crate::spaces::{
     to_initial_members,
 };
 use crate::streams::{
-    Acked, EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
     StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
     event_stream, processed_stream, to_stream_event, to_system_event,
 };
@@ -330,12 +330,12 @@ impl Node {
         &self,
         topic: impl Into<Topic>,
         from: StreamFrom,
-        custom_acked: Option<Acked>,
+        custom_cursor_name: Option<String>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from_inner(topic, from, ProcessorHooksList::new(), custom_acked)
+        self.stream_from_inner(topic, from, ProcessorHooksList::new(), custom_cursor_name)
             .await
     }
 
@@ -345,7 +345,7 @@ impl Node {
         topic: impl Into<Topic>,
         from: StreamFrom,
         post_pipeline_hooks: ProcessorHooksList<Event>,
-        custom_acked: Option<Acked>,
+        custom_cursor_name: Option<String>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -377,7 +377,7 @@ impl Node {
             pipeline,
             self.events_tx.clone(),
             from,
-            custom_acked,
+            custom_cursor_name,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;

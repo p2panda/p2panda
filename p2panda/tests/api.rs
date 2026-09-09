@@ -310,7 +310,7 @@ mod api {
 mod event_replays {
     use p2panda::node::AckPolicy;
     use p2panda::operation::LogId;
-    use p2panda::streams::{Acked, StreamEvent, StreamFrom};
+    use p2panda::streams::{StreamEvent, StreamFrom};
     use p2panda_core::logs::LogHeights;
     use p2panda_core::test_utils::setup_logging;
     use p2panda_core::{Cursor, Topic};
@@ -505,7 +505,7 @@ mod event_replays {
     }
 
     #[tokio::test]
-    async fn replay_stream_from_custom_acked() {
+    async fn replay_stream_with_custom_cursor() {
         setup_logging();
 
         let topic = Topic::random();
@@ -538,13 +538,15 @@ mod event_replays {
         drop(tx);
         drop(rx);
 
-        let custom_acked = Acked::from_name(node.store(), topic, "custom-replay");
-
-        // Replay from the custom ack-tracker's frontier. Because this tracker has never acked
+        // Replay from the custom cursor name's frontier. Because this cursor has never acked
         // anything, it replays every message on the topic regardless of what the default stream
         // already acked above.
         let (_tx, mut rx) = node
-            .stream_from::<String>(topic, StreamFrom::Frontier, Some(custom_acked))
+            .stream_from::<String>(
+                topic,
+                StreamFrom::Frontier,
+                Some("custom-replay".to_string()),
+            )
             .await
             .unwrap();
 
