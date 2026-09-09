@@ -37,15 +37,56 @@ pub trait LogId: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'
 impl<T> LogId for T where T: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de> {}
 
 /// Sequence number of an entry in an append-only log.
+///
+/// ```text
+/// [0] <- [1] <- [2]
+///                ^
+///            log height
+/// ```
+///
+/// To express the state vector of a log we can use the _log height_ (also HEAD or "frontier") which
+/// is a `SeqNum`.
 pub type SeqNum = u32;
 
 /// Author logs mapping.
+///
+/// Each log is identified with `L` and grouped by author `A`.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log
+/// - "animals" log
+///
+/// Author "icebear":
+/// - "trees" log
+/// ```
 pub type Logs<A, L> = BTreeMap<A, Vec<L>>;
 
-/// Map of log heights grouped by author.
+/// Map of [`SeqNum`] log heights grouped by author `A`. Each log is identified with `L`.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log: 6
+/// - "animals" log: 12
+///
+/// Author "icebear":
+/// - "trees" log: 4
+/// ```
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
 
-/// Map of log ranges grouped by author.
+/// Map of log ranges, grouped by author `A` and each log identified with `L`.
+///
+/// Log ranges are used to express the _difference_ between two [`LogHeights`] state vectors. Use
+/// the [`compare_logs`] method to compute it.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log: [0..6]
+/// - "animals" log: [4..12]
+///
+/// Author "icebear":
+/// - "trees" log: [3..4]
+/// ```
 pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNum>)>>;
 
 /// Compare two sets of logs (local and remote) and calculate the "diff" representing ranges of
@@ -66,7 +107,7 @@ pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNu
 /// them to the remote. If both local and remote replicas do this then they will arrive at the
 /// same state. If pruned logs are being replicated and a range has been returned from this
 /// method, then it is expected only the remaining "frontier" will be replicated for each log.
-pub fn compare<A, L>(local: &LogHeights<A, L>, remote: &LogHeights<A, L>) -> LogRanges<A, L>
+pub fn compare_logs<A, L>(local: &LogHeights<A, L>, remote: &LogHeights<A, L>) -> LogRanges<A, L>
 where
     A: Author,
     L: LogId,
@@ -124,7 +165,7 @@ where
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::logs::compare;
+    use crate::logs::compare_logs;
 
     type Author = u8;
 
@@ -137,7 +178,7 @@ mod tests {
     fn both_empty() {
         let local: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
         let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -149,7 +190,7 @@ mod tests {
 
         let remote: BTreeMap<Author, BTreeMap<u32, u32>> = BTreeMap::new();
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(None, Some(5))));
@@ -164,7 +205,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&2), Some(&(None, Some(10))));
@@ -179,7 +220,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 10)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(Some(10), Some(20))));
@@ -193,7 +234,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 30)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -205,7 +246,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 20)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         assert!(result.is_empty());
     }
 
@@ -217,7 +258,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&ALICE).unwrap();
 
         assert_eq!(needs.get(&2), Some(&(None, Some(10))));
@@ -234,7 +275,7 @@ mod tests {
         let mut remote = BTreeMap::new();
         remote.insert(ALICE, BTreeMap::from([(1, 5)]));
 
-        let result = compare(&local, &remote);
+        let result = compare_logs(&local, &remote);
         let needs = result.get(&BOB).unwrap();
 
         assert_eq!(needs.get(&1), Some(&(None, Some(5))));

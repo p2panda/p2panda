@@ -7,7 +7,7 @@ use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, Topic, VerifyingKey};
 use p2panda_net::sync::SyncHandle;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{StreamItem, log_ranges};
+use p2panda_sync::api::{LogEntry, log_ranges};
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -73,7 +73,7 @@ where
     let mut operations = log_ranges(store, ranges);
 
     while let Some(result) = operations.next().await {
-        let StreamItem {
+        let LogEntry {
             entry: operation, ..
         } = result?;
 

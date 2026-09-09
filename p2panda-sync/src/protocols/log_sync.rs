@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare};
+use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare_logs};
 use p2panda_core::{
     AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
     VerifyingKey,
@@ -17,7 +17,7 @@ use tokio::select;
 use tokio::sync::broadcast;
 use tracing::{Instrument, debug, trace};
 
-use crate::api::{StreamItem, log_heights, log_ranges};
+use crate::api::{LogEntry, log_heights, log_ranges};
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
 
@@ -150,7 +150,7 @@ where
                         return Err(LogSyncError::UnexpectedMessage(message.to_string()));
                     };
 
-                    let remote_needs = compare(&local, &remote);
+                    let remote_needs = compare_logs(&local, &remote);
 
                     self.state = State::SendPreSync { remote_needs };
                     trace!(parent: &state_machine_span, state = ?self.state, "Updated state");
@@ -369,7 +369,7 @@ where
                                     continue;
                                 };
 
-                                let StreamItem { entry: operation, bytes: header_bytes, .. } = result.map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
+                                let LogEntry { entry: operation, bytes: header_bytes, .. } = result.map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                                 let header = operation.header;
                                 let body = operation.body;
