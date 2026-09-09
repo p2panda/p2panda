@@ -78,7 +78,6 @@ mod common;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
-use p2panda_core::test_utils::TestLog;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -87,6 +86,8 @@ use p2panda_store::{SqliteError, SqliteStore, tx};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+use crate::common::create_operation;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Announcement {
@@ -147,33 +148,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: We want a method on TopicStore to give us _all_ topics.
     let mut topics_a = HashSet::<Topic>::new();
 
-    tx!(store_a, {
-        for _ in 0..5 {
-            let topic = Topic::random();
-            topics_a.insert(topic);
+    for _ in 0..5 {
+        let topic = Topic::random();
+        topics_a.insert(topic);
 
-            let log_id = LogId::digest(topic.as_bytes());
-            let log_a = TestLog::from_signing_key(signing_key_a.clone());
-
-            for op_i in 0..5 {
-                let body = (op_i as usize).to_be_bytes();
-                let operation = log_a.operation(&body, CustomExtensions { log_id });
-
-                <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                    &store_a,
-                    &operation.hash,
-                    &operation,
-                    &log_id,
-                )
-                .await?;
-            }
-
-            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                &store_a, &topic, &node_id_a, &log_id,
-            )
-            .await?;
+        for op_i in 0..5 {
+            let body = (op_i as usize).to_be_bytes();
+            create_operation(&store_a, &signing_key_a, topic, &body).await?;
         }
-    });
+    }
 
     // Export data.
 
@@ -248,61 +231,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let topic_only_b = Topic::random();
     topics_b.insert(topic_only_b);
 
-    tx!(store_b, {
-        let log_id = LogId::digest(topic_only_b.as_bytes());
-        let log_b = TestLog::from_signing_key(signing_key_b.clone());
-
-        for op_i in 0..5 {
-            let body = (op_i as usize).to_be_bytes();
-            let operation = log_b.operation(&body, CustomExtensions { log_id });
-
-            <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                &store_b,
-                &operation.hash,
-                &operation,
-                &log_id,
-            )
-            .await?;
-        }
-
-        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-            &store_b,
-            &topic_only_b,
-            &node_id_b,
-            &log_id,
-        )
-        .await?;
-    });
+    for op_i in 0..5 {
+        let body = (op_i as usize).to_be_bytes();
+        create_operation(&store_b, &signing_key_b, topic_only_b, &body).await?;
+    }
 
     // B shares one topic with A.
     let topic_a_and_b = topics_a.iter().next().unwrap().clone();
     topics_b.insert(topic_a_and_b);
 
-    tx!(store_b, {
-        let log_id = LogId::digest(topic_a_and_b.as_bytes());
-        let log_b = TestLog::from_signing_key(signing_key_b.clone());
-
-        for op_i in 0..2 {
-            let body = (op_i as usize).to_be_bytes();
-            let operation = log_b.operation(&body, CustomExtensions { log_id });
-
-            <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                &store_b,
-                &operation.hash,
-                &operation,
-                &log_id,
-            )
-            .await?;
-        }
-
-        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-            &store_b,
-            &topic_a_and_b,
-            &node_id_b,
-            &log_id,
-        )
-        .await?;
-    });
+    for op_i in 0..2 {
+        let body = (op_i as usize).to_be_bytes();
+        create_operation(&store_b, &signing_key_b, topic_a_and_b, &body).await?;
+    }
 
     // Import data.
 
