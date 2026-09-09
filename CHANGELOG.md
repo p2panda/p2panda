@@ -43,6 +43,7 @@ Highlights are marked with a pancake 🥞
 - sync: `api` module with useful methods to hack your own sync protocols [#1393](https://github.com/p2panda/p2panda/pull/1393)
 - sync: Method for streaming log ranges from the store [#1393](https://github.com/p2panda/p2panda/pull/1393)
 - sync: Method to resolve log heights from topic [#1405](https://github.com/p2panda/p2panda/pull/1405)
+- sync: Re-export -stream ingest_operation in `api` module [#1406](https://github.com/p2panda/p2panda/pull/1406)
 
 ### Changed
 
