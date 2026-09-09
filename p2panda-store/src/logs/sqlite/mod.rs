@@ -14,7 +14,7 @@ use sqlx::{QueryBuilder, query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
-use crate::logs::traits::{LogStream, LogEntry};
+use crate::logs::traits::{LogEntry, LogStream};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 

@@ -12,7 +12,7 @@ pub type LogId = Hash;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CustomExtensions {
-    log_id: LogId,
+    pub log_id: LogId,
 }
 
 /// Create a signed operation, append it to log and insert into the store.

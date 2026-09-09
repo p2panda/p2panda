@@ -9,4 +9,4 @@
 mod sqlite;
 mod traits;
 
-pub use traits::{LogStream, LogEntry, LogStore};
+pub use traits::{LogEntry, LogStore, LogStream};

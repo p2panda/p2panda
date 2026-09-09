@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Sync over "broadcast" transports with mesh-network topologies.
+//! Sync over broadcast-based transports with mesh network topologies.
 //!
-//! This example shows how one could integrate the p2panda sync protocol into any more
-//! broadcast-like transport or mesh-network topology, for example on top of LoRa or BLE
-//! Advertisements.
+//! This example shows how a sync protocol can be built for any broadcast-like transport or
+//! mesh network topology using p2panda append-only logs and helper methods. Such a sync protocol
+//! might run on top of LoRa or BLE Advertisements, for example.
 //!
-//! ## Mesh-Network
+//! ## Mesh Network
 //!
-//! The approach taken here is a simple "flooding" mesh protocol (some people might call this a
-//! routing technique) where each node "repeats" any received message. With the help of checking and
-//! storing every message's hash digest in a ring buffer when repeating we make sure to avoid loops.
+//! The message delivery approach taken here is a simple flooding mesh protocol, without any routing
+//! logic, where each node "repeats" every message it receives. The hash digest of each message is
+//! stored in a ring buffer after each broadcast. Received messages are checked against this buffer
+//! and only broadcast if they have not been sent within recorded history. This deduplication logic
+//! helps to avoid feedback loops with neighbouring nodes.
 //!
-//! ## Possible improvements
+//! ## Possible Improvements
 //!
 //! 1. This example can easily be extended with a more robust store and forward approach where every
 //!    node keeps a cache of the last n operations around, independent of if they are interested in
@@ -30,22 +32,20 @@
 //!    limited packet sizes.
 mod common;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{LogEntry, LogStream, ingest_operation, log_heights, log_ranges};
+use p2panda_store::{SqliteStore, Transaction};
+use p2panda_sync::api::{LogEntry, compare_logs, ingest_operation, log_ranges, topic_log_heights};
 use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
-use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock, mpsc};
 
-use crate::common::create_operation;
+use crate::common::{CustomExtensions, LogId, create_operation};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -69,12 +69,12 @@ async fn main() -> Result<()> {
         icebear.id().fmt_short()
     );
 
-    // Publishing new operations will also automatically subscribe to the topic.
+    // Publish new operations and automatically subscribe to the topic.
     panda.publish(topic, b"Hello!").await?;
 
-    // Expresses interest in a topic and will include it in announcements from now on.
-    racoon.subscribe(topic).await;
-    icebear.subscribe(topic).await;
+    // Express interest in a topic and include it in any sync announcements from now on.
+    racoon.subscribe(topic).await?;
+    icebear.subscribe(topic).await?;
 
     // Finally the nodes are reachable and can receive each other's messages.
     panda.connect(&racoon).await;
@@ -205,17 +205,7 @@ impl Digest<Hash> for Message {
     }
 }
 
-type LogId = Hash;
-
-type LogIds = BTreeMap<VerifyingKey, Vec<LogId>>;
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct CustomExtensions {
-    log_id: LogId,
-}
-
 struct Node {
-    topics: Arc<RwLock<HashSet<Topic>>>,
     signing_key: SigningKey,
     store: SqliteStore,
     radio: Radio,
@@ -226,13 +216,11 @@ impl Node {
     pub async fn new() -> Self {
         let signing_key = SigningKey::generate();
         let store = SqliteStore::temporary().await;
-        let topics = Arc::new(RwLock::new(HashSet::new()));
 
         let (radio, mut antenna) = Radio::new();
         let mesh = Mesh::new(radio.clone());
 
         {
-            let topics = topics.clone();
             let store = store.clone();
             let node_id = signing_key.verifying_key();
             let mesh = mesh.clone();
@@ -247,8 +235,18 @@ impl Node {
                         continue;
                     }
 
-                    // Only look at messages for topics we are interested in.
-                    let my_topics = topics.read().await;
+                    let permit = store.begin().await.unwrap();
+
+                    // We only want to process announcement messages for topics we're interested
+                    // in. Here we retrieve all topics we have ever registered on the store to
+                    // understand our interests.
+                    let my_topics =
+                        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&store)
+                            .await
+                            .unwrap();
+
+                    store.commit(permit).await.unwrap();
+
                     let topic = match &message {
                         Message::Operation(topic, _) => topic,
                         Message::Announcement(announcement) => &announcement.topic,
@@ -265,7 +263,7 @@ impl Node {
 
                                 // TODO: Clone can be removed after OooBuffer PR was merged.
                                 let Ok(operation) =
-                                    Operation::<CustomExtensions>::try_from(operation.clone())
+                                    Operation::<CustomExtensions>::try_from(operation.to_owned())
                                 else {
                                     // Custom header extensions did not match expected format.
                                     continue;
@@ -287,15 +285,12 @@ impl Node {
                                 }
                             }
                             Message::Announcement(announcement) => {
-                                let Ok(mut operations) = compute_diff(
+                                let our_log_heights =
+                                    topic_log_heights(&store, topic).await.unwrap();
+                                let mut operations = log_ranges(
                                     &store,
-                                    announcement.topic,
-                                    &announcement.log_heights,
-                                )
-                                .await
-                                else {
-                                    continue;
-                                };
+                                    compare_logs(&our_log_heights, &announcement.log_heights),
+                                );
 
                                 while let Some(result) = operations.next().await {
                                     let LogEntry {
@@ -324,7 +319,6 @@ impl Node {
         }
 
         Self {
-            topics,
             signing_key,
             store,
             radio,
@@ -347,15 +341,17 @@ impl Node {
     }
 
     pub async fn announce(&self) -> Result<()> {
-        let topics = self.topics.read().await;
+        let permit = self.store.begin().await?;
+        let topics = <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&self.store)
+            .await
+            .unwrap();
+        self.store.commit(permit).await?;
 
         for topic in topics.iter() {
-            let all_log_heights = get_topic_log_heights(&self.store, &topic).await?;
-
             let announcement = Announcement {
                 topic: *topic,
                 node_id: self.id(),
-                log_heights: all_log_heights,
+                log_heights: topic_log_heights(&self.store, topic).await?,
             };
 
             println!(
@@ -370,13 +366,26 @@ impl Node {
         Ok(())
     }
 
-    pub async fn subscribe(&self, topic: Topic) {
-        let mut topics = self.topics.write().await;
-        topics.insert(topic);
+    pub async fn subscribe(&self, topic: Topic) -> Result<()> {
+        let permit = self.store.begin().await?;
+
+        // As we are deferring to the TopicStore to compute our topics of interest, subscribing
+        // means associating a log (in this case our own) with the topic we wish to subscribe to.
+        self.store
+            .associate(
+                &topic,
+                &self.signing_key.verifying_key(),
+                &Hash::digest(topic.as_bytes()),
+            )
+            .await?;
+
+        self.store.commit(permit).await?;
+
+        Ok(())
     }
 
     pub async fn publish(&self, topic: Topic, body: &[u8]) -> Result<()> {
-        self.subscribe(topic).await;
+        self.subscribe(topic).await?;
 
         let operation = create_operation(&self.store, &self.signing_key, topic, body).await?;
 
@@ -390,26 +399,4 @@ impl Node {
 
         Ok(())
     }
-}
-
-// TODO: A lot of methods we probably want to move somewhere else:
-
-async fn compute_diff(
-    store: &SqliteStore,
-    topic: Topic,
-    their_log_heights: &LogHeights<VerifyingKey, LogId>,
-) -> Result<LogStream<LogId, SqliteError>> {
-    let our_log_heights = get_topic_log_heights(&store, &topic).await?;
-    let diff = compare_logs(&our_log_heights, &their_log_heights);
-    Ok(log_ranges(store, diff))
-}
-
-async fn get_topic_log_heights(
-    store: &SqliteStore,
-    topic: &Topic,
-) -> std::result::Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
-    let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = log_heights(store, &logs).await?;
-
-    Ok(log_heights)
 }
