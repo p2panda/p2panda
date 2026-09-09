@@ -5,10 +5,10 @@ use std::error::Error;
 
 use futures_util::stream::BoxStream;
 
-pub(crate) type LogStream<T, L, E> = BoxStream<'static, Result<StreamItem<T, L>, E>>;
+pub type LogStream<T, L, E> = BoxStream<'static, Result<LogEntry<T, L>, E>>;
 
 #[derive(Debug, Clone)]
-pub struct StreamItem<T, L> {
+pub struct LogEntry<T, L> {
     pub entry: T,
     pub log_id: L,
     pub bytes: Vec<u8>,

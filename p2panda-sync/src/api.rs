@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use futures_util::stream::{self, BoxStream};
+use futures_util::stream;
 use futures_util::{StreamExt, future};
 use p2panda_core::logs::{LogHeights, LogRanges, Logs};
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
-pub use p2panda_store::logs::StreamItem;
 use p2panda_store::topics::TopicStore;
 #[cfg(feature = "ingest")]
 pub use p2panda_stream::ingest::ingest_operation;
 use thiserror::Error;
 
-/// Stream of `(AnyOperation, LogId, HeaderBytes)`.
-pub type OperationStream<L, E> = BoxStream<'static, Result<StreamItem<AnyOperation, L>, E>>;
+pub type LogEntry<L> = p2panda_store::logs::LogEntry<AnyOperation, L>;
+
+pub type LogStream<L, E> = p2panda_store::logs::LogStream<AnyOperation, L, E>;
 
 /// Compute log heights of all passed author logs based on what is known in the local store.
 pub async fn log_heights<L, S>(
@@ -38,13 +38,10 @@ where
 ///
 /// This is a memory efficient query with only one stream item staying in memory at a time. If any
 /// error occurs when fetching items the stream will return the error then immediately close.
-pub fn log_ranges<S, L>(
-    store: &S,
-    ranges: LogRanges<VerifyingKey, L>,
-) -> OperationStream<L, S::Error>
+pub fn log_ranges<L, S>(store: &S, ranges: LogRanges<VerifyingKey, L>) -> LogStream<L, S::Error>
 where
-    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
     L: LogId + Send + 'static,
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> + Clone + Send + 'static,
 {
     let mut flattened_ranges = vec![];
     for (author, log_heights) in ranges {
@@ -81,7 +78,7 @@ where
 pub async fn topic_log_heights<L, S, T>(
     store: &S,
     topic: &T,
-) -> Result<LogHeights<VerifyingKey, L>, TopicLogHeightsError<L, S, T>>
+) -> Result<LogHeights<VerifyingKey, L>, StoreError<L, S, T>>
 where
     L: LogId,
     S: TopicStore<T, VerifyingKey, L> + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
@@ -89,16 +86,17 @@ where
     let logs: Logs<VerifyingKey, L> = store
         .resolve(topic)
         .await
-        .map_err(|err| TopicLogHeightsError::TopicStore(err))?;
+        .map_err(|err| StoreError::TopicStore(err))?;
     let log_heights = log_heights(store, &logs)
         .await
-        .map_err(|err| TopicLogHeightsError::LogStore(err))?;
+        .map_err(|err| StoreError::LogStore(err))?;
 
     Ok(log_heights)
 }
 
+/// Critical store failure.
 #[derive(Debug, Error)]
-pub enum TopicLogHeightsError<L, S, T>
+pub enum StoreError<L, S, T>
 where
     L: LogId,
     S: TopicStore<T, VerifyingKey, L> + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,

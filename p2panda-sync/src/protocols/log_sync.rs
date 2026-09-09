@@ -17,7 +17,7 @@ use tokio::select;
 use tokio::sync::broadcast;
 use tracing::{Instrument, debug, trace};
 
-use crate::api::{StreamItem, log_heights, log_ranges};
+use crate::api::{LogEntry, log_heights, log_ranges};
 use crate::dedup::{DEFAULT_BUFFER_CAPACITY, DeduplicationBuffer};
 use crate::traits::Protocol;
 
@@ -369,7 +369,7 @@ where
                                     continue;
                                 };
 
-                                let StreamItem { entry: operation, bytes: header_bytes, .. } = result.map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
+                                let LogEntry { entry: operation, bytes: header_bytes, .. } = result.map_err(|err| LogSyncError::LogStore(format!("{err}")))?;
 
                                 let header = operation.header;
                                 let body = operation.body;
