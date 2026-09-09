@@ -98,6 +98,18 @@ where
         }
     }
 
+    pub async fn len(&self) -> usize {
+        self.buffer.lock().await.len()
+    }
+
+    pub async fn is_empty(&self) -> bool {
+        self.buffer.lock().await.is_empty()
+    }
+
+    pub async fn clear(&self) {
+        self.buffer.lock().await.clear();
+    }
+
     // TODO: Use AnyOperation when OperationStore is ready.
     pub async fn process<'a>(
         &self,
@@ -315,17 +327,14 @@ where
         result
     }
 
-    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.buffer.len()
     }
 
-    #[allow(unused)]
     pub fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 
-    #[allow(unused)]
     pub fn clear(&mut self) {
         self.buffer.clear()
     }
