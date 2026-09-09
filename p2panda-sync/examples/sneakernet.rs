@@ -84,7 +84,7 @@ use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, Ver
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{StreamItem, ingest_operation, log_ranges};
+use p2panda_sync::api::{ingest_operation, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -171,14 +171,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let diff = compare(&local_log_heights, &remote_log_heights);
         let mut operation_stream = log_ranges(&store_a, diff);
 
-        if let Some(result) = operation_stream.next().await {
-            let StreamItem {
-                entry: operation,
-                log_id,
-                ..
-            } = result?;
+        if let Some(Ok(log)) = operation_stream.next().await {
+            let operation = log.entry;
             let logs = operations.entry(*topic).or_default();
-            logs.entry((operation.author(), log_id))
+            logs.entry((operation.author(), log.log_id))
                 .or_default()
                 .push(operation);
         }
@@ -324,18 +320,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let diff = compare(&our_log_heights, &their_log_heights);
             let mut operation_stream = log_ranges(&store_a, diff);
 
-            if let Some(result) = operation_stream.next().await {
-                let StreamItem {
-                    entry: operation,
-                    log_id,
-                    ..
-                } = result?;
+            if let Some(Ok(log)) = operation_stream.next().await {
+                let operation = log.entry;
                 let logs = operations.entry(topic).or_default();
 
-                // NOTE: Appending only the "latest" operations to the log allows us to
-                // build some ring-buffer logic here where we would drop old operations when
-                // running full.
-                logs.entry((operation.author(), log_id))
+                // NOTE: Appending only the "latest" operations to the log allows us to build some
+                // ring-buffer logic here where we would drop old operations when running full.
+                logs.entry((operation.author(), log.log_id))
                     .or_default()
                     .push(operation);
             }
