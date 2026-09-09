@@ -23,9 +23,13 @@ workspace = true
 
 [features]
 default = []
+ingest = [
+  "dep:p2panda-stream",
+]
 test_utils = [
   "dep:rand",
   "dep:tracing-subscriber",
+  "p2panda-core/test_utils",
   "p2panda-store/test_utils",
 ]
 
@@ -34,6 +38,7 @@ futures-channel = { workspace = true }
 futures-util = { workspace = true, default-features = true, features = ["sink"] }
 p2panda-core = { workspace = true, default-features = true }
 p2panda-store = { workspace = true, default-features = true }
+p2panda-stream = { workspace = true, optional = true, default-features = false, features = ["ingest"] }
 pin-project-lite = "0.2.16"
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -44,9 +49,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
-p2panda-store = { workspace = true, default-features = true, features = ["test_utils"] }
-p2panda-core = { workspace = true, default-features = true, features = ["test_utils"] }
-rand = { workspace = true }
+p2panda-sync = { path = ".", features = ["test_utils"] }
+test-log = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["time", "rt", "macros", "sync"] }
-test-log.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }

@@ -5,10 +5,11 @@ use futures_util::{StreamExt, future};
 use p2panda_core::logs::{LogHeights, LogRanges, Logs};
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
-use p2panda_store::topics::TopicStore;
-use thiserror::Error;
-
 pub use p2panda_store::logs::StreamItem;
+use p2panda_store::topics::TopicStore;
+#[cfg(feature = "ingest")]
+pub use p2panda_stream::ingest::ingest_operation;
+use thiserror::Error;
 
 /// Stream of `(AnyOperation, LogId, HeaderBytes)`.
 pub type OperationStream<L, E> = BoxStream<'static, Result<StreamItem<AnyOperation, L>, E>>;
