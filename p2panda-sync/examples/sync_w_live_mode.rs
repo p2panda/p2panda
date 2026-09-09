@@ -18,10 +18,9 @@ use futures_util::stream::StreamExt;
 use p2panda_core::logs::{LogHeights, compare};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, tx};
-use p2panda_sync::api::{OperationStream, StreamItem, log_heights, log_ranges};
+use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::{OperationStream, StreamItem, ingest_operation, log_heights, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 
@@ -118,27 +117,26 @@ impl Node {
 
     /// Insert an operation into the store and associate the log with the given topic.
     async fn ingest_operation(&self, topic: Topic, operation: AnyOperation) -> Result<()> {
-        let log_id = LogId::digest(topic.as_bytes());
+        // 1. Check if custom header extensions matches expected format.
+        // TODO: Clone can be removed after OooBuffer PR was merged.
+        let operation = Operation::<CustomExtensions>::try_from(operation.clone())?;
 
-        tx!(self.store, {
-            let operation: Operation<CustomExtensions> = operation.clone().try_into()?;
+        // 2. Check if claimed log id matches topic.
+        let log_id_check = LogId::digest(topic.as_bytes());
+        if log_id_check != operation.header.extensions.log_id {
+            return Err("log id does not match topic digest".into());
+        }
 
-            <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                &self.store,
-                &operation.hash,
-                &operation,
-                &log_id,
-            )
-            .await?;
-
-            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                &self.store,
-                &topic,
-                &self.id(),
-                &log_id,
-            )
-            .await?;
-        });
+        // 3. Validate and store operation in database.
+        ingest_operation(
+            &self.store,
+            None,
+            &operation,
+            &operation.header.extensions.log_id,
+            &topic,
+            false,
+        )
+        .await?;
 
         Ok(())
     }

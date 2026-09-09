@@ -49,6 +49,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
-p2panda-sync = { path = ".", features = ["test_utils"] }
+p2panda-sync = { path = ".", features = ["test_utils", "ingest"] }
 test-log = { workspace = true }
 tokio = { workspace = true, default-features = true, features = ["time", "rt", "macros", "sync"] }
