@@ -10,6 +10,8 @@
 //! To keep the example simple, messages (in the forms of announcements and operations) are passed
 //! directly between nodes. In a real-world context the messages would be sent over an underlying
 //! connection of some kind (e.g. iroh's QUIC streams).
+mod common;
+
 use std::collections::BTreeMap;
 
 use p2panda_core::logs::{LogHeights, LogRanges, compare};
