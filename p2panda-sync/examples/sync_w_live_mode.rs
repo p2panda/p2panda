@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 type LogId = Hash;
+
 type LogIds = BTreeMap<VerifyingKey, Vec<LogId>>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
