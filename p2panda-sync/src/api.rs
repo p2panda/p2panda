@@ -2,7 +2,7 @@
 
 use futures_util::stream;
 use futures_util::{StreamExt, future};
-use p2panda_core::logs::{LogHeights, LogRanges, Logs};
+pub use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare_logs};
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
