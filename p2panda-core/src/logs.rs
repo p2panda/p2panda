@@ -37,15 +37,56 @@ pub trait LogId: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'
 impl<T> LogId for T where T: Clone + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de> {}
 
 /// Sequence number of an entry in an append-only log.
+///
+/// ```text
+/// [0] <- [1] <- [2]
+///                ^
+///            log height
+/// ```
+///
+/// To express the state vector of a log we can use the _log height_ (also HEAD or "frontier") which
+/// is a `SeqNum`.
 pub type SeqNum = u32;
 
 /// Author logs mapping.
+///
+/// Each log is identified with `L` and grouped by author `A`.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log
+/// - "animals" log
+///
+/// Author "icebear":
+/// - "trees" log
+/// ```
 pub type Logs<A, L> = BTreeMap<A, Vec<L>>;
 
-/// Map of log heights grouped by author.
+/// Map of [`SeqNum`] log heights grouped by author `A`. Each log is identified with `L`.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log: 6
+/// - "animals" log: 12
+///
+/// Author "icebear":
+/// - "trees" log: 4
+/// ```
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
 
-/// Map of log ranges grouped by author.
+/// Map of log ranges, grouped by author `A` and each log identified with `L`.
+///
+/// Log ranges are used to express the _difference_ between two [`LogHeights`] state vectors. Use
+/// the [`compare_logs`] method to compute it.
+///
+/// ```text
+/// Author "panda":
+/// - "trees" log: [0..6]
+/// - "animals" log: [4..12]
+///
+/// Author "icebear":
+/// - "trees" log: [3..4]
+/// ```
 pub type LogRanges<A, L> = BTreeMap<A, BTreeMap<L, (Option<SeqNum>, Option<SeqNum>)>>;
 
 /// Compare two sets of logs (local and remote) and calculate the "diff" representing ranges of
