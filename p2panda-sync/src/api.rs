@@ -5,10 +5,12 @@ use futures_util::{StreamExt, future};
 use p2panda_core::logs::{LogHeights, LogRanges, Logs};
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
 use p2panda_store::logs::LogStore;
+use p2panda_store::topics::TopicStore;
+use thiserror::Error;
 
 pub use p2panda_store::logs::StreamItem;
 
-/// Stream of `(AnyOperation, LogId, HeaderBytes)`  
+/// Stream of `(AnyOperation, LogId, HeaderBytes)`.
 pub type OperationStream<L, E> = BoxStream<'static, Result<StreamItem<AnyOperation, L>, E>>;
 
 /// Compute log heights of all passed author logs based on what is known in the local store.
@@ -72,4 +74,37 @@ where
         });
 
     Box::pin(stream)
+}
+
+/// Compute log heights for the given topic based on what is known in the local store.
+pub async fn topic_log_heights<L, S, T>(
+    store: &S,
+    topic: &T,
+) -> Result<LogHeights<VerifyingKey, L>, TopicLogHeightsError<L, S, T>>
+where
+    L: LogId,
+    S: TopicStore<T, VerifyingKey, L> + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
+{
+    let logs: Logs<VerifyingKey, L> = store
+        .resolve(topic)
+        .await
+        .map_err(|err| TopicLogHeightsError::TopicStore(err))?;
+    let log_heights = log_heights(store, &logs)
+        .await
+        .map_err(|err| TopicLogHeightsError::LogStore(err))?;
+
+    Ok(log_heights)
+}
+
+#[derive(Debug, Error)]
+pub enum TopicLogHeightsError<L, S, T>
+where
+    L: LogId,
+    S: TopicStore<T, VerifyingKey, L> + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
+{
+    #[error(transparent)]
+    LogStore(<S as LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>>::Error),
+
+    #[error(transparent)]
+    TopicStore(<S as TopicStore<T, VerifyingKey, L>>::Error),
 }
