@@ -30,16 +30,15 @@
 //!    limited packet sizes.
 mod common;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_store::SqliteStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{LogEntry, LogStream, ingest_operation, log_heights, log_ranges};
+use p2panda_sync::api::{LogEntry, compare_logs, ingest_operation, log_ranges, topic_log_heights};
 use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
@@ -73,8 +72,8 @@ async fn main() -> Result<()> {
     panda.publish(topic, b"Hello!").await?;
 
     // Expresses interest in a topic and will include it in announcements from now on.
-    racoon.subscribe(topic).await;
-    icebear.subscribe(topic).await;
+    racoon.subscribe(topic).await?;
+    icebear.subscribe(topic).await?;
 
     // Finally the nodes are reachable and can receive each other's messages.
     panda.connect(&racoon).await;
@@ -207,15 +206,12 @@ impl Digest<Hash> for Message {
 
 type LogId = Hash;
 
-type LogIds = BTreeMap<VerifyingKey, Vec<LogId>>;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CustomExtensions {
     log_id: LogId,
 }
 
 struct Node {
-    topics: Arc<RwLock<HashSet<Topic>>>,
     signing_key: SigningKey,
     store: SqliteStore,
     radio: Radio,
@@ -226,13 +222,11 @@ impl Node {
     pub async fn new() -> Self {
         let signing_key = SigningKey::generate();
         let store = SqliteStore::temporary().await;
-        let topics = Arc::new(RwLock::new(HashSet::new()));
 
         let (radio, mut antenna) = Radio::new();
         let mesh = Mesh::new(radio.clone());
 
         {
-            let topics = topics.clone();
             let store = store.clone();
             let node_id = signing_key.verifying_key();
             let mesh = mesh.clone();
@@ -247,8 +241,13 @@ impl Node {
                         continue;
                     }
 
-                    // Only look at messages for topics we are interested in.
-                    let my_topics = topics.read().await;
+                    // We only want to process announcement messages for topics we're interested
+                    // in. Here we retrieve all topics we have ever registered on the store to
+                    // understand our interests.
+                    let my_topics =
+                        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&store)
+                            .await
+                            .unwrap();
                     let topic = match &message {
                         Message::Operation(topic, _) => topic,
                         Message::Announcement(announcement) => &announcement.topic,
@@ -265,7 +264,7 @@ impl Node {
 
                                 // TODO: Clone can be removed after OooBuffer PR was merged.
                                 let Ok(operation) =
-                                    Operation::<CustomExtensions>::try_from(operation.clone())
+                                    Operation::<CustomExtensions>::try_from(operation.to_owned())
                                 else {
                                     // Custom header extensions did not match expected format.
                                     continue;
@@ -287,15 +286,12 @@ impl Node {
                                 }
                             }
                             Message::Announcement(announcement) => {
-                                let Ok(mut operations) = compute_diff(
+                                let our_log_heights =
+                                    topic_log_heights(&store, topic).await.unwrap();
+                                let mut operations = log_ranges(
                                     &store,
-                                    announcement.topic,
-                                    &announcement.log_heights,
-                                )
-                                .await
-                                else {
-                                    continue;
-                                };
+                                    compare_logs(&our_log_heights, &announcement.log_heights),
+                                );
 
                                 while let Some(result) = operations.next().await {
                                     let LogEntry {
@@ -324,7 +320,6 @@ impl Node {
         }
 
         Self {
-            topics,
             signing_key,
             store,
             radio,
@@ -347,15 +342,15 @@ impl Node {
     }
 
     pub async fn announce(&self) -> Result<()> {
-        let topics = self.topics.read().await;
+        let topics = <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&self.store)
+            .await
+            .unwrap();
 
         for topic in topics.iter() {
-            let all_log_heights = get_topic_log_heights(&self.store, &topic).await?;
-
             let announcement = Announcement {
                 topic: *topic,
                 node_id: self.id(),
-                log_heights: all_log_heights,
+                log_heights: topic_log_heights(&self.store, topic).await?,
             };
 
             println!(
@@ -370,13 +365,21 @@ impl Node {
         Ok(())
     }
 
-    pub async fn subscribe(&self, topic: Topic) {
-        let mut topics = self.topics.write().await;
-        topics.insert(topic);
+    pub async fn subscribe(&self, topic: Topic) -> Result<()> {
+        // As we are deferring to the TopicStore to compute our topics of interest, subscribing
+        // means associating a log (in this case our own) with the topic we with to subscribe to.
+        self.store
+            .associate(
+                &topic,
+                &self.signing_key.verifying_key(),
+                &Hash::digest(topic.as_bytes()),
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn publish(&self, topic: Topic, body: &[u8]) -> Result<()> {
-        self.subscribe(topic).await;
+        self.subscribe(topic).await?;
 
         let operation = create_operation(&self.store, &self.signing_key, topic, body).await?;
 
@@ -390,26 +393,4 @@ impl Node {
 
         Ok(())
     }
-}
-
-// TODO: A lot of methods we probably want to move somewhere else:
-
-async fn compute_diff(
-    store: &SqliteStore,
-    topic: Topic,
-    their_log_heights: &LogHeights<VerifyingKey, LogId>,
-) -> Result<LogStream<LogId, SqliteError>> {
-    let our_log_heights = get_topic_log_heights(&store, &topic).await?;
-    let diff = compare_logs(&our_log_heights, &their_log_heights);
-    Ok(log_ranges(store, diff))
-}
-
-async fn get_topic_log_heights(
-    store: &SqliteStore,
-    topic: &Topic,
-) -> std::result::Result<LogHeights<VerifyingKey, LogId>, SqliteError> {
-    let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = log_heights(store, &logs).await?;
-
-    Ok(log_heights)
 }

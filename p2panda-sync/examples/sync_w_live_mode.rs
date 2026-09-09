@@ -15,20 +15,18 @@ mod common;
 use std::collections::BTreeMap;
 
 use futures_util::stream::StreamExt;
-use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{LogStream, ingest_operation, log_heights, log_ranges};
+use p2panda_sync::api::{LogStream, compare_logs, ingest_operation, log_ranges, topic_log_heights};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
+
+use crate::common::create_operation;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 type LogId = Hash;
-
-type LogIds = BTreeMap<VerifyingKey, Vec<LogId>>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CustomExtensions {
@@ -87,14 +85,13 @@ impl Node {
     }
 
     async fn create_operation(&self, topic: Topic, body: &[u8]) -> Result<AnyOperation> {
-        let operation =
-            crate::common::create_operation(&self.store, &self.signing_key, topic, &body).await?;
+        let operation = create_operation(&self.store, &self.signing_key, topic, &body).await?;
         Ok(operation)
     }
 
     /// Query the local log heights for the topic and return an announcement.
     async fn generate_announcement(&self, topic: Topic) -> Result<Announcement> {
-        let log_heights = get_topic_log_heights(&self.store, &topic).await?;
+        let log_heights = topic_log_heights(&self.store, &topic).await?;
 
         Ok(Announcement { log_heights })
     }
@@ -109,10 +106,12 @@ impl Node {
         topic: Topic,
     ) -> Result<LogStream<LogId, SqliteError>> {
         let their_log_heights = &announcement.log_heights;
-        let our_log_heights = get_topic_log_heights(&self.store, &topic).await?;
+        let our_log_heights = topic_log_heights(&self.store, &topic).await?;
 
-        let diff = compare_logs(&our_log_heights, &their_log_heights);
-        Ok(log_ranges(&self.store, diff))
+        Ok(log_ranges(
+            &self.store,
+            compare_logs(&our_log_heights, &their_log_heights),
+        ))
     }
 
     /// Insert an operation into the store and associate the log with the given topic.
@@ -232,15 +231,4 @@ async fn main() -> Result<()> {
     node_a.ingest_operation(topic, operation_b).await?;
 
     Ok(())
-}
-
-// TODO: This function may be a good candidate for inclusion in the `p2panda-store` API.
-async fn get_topic_log_heights(
-    store: &SqliteStore,
-    topic: &Topic,
-) -> Result<LogHeights<VerifyingKey, LogId>> {
-    let logs: LogIds = store.resolve(topic).await?;
-    let log_heights = log_heights(store, &logs).await?;
-
-    Ok(log_heights)
 }
