@@ -35,12 +35,11 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 use p2panda_core::logs::{LogHeights, compare};
-use p2panda_core::traits::{Digest, Provenance};
+use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, tx};
-use p2panda_sync::api::{OperationStream, StreamItem, log_heights, log_ranges};
+use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::{OperationStream, StreamItem, ingest_operation, log_heights, log_ranges};
 use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
@@ -264,9 +263,28 @@ impl Node {
                                     operation.hash().fmt_short()
                                 );
 
-                                // TODO: Validation?
+                                // TODO: Clone can be removed after OooBuffer PR was merged.
+                                let Ok(operation) =
+                                    Operation::<CustomExtensions>::try_from(operation.clone())
+                                else {
+                                    // Custom header extensions did not match expected format.
+                                    continue;
+                                };
 
-                                let _ = ingest_operation(&store, *topic, operation.clone()).await;
+                                if ingest_operation(
+                                    &store,
+                                    None,
+                                    &operation,
+                                    &operation.header.extensions.log_id,
+                                    topic,
+                                    false,
+                                )
+                                .await
+                                .is_err()
+                                {
+                                    // Operation was not valid.
+                                    continue;
+                                }
                             }
                             Message::Announcement(announcement) => {
                                 let Ok(mut operations) = compute_diff(
@@ -374,36 +392,6 @@ impl Node {
 }
 
 // TODO: A lot of methods we probably want to move somewhere else:
-
-async fn ingest_operation(
-    store: &SqliteStore,
-    topic: Topic,
-    operation: AnyOperation,
-) -> Result<()> {
-    let operation: Operation<CustomExtensions> = operation.try_into()?;
-
-    tx!(store, {
-        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-            &store,
-            &topic,
-            &operation.author(),
-            &operation.header.extensions.log_id,
-        )
-        .await?;
-
-        store
-            .insert_operation(
-                &operation.hash,
-                &operation,
-                &operation.header.extensions.log_id,
-            )
-            .await?;
-
-        operation
-    });
-
-    Ok(())
-}
 
 async fn compute_diff(
     store: &SqliteStore,

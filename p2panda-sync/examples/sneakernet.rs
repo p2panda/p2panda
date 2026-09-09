@@ -82,10 +82,9 @@ use p2panda_core::logs::{LogHeights, LogRanges, compare};
 use p2panda_core::traits::Provenance;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
-use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, tx};
-use p2panda_sync::api::{StreamItem, log_ranges};
+use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::{StreamItem, ingest_operation, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -282,32 +281,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Insert all desired stick operations into our store.
-            //
-            // TODO: Operations will eventually need validation; in the future we might forward them
-            // and ingest on a higher layer which also validates (in stream).
             for (node_id, log_heights) in diff {
                 for (log_id, (after, _until)) in log_heights {
                     let after = after.unwrap_or_default() as usize;
                     let operations_we_need = &operations.get(&(node_id, log_id)).unwrap()[after..];
 
                     for operation in operations_we_need {
-                        tx!(store_b, {
-                            let operation: Operation<CustomExtensions> =
-                                operation.clone().try_into().unwrap();
+                        // TODO: Clone can be removed after OooBuffer PR was merged.
+                        let operation: Operation<CustomExtensions> =
+                            operation.clone().try_into()?;
 
-                            <SqliteStore as OperationStore<Operation<CustomExtensions>, Hash>>::insert_operation(
-                                    &store_b,
-                                    &operation.hash,
-                                    &operation,
-                                    &log_id,
-                                )
-                                .await?;
-
-                            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
-                                &store_b, &topic, &node_id_b, &log_id,
-                            )
+                        ingest_operation(&store_b, None, &operation, &log_id, &topic, false)
                             .await?;
-                        });
                     }
                 }
             }
