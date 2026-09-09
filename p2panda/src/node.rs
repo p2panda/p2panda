@@ -38,7 +38,7 @@ use crate::spaces::{
     submit_enriched_space_messages, to_initial_members,
 };
 use crate::streams::{
-    Acked, EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
     StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
     event_stream, processed_stream,
 };
@@ -334,13 +334,19 @@ impl Node {
         &self,
         topic: impl Into<Topic>,
         from: StreamFrom,
-        custom_acked: Option<Acked>,
+        custom_cursor_name: Option<String>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from_inner(topic, from, false, ProcessorHooksList::new(), custom_acked)
-            .await
+        self.stream_from_inner(
+            topic,
+            from,
+            false,
+            ProcessorHooksList::new(),
+            custom_cursor_name,
+        )
+        .await
     }
 
     // TODO: This should be a proper TopicStream-builder.
@@ -350,7 +356,7 @@ impl Node {
         from: StreamFrom,
         is_space: bool,
         post_pipeline_hooks: ProcessorHooksList<Event>,
-        custom_acked: Option<Acked>,
+        custom_cursor_name: Option<String>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -382,7 +388,7 @@ impl Node {
             pipeline,
             self.events_tx.clone(),
             from,
-            custom_acked,
+            custom_cursor_name,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;

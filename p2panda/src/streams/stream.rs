@@ -109,13 +109,13 @@ pub(crate) async fn processed_stream<M>(
     pipeline: Pipeline,
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
-    custom_acked: Option<Acked>,
+    custom_cursor_name: Option<String>,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let acked = match custom_acked {
-        Some(cursor) => cursor,
+    let acked = match custom_cursor_name {
+        Some(cursor_name) => Acked::from_name(store.clone(), topic, cursor_name),
         None => Acked::new(store.clone(), topic),
     };
 
