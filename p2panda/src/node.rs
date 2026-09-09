@@ -38,7 +38,7 @@ use crate::spaces::{
     submit_enriched_space_messages, to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
+    Acked, EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
     StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
     event_stream, processed_stream,
 };
@@ -322,7 +322,7 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from(topic, StreamFrom::Frontier).await
+        self.stream_from(topic, StreamFrom::Frontier, None).await
     }
 
     /// Eventually consistent publish and subscribe stream of messages from a given position.
@@ -334,11 +334,12 @@ impl Node {
         &self,
         topic: impl Into<Topic>,
         from: StreamFrom,
+        custom_acked: Option<Acked>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from_inner(topic, from, false, ProcessorHooksList::new())
+        self.stream_from_inner(topic, from, false, ProcessorHooksList::new(), custom_acked)
             .await
     }
 
@@ -349,6 +350,7 @@ impl Node {
         from: StreamFrom,
         is_space: bool,
         post_pipeline_hooks: ProcessorHooksList<Event>,
+        custom_acked: Option<Acked>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -380,6 +382,7 @@ impl Node {
             pipeline,
             self.events_tx.clone(),
             from,
+            custom_acked,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
@@ -621,7 +624,7 @@ impl Node {
         ));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
 
-        self.stream_from_inner(topic, from, true, post_pipeline)
+        self.stream_from_inner(topic, from, true, post_pipeline, None)
             .await
     }
 
