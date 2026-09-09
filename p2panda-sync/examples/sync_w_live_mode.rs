@@ -15,7 +15,7 @@ mod common;
 use std::collections::BTreeMap;
 
 use futures_util::stream::StreamExt;
-use p2panda_core::logs::{LogHeights, compare};
+use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::topics::TopicStore;
@@ -111,7 +111,7 @@ impl Node {
         let their_log_heights = &announcement.log_heights;
         let our_log_heights = get_topic_log_heights(&self.store, &topic).await?;
 
-        let diff = compare(&our_log_heights, &their_log_heights);
+        let diff = compare_logs(&our_log_heights, &their_log_heights);
         Ok(log_ranges(&self.store, diff))
     }
 

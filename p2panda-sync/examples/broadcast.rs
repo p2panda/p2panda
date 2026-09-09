@@ -34,7 +34,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use p2panda_core::logs::{LogHeights, compare};
+use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::topics::TopicStore;
@@ -400,7 +400,7 @@ async fn compute_diff(
     their_log_heights: &LogHeights<VerifyingKey, LogId>,
 ) -> Result<LogStream<LogId, SqliteError>> {
     let our_log_heights = get_topic_log_heights(&store, &topic).await?;
-    let diff = compare(&our_log_heights, &their_log_heights);
+    let diff = compare_logs(&our_log_heights, &their_log_heights);
     Ok(log_ranges(store, diff))
 }
 
