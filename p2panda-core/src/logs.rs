@@ -74,7 +74,7 @@ pub type Logs<A, L> = BTreeMap<A, Vec<L>>;
 /// ```
 pub type LogHeights<A, L> = BTreeMap<A, BTreeMap<L, SeqNum>>;
 
-/// Map of log ranges, grouped by author `A` and each log identified with `L`.
+/// Map of log ranges grouped by author `A`. Each log is identified with `L`.
 ///
 /// Log ranges are used to express the _difference_ between two [`LogHeights`] state vectors. Use
 /// the [`compare_logs`] method to compute it.
