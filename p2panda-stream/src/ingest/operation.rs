@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Methods to handle p2panda operations.
-use std::borrow::Borrow;
-
 use p2panda_core::prune::validate_prunable_backlink;
 use p2panda_core::{
-    AnyOperation, Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey, validate_operation,
+    AnyHeader, AnyOperation, Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey,
 };
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
@@ -38,13 +36,18 @@ pub enum IngestResult<E> {
 /// Checks an incoming operation to ensure correct formatting and log integrity before persisting it
 /// into the store when valid. This function is idempotent; duplicate operations are ignored.
 ///
+/// See [`validate_operation`] for an alternative method to validate an operation without
+/// persistence.
+///
 /// Can optionally be extended with an [`OooBuffer`] (Out-Of-Order) for offering a configurable
 /// window for incoming operations to wait in memory if they can't be validated yet due to missing
 /// predecessors.
-pub async fn ingest_operation<S, T, L, E, TP>(
+pub async fn ingest_operation<S, L, E, TP>(
     store: &S,
     ooo: Option<&OooBuffer<L, E>>,
-    operation: &T,
+    // TODO: We probably want to use AnyOperation here and convert to Operation<E> in the ingest
+    // processor (and not inside of this method).
+    operation: &Operation<E>,
     log_id: &L,
     topic: &TP,
     prune_flag: bool,
@@ -54,14 +57,9 @@ where
         + OperationStore<Operation<E>, Hash>
         + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
-    // TODO: We probably want to use AnyOperation here and convert to Operation<E> in the ingest
-    // processor (and not inside of this method).
-    T: Borrow<Operation<E>>,
     L: LogId,
     E: Extensions,
 {
-    let operation: &Operation<E> = operation.borrow();
-
     // 1. Operation format validation
     // ==============================
 
@@ -71,7 +69,7 @@ where
     }
 
     // Validate operation format.
-    validate_operation(operation).map_err(IngestError::InvalidOperation)?;
+    p2panda_core::validate_operation(operation).map_err(IngestError::InvalidOperation)?;
 
     let permit = store
         .begin()
@@ -189,6 +187,57 @@ where
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
     <S as TopicStore<TP, VerifyingKey, L>>::associate(store, topic, &verifying_key, log_id)
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
+    Ok(())
+}
+
+/// Checks an incoming operation to ensure correct formatting and log integrity.
+pub async fn validate_operation<S, L, E, TP>(
+    store: &S,
+    operation: &Operation<E>,
+    log_id: &L,
+    prune_flag: bool,
+) -> Result<(), IngestError>
+where
+    S: Transaction
+        + OperationStore<Operation<E>, Hash>
+        + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
+        + TopicStore<TP, VerifyingKey, L>,
+    L: LogId,
+    E: Extensions,
+{
+    // Check if hash associated to struct ("checksum") is matching the header's digest.
+    if operation.hash != operation.header.hash() {
+        return Err(IngestError::HashMismatch);
+    }
+
+    // Validate operation format.
+    p2panda_core::validate_operation(operation).map_err(IngestError::InvalidOperation)?;
+
+    let permit = store
+        .begin()
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
+    let latest_header = store
+        .get_latest_entry_tx(&operation.header.verifying_key, log_id)
+        .await
+        .map_err(|err| IngestError::StoreError(err.to_string()))?
+        .map(|operation| operation.header);
+
+    // If no pruning flag is set, we expect the log to have integrity with the previously given
+    // operation.
+    //
+    // TODO: We can remove the header Clone and Into here once we update OperationStore to use
+    // AnyOperation. See issue: https://github.com/p2panda/p2panda/issues/1018.
+    let header: AnyHeader = operation.header.clone().into();
+    validate_prunable_backlink(latest_header.as_ref(), &header, prune_flag)
+        .map_err(IngestError::InvalidOperation)?;
+
+    store
+        .commit(permit)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
