@@ -8,5 +8,5 @@ mod processor;
 
 pub use args::IngestArgs;
 pub use ooo::{OooBuffer, OooResult};
-pub use operation::{IngestError, IngestResult, ingest_operation};
+pub use operation::{IngestError, IngestResult, ingest_operation, validate_operation};
 pub use processor::Ingest;
