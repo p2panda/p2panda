@@ -15,12 +15,12 @@ mod common;
 use std::collections::BTreeMap;
 
 use futures_util::stream::StreamExt;
-use p2panda_core::logs::{LogHeights, compare};
+use p2panda_core::logs::{LogHeights, compare_logs};
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore};
-use p2panda_sync::api::{OperationStream, StreamItem, ingest_operation, log_heights, log_ranges};
+use p2panda_sync::api::{LogStream, ingest_operation, log_heights, log_ranges};
 use p2panda_sync::protocols::ShortFormat;
 use serde::{Deserialize, Serialize};
 
@@ -107,11 +107,11 @@ impl Node {
         &self,
         announcement: Announcement,
         topic: Topic,
-    ) -> Result<OperationStream<LogId, SqliteError>> {
+    ) -> Result<LogStream<LogId, SqliteError>> {
         let their_log_heights = &announcement.log_heights;
         let our_log_heights = get_topic_log_heights(&self.store, &topic).await?;
 
-        let diff = compare(&our_log_heights, &their_log_heights);
+        let diff = compare_logs(&our_log_heights, &their_log_heights);
         Ok(log_ranges(&self.store, diff))
     }
 
@@ -177,10 +177,9 @@ async fn main() -> Result<()> {
 
     // Node A processes the operations and announcement from node B then sends operations.
 
-    while let Some(result) = log_operations_b.next().await {
-        let StreamItem {
-            entry: operation, ..
-        } = result?;
+    while let Some(Ok(log)) = log_operations_b.next().await {
+        let operation = log.entry;
+
         println!(
             "{}: ingest remote operation {}",
             node_a.id().fmt_short(),
@@ -203,10 +202,9 @@ async fn main() -> Result<()> {
     // Node B processes the operations from node A.
 
     // We only expect operations at this stage; no more announcements.
-    while let Some(result) = log_operations_a.next().await {
-        let StreamItem {
-            entry: operation, ..
-        } = result?;
+    while let Some(Ok(log)) = log_operations_a.next().await {
+        let operation = log.entry;
+
         println!(
             "{}: ingest remote operation {}",
             node_b.id().fmt_short(),

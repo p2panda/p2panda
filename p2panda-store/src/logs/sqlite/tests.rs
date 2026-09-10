@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use p2panda_core::SigningKey;
 use p2panda_core::test_utils::TestLog;
 
-use crate::logs::{LogStore, StreamItem};
+use crate::logs::{LogEntry, LogStore};
 use crate::operations::OperationStore;
 use crate::sqlite::SqliteStore;
 use crate::traits::Transaction;
@@ -194,7 +194,7 @@ async fn get_log_entries() {
         operation_5,
     ];
     for index in 0..=4 {
-        let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+        let LogEntry { entry, .. } = log_entries.next().await.unwrap().unwrap();
         assert_eq!(entry, expected[index].clone().into());
     }
 
@@ -260,10 +260,10 @@ async fn prune_entries() {
 
     // Three entries were pruned; the two most recently published entries should
     // remain.
-    let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+    let LogEntry { entry, .. } = log_entries.next().await.unwrap().unwrap();
     assert_eq!(entry, operation_4.into());
 
-    let StreamItem { entry, .. } = log_entries.next().await.unwrap().unwrap();
+    let LogEntry { entry, .. } = log_entries.next().await.unwrap().unwrap();
     assert_eq!(entry, operation_5.into());
 
     assert!(log_entries.next().await.is_none());

@@ -14,7 +14,7 @@ use sqlx::{QueryBuilder, query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
-use crate::logs::traits::{LogStream, StreamItem};
+use crate::logs::traits::{LogEntry, LogStream};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
@@ -239,7 +239,7 @@ where
             while let Some(row) = rows.try_next().await? {
                 let header = row.header.clone();
                 let operation: AnyOperation = row.try_into()?;
-                yield StreamItem { entry: operation, log_id: log_id.clone(), bytes: header };
+                yield LogEntry { entry: operation, log_id: log_id.clone(), bytes: header };
             }
         };
 
