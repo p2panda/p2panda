@@ -32,14 +32,13 @@
 //!    limited packet sizes.
 mod common;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 
 use futures_util::StreamExt;
 use p2panda_core::traits::Digest;
 use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
-use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteStore, Transaction};
+use p2panda_store::SqliteStore;
 use p2panda_sync::api::{LogEntry, compare_logs, ingest_operation, log_ranges, topic_log_heights};
 use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::protocols::ShortFormat;
@@ -73,8 +72,8 @@ async fn main() -> Result<()> {
     panda.publish(topic, b"Hello!").await?;
 
     // Express interest in a topic and include it in any sync announcements from now on.
-    racoon.subscribe(topic).await?;
-    icebear.subscribe(topic).await?;
+    racoon.subscribe(topic).await;
+    icebear.subscribe(topic).await;
 
     // Finally the nodes are reachable and can receive each other's messages.
     panda.connect(&racoon).await;
@@ -206,6 +205,7 @@ impl Digest<Hash> for Message {
 }
 
 struct Node {
+    topics: Arc<RwLock<HashSet<Topic>>>,
     signing_key: SigningKey,
     store: SqliteStore,
     radio: Radio,
@@ -216,11 +216,13 @@ impl Node {
     pub async fn new() -> Self {
         let signing_key = SigningKey::generate();
         let store = SqliteStore::temporary().await;
+        let topics = Arc::new(RwLock::new(HashSet::new()));
 
         let (radio, mut antenna) = Radio::new();
         let mesh = Mesh::new(radio.clone());
 
         {
+            let topics = topics.clone();
             let store = store.clone();
             let node_id = signing_key.verifying_key();
             let mesh = mesh.clone();
@@ -235,17 +237,9 @@ impl Node {
                         continue;
                     }
 
-                    let permit = store.begin().await.unwrap();
-
                     // We only want to process announcement messages for topics we're interested
-                    // in. Here we retrieve all topics we have ever registered on the store to
-                    // understand our interests.
-                    let my_topics =
-                        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&store)
-                            .await
-                            .unwrap();
-
-                    store.commit(permit).await.unwrap();
+                    // in.
+                    let my_topics = topics.read().await;
 
                     let topic = match &message {
                         Message::Operation(topic, _) => topic,
@@ -319,6 +313,7 @@ impl Node {
         }
 
         Self {
+            topics,
             signing_key,
             store,
             radio,
@@ -341,11 +336,7 @@ impl Node {
     }
 
     pub async fn announce(&self) -> Result<()> {
-        let permit = self.store.begin().await?;
-        let topics = <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::topics(&self.store)
-            .await
-            .unwrap();
-        self.store.commit(permit).await?;
+        let topics = self.topics.read().await;
 
         for topic in topics.iter() {
             let announcement = Announcement {
@@ -366,26 +357,13 @@ impl Node {
         Ok(())
     }
 
-    pub async fn subscribe(&self, topic: Topic) -> Result<()> {
-        let permit = self.store.begin().await?;
-
-        // As we are deferring to the TopicStore to compute our topics of interest, subscribing
-        // means associating a log (in this case our own) with the topic we wish to subscribe to.
-        self.store
-            .associate(
-                &topic,
-                &self.signing_key.verifying_key(),
-                &Hash::digest(topic.as_bytes()),
-            )
-            .await?;
-
-        self.store.commit(permit).await?;
-
-        Ok(())
+    pub async fn subscribe(&self, topic: Topic) {
+        let mut topics = self.topics.write().await;
+        topics.insert(topic);
     }
 
     pub async fn publish(&self, topic: Topic, body: &[u8]) -> Result<()> {
-        self.subscribe(topic).await?;
+        self.subscribe(topic).await;
 
         let operation = create_operation(&self.store, &self.signing_key, topic, body).await?;
 
