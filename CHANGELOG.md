@@ -58,6 +58,7 @@ Highlights are marked with a pancake 🥞
 - store: sqlx 0.9.0, use safer query builder [#1322](https://github.com/p2panda/p2panda/pull/1322)
 - core: Infallible conversion from Operation<E> into AnyOperation [#1389](https://github.com/p2panda/p2panda/pull/1389)
 - store: Use `AnyOperation` on `LogStore` [#1391](https://github.com/p2panda/p2panda/pull/1391)
+- sync: Update examples to use new `api` module [#1413](https://github.com/p2panda/p2panda/pull/1413)
 
 ### Fixes
 
