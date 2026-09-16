@@ -79,9 +79,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use futures_util::StreamExt;
 use p2panda_core::traits::Provenance;
-use p2panda_core::{AnyOperation, Hash, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
+use p2panda_core::{AnyOperation, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::{SqliteStore, Transaction};
 use p2panda_sync::api::{
     LogHeights, compare_logs, ingest_operation, log_heights, log_ranges, topic_log_heights,
 };
@@ -138,7 +138,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for _ in 0..5 {
         let topic = Topic::random();
-        subscribe(&panda_store, &panda_signing_key, topic).await?;
 
         for op_i in 0..5 {
             let body = (op_i as usize).to_be_bytes();
@@ -165,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             compare_logs(&panda_log_heights, &LogHeights::default()),
         );
 
-        if let Some(Ok(log)) = operation_stream.next().await {
+        while let Some(Ok(log)) = operation_stream.next().await {
             let operation = log.entry;
             let logs = operations.entry(*topic).or_default();
             logs.entry((operation.author(), log.log_id))
@@ -214,7 +213,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Sloth creates some data.
 
     let sloth_topic_only = Topic::random();
-    subscribe(&sloth_store, &sloth_signing_key, sloth_topic_only).await?;
 
     for op_i in 0..5 {
         let body = (op_i as usize).to_be_bytes();
@@ -223,7 +221,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Ensure that Sloth shares one topic with Panda.
     let sloth_and_panda_topics = panda_topics.iter().next().unwrap().clone();
-    subscribe(&sloth_store, &sloth_signing_key, sloth_and_panda_topics).await?;
 
     for op_i in 0..2 {
         let body = (op_i as usize).to_be_bytes();
@@ -256,7 +253,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
 
+            // Get all stick operations for the announcement topic.
             let topic = announcement.topic;
+            let mut operations = HashMap::new();
+            if let Some(ops) = &stick.operations.get(&topic) {
+                operations.extend(*ops)
+            }
+
             let panda_log_heights = &announcement.log_heights;
             let sloth_log_heights = {
                 let logs = sloth_store.resolve(&topic).await?;
@@ -271,12 +274,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // The docs for `compare_logs()` could maybe be updated to reflect this bidirectional
                 // nature.
                 compare_logs(&panda_log_heights, &sloth_log_heights);
-
-            // Get all stick operations for the announcement topic.
-            let mut operations = HashMap::new();
-            if let Some(ops) = &stick.operations.get(&topic) {
-                operations.extend(*ops)
-            }
 
             // Insert all desired stick operations into our store.
             for (node_id, log_heights) in diff {
@@ -324,7 +321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 compare_logs(&sloth_log_heights, &panda_log_heights),
             );
 
-            if let Some(Ok(log)) = operation_stream.next().await {
+            while let Some(Ok(log)) = operation_stream.next().await {
                 let operation = log.entry;
                 let logs = operations.entry(topic).or_default();
 
@@ -406,24 +403,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("---");
         }
     }
-
-    Ok(())
-}
-
-async fn subscribe(
-    store: &SqliteStore,
-    signing_key: &SigningKey,
-    topic: Topic,
-) -> Result<(), SqliteError> {
-    let permit = store.begin().await?;
-    store
-        .associate(
-            &topic,
-            &signing_key.verifying_key(),
-            &Hash::digest(topic.as_bytes()),
-        )
-        .await?;
-    store.commit(permit).await?;
 
     Ok(())
 }
