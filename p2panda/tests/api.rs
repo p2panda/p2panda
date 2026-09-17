@@ -423,7 +423,7 @@ mod event_replays {
 
         // Panda subscribes again, this time asking to replay all messages from start.
         let (_panda_tx, mut panda_rx) = panda
-            .stream_from::<String>(chat_id, StreamFrom::Start)
+            .stream_from::<String>(chat_id, StreamFrom::Start, None)
             .await
             .unwrap();
 
@@ -490,7 +490,7 @@ mod event_replays {
 
         // Force re-playing from custom cursor position with new stream subscription.
         let (_tx, mut rx) = node
-            .stream_from::<String>(topic, StreamFrom::Cursor(cursor))
+            .stream_from::<String>(topic, StreamFrom::Cursor(cursor), None)
             .await
             .unwrap();
 
@@ -498,6 +498,59 @@ mod event_replays {
         assert_replay_started(&rx.next().await.unwrap(), 2);
         assert_message_id(&rx.next().await.unwrap(), message_id_2);
         assert_message_id(&rx.next().await.unwrap(), message_id_3);
+        assert_replay_ended(&rx.next().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn replay_stream_with_custom_cursor() {
+        setup_logging();
+
+        let topic = Topic::random();
+        let node = p2panda::builder().spawn().await.unwrap();
+
+        let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
+
+        // Publish two messages and receive them on the main stream. With the default ack policy
+        // this advances the topic's default ack-tracker to the frontier.
+        let message_id_1 = {
+            let processing = tx.publish("first".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        let message_id_2 = {
+            let processing = tx.publish("second".into()).await.unwrap();
+            let id = processing.hash();
+            processing.await.unwrap();
+            id
+        };
+
+        assert_message_id(&rx.next().await.unwrap(), message_id_1);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
+
+        // Await graceful termination of the sync session.
+        let _ = tx.close().await;
+
+        drop(tx);
+        drop(rx);
+
+        // Replay from the custom cursor name's frontier. Because this cursor has never acked
+        // anything, it replays every message on the topic regardless of what the default stream
+        // already acked above.
+        let (_tx, mut rx) = node
+            .stream_from::<String>(
+                topic,
+                StreamFrom::Frontier,
+                Some("custom-replay".to_string()),
+            )
+            .await
+            .unwrap();
+
+        // We expect to receive both messages, independently of the main stream.
+        assert_replay_started(&rx.next().await.unwrap(), 2);
+        assert_message_id(&rx.next().await.unwrap(), message_id_1);
+        assert_message_id(&rx.next().await.unwrap(), message_id_2);
         assert_replay_ended(&rx.next().await.unwrap());
     }
 }
