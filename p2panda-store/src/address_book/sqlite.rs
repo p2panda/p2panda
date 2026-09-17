@@ -170,7 +170,7 @@ where
         .fetch_optional(&self.pool)
         .await
         .map_err(SqliteError::Sqlite)
-        .map(|o| o.map(|(n,)| n.0))
+        .map(|o| o.and_then(|(row,)| row.into_decoded()))
     }
 
     async fn node_topics(&self, id: &VerifyingKey) -> Result<HashSet<Topic>, Self::Error> {
@@ -216,7 +216,11 @@ where
         .fetch_all(&self.pool)
         .await
         .map_err(SqliteError::Sqlite)
-        .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
+        .map(|v| {
+            v.into_iter()
+                .filter_map(|(row,)| row.into_decoded())
+                .collect()
+        })
     }
 
     async fn all_nodes_len(&self) -> Result<usize, Self::Error> {
@@ -289,7 +293,11 @@ where
             .fetch_all(&self.pool)
             .await
             .map_err(SqliteError::Sqlite)
-            .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
+            .map(|v| {
+                v.into_iter()
+                    .filter_map(|(row,)| row.into_decoded())
+                    .collect()
+            })
     }
 
     async fn set_topics(
@@ -376,7 +384,11 @@ where
             .fetch_all(&self.pool)
             .await
             .map_err(SqliteError::Sqlite)
-            .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
+            .map(|v| {
+                v.into_iter()
+                    .filter_map(|(row,)| row.into_decoded())
+                    .collect()
+            })
     }
 
     async fn random_node(&self) -> Result<Option<N>, Self::Error> {
@@ -395,7 +407,7 @@ where
         .fetch_optional(&self.pool)
         .await
         .map_err(SqliteError::Sqlite)
-        .map(|o| o.map(|(n,)| n.0))
+        .map(|o| o.and_then(|(row,)| row.into_decoded()))
     }
 
     async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
@@ -415,7 +427,7 @@ where
         .fetch_optional(&self.pool)
         .await
         .map_err(SqliteError::Sqlite)
-        .map(|o| o.map(|(n,)| n.0))
+        .map(|o| o.and_then(|(row,)| row.into_decoded()))
     }
 }
 
@@ -450,7 +462,19 @@ impl SqliteStore {
     }
 }
 
-struct NodeInfoDecode<N>(N);
+enum NodeInfoDecode<N> {
+    Decoded(N),
+    Undecodable,
+}
+
+impl<N> NodeInfoDecode<N> {
+    fn into_decoded(self) -> Option<N> {
+        match self {
+            NodeInfoDecode::Decoded(node_info) => Some(node_info),
+            NodeInfoDecode::Undecodable => None,
+        }
+    }
+}
 
 impl<N> sqlx::Type<sqlx::Sqlite> for NodeInfoDecode<N>
 where
@@ -470,10 +494,13 @@ where
     ) -> Result<Self, sqlx::error::BoxDynError> {
         let bytes = <&[u8] as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
 
-        let cbor = decode_cbor(bytes)
-            .map_err(|err| SqliteError::Decode("node_info".to_string(), err.into()))?;
-
-        Ok(NodeInfoDecode(cbor))
+        match decode_cbor(bytes) {
+            Ok(node_info) => Ok(NodeInfoDecode::Decoded(node_info)),
+            Err(err) => {
+                tracing::warn!(%err, "skipping undecodable node_info row in address book store");
+                Ok(NodeInfoDecode::Undecodable)
+            }
+        }
     }
 }
 

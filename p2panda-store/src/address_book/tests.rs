@@ -242,3 +242,46 @@ async fn sample_random_nodes() {
     }
     assert!(samples.len() > 25);
 }
+
+#[tokio::test]
+async fn skip_undecodable_node_info_rows() {
+    let store = SqliteStore::temporary().await;
+
+    // A valid, decodable entry.
+    let good_id = SigningKey::generate().verifying_key();
+    let good = TestNodeInfo::new(good_id);
+    let permit = store.begin().await.unwrap();
+    store.insert_node_info(good.clone()).await.unwrap();
+    store.commit(permit).await.unwrap();
+
+    // A row whose `node_info` blob cannot be decoded (e.g. written by an older, incompatible
+    // encoding). This must not fail queries or take down callers.
+    let bad_id = SigningKey::generate().verifying_key();
+    sqlx::query(
+        "INSERT INTO node_infos_v1 (node_id, node_info, bootstrap, stale) VALUES (?, ?, ?, ?)",
+    )
+    .bind(bad_id.to_hex())
+    .bind(vec![0xff_u8, 0xff, 0xff])
+    .bind(false)
+    .bind(false)
+    .execute(&store.pool)
+    .await
+    .unwrap();
+
+    // Looking up the undecodable node yields `None` instead of an error.
+    let bad: Option<TestNodeInfo> =
+        <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::node_info(&store, &bad_id)
+            .await
+            .unwrap();
+    assert_eq!(bad, None);
+
+    // The valid entry is still readable.
+    assert_eq!(store.node_info(&good_id).await.unwrap(), Some(good.clone()));
+
+    // List queries skip the undecodable row and return only the good one.
+    let all: Vec<TestNodeInfo> =
+        <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::all_node_infos(&store)
+            .await
+            .unwrap();
+    assert_eq!(all, vec![good]);
+}

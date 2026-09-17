@@ -31,6 +31,7 @@ sqlite = [
   "dep:sqlx",
   "dep:thiserror",
   "dep:tokio",
+  "dep:tracing",
 ]
 encryption = [
   "dep:p2panda-encryption",
@@ -68,6 +69,7 @@ serde = { workspace = true, optional = true }
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite"], optional = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, default-features = true, features = ["sync"], optional = true }
+tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 futures-test = { workspace = true }
