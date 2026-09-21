@@ -445,6 +445,7 @@ pub(crate) async fn process_operation_in(
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
+    let groups_args = operation.header.extensions.group_args();
 
     // TODO: Using the Source here to determine live-mode behaviour is not explicit enough and might
     // lead to errors.
@@ -474,6 +475,7 @@ pub(crate) async fn process_operation_in(
             topic,
             prune_flag,
             spaces_args,
+            groups_args,
         ))
         .await;
 
@@ -885,7 +887,7 @@ impl<M> From<SystemEvent> for ForwardEvent<M> {
 /// Processed operation with application message coming from a topic stream.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcessedOperation<M> {
-    event: Event,
+    pub event: Event,
     topic: Topic,
     acked: Acked,
     message: M,

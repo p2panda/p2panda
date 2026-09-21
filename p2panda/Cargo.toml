@@ -23,9 +23,7 @@ workspace = true
 
 [features]
 default = []
-test_utils = [
-  "dep:tracing-subscriber",
-]
+test_utils = ["dep:tracing-subscriber"]
 
 [dependencies]
 futures-util = { workspace = true }

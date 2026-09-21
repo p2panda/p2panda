@@ -254,6 +254,7 @@
 mod builder;
 pub mod credentials;
 mod forge;
+pub mod groups;
 pub mod network;
 pub mod node;
 pub mod operation;

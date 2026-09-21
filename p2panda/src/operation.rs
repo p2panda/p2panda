@@ -351,6 +351,7 @@ use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 
+use crate::groups::GroupsArgs;
 use crate::spaces::types::SpacesArgs;
 
 /// Extensions version type.
@@ -381,6 +382,7 @@ pub struct Extensions {
 pub enum ExtensionsVariantV1 {
     Basic(BasicExtensions),
     Space(SpaceExtensions),
+    Group(GroupExtensions),
 }
 
 impl ExtensionsVariantV1 {
@@ -389,6 +391,7 @@ impl ExtensionsVariantV1 {
         match self {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::VARIANT_CODE,
             ExtensionsVariantV1::Space(_) => SpaceExtensions::VARIANT_CODE,
+            ExtensionsVariantV1::Group(_) => GroupExtensions::VARIANT_CODE,
         }
     }
 }
@@ -426,6 +429,18 @@ impl Builder {
                 log_id: self.log_id,
                 timestamp: self.timestamp,
                 prune_flag: self.prune_flag,
+            }),
+        }
+    }
+
+    /// Returns "group" extensions.
+    pub fn build_group(self, args: GroupsArgs) -> Extensions {
+        Extensions {
+            version: EXTENSIONS_VERSION,
+            variant: ExtensionsVariantV1::Group(GroupExtensions {
+                log_id: self.log_id,
+                timestamp: self.timestamp,
+                groups_args: args,
             }),
         }
     }
@@ -475,6 +490,19 @@ impl SpaceExtensions {
     const FIELDS_COUNT: usize = 3;
 }
 
+#[allow(unused)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GroupExtensions {
+    pub log_id: LogId,
+    pub timestamp: Timestamp,
+    pub groups_args: GroupsArgs,
+}
+
+impl GroupExtensions {
+    const VARIANT_CODE: VariantCode = 0x00_02;
+    const FIELDS_COUNT: usize = 3;
+}
+
 impl Extensions {
     pub fn from_topic(topic: Topic) -> Extensions {
         Builder::new(LogId::from_topic(topic)).build()
@@ -493,6 +521,7 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::VARIANT_CODE,
             ExtensionsVariantV1::Space(_) => SpaceExtensions::VARIANT_CODE,
+            ExtensionsVariantV1::Group(_) => GroupExtensions::VARIANT_CODE,
         }
     }
 
@@ -503,6 +532,7 @@ impl Extensions {
         let variant_field_count = match &self.variant {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::FIELDS_COUNT,
             ExtensionsVariantV1::Space(_) => SpaceExtensions::FIELDS_COUNT,
+            ExtensionsVariantV1::Group(_) => GroupExtensions::FIELDS_COUNT,
         };
 
         header_field_count + variant_field_count
@@ -512,6 +542,7 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.log_id,
             ExtensionsVariantV1::Space(extensions) => extensions.log_id,
+            ExtensionsVariantV1::Group(extensions) => extensions.log_id,
         }
     }
 
@@ -519,6 +550,7 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.prune_flag,
             ExtensionsVariantV1::Space(_) => false.into(),
+            ExtensionsVariantV1::Group(_) => false.into(),
         }
     }
 
@@ -526,6 +558,7 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.timestamp,
             ExtensionsVariantV1::Space(extensions) => extensions.timestamp,
+            ExtensionsVariantV1::Group(extensions) => extensions.timestamp,
         }
     }
 
@@ -533,6 +566,15 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(_) => None,
             ExtensionsVariantV1::Space(extensions) => Some(extensions.args.clone()),
+            ExtensionsVariantV1::Group(_) => None,
+        }
+    }
+
+    pub fn group_args(&self) -> Option<GroupsArgs> {
+        match &self.variant {
+            ExtensionsVariantV1::Basic(_) => None,
+            ExtensionsVariantV1::Space(_) => None,
+            ExtensionsVariantV1::Group(extensions) => Some(extensions.groups_args.clone()),
         }
     }
 }
@@ -564,6 +606,11 @@ impl Serialize for Extensions {
                 seq.serialize_element(&extensions.log_id)?;
                 seq.serialize_element(&extensions.timestamp)?;
                 seq.serialize_element(&extensions.args)?;
+            }
+            ExtensionsVariantV1::Group(extensions) => {
+                seq.serialize_element(&extensions.log_id)?;
+                seq.serialize_element(&extensions.timestamp)?;
+                seq.serialize_element(&extensions.groups_args)?;
             }
         }
 
@@ -637,6 +684,24 @@ impl<'de> Deserialize<'de> for Extensions {
                         timestamp,
                         args,
                     })
+                } else if variant_code == GroupExtensions::VARIANT_CODE {
+                    let log_id: LogId = seq
+                        .next_element()?
+                        .ok_or(SerdeError::custom("log id missing"))?;
+
+                    let timestamp: Timestamp = seq
+                        .next_element()?
+                        .ok_or(SerdeError::custom("timestamp missing"))?;
+
+                    let groups_args: GroupsArgs = seq
+                        .next_element()?
+                        .ok_or(SerdeError::custom("groups args field missing"))?;
+
+                    ExtensionsVariantV1::Group(GroupExtensions {
+                        log_id,
+                        timestamp,
+                        groups_args,
+                    })
                 } else {
                     return Err(SerdeError::custom("unsupported extensions variant"));
                 };
@@ -682,6 +747,16 @@ impl LogId {
 
     pub fn as_bytes(&self) -> &[u8; HASH_LEN] {
         self.0.as_bytes()
+    }
+
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+}
+
+impl std::fmt::Display for LogId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 

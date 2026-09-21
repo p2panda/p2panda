@@ -17,6 +17,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
+use crate::groups::GroupsArgs;
 use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
@@ -151,18 +152,34 @@ where
     /// operations. It is possible to await the processing result which can be useful for some
     /// applications if they want to block UI components etc.
     pub async fn publish(&self, message: M) -> Result<PublishFuture, PublishError> {
-        self.publish_inner(Some(message), false).await
+        self.publish_inner(Some(message), false, None).await
+    }
+
+    /// Publish a groups control message.
+    pub async fn publish_groups(
+        &self,
+        args: GroupsArgs,
+        message: M,
+    ) -> Result<PublishFuture, PublishError> {
+        // @NOTE: the message is compulsory so that these events are surfaced to the user on a
+        // subscription stream as groups control messages are not yet processed internally in the
+        // pipeline.
+        self.publish_inner(Some(message), false, Some(args)).await
     }
 
     async fn publish_inner(
         &self,
         message: Option<M>,
         prune_flag: bool,
+        groups_args: Option<GroupsArgs>,
     ) -> Result<PublishFuture, PublishError> {
         // Create, sign and persist operation with given payload.
-        let extensions = Extensions::builder(LogId::from_topic(self.topic()))
-            .prune_flag(prune_flag)
-            .build();
+        let extensions = match groups_args {
+            Some(args) => Extensions::builder(LogId::from_topic(self.topic())).build_group(args),
+            None => Extensions::builder(LogId::from_topic(self.topic()))
+                .prune_flag(prune_flag)
+                .build(),
+        };
 
         let body_bytes = match message {
             Some(ref message) => Some(encode_cbor(&message)?),
@@ -203,7 +220,7 @@ where
     /// gets pruned. The prefix is the set of operations in the log's sequence which are causally
     /// "older" / before the point where the prune flag was set.
     pub async fn prune(&self, message: Option<M>) -> Result<PublishFuture, PublishError> {
-        self.publish_inner(message, true).await
+        self.publish_inner(message, true, None).await
     }
 
     /// Import an external source of operations.

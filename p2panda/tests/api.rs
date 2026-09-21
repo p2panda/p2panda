@@ -708,3 +708,72 @@ mod connection_authorisation {
         assert!(received_event);
     }
 }
+
+mod dash_chat_groups {
+    use futures_util::StreamExt;
+    use p2panda::operation::{Extensions, LogId};
+    use p2panda::processor::Event;
+    use p2panda::{Hash, SigningKey, Topic, VerifyingKey};
+    use p2panda_auth::group::{GroupAction, GroupCrdtState, GroupMember};
+    use p2panda_auth::{Access, GroupsExtensionArgs};
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+    use p2panda_store::groups::GroupsStore;
+    use p2panda_store::tx_unwrap;
+    use p2panda_stream::Processor;
+    use p2panda_stream::groups::{Groups, GroupsOperation};
+
+    #[tokio::test]
+    async fn processor_integration() {
+        setup_logging();
+
+        let chat_id = Topic::random();
+        let group_id = SigningKey::generate().verifying_key();
+
+        let panda = p2panda::builder().spawn().await.unwrap();
+        let store = panda.store().clone();
+        let groups =
+            Groups::<Event<LogId, Extensions, Topic>, Extensions, LogId, ()>::new(store.clone());
+
+        let args = GroupsExtensionArgs {
+            group_id,
+            action: GroupAction::Create {
+                initial_members: vec![(
+                    GroupMember::Individual(panda.id()),
+                    Access::<()>::manage(),
+                )],
+            },
+            dependencies: vec![],
+        };
+
+        let (panda_tx, mut panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
+        panda_tx
+            .publish_groups(args, "no message".to_string())
+            .await
+            .unwrap();
+
+        loop {
+            let Some(event) = panda_rx.next().await else {
+                continue;
+            };
+
+            let p2panda::streams::StreamEvent::Processed { operation, .. } = event else {
+                continue;
+            };
+
+            groups.process(operation.event).await.unwrap();
+            break;
+        }
+
+        let group_y: GroupCrdtState<VerifyingKey, Hash, GroupsOperation<()>, ()> = tx_unwrap!(
+            store,
+            store
+                .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+                .await
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(group_y.members(group_id).len(), 1);
+    }
+}

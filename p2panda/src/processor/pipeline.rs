@@ -474,6 +474,7 @@ mod tests {
                 topic,
                 PruneFlag::default(),
                 None,
+                None,
             ))
             .await;
 
@@ -491,6 +492,7 @@ mod tests {
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
+                None,
                 None,
             ))
             .await;
@@ -537,6 +539,7 @@ mod tests {
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
+                None,
                 None,
             );
 
@@ -595,6 +598,7 @@ mod tests {
                 topic,
                 PruneFlag::default(),
                 None,
+                None,
             );
             event.orderer_args = OrdererArgs::Process {
                 dependencies: vec![],
@@ -610,6 +614,7 @@ mod tests {
                 topic,
                 PruneFlag::default(),
                 None,
+                None,
             );
             event.orderer_args = OrdererArgs::Process {
                 dependencies: vec![event_1.hash()],
@@ -624,6 +629,7 @@ mod tests {
                 LogId::from_topic(topic),
                 topic,
                 PruneFlag::default(),
+                None,
                 None,
             );
             event.orderer_args = OrdererArgs::Process {

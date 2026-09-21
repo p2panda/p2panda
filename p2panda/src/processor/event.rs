@@ -6,6 +6,8 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{
     Body, Extensions, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey,
 };
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+use p2panda_stream::groups::{GroupsArgs as GroupsProcessorArgs, GroupsOperation};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
 use p2panda_stream::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
@@ -13,6 +15,7 @@ use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::groups::GroupsArgs;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 use crate::streams::Source;
 
@@ -60,6 +63,9 @@ pub struct Event<L, E, TP> {
     /// Input arguments for the "spaces" processor.
     pub spaces_args: SpacesProcessorArgs<AuthCapabilities>,
 
+    /// Input arguments for the "groups" processor.
+    pub groups_args: GroupsProcessorArgs<AuthCapabilities>,
+
     /// Status of the "spaces" processor.
     pub spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
 }
@@ -75,6 +81,7 @@ where
         topic: TP,
         prune_flag: PruneFlag,
         spaces_args: Option<SpacesArgs>,
+        groups_args: Option<GroupsArgs>,
     ) -> Self {
         Self {
             ingest_args: IngestArgs {
@@ -112,6 +119,23 @@ where
                     },
                 },
                 None => SpacesProcessorArgs::Ignore,
+            },
+            groups_args: match groups_args {
+                Some(args) => {
+                    let operation = GroupsOperation {
+                        id: operation.hash,
+                        author: operation.header.verifying_key,
+                        dependencies: args.dependencies,
+                        group_id: args.group_id,
+                        action: args.action,
+                    };
+
+                    GroupsProcessorArgs::Process {
+                        state_id: Hash::digest(GLOBAL_GROUPS_CONTEXT_ID),
+                        operation,
+                    }
+                }
+                None => GroupsProcessorArgs::Ignore,
             },
             spaces: ProcessorStatus::Pending,
             operation,
@@ -196,6 +220,7 @@ where
             log_prune_args: LogPruneArgs::Ignore,
             log_prune: self.log_prune,
             spaces_args: SpacesProcessorArgs::Ignore,
+            groups_args: GroupsProcessorArgs::Ignore,
             spaces: self.spaces,
         }
     }
@@ -249,6 +274,7 @@ where
             meta.topic,
             meta.prune_flag,
             meta.spaces_args,
+            None,
         )
     }
 }
@@ -321,6 +347,16 @@ where
 {
     fn borrow(&self) -> &SpacesProcessorArgs<AuthCapabilities> {
         &self.spaces_args
+    }
+}
+
+impl<L, E, TP> Borrow<GroupsProcessorArgs<AuthCapabilities>> for Event<L, E, TP>
+where
+    L: LogId,
+    TP: Clone,
+{
+    fn borrow(&self) -> &GroupsProcessorArgs<AuthCapabilities> {
+        &self.groups_args
     }
 }
 
