@@ -44,6 +44,9 @@ pub enum GroupMembershipError<ID> {
 
     #[error("member is not known to the group: {0}")]
     UnrecognisedMember(ID),
+
+    #[error("attempted to perform an action on a non-existent group: {0}")]
+    MissingGroup(String),
 }
 
 /// The access state of an individual group member.
