@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda::streams::StreamEvent;
+use p2panda::{NetworkId, Node, streams::StreamEvent};
 use p2panda_core::Hash;
 
 fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32) {
@@ -23,6 +23,14 @@ fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash) {
     assert_eq!(operation.id(), id);
 }
 
+async fn spawn_node(network_id: NetworkId) -> Node {
+    p2panda::builder()
+        .network_id(network_id)
+        .spawn()
+        .await
+        .unwrap()
+}
+
 mod api {
     use std::time::Duration;
 
@@ -36,6 +44,8 @@ mod api {
     use p2panda_store::logs::LogStore;
     use tokio::task::JoinHandle;
     use tokio_stream::StreamExt;
+
+    use crate::spawn_node;
 
     #[tokio::test]
     async fn build_and_spawn() -> Result<(), Box<dyn std::error::Error>> {
@@ -55,9 +65,10 @@ mod api {
     #[tokio::test]
     async fn ephemeral_stream() {
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::spawn().await.unwrap();
-        let icebear = p2panda::spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         // Panda joins the chat and sends a message to icebear, then waits for an answer.
         let panda_task: JoinHandle<EphemeralMessage<String>> = {
@@ -103,9 +114,10 @@ mod api {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         // Panda joins the chat and sends a message to icebear.
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
@@ -133,9 +145,10 @@ mod api {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         // Panda joins the chat and sends a message to icebear.
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
@@ -165,9 +178,10 @@ mod api {
         setup_logging();
 
         let topic = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         let (panda_tx, _) = panda.stream::<usize>(topic).await.unwrap();
 
@@ -228,6 +242,7 @@ mod api {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
         // Panda opens their app and publishes some messages into a chat.
         let panda_log = TestLog::new();
@@ -257,7 +272,7 @@ mod api {
 
         // Icebear receives the SD card, opens their app and initiates import.
         let import_stream = futures_util::stream::iter(exported);
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let icebear = spawn_node(network_id).await;
         let (icebear_tx, mut icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
         let import = icebear_tx.import(import_stream).await.unwrap();
 
@@ -313,6 +328,8 @@ mod event_replays {
     use p2panda_core::{Cursor, Topic};
     use tokio_stream::StreamExt;
 
+    use crate::spawn_node;
+
     use super::{assert_message_id, assert_replay_ended, assert_replay_started};
 
     #[tokio::test]
@@ -320,7 +337,8 @@ mod event_replays {
         setup_logging();
 
         let topic = Topic::random();
-        let node = p2panda::builder().spawn().await.unwrap();
+        let network_id = Topic::random().into();
+        let node = spawn_node(network_id).await;
 
         let (tx, mut rx) = node.stream::<String>(topic).await.unwrap();
 
@@ -410,9 +428,10 @@ mod event_replays {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         // Panda subscribes to chat and publishes one message.
         {
@@ -453,7 +472,8 @@ mod event_replays {
         setup_logging();
 
         let topic = Topic::random();
-        let node = p2panda::builder().spawn().await.unwrap();
+        let network_id = Topic::random().into();
+        let node = spawn_node(network_id).await;
 
         let (tx, rx) = node.stream::<String>(topic).await.unwrap();
 
@@ -510,14 +530,17 @@ mod shutdown {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
+    use crate::spawn_node;
+
     #[tokio::test]
     async fn sync_is_closed_on_drop() {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
@@ -564,9 +587,10 @@ mod shutdown {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         let (panda_tx, _panda_rx) = panda.stream::<String>(chat_id).await.unwrap();
         panda_tx.publish("Hello, Icebear!".into()).await.unwrap();
@@ -619,14 +643,17 @@ mod connection_authorisation {
     use p2panda_net::connection_authoriser::ConnectionAuthoriserEvent;
     use tokio_stream::StreamExt;
 
+    use crate::spawn_node;
+
     #[tokio::test]
     async fn block_node_connections() {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         panda.block(icebear.id()).await;
 
@@ -668,9 +695,10 @@ mod connection_authorisation {
         setup_logging();
 
         let chat_id = Topic::random();
+        let network_id = Topic::random().into();
 
-        let panda = p2panda::builder().spawn().await.unwrap();
-        let icebear = p2panda::builder().spawn().await.unwrap();
+        let panda = spawn_node(network_id).await;
+        let icebear = spawn_node(network_id).await;
 
         // Panda blocks icebear on the chat topic.
         panda.topic_block(icebear.id(), chat_id).await;
