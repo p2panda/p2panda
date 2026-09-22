@@ -70,6 +70,7 @@ thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, default-features = true, features = ["sync"], optional = true }
 
 [dev-dependencies]
+cbor-core = { version = "0.10.1", features = ["serde"] }
 futures-test = { workspace = true }
 p2panda-core = { workspace = true, features = ["test_utils"] }
 p2panda-store = { path = ".", features = ["test_utils"] }
