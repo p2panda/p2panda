@@ -25,6 +25,24 @@ pub fn decode_cbor<T: for<'a> Deserialize<'a>, R: Read>(reader: R) -> Result<T, 
     Ok(cbor_core::Value::deserialized(&value)?)
 }
 
+/// Deserializes a value which was formatted in CBOR, tolerating non-canonical map key ordering.
+///
+/// Unlike [`decode_cbor`] this accepts input whose map keys are not in CBOR canonical order,
+/// normalizing it while decoding.
+pub fn decode_cbor_lenient<T: for<'a> Deserialize<'a>, R: Read>(
+    reader: R,
+) -> Result<T, DecodeError> {
+    let strictness = cbor_core::Strictness {
+        allow_unsorted_map_keys: true,
+        ..cbor_core::Strictness::STRICT
+    };
+    let value = cbor_core::DecodeOptions::new()
+        .strictness(strictness)
+        .read_from(reader)
+        .map_err(|err| DecodeError::Io(Arc::new(err)))?;
+    Ok(cbor_core::Value::deserialized(&value)?)
+}
+
 /// An error occurred during CBOR serialization.
 #[derive(Debug, Error)]
 #[error(transparent)]

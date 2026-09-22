@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::time::Duration;
 
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
+use p2panda_core::cbor::{decode_cbor_lenient, encode_cbor};
 use p2panda_core::{Topic, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::{QueryBuilder, query, query_as, query_scalar};
@@ -470,7 +470,7 @@ where
     ) -> Result<Self, sqlx::error::BoxDynError> {
         let bytes = <&[u8] as sqlx::Decode<sqlx::Sqlite>>::decode(value)?;
 
-        let cbor = decode_cbor(bytes)
+        let cbor = decode_cbor_lenient(bytes)
             .map_err(|err| SqliteError::Decode("node_info".to_string(), err.into()))?;
 
         Ok(NodeInfoDecode(cbor))
