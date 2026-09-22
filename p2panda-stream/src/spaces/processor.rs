@@ -64,81 +64,89 @@ where
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let input_args: &SpacesProcessorArgs<C> = input.borrow();
 
-        let result = if let SpacesProcessorArgs::Process { msg } = input_args {
-            // Process incoming event.
-            let (groups_y, space_y, mut events) = match self.manager.process(msg).await {
-                Ok(result) => result,
-                Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
-            };
+        let result = match input_args {
+            SpacesProcessorArgs::Process { msg } => {
+                // Process incoming event.
+                let (groups_y, space_y, mut events) = match self.manager.process(msg).await {
+                    Ok(result) => result,
+                    Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
+                };
 
-            // Persist resulting new states into database in one atomic transaction.
-            let permit = match self.store.begin().await {
-                Ok(permit) => permit,
-                Err(err) => return Err((input, SpacesError::Store(err.to_string()))),
-            };
+                // Persist resulting new states into database in one atomic transaction.
+                let permit = match self.store.begin().await {
+                    Ok(permit) => permit,
+                    Err(err) => return Err((input, SpacesError::Store(err.to_string()))),
+                };
 
-            if let Some(y) = groups_y {
-                // TODO: Hashing every time when processing feels a bit redundant. We either want to
-                // hard-code the hash itself or change the id type in p2panda-store to a string OR
-                // have the constant in p2panda-store.
-                if let Err(err) = self
-                    .store
-                    .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &y)
-                    .await
-                {
-                    return Err((input, SpacesError::Store(err.to_string())));
+                if let Some(y) = groups_y {
+                    // TODO: Hashing every time when processing feels a bit redundant. We either want to
+                    // hard-code the hash itself or change the id type in p2panda-store to a string OR
+                    // have the constant in p2panda-store.
+                    if let Err(err) = self
+                        .store
+                        .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &y)
+                        .await
+                    {
+                        return Err((input, SpacesError::Store(err.to_string())));
+                    }
                 }
-            }
 
-            if let Some(y) = space_y {
-                let space_id = y.space_id;
+                if let Some(y) = space_y {
+                    let space_id = y.space_id;
 
-                // Filter out application events if the author has concurrently lost their write
-                // access.
-                //
-                // This case occurs if a member published messages before receiving the control
-                // message which removed them. Their claim to have access write is still
-                // historically valid, however we have already learned that they have actually
-                // been removed.
-                //
-                // NOTE: Application _and_ control messages are partially-ordered based on their
-                // causal relationships, application messages are always emitted together with the
-                // member's (create/add) welcome message. For that reason application messages
-                // from members which have been removed at a causally later point (not
-                // concurrently) will not be affected by this filter and are correctly forwarded
-                // to the application layer.
-                if msg.is_application_message() {
-                    let mut is_member = false;
+                    // Filter out application events if the author has concurrently lost their write
+                    // access.
+                    //
+                    // This case occurs if a member published messages before receiving the control
+                    // message which removed them. Their claim to have access write is still
+                    // historically valid, however we have already learned that they have actually
+                    // been removed.
+                    //
+                    // NOTE: Application _and_ control messages are partially-ordered based on their
+                    // causal relationships, application messages are always emitted together with the
+                    // member's (create/add) welcome message. For that reason application messages
+                    // from members which have been removed at a causally later point (not
+                    // concurrently) will not be affected by this filter and are correctly forwarded
+                    // to the application layer.
+                    if msg.is_application_message() {
+                        let mut is_member = false;
 
-                    // Check if the message author is still a member of the group from our local
-                    // perspective.
-                    for (member, access) in y.groups_y.members(y.group_id) {
-                        if member == msg.author && (access.is_write() || access.is_manage()) {
-                            is_member = true;
+                        // Check if the message author is still a member of the group from our local
+                        // perspective.
+                        for (member, access) in y.groups_y.members(y.group_id) {
+                            if member == msg.author && (access.is_write() || access.is_manage()) {
+                                is_member = true;
+                            }
                         }
+
+                        if !is_member {
+                            events.retain(|event| !matches!(event, Event::Application { .. }));
+                        };
                     }
 
-                    if !is_member {
-                        events.retain(|event| !matches!(event, Event::Application { .. }));
-                    };
+                    if let Err(err) = self
+                        .store
+                        .set_space_state_tx(&space_id, &SpacesStoreState::from(y))
+                        .await
+                    {
+                        return Err((input, SpacesError::Store(err.to_string())));
+                    }
                 }
 
-                if let Err(err) = self
-                    .store
-                    .set_space_state_tx(&space_id, &SpacesStoreState::from(y))
-                    .await
-                {
+                if let Err(err) = self.store.commit(permit).await {
                     return Err((input, SpacesError::Store(err.to_string())));
                 }
-            }
 
-            if let Err(err) = self.store.commit(permit).await {
-                return Err((input, SpacesError::Store(err.to_string())));
+                (input, SpacesResult::Processed { events })
             }
-
-            (input, SpacesResult::Processed { events })
-        } else {
-            (input, SpacesResult::Ignored)
+            // For locally created operations the spaces args have already been processed and
+            // resulting events are included in the processor args here. All that's needed from
+            // the processor is to forward them onto any consumers.
+            SpacesProcessorArgs::AlreadyProcessed { events, .. } => {
+                let events = events.clone();
+                (input, SpacesResult::Processed { events })
+            }
+            SpacesProcessorArgs::Ignore => (input, SpacesResult::Ignored),
         };
 
         self.queue.borrow_mut().push_back(result);

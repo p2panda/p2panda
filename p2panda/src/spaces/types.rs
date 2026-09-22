@@ -17,6 +17,8 @@ pub type InnerSpaceEvent = p2panda_spaces::SpaceEvent<AuthCapabilities>;
 
 pub type SpacesArgs = p2panda_spaces::SpacesArgs<AuthCapabilities>;
 
+pub type SpacesEvent = p2panda_spaces::Event<AuthCapabilities>;
+
 pub type SpacesStore = p2panda_store::spaces::SqliteSpacesStore<Extensions>;
 
 pub type SpacesProcessor<T> =

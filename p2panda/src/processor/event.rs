@@ -13,7 +13,7 @@ use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::spaces::types::{AuthCapabilities, SpacesArgs};
+use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesEvent};
 use crate::streams::Source;
 
 /// Status of an event being processed by a _single_ processor in the pipeline.
@@ -75,6 +75,7 @@ where
         topic: TP,
         prune_flag: PruneFlag,
         spaces_args: Option<SpacesArgs>,
+        spaces_events: Option<Vec<SpacesEvent>>,
     ) -> Self {
         Self {
             ingest_args: IngestArgs {
@@ -113,7 +114,10 @@ where
                 },
                 None => SpacesProcessorArgs::Ignore,
             },
-            spaces: ProcessorStatus::Pending,
+            spaces: match spaces_events {
+                Some(events) => ProcessorStatus::Completed(SpacesResult::Processed { events }),
+                None => ProcessorStatus::Pending,
+            },
             operation,
             source,
         }
@@ -226,9 +230,15 @@ where
         let log_id = self.ingest_args.log_id.clone();
         let topic = self.ingest_args.topic.clone();
         let prune_flag = PruneFlag::new(self.ingest_args.prune_flag);
-        let spaces_args = match &self.spaces_args {
-            SpacesProcessorArgs::Ignore => None,
-            SpacesProcessorArgs::Process { msg } => Some(msg.args.clone()),
+        // TODO: do we need to persist the spaces events here? Locally created events will always
+        // have their dependencies already met in the orderer so they won't be buffered and need
+        // re-constructing from operation+metadata parts.
+        let (spaces_args, _spaces_events) = match &self.spaces_args {
+            SpacesProcessorArgs::Ignore => (None, None),
+            SpacesProcessorArgs::Process { msg } => (Some(msg.args.clone()), None),
+            SpacesProcessorArgs::AlreadyProcessed { msg, events } => {
+                (Some(msg.args.clone()), Some(events.clone()))
+            }
         };
         let source = self.source.clone();
 
@@ -249,6 +259,9 @@ where
             meta.topic,
             meta.prune_flag,
             meta.spaces_args,
+            // Spaces events for locally created operations are not persisted in the metadata as
+            // they never arrive out-of-order.
+            None,
         )
     }
 }

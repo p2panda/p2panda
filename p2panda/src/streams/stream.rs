@@ -474,6 +474,8 @@ pub(crate) async fn process_operation_in(
             topic,
             prune_flag,
             spaces_args,
+            // TODO: inject events resulting from locally created spaces operations.
+            None,
         ))
         .await;
 
