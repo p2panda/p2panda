@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-use p2panda_core::{SigningKey, Topic};
+use p2panda_core::SigningKey;
 use p2panda_net::address_book::AddressBookError;
 use p2panda_net::addrs::{NodeInfo, TrustedTransportInfo};
 use p2panda_net::discovery::{DiscoveryConfig, DiscoveryError};
@@ -20,7 +20,7 @@ use p2panda_net::{
 use p2panda_store::SqliteStore;
 use thiserror::Error;
 
-use crate::operation::Extensions;
+use crate::operation::{Extensions, LogId};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Network {
@@ -30,7 +30,7 @@ pub(crate) struct Network {
     pub endpoint: Endpoint,
     pub discovery: Discovery,
     pub gossip: Gossip,
-    pub log_sync: LogSync<SqliteStore, Topic, Extensions>,
+    pub log_sync: LogSync<SqliteStore, LogId, Extensions>,
 }
 
 impl Network {

@@ -2,14 +2,13 @@
 
 use std::time::Duration;
 
-use p2panda_core::traits::{Provenance, ShortFormat};
-use p2panda_core::{Hash, Topic};
+use p2panda_core::Hash;
+use p2panda_core::traits::ShortFormat;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
-use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, Transaction, tx};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
@@ -21,8 +20,8 @@ use tracing::{debug, trace, warn};
 use crate::egress::{EgressError, EgressHandle, SubmitError};
 use crate::operation::Operation;
 use crate::spaces::space::SpaceEgressError;
-use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
-use crate::spaces::{SpacesManagerError, dispatch_spaces_events, group_log_id};
+use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
+use crate::spaces::{SpacesManagerError, dispatch_spaces_events};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
@@ -122,47 +121,17 @@ pub(crate) async fn repair_space(
 
     // Collect all missing groups operations. These will be imported into the space and forwarded to
     // live-mode peers.
-    let permit = store.begin().await?;
-
-    let mut groups_operations = vec![];
     for id in groups_y.inner.toposort(&group_ids) {
         if space_y.groups_y.inner.operations.contains_key(&id) {
             continue;
         }
 
-        let Some(operation): Option<Operation> = store.get_operation_tx(&id).await? else {
+        let Some(operation): Option<Operation> = tx!(store, store.get_operation_tx(&id).await?)
+        else {
             warn!("missing expected auth groups operation");
             continue;
         };
 
-        // Ignore non-groups operations.
-        let Some(SpacesArgs::Group {
-            group_id,
-            group_action,
-            ..
-        }) = operation.header.extensions.spaces_args()
-        else {
-            warn!("expected auth groups operation");
-            continue;
-        };
-
-        // If this is a create operation then associate the groups log with this space topic.
-        if group_action.is_create() {
-            store
-                .associate(
-                    &Topic::from(space_id),
-                    &operation.author(),
-                    &group_log_id(group_id),
-                )
-                .await?;
-        }
-
-        groups_operations.push(operation)
-    }
-
-    store.commit(permit).await?;
-
-    for operation in groups_operations {
         let processed = egress_handle.dispatch(operation, space_id.into()).await?;
         processed.await?;
     }

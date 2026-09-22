@@ -4,13 +4,12 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 
 use futures_util::Stream;
-use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
@@ -20,7 +19,6 @@ use p2panda_stream::hooks::ProcessorHooksList;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
-use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
@@ -30,13 +28,14 @@ use crate::hooks::GroupsHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
 use crate::spaces::types::{
-    AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
+    InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask, Member,
-    MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError, SpaceSubscription,
-    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_log_id, member_log_id,
-    spaces_manager, spaces_stream, to_initial_members,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, GroupsScope, InviteError,
+    InviteTask, KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space,
+    SpaceEgressError, SpaceSubscription, SyncAuthoriserHook, actor_to_topic,
+    dispatch_spaces_events, member_log_id, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -59,6 +58,7 @@ pub struct Node {
     egress: Egress,
     #[allow(unused)]
     key_bundle_task: KeyBundleTask,
+    invite_task: InviteTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
     sync_authoriser: SyncAuthoriser,
@@ -125,6 +125,8 @@ impl Node {
         // Spawn background tasks which run for the duration of the whole program.
         let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone(), egress.handle()).await;
 
+        let invite_task = InviteTask::spawn(store.clone());
+
         let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
 
         Ok(Node {
@@ -137,6 +139,7 @@ impl Node {
             spaces_manager,
             egress,
             key_bundle_task,
+            invite_task,
             events_tx,
             events_rx: Mutex::new(events_rx),
             sync_authoriser,
@@ -534,28 +537,6 @@ impl Node {
         let space_id = space_id.into();
 
         tx!(self.store, {
-            // Associate all group logs we have with the space topic, this handles the "first time
-            // subscription" case where we want to sync all groups logs up-front.
-            //
-            // TODO: This can be removed once we have a working orderer as then the repair task can
-            // be relied upon.
-            let y: AuthGroupState<AuthCapabilities> = self
-                .store
-                .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-                .await?
-                .unwrap_or_default();
-
-            for group_id in y.groups_global() {
-                debug!(
-                    group_id = group_id.fmt_short(),
-                    space_id = space_id.fmt_short(),
-                    "associate group log with space topic"
-                );
-                self.store
-                    .associate(&Topic::from(space_id), &self.id(), &group_log_id(group_id))
-                    .await?;
-            }
-
             // Associate the space topic with our own member / key bundle logs.
             self.store
                 .associate(&Topic::from(space_id), &self.id(), &member_log_id())
@@ -597,11 +578,21 @@ impl Node {
             egress_handle.clone(),
         );
 
+        // Push all locally known groups into the space and make any new log associations.
+        //
+        // NOTE: This is only done for group discovery reasons. We could remove this call and
+        // instead opt for requiring that group operations are shared via a side-channel before
+        // being added to a space.
+        self.invite_task
+            .share(space_id, GroupsScope::Global, egress_handle.clone())
+            .await?;
+
         Ok(spaces_stream::<M>(
             inner,
             self.store.clone(),
             repair_task,
             egress_handle,
+            self.invite_task.command_handle(),
             tx,
             rx,
         ))
@@ -620,11 +611,7 @@ impl Node {
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_authoriser.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
-        post_pipeline.push(GroupsHook::new(
-            // Space id is the digest of the topic.
-            SpaceId::digest(topic.as_bytes()),
-            self.store.clone(),
-        ));
+        post_pipeline.push(GroupsHook::new(topic.into(), self.store.clone()));
 
         self.stream_from_inner(topic, from, true, post_pipeline)
             .await
@@ -654,6 +641,9 @@ impl Node {
         // Create a space.
         //
         // We always create a space with only us as the initial members.
+        //
+        // NOTE: As we know the space is created with no members which are groups we don't need to
+        // manually push any groups into the space here.
         let output = self.spaces_manager.create_space(space_id, &[]).await?;
 
         // Persist the computed groups- and spaces-state to the stores.
@@ -670,6 +660,15 @@ impl Node {
         let egress_handle = self.egress.handle();
 
         dispatch_spaces_events(&egress_handle, space_id, output.messages).await?;
+
+        // Push all groups into the space and make any new log associations.
+        //
+        // NOTE: This is only done for group discovery reasons. We could remove this call and
+        // instead opt for requiring that group operations are shared via a side-channel before
+        // being added to a space.
+        self.invite_task
+            .share(space_id, GroupsScope::Global, egress_handle.clone())
+            .await?;
 
         let inner = self
             .spaces_manager
@@ -692,6 +691,7 @@ impl Node {
             self.store.clone(),
             repair_task,
             egress_handle,
+            self.invite_task.command_handle(),
             tx,
             rx,
         );
@@ -850,6 +850,9 @@ pub enum SubscribeSpaceError {
 
     #[error(transparent)]
     ImportKeyBundle(#[from] ImportError),
+
+    #[error(transparent)]
+    Invite(#[from] InviteError),
 }
 
 /// Errors which can occur when creating a stream.
@@ -870,6 +873,9 @@ pub enum CreateSpaceError {
 
     #[error(transparent)]
     ImportKeyBundle(#[from] ImportError),
+
+    #[error(transparent)]
+    Invite(#[from] InviteError),
 
     #[error("couldn't send event due to broken app channel")]
     AppSend,

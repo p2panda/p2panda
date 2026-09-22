@@ -48,6 +48,7 @@ Highlights are marked with a pancake 🥞
 - sync: Method to resolve log heights from topic [#1405](https://github.com/p2panda/p2panda/pull/1405)
 - sync: Re-export -stream ingest_operation in `api` module [#1406](https://github.com/p2panda/p2panda/pull/1406)
 - stream: Forward events of already processed operations in spaces processor [#1430](https://github.com/p2panda/p2panda/pull/1430)
+- node: Introduce `GroupsHook` for associating group logs with spaces [#1457](https://github.com/p2panda/p2panda/pull/1457)
 
 ### Changed
 
@@ -66,6 +67,7 @@ Highlights are marked with a pancake 🥞
 - net: Separate sync- from connection authoriser [#1437](https://github.com/p2panda/p2panda/pull/1437)
 - spaces: Return output structs from public APIs [#1453](https://github.com/p2panda/p2panda/pull/1453)
 - node: Remove redundant authoriser updates [#1455](https://github.com/p2panda/p2panda/pull/1455)
+- node: Move group sharing logic into `InviteTask` [#1457](https://github.com/p2panda/p2panda/pull/1457)
 
 ### Fixed
 

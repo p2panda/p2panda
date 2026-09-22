@@ -14,12 +14,13 @@ use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::space::SpaceOutput;
-use p2panda_spaces::{ActorId, MemberId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{ActorId, AuthGroupState, MemberId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
@@ -29,7 +30,9 @@ use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, SpacesEvent, SpacesManagerError,
 };
-use crate::spaces::{RepairError, RepairTask};
+use crate::spaces::{
+    GroupsScope, InviteError, InviteTaskCommand, InviteTaskSender, RepairError, RepairTask,
+};
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
@@ -38,6 +41,7 @@ pub(crate) fn spaces_stream<M>(
     store: SqliteStore,
     repair_task: RepairTask,
     egress_handle: EgressHandle,
+    invite_task_tx: InviteTaskSender,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
 ) -> (Space<M>, SpaceSubscription<M>)
@@ -50,6 +54,7 @@ where
             store,
             repair_task,
             egress_handle,
+            invite_task_tx,
             tx,
         },
         SpaceSubscription { rx },
@@ -65,6 +70,7 @@ where
     store: SqliteStore,
     repair_task: RepairTask,
     egress_handle: EgressHandle,
+    invite_task_tx: InviteTaskSender,
     tx: StreamPublisher<M>,
 }
 
@@ -127,6 +133,12 @@ where
             space_id: self.id(),
             err,
         })?;
+
+        // If the new actor is a group then push any required group operations into the space and
+        // make log associations.
+        if self.global_groups().await?.contains(&actor) {
+            self.share(GroupsScope::Partial(vec![actor])).await?;
+        }
 
         // Before performing any action we trigger and await return from a space repair which will
         // ensure we have incorporated the latest groups changes into the space.
@@ -301,9 +313,33 @@ where
         })
     }
 
+    /// Return ids of all group in the global groups state.
+    pub async fn global_groups(&self) -> Result<Vec<ActorId>, SqliteError> {
+        let groups_y: AuthGroupState<AuthCapabilities> = tx!(self.store, {
+            self.store
+                .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+                .await?
+        })
+        .unwrap_or_default();
+        Ok(groups_y.groups_global())
+    }
+
     /// Gracefully close the space and any associated sync sessions.
     pub async fn close(self) -> Result<(), CloseError> {
         self.tx.close().await
+    }
+
+    pub async fn share(&self, scope: GroupsScope) -> Result<bool, InviteError> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        let command = InviteTaskCommand::ShareGroups {
+            space_id: self.id(),
+            egress_handle: self.egress_handle.clone(),
+            scope,
+            reply_tx,
+        };
+        self.invite_task_tx.send(command)?;
+        let success = reply_rx.await??;
+        Ok(success)
     }
 
     /// Incorporate missing groups messages into the space, any resulting operations are published
@@ -394,6 +430,12 @@ pub enum AddSpaceMemberError {
         space_id: SpaceId,
         err: AddMemberError,
     },
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Invite(#[from] InviteError),
 
     #[error(transparent)]
     RepairSpace(#[from] RepairError),

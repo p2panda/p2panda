@@ -86,9 +86,9 @@ async fn associate_group_log(
         return Ok(());
     };
 
-    // For every create group message received in the hook make a topic -> log association. This
-    // works based on the assumption that group operations are replicated in every space that
-    // needs them. This includes the space's own group operations.
+    // For every group message received in the hook make a topic -> log association. This works
+    // based on the assumption that group operations are processed in every space that needs them.
+    // This includes the space's own group operations.
     let log_id = group_log_id(*group_id);
     tx!(
         store,

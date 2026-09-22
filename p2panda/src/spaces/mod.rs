@@ -3,6 +3,7 @@
 mod authoriser;
 mod forge;
 mod group;
+mod invite;
 mod member;
 pub(crate) mod message;
 mod repair;
@@ -23,6 +24,9 @@ pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::{group_log_id, member_log_id};
 pub use group::{
     AddGroupMemberError, Group, GroupError, GroupEvent, GroupFuture, RemoveGroupMemberError,
+};
+pub(crate) use invite::{
+    GroupsScope, InviteError, InviteTask, InviteTaskCommand, InviteTaskSender,
 };
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
