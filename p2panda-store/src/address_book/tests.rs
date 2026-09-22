@@ -249,7 +249,10 @@ fn encode_non_canonical(info: &TestNodeInfo) -> Vec<u8> {
     let mut buf = vec![0xa4]; // definite-length map with four entries
     for (key, value) in [
         ("id", cbor_core::Value::serialized(&info.id).unwrap()),
-        ("bootstrap", cbor_core::Value::serialized(&info.bootstrap).unwrap()),
+        (
+            "bootstrap",
+            cbor_core::Value::serialized(&info.bootstrap).unwrap(),
+        ),
         ("stale", cbor_core::Value::serialized(&info.stale).unwrap()),
         (
             "transports",
