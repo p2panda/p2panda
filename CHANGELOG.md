@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- store: Decoding NodeInfo cbor records allows for non-canonical key ordering, to proivide backwards compatability. [#1428](https://github.com/p2panda/p2panda/pull/1428)
 - net: Introduce an `Authoriser` for maintaining and enforcing allow- and blocklists [#1321](https://github.com/p2panda/p2panda/pull/1321)
 - node: API for promoting and demoting space members [#1311](https://github.com/p2panda/p2panda/pull/1311)
 - node: Allow graceful closure of sync sessions [#1307](https://github.com/p2panda/p2panda/pull/1307)
