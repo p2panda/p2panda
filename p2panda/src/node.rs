@@ -24,6 +24,7 @@ use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
+use crate::egress::Egress;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
@@ -54,6 +55,7 @@ pub struct Node {
     tasks: TaskTracker,
     network: Network,
     spaces_manager: SpacesManager,
+    egress: Egress,
     key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
@@ -115,7 +117,7 @@ impl Node {
             SpacesConfig::default(),
         )?;
 
-        // Prepare manager which orchestrates processing of incoming operations.
+        let egress = Egress::new();
         let tasks = TaskTracker::new();
 
         // Spawn background tasks which run for the duration of the whole program.
@@ -131,6 +133,7 @@ impl Node {
             tasks,
             network,
             spaces_manager,
+            egress,
             key_bundle_task,
             events_tx,
             events_rx: Mutex::new(events_rx),
@@ -334,7 +337,7 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        self.stream_from_inner(topic, from, ProcessorHooksList::new())
+        self.stream_from_inner(topic, from, false, ProcessorHooksList::new())
             .await
     }
 
@@ -343,6 +346,7 @@ impl Node {
         &self,
         topic: impl Into<Topic>,
         from: StreamFrom,
+        is_space: bool,
         post_pipeline_hooks: ProcessorHooksList<Event>,
     ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
     where
@@ -378,6 +382,10 @@ impl Node {
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
+
+        self.egress
+            .add_stream(topic, is_space, tx.import_local_tx.clone())
+            .await;
 
         Ok((tx, rx))
     }
@@ -613,7 +621,8 @@ impl Node {
         ));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
 
-        self.stream_from_inner(topic, from, post_pipeline).await
+        self.stream_from_inner(topic, from, true, post_pipeline)
+            .await
     }
 
     pub async fn create_space<M>(
@@ -641,10 +650,10 @@ impl Node {
         //
         // We always create a space with only us as the initial members.
         //
-        // @TODO: Consider if we want an alternative method for instantiating a space with initial
-        // members. I (sam) removed it from the API for now as without a manual member
-        // registration flow a user likely doesn't have access to any member key bundles at the
-        // point of space creation.
+        // TODO: Consider if we want an alternative method for instantiating a space with initial
+        // members. I (sam) removed it from the API for now as without a manual member registration
+        // flow a user likely doesn't have access to any member key bundles at the point of space
+        // creation.
         let (groups_y, space_y, create_space_messages, events) =
             self.spaces_manager.create_space(space_id, &[]).await?;
 
