@@ -56,6 +56,7 @@ pub struct Node {
     network: Network,
     spaces_manager: SpacesManager,
     egress: Egress,
+    #[allow(unused)]
     key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
@@ -121,7 +122,7 @@ impl Node {
         let tasks = TaskTracker::new();
 
         // Spawn background tasks which run for the duration of the whole program.
-        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone()).await;
+        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone(), &egress).await;
 
         let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
 
@@ -595,7 +596,6 @@ impl Node {
             inner,
             self.store.clone(),
             repair_task,
-            self.key_bundle_task.command_handle(),
             egress_handle,
             tx,
             rx,
@@ -687,7 +687,6 @@ impl Node {
             inner,
             self.store.clone(),
             repair_task,
-            self.key_bundle_task.command_handle(),
             egress_handle,
             tx,
             rx,

@@ -22,7 +22,6 @@ use p2panda_store::{SqliteError, SqliteStore, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot::error::RecvError;
-use tracing::error;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
 use crate::operation::Extensions;
@@ -32,7 +31,7 @@ use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, SpacesEvent, SpacesManagerError,
 };
-use crate::spaces::{KeyBundleTaskCommand, KeyBundleTaskSender, RepairError, RepairTask};
+use crate::spaces::{RepairError, RepairTask};
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
@@ -40,10 +39,8 @@ pub(crate) fn spaces_stream<M>(
     inner: InnerSpace,
     store: SqliteStore,
     repair_task: RepairTask,
-    key_bundle_task_tx: KeyBundleTaskSender,
     egress_handle: EgressHandle,
-    // TODO: Not used, can it be removed now?
-    _tx: StreamPublisher<M>,
+    tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
     connection_authoriser: ConnectionAuthoriser,
@@ -51,21 +48,13 @@ pub(crate) fn spaces_stream<M>(
 where
     M: Serialize,
 {
-    if let Err(err) = key_bundle_task_tx.send(KeyBundleTaskCommand::AddStream(
-        inner.id(),
-        egress_handle.clone(),
-    )) {
-        error!(space_id = %inner.id(), "failed adding stream to key bundle task: {err}");
-    }
-
     (
         Space {
             inner,
             store,
             repair_task,
-            key_bundle_task_tx,
             egress_handle,
-            _tx,
+            tx,
             connection_authoriser,
         },
         SpaceSubscription { rx },
@@ -80,21 +69,9 @@ where
     inner: InnerSpace,
     store: SqliteStore,
     repair_task: RepairTask,
-    key_bundle_task_tx: KeyBundleTaskSender,
     egress_handle: EgressHandle,
-    _tx: StreamPublisher<M>,
+    tx: StreamPublisher<M>,
     connection_authoriser: ConnectionAuthoriser,
-}
-
-impl<M> Drop for Space<M>
-where
-    M: Serialize,
-{
-    fn drop(&mut self) {
-        let _ = self
-            .key_bundle_task_tx
-            .send(KeyBundleTaskCommand::RemoveStream(self.id()));
-    }
 }
 
 impl<M> Space<M>
@@ -340,7 +317,7 @@ where
 
     /// Gracefully close the space and any associated sync sessions.
     pub async fn close(self) -> Result<(), CloseError> {
-        self._tx.close().await
+        self.tx.close().await
     }
 
     /// Incorporate missing groups messages into the space, any resulting operations are published
