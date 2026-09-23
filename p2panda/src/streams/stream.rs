@@ -41,7 +41,7 @@ use crate::streams::publisher::StreamPublisher;
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::subscription::StreamSubscription;
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
-use crate::streams::{Event, Pipeline, SystemEvent};
+use crate::streams::{Event, LocalStreamDestination, Pipeline, SystemEvent};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -142,7 +142,7 @@ where
 
     // Channel for importing local operation streams.
     let (import_local_tx, mut import_local_rx) = mpsc::channel::<(
-        BoxStream<'static, Operation>,
+        BoxStream<'static, LocalStreamDestination>,
         oneshot::Sender<LocalStreamFuture>,
     )>(IMPORT_BUFFER_SIZE);
 
@@ -254,15 +254,9 @@ where
             {
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
-                let replay_result = replay_log_ranges(
-                    topic,
-                    &store,
-                    &to_output_tx,
-                    &pipeline,
-                    &sync_handle,
-                    nacked_log_ranges,
-                )
-                .await;
+                let replay_result =
+                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
+                        .await;
 
                 // Errors occurring in the replay task which be returned to the user.
                 if let Err(error) = replay_result {
@@ -313,7 +307,7 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                process_operation_in(*operation, source, topic, &pipeline, &sync_handle).await;
+                                process_operation_in(*operation, source, topic, &pipeline, None).await;
                                 continue;
                             },
                         }
@@ -333,7 +327,7 @@ where
                             Source::LocalStore,
                             topic,
                             &pipeline,
-                            &sync_handle
+                            Some(&sync_handle),
                         ).await;
 
                         // Inform publisher optionally about result of processor and that we're
@@ -365,7 +359,7 @@ where
                                     Source::ExternalStream { session_id },
                                     topic,
                                     &pipeline,
-                                    &sync_handle
+                                    Some(&sync_handle),
                                 ).await;
 
                                 continue;
@@ -390,13 +384,25 @@ where
                     // Receive the next ready event from any imported local source.
                     Some(event) = local_stream.next() => {
                         match event {
-                            LocalStreamEvent::Operation(operation) => {
+                            LocalStreamEvent::Item(LocalStreamDestination::Delivery(operation)) => {
+                                let operation_id = operation.hash();
+
+                                if sync_handle.publish(operation).is_err() {
+                                    warn!(
+                                        %operation_id,
+                                        "failed sending operation on sync handle"
+                                    )
+                                }
+
+                                continue;
+                            }
+                            LocalStreamEvent::Item(LocalStreamDestination::Processing(operation)) => {
                                 process_operation_in(
-                                    *operation,
+                                    operation,
                                     Source::LocalStore,
                                     topic,
                                     &pipeline,
-                                    &sync_handle
+                                    None,
                                 ).await;
 
                                 continue;
@@ -440,29 +446,25 @@ pub(crate) async fn process_operation_in(
     source: Source,
     topic: Topic,
     pipeline: &Pipeline,
-    sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
+    sync_handle: Option<&Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>>,
 ) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
-    // TODO: Using the Source here to determine live-mode behaviour is not explicit enough and might
-    // lead to errors.
-    match source {
-        Source::ExternalStream { .. } | Source::LocalStore
-            // Try pushing operation to other nodes if we have an active and "live" sync session
-            // with them. This allows disseminating new messages quickly in the network.
-            //
-            // If no active live session exists, nodes will pick up the operation later when running
-            // the sync protocol.
-            if sync_handle.publish(operation.clone()).is_err() => {
-                warn!(
-                    operation_id = %operation.hash(),
-                    "failed sending operation on sync handle"
-                )
-            }
-        _ => (),
-    };
+    if let Some(sync_handle) = sync_handle {
+        // Try pushing operation to other nodes if we have an active and "live" sync session with
+        // them. This allows disseminating new messages quickly in the network.
+        //
+        // If no active live session exists, nodes will pick up the operation later when running the
+        // sync protocol.
+        if sync_handle.publish(operation.clone()).is_err() {
+            warn!(
+                operation_id = %operation.hash(),
+                "failed sending operation on sync handle"
+            )
+        }
+    }
 
     // Send operation to processor task. This blocks any parent stream and makes sure that all
     // events are handled in same order.

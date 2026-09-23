@@ -32,8 +32,8 @@ use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{AuthCapabilities, InnerSpace, InnerSpaceError, SpacesManagerError};
 use crate::spaces::{KeyBundleTaskCommand, KeyBundleTaskSender, RepairError, RepairTask};
 use crate::streams::{
-    CloseError, ImportError, LocalStreamFuture, StreamEvent, StreamPublisher, StreamSubscription,
-    to_stream_event, to_system_event,
+    CloseError, ImportError, LocalStreamDestination, LocalStreamFuture, StreamEvent,
+    StreamPublisher, StreamSubscription, to_stream_event, to_system_event,
 };
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
@@ -133,7 +133,7 @@ where
         let processed = self
             .tx
             .import_local(futures_util::stream::once(async {
-                message.into_operation()
+                LocalStreamDestination::Processing(message.into_operation())
             }))
             .await?;
 
@@ -317,9 +317,9 @@ where
 
         let processed = self
             .tx
-            .import_local(futures_util::stream::iter(
-                messages.into_iter().map(|message| message.into_operation()),
-            ))
+            .import_local(futures_util::stream::iter(messages.into_iter().map(
+                |message| LocalStreamDestination::Processing(message.into_operation()),
+            )))
             .await?;
 
         processed.await?;

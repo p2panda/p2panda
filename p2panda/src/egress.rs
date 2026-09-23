@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![allow(unused)] // TODO: Remove this.
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
@@ -14,7 +15,7 @@ use tokio::sync::{RwLock, oneshot};
 use tracing::error;
 
 use crate::operation::Operation;
-use crate::streams::{ImportLocalTx, LocalStreamFuture};
+use crate::streams::{ImportLocalTx, LocalStreamDestination, LocalStreamFuture};
 
 /// Configure event-delivery & -processing policies for locally forged or remotely received
 /// operations.
@@ -208,6 +209,7 @@ pub struct EgressHandle {
 }
 
 impl EgressHandle {
+    // TODO: Should be changed from Operation -> Event.
     pub async fn submit(&self, operation: Operation) -> Result<SubmitFuture, SubmitError> {
         let mut broken_channels = Vec::new();
 
@@ -230,7 +232,13 @@ impl EgressHandle {
         let delivery_count = to_delivery.len();
 
         for (topic, tx) in to_delivery {
-            match send_to_import_tx(operation.clone(), &topic, &tx).await {
+            match send_to_import_tx(
+                LocalStreamDestination::Delivery(operation.clone()),
+                &topic,
+                &tx,
+            )
+            .await
+            {
                 Err(SubmitError::SendEvent(_)) => {
                     broken_channels.push(topic);
                 }
@@ -262,7 +270,13 @@ impl EgressHandle {
         let processing_count = to_processing.len();
 
         for (topic, tx) in to_processing {
-            match send_to_import_tx(operation.clone(), &topic, &tx).await {
+            match send_to_import_tx(
+                LocalStreamDestination::Processing(operation.clone()),
+                &topic,
+                &tx,
+            )
+            .await
+            {
                 Err(SubmitError::SendEvent(_)) => {
                     broken_channels.push(topic);
                 }
@@ -294,11 +308,11 @@ impl EgressHandle {
 }
 
 async fn send_to_import_tx(
-    operation: Operation,
+    destination: LocalStreamDestination,
     topic: &Topic,
     import_local_tx: &ImportLocalTx,
 ) -> Result<LocalStreamFuture, SubmitError> {
-    let stream = Box::pin(futures_util::stream::once(async { operation }));
+    let stream = Box::pin(futures_util::stream::once(async { destination }));
 
     let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
 

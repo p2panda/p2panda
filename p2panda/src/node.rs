@@ -38,9 +38,10 @@ use crate::spaces::{
     to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
-    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
-    event_stream, processed_stream, to_stream_event, to_system_event,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError,
+    LocalStreamDestination, Pipeline, StreamFrom, StreamPublisher, StreamSubscription, SystemEvent,
+    TaskTracker, ephemeral_stream, event_stream, processed_stream, to_stream_event,
+    to_system_event,
 };
 
 static_assertions::assert_impl_all!(Node: Send, Sync);
@@ -492,7 +493,7 @@ impl Node {
 
         let processed = tx
             .import_local(futures_util::stream::once(async {
-                message.into_operation()
+                LocalStreamDestination::Processing(message.into_operation())
             }))
             .await?;
 
@@ -672,7 +673,7 @@ impl Node {
             .import_local(futures_util::stream::iter(
                 create_space_messages
                     .into_iter()
-                    .map(|message| message.into_operation()),
+                    .map(|message| LocalStreamDestination::Processing(message.into_operation())),
             ))
             .await?;
 

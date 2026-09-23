@@ -24,7 +24,8 @@ use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
 use crate::spaces::{SpacesManagerError, group_log_id};
 use crate::streams::{
-    ImportLocalTx, LocalStreamFuture, ToOutputTx, to_stream_event, to_system_event,
+    ImportLocalTx, LocalStreamDestination, LocalStreamFuture, ToOutputTx, to_stream_event,
+    to_system_event,
 };
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
@@ -206,7 +207,9 @@ pub(crate) async fn repair_space<M>(
             .into_iter()
             .map(|message| message.into_operation()),
     );
-    let stream = Box::pin(futures_util::stream::iter(operations));
+    let stream = Box::pin(futures_util::stream::iter(
+        operations.map(LocalStreamDestination::Processing),
+    ));
     let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
     import_local_tx
         .send((stream, ready_tx))

@@ -61,7 +61,7 @@ use crate::operation::Operation;
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
-use crate::streams::{Event, ImportLocalTx, LocalStreamFuture};
+use crate::streams::{Event, ImportLocalTx, LocalStreamDestination, LocalStreamFuture};
 
 #[derive(Debug)]
 pub struct Member {
@@ -316,7 +316,9 @@ async fn publish_member_message(
     space_id: &SpaceId,
     import_local_tx: &ImportLocalTx,
 ) -> bool {
-    let stream = Box::pin(futures_util::stream::once(async { operation }));
+    let stream = Box::pin(futures_util::stream::once(async {
+        LocalStreamDestination::Processing(operation)
+    }));
 
     let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
 
@@ -533,9 +535,10 @@ mod tests {
         //    bundle. We expect all currently active streams (in "live-mode") to be informed about
         //    this update.
         let (mut import_stream, _) = import_rx.recv().await.expect("import stream exists");
-        let operation = import_stream.next().await.expect("an operation was forged");
+        let item = import_stream.next().await.expect("an operation was forged");
 
-        let member_msg = match operation
+        let member_msg = match item
+            .operation()
             .header
             .extensions
             .spaces_args()

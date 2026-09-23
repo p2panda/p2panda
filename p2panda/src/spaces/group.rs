@@ -25,7 +25,8 @@ use crate::spaces::types::{
     AuthCapabilities, InnerGroup, InnerGroupError, InnerGroupEvent, NoBody, SpacesManagerError,
 };
 use crate::streams::{
-    ImportError, LocalStreamFuture, StreamPublisher, StreamSubscription, SystemEvent,
+    ImportError, LocalStreamDestination, LocalStreamFuture, StreamPublisher, StreamSubscription,
+    SystemEvent,
 };
 
 #[derive(Debug)]
@@ -137,7 +138,7 @@ impl Group {
         let processed = self
             .tx
             .import_local(futures_util::stream::once(async {
-                message.into_operation()
+                LocalStreamDestination::Processing(message.into_operation())
             }))
             .await?;
 
@@ -168,7 +169,7 @@ impl Group {
         let processed = self
             .tx
             .import_local(futures_util::stream::once(async {
-                message.into_operation()
+                LocalStreamDestination::Processing(message.into_operation())
             }))
             .await?;
 

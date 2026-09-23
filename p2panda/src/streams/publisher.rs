@@ -20,7 +20,7 @@ use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
-use crate::streams::local_stream::LocalStreamFuture;
+use crate::streams::local_stream::{LocalStreamDestination, LocalStreamFuture};
 use crate::streams::{Event, ForwardEvent};
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
@@ -31,7 +31,7 @@ type ImportExternalTx = mpsc::Sender<(
 )>;
 
 pub(crate) type ImportLocalTx = mpsc::Sender<(
-    BoxStream<'static, Operation>,
+    BoxStream<'static, LocalStreamDestination>,
     oneshot::Sender<LocalStreamFuture>,
 )>;
 
@@ -237,7 +237,7 @@ where
     /// operations themselves.
     pub(crate) async fn import_local(
         &self,
-        stream: impl Stream<Item = Operation> + Send + 'static,
+        stream: impl Stream<Item = LocalStreamDestination> + Send + 'static,
     ) -> Result<LocalStreamFuture, ImportError> {
         // Send stream to processor.
         let stream = Box::pin(stream);
