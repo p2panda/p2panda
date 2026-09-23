@@ -15,6 +15,7 @@ use tokio::sync::{RwLock, oneshot};
 use tracing::error;
 
 use crate::operation::Operation;
+use crate::spaces::types::SpacesEvent;
 use crate::streams::{ImportLocalTx, LocalStreamDestination, LocalStreamFuture};
 
 /// Configure event-delivery & -processing policies for locally forged or remotely received
@@ -209,8 +210,24 @@ pub struct EgressHandle {
 }
 
 impl EgressHandle {
-    // TODO: Should be changed from Operation -> Event.
+    pub async fn submit_enriched(
+        &self,
+        operation: Operation,
+        events: Vec<SpacesEvent>,
+    ) -> Result<SubmitFuture, SubmitError> {
+        self.submit_inner(operation, events).await
+    }
+
     pub async fn submit(&self, operation: Operation) -> Result<SubmitFuture, SubmitError> {
+        self.submit_inner(operation, vec![]).await
+    }
+
+    // TODO: Should be changed from Operation -> Event.
+    pub async fn submit_inner(
+        &self,
+        operation: Operation,
+        events: Vec<SpacesEvent>,
+    ) -> Result<SubmitFuture, SubmitError> {
         let mut broken_channels = Vec::new();
 
         // Event Delivery.
@@ -271,7 +288,10 @@ impl EgressHandle {
 
         for (topic, tx) in to_processing {
             match send_to_import_tx(
-                LocalStreamDestination::Processing(operation.clone()),
+                // TODO: Here we are potentially sending enriched events to many topics, I'm not
+                // sure if this ever happens, maybe enrichment is a per-topic action? If so we
+                // could refactor to account for that expectation.
+                LocalStreamDestination::Processing(operation.clone(), events.clone()),
                 &topic,
                 &tx,
             )

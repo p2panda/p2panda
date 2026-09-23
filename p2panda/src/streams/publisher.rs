@@ -18,10 +18,10 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
+use crate::streams::Event;
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
 use crate::streams::local_stream::{LocalStreamDestination, LocalStreamFuture};
-use crate::streams::{Event, ForwardEvent};
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
 
@@ -34,8 +34,6 @@ pub(crate) type ImportLocalTx = mpsc::Sender<(
     BoxStream<'static, LocalStreamDestination>,
     oneshot::Sender<LocalStreamFuture>,
 )>;
-
-pub(crate) type ToOutputTx<M> = mpsc::Sender<Vec<ForwardEvent<M>>>;
 
 /// Publish messages into a topic stream.
 ///
@@ -108,7 +106,6 @@ pub struct StreamPublisher<M> {
     pub(crate) publish_tx: PublishTx<M>,
     import_external_tx: ImportExternalTx,
     pub(crate) import_local_tx: ImportLocalTx,
-    pub(crate) to_output_tx: ToOutputTx<M>,
     _guard: StreamDropGuard,
 }
 
@@ -125,7 +122,6 @@ where
         publish_tx: PublishTx<M>,
         import_external_tx: ImportExternalTx,
         import_local_tx: ImportLocalTx,
-        to_output_tx: ToOutputTx<M>,
         _guard: StreamDropGuard,
     ) -> Self {
         Self {
@@ -135,7 +131,6 @@ where
             publish_tx,
             import_external_tx,
             import_local_tx,
-            to_output_tx,
             _guard,
         }
     }
@@ -224,30 +219,6 @@ where
             .map_err(|err| ImportError::SendToProcessor(err.to_string()))?;
 
         // Await receiving the session id and future which will complete when the external stream
-        // closes and all operations have been processed.
-        ready_rx
-            .await
-            .map_err(|err| ImportError::ReceiveFromProcessor(err.to_string()))
-    }
-
-    /// Import a local source of operations.
-    ///
-    /// This method can be used for importing some locally forged operations in a batch. The user
-    /// will receive no "import" events on the stream, only events resulting from publishing the
-    /// operations themselves.
-    pub(crate) async fn import_local(
-        &self,
-        stream: impl Stream<Item = LocalStreamDestination> + Send + 'static,
-    ) -> Result<LocalStreamFuture, ImportError> {
-        // Send stream to processor.
-        let stream = Box::pin(stream);
-        let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-        self.import_local_tx
-            .send((stream, ready_tx))
-            .await
-            .map_err(|err| ImportError::SendToProcessor(err.to_string()))?;
-
-        // Await receiving the future which will complete when the stream
         // closes and all operations have been processed.
         ready_rx
             .await

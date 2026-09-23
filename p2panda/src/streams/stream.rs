@@ -29,7 +29,7 @@ use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::InnerSpaceEvent;
+use crate::spaces::types::{InnerSpaceEvent, SpacesEvent};
 use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
@@ -307,7 +307,7 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                process_operation_in(*operation, source, topic, &pipeline, None).await;
+                                process_operation_in(*operation, source, topic, &pipeline, None, None).await;
                                 continue;
                             },
                         }
@@ -328,6 +328,7 @@ where
                             topic,
                             &pipeline,
                             Some(&sync_handle),
+                            None
                         ).await;
 
                         // Inform publisher optionally about result of processor and that we're
@@ -360,6 +361,7 @@ where
                                     topic,
                                     &pipeline,
                                     Some(&sync_handle),
+                                    None
                                 ).await;
 
                                 continue;
@@ -396,13 +398,15 @@ where
 
                                 continue;
                             }
-                            LocalStreamEvent::Item(LocalStreamDestination::Processing(operation)) => {
+                            LocalStreamEvent::Item(LocalStreamDestination::Processing(operation, events)) => {
+                                let events = if events.is_empty() {None} else {Some(events)};
                                 process_operation_in(
                                     operation,
                                     Source::LocalStore,
                                     topic,
                                     &pipeline,
                                     None,
+                                    events
                                 ).await;
 
                                 continue;
@@ -432,7 +436,6 @@ where
         publish_tx,
         import_external_tx,
         import_local_tx,
-        to_output_tx,
         drop_guard.clone(),
     );
     let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx), drop_guard);
@@ -447,6 +450,7 @@ pub(crate) async fn process_operation_in(
     topic: Topic,
     pipeline: &Pipeline,
     sync_handle: Option<&Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>>,
+    spaces_events: Option<Vec<SpacesEvent>>,
 ) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
@@ -476,8 +480,7 @@ pub(crate) async fn process_operation_in(
             topic,
             prune_flag,
             spaces_args,
-            // TODO: inject events resulting from locally created spaces operations.
-            None,
+            spaces_events,
         ))
         .await;
 

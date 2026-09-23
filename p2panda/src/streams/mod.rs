@@ -29,11 +29,11 @@ pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
 pub use external_stream::ExternalStreamFuture;
 pub(crate) use local_stream::{LocalStreamDestination, LocalStreamFuture};
+pub(crate) use publisher::ImportLocalTx;
 pub use publisher::{CloseError, ImportError, PublishError, PublishFuture, StreamPublisher};
-pub(crate) use publisher::{ImportLocalTx, ToOutputTx};
 pub use replay::{ReplayError, StreamFrom};
+pub(crate) use stream::processed_stream;
 pub use stream::{ForwardEvent, ProcessedOperation, Source, StreamEvent};
-pub(crate) use stream::{processed_stream, to_stream_event, to_system_event};
 pub use subscription::StreamSubscription;
 pub use sync_metrics::{SessionPhase, SyncError};
 

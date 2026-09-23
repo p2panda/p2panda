@@ -80,6 +80,7 @@ where
             topic,
             pipeline,
             None,
+            None,
         )
         .await;
     }

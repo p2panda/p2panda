@@ -54,14 +54,15 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use p2panda_stream::hooks::ProcessorHook;
 use thiserror::Error;
-use tokio::sync::{Notify, mpsc, oneshot};
+use tokio::sync::{Notify, mpsc};
 use tracing::{debug, error};
 
+use crate::egress::EgressHandle;
 use crate::operation::Operation;
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
-use crate::streams::{Event, ImportLocalTx, LocalStreamDestination, LocalStreamFuture};
+use crate::streams::Event;
 
 #[derive(Debug)]
 pub struct Member {
@@ -226,7 +227,7 @@ pub enum KeyBundleTaskCommand {
     /// This allows currently connected nodes to directly receive these messages in "live-mode" as
     /// they get eagerly pushed towards them. Offline nodes will pick them up later as part of the
     /// regular sync protocol.
-    AddStream(SpaceId, ImportLocalTx),
+    AddStream(SpaceId, EgressHandle),
 
     /// Remove inactive / closed stream from the list.
     RemoveStream(SpaceId),
@@ -246,7 +247,7 @@ async fn renew_expired_key_bundles(
     // TODO: Instead of this space id -> import stream association the whole thing should be it's
     // own object (something like an "local import handle"), we should be able to create one
     // directly from a stream object.
-    let mut spaces_streams: HashMap<SpaceId, ImportLocalTx> = HashMap::new();
+    let mut spaces_streams: HashMap<SpaceId, EgressHandle> = HashMap::new();
 
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
@@ -271,11 +272,11 @@ async fn renew_expired_key_bundles(
 
                 let mut failed_sends = Vec::new();
 
-                for (space_id, import_local_tx) in spaces_streams.iter() {
+                for (space_id, egress_handle) in spaces_streams.iter() {
                     let success = publish_member_message(
                         operation.clone(),
                         space_id,
-                        import_local_tx,
+                        egress_handle,
                     )
                     .await;
 
@@ -299,8 +300,8 @@ async fn renew_expired_key_bundles(
                 };
 
                 match command {
-                    KeyBundleTaskCommand::AddStream(space_id, import_local_tx) => {
-                        spaces_streams.insert(space_id, import_local_tx);
+                    KeyBundleTaskCommand::AddStream(space_id, egress_handle) => {
+                        spaces_streams.insert(space_id, egress_handle);
                     },
                     KeyBundleTaskCommand::RemoveStream(space_id) => {
                         spaces_streams.remove(&space_id);
@@ -314,25 +315,25 @@ async fn renew_expired_key_bundles(
 async fn publish_member_message(
     operation: Operation,
     space_id: &SpaceId,
-    import_local_tx: &ImportLocalTx,
+    egress_handle: &EgressHandle,
 ) -> bool {
-    let stream = Box::pin(futures_util::stream::once(async {
-        LocalStreamDestination::Processing(operation)
-    }));
+    let submit_fut = match egress_handle.submit(operation).await {
+        Ok(fut) => fut,
+        Err(err) => {
+            debug!(
+                space_id = %space_id.fmt_short(),
+                "sending member message failed due to error: {err}"
+            );
+            return false;
+        }
+    };
 
-    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-
-    if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
+    if let Err(err) = submit_fut.await {
         debug!(
             space_id = %space_id.fmt_short(),
-            "sending member message failed due to error: {err}"
+            "processing member message failed due to error: {err}"
         );
-
-        return false;
     }
-
-    // Wait until this member message was properly ingested.
-    let _ = ready_rx.await;
 
     true
 }
@@ -450,6 +451,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use crate::Credentials;
+    use crate::egress::{Egress, EgressConfig};
     use crate::forge::OperationForge;
     use crate::spaces::forge::member_log_id;
 
@@ -526,7 +528,14 @@ mod tests {
 
         let space_id = Topic::random();
         let (import_tx, mut import_rx) = mpsc::channel(16);
-        let _ = handle.send(KeyBundleTaskCommand::AddStream(space_id.into(), import_tx));
+
+        let egress = Egress::new();
+        egress.add_stream(space_id, true, import_tx).await;
+        let egress_handle = egress.handle(EgressConfig::topic(space_id));
+        let _ = handle.send(KeyBundleTaskCommand::AddStream(
+            space_id.into(),
+            egress_handle,
+        ));
 
         assert!(import_rx.is_empty());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);

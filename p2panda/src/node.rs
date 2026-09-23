@@ -24,7 +24,7 @@ use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
-use crate::egress::Egress;
+use crate::egress::{Egress, EgressConfig};
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
@@ -33,15 +33,14 @@ use crate::spaces::types::{
 };
 use crate::spaces::{
     AccessLevel, ActorId, ConnectionAuthoriserHook, DEFAULT_REPAIR_STRATEGY, Group, GroupError,
-    KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space,
+    KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError,
     SpaceSubscription, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
-    to_initial_members,
+    submit_enriched, to_initial_members,
 };
 use crate::streams::{
-    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError,
-    LocalStreamDestination, Pipeline, StreamFrom, StreamPublisher, StreamSubscription, SystemEvent,
-    TaskTracker, ephemeral_stream, event_stream, processed_stream, to_stream_event,
-    to_system_event,
+    EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
+    StreamFrom, StreamPublisher, StreamSubscription, SystemEvent, TaskTracker, ephemeral_stream,
+    event_stream, processed_stream,
 };
 
 static_assertions::assert_impl_all!(Node: Send, Sync);
@@ -467,8 +466,9 @@ impl Node {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
+                let egress_handle = self.egress.handle(EgressConfig::topic(topic));
                 let events_rx = self.resubscribe_event_stream();
-                Ok(Some(Group::new(inner, tx, rx, events_rx)))
+                Ok(Some(Group::new(inner, egress_handle, tx, rx, events_rx)))
             }
             None => Ok(None),
         }
@@ -491,17 +491,9 @@ impl Node {
         let topic = actor_to_topic(group_id);
         let (tx, rx) = self.stream::<NoBody>(topic).await?;
 
-        let processed = tx
-            .import_local(futures_util::stream::once(async {
-                LocalStreamDestination::Processing(message.into_operation())
-            }))
-            .await?;
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
+        let egress_handle = self.egress.handle(EgressConfig::topic(topic));
+        let submit_fut = egress_handle.submit(message.into_operation()).await?;
+        submit_fut.await?;
 
         let events_rx = self.resubscribe_event_stream();
 
@@ -510,7 +502,8 @@ impl Node {
             .group(group_id)
             .await?
             .expect("newly created group exists");
-        Ok(Group::new(inner, tx, rx, events_rx))
+
+        Ok(Group::new(inner, egress_handle, tx, rx, events_rx))
     }
 
     pub async fn space<M>(
@@ -586,14 +579,15 @@ impl Node {
         }
         let (tx, rx) = self.space_stream_from_inner(space_id, from).await?;
 
+        let egress_handle = self.egress.handle(EgressConfig::topic(space_id.into()));
+
         // Spawn per-space repair background task.
         let repair_task = RepairTask::spawn(
             inner.id(),
             self.spaces_manager.clone(),
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
-            tx.import_local_tx.clone(),
-            tx.to_output_tx.clone(),
+            egress_handle.clone(),
             self.connection_authoriser.clone(),
         );
 
@@ -602,6 +596,7 @@ impl Node {
             self.store.clone(),
             repair_task,
             self.key_bundle_task.command_handle(),
+            egress_handle,
             tx,
             rx,
             self.connection_authoriser.clone(),
@@ -669,41 +664,8 @@ impl Node {
                 .await?;
         });
 
-        let processed = tx
-            .import_local(futures_util::stream::iter(
-                create_space_messages
-                    .into_iter()
-                    .map(|message| LocalStreamDestination::Processing(message.into_operation())),
-            ))
-            .await?;
-
-        // Wait until processing the events has finished. This should result in a "materialised
-        // space" we can finally call and return to the user.
-
-        // TODO: Would be good to get an error / report here if processing the imported operations
-        // failed. This error so far only tells us that the channel broke down.
-        if processed.await.is_err() {
-            panic!();
-        }
-
-        // Manually forward the resulting spaces events to the application layer.
-        let events = events
-            .into_iter()
-            .filter_map(|event| match event {
-                p2panda_spaces::Event::Spaces(space_event) => {
-                    Some(to_stream_event(space_event).into())
-                }
-                p2panda_spaces::Event::Groups(group_event) => {
-                    Some(to_system_event(group_event).into())
-                }
-                _ => None,
-            })
-            .collect();
-
-        tx.to_output_tx
-            .send(events)
-            .await
-            .map_err(|_| CreateSpaceError::AppSend)?;
+        let egress_handle = self.egress.handle(EgressConfig::topic(space_id.into()));
+        submit_enriched(&egress_handle, create_space_messages, events).await?;
 
         let inner = self
             .spaces_manager
@@ -717,8 +679,7 @@ impl Node {
             self.spaces_manager.clone(),
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
-            tx.import_local_tx.clone(),
-            tx.to_output_tx.clone(),
+            egress_handle.clone(),
             self.connection_authoriser.clone(),
         );
 
@@ -727,6 +688,7 @@ impl Node {
             self.store.clone(),
             repair_task,
             self.key_bundle_task.command_handle(),
+            egress_handle,
             tx,
             rx,
             self.connection_authoriser.clone(),
@@ -900,6 +862,9 @@ pub enum CreateSpaceError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
+
+    #[error(transparent)]
+    SpaceEgress(#[from] SpaceEgressError),
 
     #[error(transparent)]
     ImportKeyBundle(#[from] ImportError),

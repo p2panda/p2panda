@@ -31,8 +31,8 @@ pub(crate) use member::{
 pub(crate) use repair::{DEFAULT_REPAIR_STRATEGY, RepairError, RepairTask};
 pub(crate) use space::spaces_stream;
 pub use space::{
-    AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceFuture,
-    SpaceSubscription,
+    AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceEgressError,
+    SpaceFuture, SpaceSubscription, submit_enriched,
 };
 pub use types::{InnerGroupEvent, SpacesManagerError};
 

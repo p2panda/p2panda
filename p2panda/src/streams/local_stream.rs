@@ -9,6 +9,7 @@ use futures_util::{FutureExt, Stream, StreamExt};
 use tokio::sync::oneshot;
 
 use crate::operation::Operation;
+use crate::spaces::types::SpacesEvent;
 
 /// Set of currently active local streams.
 #[derive(Default)]
@@ -18,7 +19,17 @@ pub(crate) struct LocalStream {
 
 pub enum LocalStreamDestination {
     Delivery(Operation),
-    Processing(Operation), // TODO: Should be changed to Event
+    Processing(Operation, Vec<SpacesEvent>),
+}
+
+impl LocalStreamDestination {
+    pub fn processing(operation: Operation) -> Self {
+        Self::Processing(operation, vec![])
+    }
+
+    pub fn processing_enriched(operation: Operation, events: Vec<SpacesEvent>) -> Self {
+        Self::Processing(operation, events)
+    }
 }
 
 #[cfg(test)]
@@ -26,7 +37,7 @@ impl LocalStreamDestination {
     pub fn operation(&self) -> &Operation {
         match self {
             Self::Delivery(operation) => operation,
-            Self::Processing(operation) => operation,
+            Self::Processing(operation, _) => operation,
         }
     }
 }
