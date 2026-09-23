@@ -26,6 +26,7 @@ pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::egress::Egress;
 use crate::forge::{Forge, OperationForge};
+use crate::hooks::GroupsHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
 use crate::spaces::types::{
@@ -614,9 +615,16 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
+        let topic = topic.into();
+
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_authoriser.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
+        post_pipeline.push(GroupsHook::new(
+            // Space id is the digest of the topic.
+            SpaceId::digest(topic.as_bytes()),
+            self.store.clone(),
+        ));
 
         self.stream_from_inner(topic, from, true, post_pipeline)
             .await
