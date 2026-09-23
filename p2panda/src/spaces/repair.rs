@@ -198,7 +198,7 @@ pub(crate) async fn repair_space(
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
     update_authoriser(connection_authoriser, &events).await;
 
-    submit_enriched(&egress_handle, spaces_messages, events).await?;
+    submit_enriched(egress_handle, spaces_messages, events).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),

@@ -21,7 +21,7 @@ use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::Event;
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
-use crate::streams::local_stream::{LocalStreamDestination, LocalStreamFuture};
+use crate::streams::local_stream::LocalStreamDestination;
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
 
@@ -30,10 +30,7 @@ type ImportExternalTx = mpsc::Sender<(
     oneshot::Sender<ExternalStreamFuture>,
 )>;
 
-pub(crate) type ImportLocalTx = mpsc::Sender<(
-    BoxStream<'static, LocalStreamDestination>,
-    oneshot::Sender<LocalStreamFuture>,
-)>;
+pub(crate) type ImportLocalTx = mpsc::Sender<(LocalStreamDestination, oneshot::Sender<()>)>;
 
 /// Publish messages into a topic stream.
 ///

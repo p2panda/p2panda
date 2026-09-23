@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-#![allow(unused)] // TODO: Remove this.
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
@@ -16,7 +15,7 @@ use tracing::error;
 
 use crate::operation::Operation;
 use crate::spaces::types::SpacesEvent;
-use crate::streams::{ImportLocalTx, LocalStreamDestination, LocalStreamFuture};
+use crate::streams::{ImportLocalTx, LocalStreamDestination};
 
 /// Configure event-delivery & -processing policies for locally forged or remotely received
 /// operations.
@@ -222,7 +221,6 @@ impl EgressHandle {
         self.submit_inner(operation, vec![]).await
     }
 
-    // TODO: Should be changed from Operation -> Event.
     pub async fn submit_inner(
         &self,
         operation: Operation,
@@ -262,8 +260,8 @@ impl EgressHandle {
                 Err(err) => {
                     return Err(err);
                 }
-                Ok(fut) => {
-                    delivery_futures.push(fut);
+                Ok(done_rx) => {
+                    delivery_futures.push(done_rx);
                 }
             }
         }
@@ -289,8 +287,8 @@ impl EgressHandle {
         for (topic, tx) in to_processing {
             match send_to_import_tx(
                 // TODO: Here we are potentially sending enriched events to many topics, I'm not
-                // sure if this ever happens, maybe enrichment is a per-topic action? If so we
-                // could refactor to account for that expectation.
+                // sure if this ever happens, maybe enrichment is a per-topic action? If so we could
+                // refactor to account for that expectation.
                 LocalStreamDestination::Processing(operation.clone(), events.clone()),
                 &topic,
                 &tx,
@@ -303,8 +301,8 @@ impl EgressHandle {
                 Err(err) => {
                     return Err(err);
                 }
-                Ok(fut) => {
-                    processing_futures.push(fut);
+                Ok(done_rx) => {
+                    processing_futures.push(done_rx);
                 }
             }
         }
@@ -331,12 +329,10 @@ async fn send_to_import_tx(
     destination: LocalStreamDestination,
     topic: &Topic,
     import_local_tx: &ImportLocalTx,
-) -> Result<LocalStreamFuture, SubmitError> {
-    let stream = Box::pin(futures_util::stream::once(async { destination }));
+) -> Result<oneshot::Receiver<()>, SubmitError> {
+    let (ready_tx, ready_rx) = oneshot::channel::<()>();
 
-    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-
-    if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
+    if let Err(err) = import_local_tx.send((destination, ready_tx)).await {
         error!(
             topic = %topic.fmt_short(),
             "sending message failed due to error: {err}"
@@ -345,9 +341,7 @@ async fn send_to_import_tx(
         return Err(SubmitError::SendEvent(err.to_string()));
     }
 
-    let process_fut = ready_rx.await?;
-
-    Ok(process_fut)
+    Ok(ready_rx)
 }
 
 #[derive(Debug, Error)]
@@ -362,9 +356,9 @@ pub enum SubmitError {
 #[derive(Debug)]
 pub struct SubmitFuture {
     pub delivery_count: usize,
-    delivery_fut: future::TryJoinAll<LocalStreamFuture>,
+    delivery_fut: future::TryJoinAll<oneshot::Receiver<()>>,
     pub processing_count: usize,
-    processing_fut: future::TryJoinAll<LocalStreamFuture>,
+    processing_fut: future::TryJoinAll<oneshot::Receiver<()>>,
 }
 
 impl Future for SubmitFuture {

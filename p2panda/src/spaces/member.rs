@@ -543,8 +543,7 @@ mod tests {
         // 2. Background task is going into next cycle which will cause generation of new key
         //    bundle. We expect all currently active streams (in "live-mode") to be informed about
         //    this update.
-        let (mut import_stream, _) = import_rx.recv().await.expect("import stream exists");
-        let item = import_stream.next().await.expect("an operation was forged");
+        let (item, _) = import_rx.recv().await.expect("import stream exists");
 
         let member_msg = match item
             .operation()

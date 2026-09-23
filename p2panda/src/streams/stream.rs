@@ -36,7 +36,6 @@ use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
-use crate::streams::local_stream::{LocalStream, LocalStreamEvent, LocalStreamFuture};
 use crate::streams::publisher::StreamPublisher;
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::subscription::StreamSubscription;
@@ -141,13 +140,8 @@ where
     let mut external_stream = ExternalStream::default();
 
     // Channel for importing local operation streams.
-    let (import_local_tx, mut import_local_rx) = mpsc::channel::<(
-        BoxStream<'static, LocalStreamDestination>,
-        oneshot::Sender<LocalStreamFuture>,
-    )>(IMPORT_BUFFER_SIZE);
-
-    // Set of currently active local streams.
-    let mut local_stream = LocalStream::default();
+    let (import_local_tx, mut import_local_rx) =
+        mpsc::channel::<(LocalStreamDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
 
     // Determine from which point on we re-play locally stored operations.
     let nacked_log_ranges = acked
@@ -374,19 +368,10 @@ where
                         }
                     },
 
-                    // Receive imported local source of operations.
-                    Some((stream, ready_tx)) = import_local_rx.recv() => {
-                        let local_stream_future = local_stream.insert(stream);
-                        if ready_tx.send(local_stream_future).is_err() {
-                            warn!("failed sending on local import ready channel")
-                        };
-                        continue;
-                    }
-
                     // Receive the next ready event from any imported local source.
-                    Some(event) = local_stream.next() => {
-                        match event {
-                            LocalStreamEvent::Item(LocalStreamDestination::Delivery(operation)) => {
+                    Some((input, signal_tx)) = import_local_rx.recv() => {
+                        match input {
+                            LocalStreamDestination::Delivery(operation) => {
                                 let operation_id = operation.hash();
 
                                 if sync_handle.publish(operation).is_err() {
@@ -396,10 +381,17 @@ where
                                     )
                                 }
 
+                                let _ = signal_tx.send(());
+
                                 continue;
                             }
-                            LocalStreamEvent::Item(LocalStreamDestination::Processing(operation, events)) => {
-                                let events = if events.is_empty() {None} else {Some(events)};
+                            LocalStreamDestination::Processing(operation, events) => {
+                                let events = if events.is_empty() {
+                                    None
+                                } else {
+                                    Some(events)
+                                };
+
                                 process_operation_in(
                                     operation,
                                     Source::LocalStore,
@@ -409,9 +401,10 @@ where
                                     events
                                 ).await;
 
+                                let _ = signal_tx.send(());
+
                                 continue;
                             },
-                            LocalStreamEvent::End => vec![] ,
                         }
                     },
 

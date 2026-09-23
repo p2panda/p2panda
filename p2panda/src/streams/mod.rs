@@ -28,7 +28,7 @@ pub use ephemeral_stream::{
 pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
 pub use external_stream::ExternalStreamFuture;
-pub(crate) use local_stream::{LocalStreamDestination, LocalStreamFuture};
+pub(crate) use local_stream::LocalStreamDestination;
 pub(crate) use publisher::ImportLocalTx;
 pub use publisher::{CloseError, ImportError, PublishError, PublishFuture, StreamPublisher};
 pub use replay::{ReplayError, StreamFrom};
