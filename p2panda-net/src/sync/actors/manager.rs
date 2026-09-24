@@ -21,12 +21,10 @@ use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
 use crate::codec::{into_codec_sink, into_codec_stream};
-use crate::connection_authoriser::{
-    ConnectionAuthoriser, ConnectionAuthoriserError, ConnectionAuthoriserEvent,
-};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{ToTopicManager, TopicManager};
+use crate::sync::sync_authoriser::{SyncAuthoriser, SyncAuthoriserError, SyncAuthoriserEvent};
 use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
@@ -108,7 +106,7 @@ where
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
-    connection_authoriser: ConnectionAuthoriser,
+    authoriser: SyncAuthoriser,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
@@ -143,10 +141,10 @@ where
         myself: &ActorRef<ToSyncManager<M::Message, M::Event>>,
         topic: Topic,
     ) -> Result<(), ActorProcessingErr> {
-        // To avoid collisions when topics are re-used across the application for different
-        // purposes (membership algorithms aiding sync protocols or ephemeral messaging gossip
-        // overlays), we're defining a constant with which topics from the user will be mixed to
-        // derive a new one.
+        // To avoid collisions when topics are re-used across the application for different purposes
+        // (membership algorithms aiding sync protocols or ephemeral messaging gossip overlays),
+        // we're defining a constant with which topics from the user will be mixed to derive a new
+        // one.
         let gossip_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
         self.gossip_topics.write().await.insert(gossip_topic, topic);
 
@@ -237,18 +235,18 @@ where
 
     type Msg = ToSyncManager<M::Message, M::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, ConnectionAuthoriser);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, SyncAuthoriser);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip, connection_authoriser) = args;
+        let (protocol_id, sync_args, endpoint, gossip, authoriser) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
-        let sync_managers = Default::default();
+        let sync_managers = TopicManagers::default();
 
         // Sync manager actors are all spawned in a dedicated thread.
         let thread_pool = ThreadLocalActorSpawner::new();
@@ -260,7 +258,7 @@ where
             protocol_id,
             endpoint,
             gossip,
-            connection_authoriser,
+            authoriser,
             gossip_handles,
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
@@ -303,7 +301,7 @@ where
                     .accept(
                         state.protocol_id.clone(),
                         SyncProtocolHandler {
-                            connection_authoriser: state.connection_authoriser.clone(),
+                            authoriser: state.authoriser.clone(),
                             stream_ref: myself.clone(),
                         },
                     )
@@ -405,25 +403,21 @@ where
             }
             ToSyncManager::InitiateSync(topic, node_id) => {
                 // Authorise that we should be connecting on this topic with the remote node.
-                if state
-                    .connection_authoriser
-                    .can_connect_on_topic(node_id, topic)
-                    .await
-                {
+                if state.authoriser.can_connect_on_topic(node_id, topic).await {
                     state
-                        .connection_authoriser
-                        .send_event(ConnectionAuthoriserEvent::TopicAllowed {
+                        .authoriser
+                        .send_event(SyncAuthoriserEvent::TopicAllowed {
                             topic,
                             node: node_id,
                         })
                         .await;
                 } else {
-                    let event = ConnectionAuthoriserEvent::TopicBlocked {
+                    let event = SyncAuthoriserEvent::TopicBlocked {
                         topic,
                         node: node_id,
                     };
                     warn!("{}", event);
-                    state.connection_authoriser.send_event(event).await;
+                    state.authoriser.send_event(event).await;
 
                     // Do not initiate a sync session with a blocked topic-node combination.
                     return Ok(());
@@ -542,7 +536,7 @@ where
     M: Send + 'static,
     E: Send + 'static,
 {
-    connection_authoriser: ConnectionAuthoriser,
+    authoriser: SyncAuthoriser,
     stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
@@ -590,31 +584,28 @@ where
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
-        let allow = self
-            .connection_authoriser
-            .can_connect_on_topic(node_id, topic)
-            .await;
+        let allow = self.authoriser.can_connect_on_topic(node_id, topic).await;
 
         // Authorise that we should be connecting on this topic with the remote node.
         if allow {
-            self.connection_authoriser
-                .send_event(ConnectionAuthoriserEvent::TopicAllowed {
+            self.authoriser
+                .send_event(SyncAuthoriserEvent::TopicAllowed {
                     topic,
                     node: node_id,
                 })
                 .await;
         } else {
-            let event = ConnectionAuthoriserEvent::TopicBlocked {
+            let event = SyncAuthoriserEvent::TopicBlocked {
                 topic,
                 node: node_id,
             };
             warn!("{}", event);
-            self.connection_authoriser.send_event(event).await;
+            self.authoriser.send_event(event).await;
 
             // Do not accept a sync session with a blocked topic-node combination.
             connection.close(VarInt::from_u32(0), b"not authorised");
             return Err(iroh::protocol::AcceptError::from_err(
-                ConnectionAuthoriserError::NotAuthorised,
+                SyncAuthoriserError::NotAuthorised,
             ));
         }
 

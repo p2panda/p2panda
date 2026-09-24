@@ -5,6 +5,7 @@ mod actors;
 mod api;
 mod builder;
 mod config;
+pub mod connection_authoriser;
 mod discovery;
 mod hooks;
 #[cfg(feature = "supervisor")]
