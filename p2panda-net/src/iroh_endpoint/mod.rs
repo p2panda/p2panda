@@ -5,6 +5,7 @@ mod actors;
 mod api;
 mod builder;
 mod config;
+mod connection_authoriser;
 mod discovery;
 mod hooks;
 #[cfg(feature = "supervisor")]
@@ -20,3 +21,4 @@ pub use iroh::{EndpointAddr, RelayUrl};
 pub use api::{Endpoint, EndpointError};
 pub use builder::Builder;
 pub use config::IrohConfig;
+pub use connection_authoriser::{ConnectionAuthoriser, ConnectionAuthoriserEvent};
