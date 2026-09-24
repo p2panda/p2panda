@@ -4,6 +4,7 @@
 mod actors;
 mod handle;
 mod log_sync;
+pub mod sync_authoriser;
 #[cfg(test)]
 mod tests;
 
