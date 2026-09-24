@@ -16,12 +16,12 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::egress::EgressDestination;
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::Event;
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
-use crate::streams::local_stream::LocalStreamDestination;
 
 type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
 
@@ -30,7 +30,7 @@ type ImportExternalTx = mpsc::Sender<(
     oneshot::Sender<ExternalStreamFuture>,
 )>;
 
-pub(crate) type ImportLocalTx = mpsc::Sender<(LocalStreamDestination, oneshot::Sender<()>)>;
+pub(crate) type ImportLocalTx = mpsc::Sender<(EgressDestination, oneshot::Sender<()>)>;
 
 /// Publish messages into a topic stream.
 ///

@@ -56,9 +56,7 @@ use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error};
 
-use crate::egress::{
-    Egress, EgressConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy,
-};
+use crate::egress::{EgressConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
@@ -164,26 +162,25 @@ impl KeyBundleTask {
     /// This method awaits until we can be sure at least one valid key bundle was published into the
     /// member's log. This assures that all logic to subscribe to a space causes sync session to be
     /// initialised _after_ the log was checked & populated.
-    pub async fn spawn(manager: SpacesManager, egress: &Egress) -> Self {
-        Self::spawn_inner(manager, egress, CHECK_KEY_BUNDLE_FREQUENCY).await
+    pub async fn spawn(manager: SpacesManager, egress_handle: EgressHandle) -> Self {
+        Self::spawn_inner(manager, egress_handle, CHECK_KEY_BUNDLE_FREQUENCY).await
     }
 
     #[cfg(test)]
     pub async fn spawn_with_frequency(
         manager: SpacesManager,
-        egress: &Egress,
+        egress_handle: EgressHandle,
         frequency: Duration,
     ) -> Self {
-        Self::spawn_inner(manager, egress, frequency).await
+        Self::spawn_inner(manager, egress_handle, frequency).await
     }
 
-    async fn spawn_inner(manager: SpacesManager, egress: &Egress, frequency: Duration) -> Self {
+    async fn spawn_inner(
+        manager: SpacesManager,
+        egress_handle: EgressHandle,
+        frequency: Duration,
+    ) -> Self {
         debug!("key bundle management task started");
-
-        let egress_handle = egress.handle(EgressConfig {
-            delivery: EventDeliveryPolicy::OnlySpaces,
-            processing: EventProcessingPolicy::Disabled,
-        });
 
         let ready_signal = Arc::new(Notify::new());
 
@@ -225,6 +222,11 @@ async fn renew_expired_key_bundles(
     ready_signal: Arc<Notify>,
     frequency: Duration,
 ) -> Result<(), SpacesManagerError> {
+    let config = EgressConfig {
+        delivery: EventDeliveryPolicy::OnlySpaces,
+        processing: EventProcessingPolicy::Disabled,
+    };
+
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
     let mut interval = tokio::time::interval(frequency);
@@ -245,7 +247,7 @@ async fn renew_expired_key_bundles(
         );
 
         // TODO: Handle error?
-        let _ = egress_handle.submit(operation).await;
+        let _ = egress_handle.submit_with_config(operation, &config).await;
 
         ready_signal.notify_one();
     }
@@ -401,7 +403,7 @@ mod tests {
 
         // 2. We launch the background task and expect a first key bundle to be published
         //    automatically in the member's log.
-        let _task = KeyBundleTask::spawn(spaces_manager.clone(), &egress).await;
+        let _task = KeyBundleTask::spawn(spaces_manager.clone(), egress.handle()).await;
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
 
         // 3. The key bundle exists and is valid. Calling "me" doesn't generate a new one.
@@ -437,7 +439,7 @@ mod tests {
         //    stream to receive any key bundles yet as they were added _afterwards_.
         let _task = KeyBundleTask::spawn_with_frequency(
             spaces_manager.clone(),
-            &egress,
+            egress.handle(),
             Duration::from_millis(300),
         )
         .await;

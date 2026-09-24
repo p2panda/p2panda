@@ -138,10 +138,13 @@ impl Group {
             )
             .await?;
 
-        let submit_fut = self.egress_handle.submit(message.into_operation()).await?;
+        let processed = self
+            .egress_handle
+            .submit(message.into_operation(), self.id().into())
+            .await?;
 
         Ok(GroupFuture {
-            submit_fut,
+            processed,
             group_id: self.inner.id(),
         })
     }
@@ -163,10 +166,14 @@ impl Group {
         })?;
 
         let (_, message, _) = self.inner.remove(actor).await?;
-        let submit_fut = self.egress_handle.submit(message.into_operation()).await?;
+
+        let processed = self
+            .egress_handle
+            .submit(message.into_operation(), self.id().into())
+            .await?;
 
         Ok(GroupFuture {
-            submit_fut,
+            processed,
             group_id: self.inner.id(),
         })
     }
@@ -205,7 +212,7 @@ impl From<Group> for ActorId {
 
 pub struct GroupFuture {
     pub(crate) group_id: ActorId,
-    pub(crate) submit_fut: SubmitFuture,
+    pub(crate) processed: SubmitFuture,
 }
 
 impl GroupFuture {
@@ -218,7 +225,7 @@ impl Future for GroupFuture {
     type Output = Result<(), EgressError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.submit_fut.poll_unpin(cx)
+        self.processed.poll_unpin(cx)
     }
 }
 

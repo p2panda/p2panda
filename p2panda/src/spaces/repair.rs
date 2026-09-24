@@ -11,7 +11,7 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::{SqliteError, SqliteStore, Transaction, tx};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::oneshot::Sender;
@@ -24,7 +24,7 @@ use crate::operation::Operation;
 use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::space::SpaceEgressError;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
-use crate::spaces::{SpacesManagerError, group_log_id, submit_enriched};
+use crate::spaces::{SpacesManagerError, group_log_id, submit_enriched_space_messages};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
@@ -167,8 +167,8 @@ pub(crate) async fn repair_space(
     store.commit(permit).await?;
 
     for operation in groups_operations {
-        let submit_fut = egress_handle.submit(operation).await?;
-        submit_fut.await?;
+        let processed = egress_handle.submit(operation, space_id.into()).await?;
+        processed.await?;
     }
 
     // Attempt to repair the space. As we pass in an array containing a single space id there will
@@ -179,26 +179,22 @@ pub(crate) async fn repair_space(
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &group_ids).await?;
+    let (space_y, spaces_messages, spaces_events) =
+        manager.repair_space(space_id, &group_ids).await?;
 
     // Persist spaces state.
-    {
-        let permit = store.begin().await?;
-
-        let space_id = space_y.space_id;
+    tx!(spaces_store, {
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
-
-        store.commit(permit).await?;
-    }
+    });
 
     // Update the connection authoriser.
     //
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    update_authoriser(connection_authoriser, &events).await;
+    update_authoriser(connection_authoriser, &spaces_events).await;
 
-    submit_enriched(egress_handle, spaces_messages, events).await?;
+    submit_enriched_space_messages(egress_handle, space_id, spaces_messages, spaces_events).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),

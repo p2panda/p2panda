@@ -27,11 +27,11 @@ pub use group::{
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
 pub(crate) use repair::{DEFAULT_REPAIR_STRATEGY, RepairError, RepairTask};
-pub(crate) use space::spaces_stream;
 pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceEgressError,
-    SpaceFuture, SpaceSubscription, submit_enriched,
+    SpaceFuture, SpaceSubscription,
 };
+pub(crate) use space::{spaces_stream, submit_enriched_space_messages};
 pub use types::{InnerGroupEvent, SpacesManagerError};
 
 use crate::Credentials;

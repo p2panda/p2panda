@@ -106,12 +106,15 @@ where
         // in the extensions for the spaces processor in p2panda-stream.
         let (_, message, _) = self.inner.publish(&body_bytes).await?;
 
-        // We don't need to persist state or pass enriched events through the pipeline as the
-        // spaces processor can re-process this event.
-        let submit_fut = self.egress_handle.submit(message.into_operation()).await?;
+        // We don't need to persist state or pass enriched events through the pipeline as the spaces
+        // processor can re-process this event.
+        let processed = self
+            .egress_handle
+            .submit(message.into_operation(), self.id().into())
+            .await?;
 
         Ok(SpaceFuture {
-            submit_fut,
+            processed,
             space_id: self.inner.id(),
         })
     }
@@ -135,7 +138,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, events) = self
+        let (groups_y, space_y, group_message, space_message, spaces_events) = self
             .inner
             .add(
                 actor,
@@ -147,10 +150,15 @@ where
             .await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &events).await;
+        update_authoriser(&self.connection_authoriser, &spaces_events).await;
 
-        self.process_change(groups_y, space_y, [group_message, space_message], events)
-            .await?;
+        self.process_change(
+            groups_y,
+            space_y,
+            [group_message, space_message],
+            spaces_events,
+        )
+        .await?;
 
         Ok(())
     }
@@ -172,14 +180,19 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, events) =
+        let (groups_y, space_y, group_message, space_message, spaces_events) =
             self.inner.remove(actor).await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &events).await;
+        update_authoriser(&self.connection_authoriser, &spaces_events).await;
 
-        self.process_change(groups_y, space_y, [group_message, space_message], events)
-            .await?;
+        self.process_change(
+            groups_y,
+            space_y,
+            [group_message, space_message],
+            spaces_events,
+        )
+        .await?;
 
         Ok(())
     }
@@ -207,7 +220,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, events) = self
+        let (groups_y, space_y, group_message, space_message, spaces_events) = self
             .inner
             .promote(
                 actor,
@@ -218,8 +231,13 @@ where
             )
             .await?;
 
-        self.process_change(groups_y, space_y, [group_message, space_message], events)
-            .await?;
+        self.process_change(
+            groups_y,
+            space_y,
+            [group_message, space_message],
+            spaces_events,
+        )
+        .await?;
 
         Ok(())
     }
@@ -247,7 +265,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, events) = self
+        let (groups_y, space_y, group_message, space_message, spaces_events) = self
             .inner
             .demote(
                 actor,
@@ -258,8 +276,13 @@ where
             )
             .await?;
 
-        self.process_change(groups_y, space_y, [group_message, space_message], events)
-            .await?;
+        self.process_change(
+            groups_y,
+            space_y,
+            [group_message, space_message],
+            spaces_events,
+        )
+        .await?;
 
         Ok(())
     }
@@ -269,12 +292,12 @@ where
         groups_y: AuthGroupState<AuthCapabilities>,
         space_y: SpacesState<AuthCapabilities>,
         messages: [SpacesMessage; 2],
-        events: Vec<p2panda_spaces::Event<AuthCapabilities>>,
+        spaces_events: Vec<SpacesEvent>,
     ) -> Result<(), ProcessError> {
         // Associate member logs with this space. This is equivalent to the member association hook
         // which is registered on the event processing pipeline. Since locally issued events are not
         // going through the pipeline, we have to repeat it here as well.
-        associate_members(self.inner.me(), &self.store, &events).await;
+        associate_members(self.inner.me(), &self.store, &spaces_events).await;
 
         let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
 
@@ -288,7 +311,14 @@ where
                 .await?;
         });
 
-        submit_enriched(&self.egress_handle, messages.to_vec(), events).await?;
+        submit_enriched_space_messages(
+            &self.egress_handle,
+            self.id(),
+            messages.to_vec(),
+            spaces_events,
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -328,32 +358,37 @@ where
     }
 }
 
-pub async fn submit_enriched(
+pub(crate) async fn submit_enriched_space_messages(
     egress_handle: &EgressHandle,
+    space_id: SpaceId,
     mut messages: Vec<SpacesMessage>,
-    events: Vec<SpacesEvent>,
+    spaces_events: Vec<SpacesEvent>,
 ) -> Result<(), SpaceEgressError> {
-    // Pop off the last spaces message, we will attach all events to this one, refactor after https://github.com/p2panda/p2panda/issues/1432
+    // TODO: Pop off the last spaces message, we will attach all system events to this one.
+    // Refactor after: https://github.com/p2panda/p2panda/issues/1432
     let Some(last) = messages.pop() else {
         return Ok(());
     };
 
-    // Send all other spaces operations to egress.
+    let topic = space_id.into();
+
     for message in messages {
-        let submit_fut = egress_handle.submit(message.into_operation()).await?;
-        submit_fut.await?;
+        let processed = egress_handle
+            .submit(message.into_operation(), topic)
+            .await?;
+        processed.await?;
     }
 
-    // Send the final spaces operation and events to egress.
-    let submit_fut = egress_handle
-        .submit_enriched(last.into_operation(), events)
+    // The final spaces event is enriched.
+    let processed = egress_handle
+        .submit_with_spaces_events(last.into_operation(), topic, Some(spaces_events))
         .await?;
-    submit_fut.await?;
+    processed.await?;
+
     Ok(())
 }
 
 pub struct SpaceSubscription<M> {
-    #[allow(unused)]
     rx: StreamSubscription<M>,
 }
 
@@ -369,8 +404,8 @@ where
 }
 
 pub struct SpaceFuture {
-    pub(crate) space_id: SpaceId,
-    pub(crate) submit_fut: SubmitFuture,
+    pub space_id: SpaceId,
+    pub processed: SubmitFuture,
 }
 
 impl SpaceFuture {
@@ -383,7 +418,7 @@ impl Future for SpaceFuture {
     type Output = Result<(), EgressError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.submit_fut.poll_unpin(cx)
+        self.processed.poll_unpin(cx)
     }
 }
 

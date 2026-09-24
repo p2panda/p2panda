@@ -25,6 +25,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
+use crate::egress::EgressDestination;
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
@@ -40,7 +41,7 @@ use crate::streams::publisher::StreamPublisher;
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::subscription::StreamSubscription;
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
-use crate::streams::{Event, LocalStreamDestination, Pipeline, SystemEvent};
+use crate::streams::{Event, Pipeline, SystemEvent};
 
 /// Number of items which can stay in the buffer before the application-layer picks up the
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
@@ -115,6 +116,9 @@ where
     let acked = Acked::new(store.clone(), topic);
 
     // Sync handle is used on the publisher and when importing from external streams.
+    //
+    // TODO: Event delivery should be handled outside of this and be connected to the pipeline via
+    // an ingress.
     let sync_handle = Arc::new(sync_handle);
 
     let mut sync_stream = sync_handle
@@ -127,10 +131,14 @@ where
 
     // Channel to send locally created operations to the processing pipeline. A "oneshot" callback
     // is attached to allow publishers to await the processing result.
+    //
+    // TODO: Remove this and make it part of egress.
     let (publish_tx, mut publish_rx) =
         mpsc::channel::<(Operation, Option<M>, oneshot::Sender<Event>)>(PUBLISH_BUFFER_SIZE);
 
     // Channel for importing external operation streams.
+    //
+    // TODO: Replace this with ingress.
     let (import_external_tx, mut import_external_rx) = mpsc::channel::<(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
@@ -139,11 +147,16 @@ where
     // Set of currently active external streams.
     let mut external_stream = ExternalStream::default();
 
-    // Channel for importing local operation streams.
+    // Channel for receiving messages from the egress.
+    //
+    // TODO: This should be two channels for different parts of the stack, one should go into the
+    // event delivery layer (sync handle), another into the ingress ("import local").
     let (import_local_tx, mut import_local_rx) =
-        mpsc::channel::<(LocalStreamDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
+        mpsc::channel::<(EgressDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
 
     // Determine from which point on we re-play locally stored operations.
+    //
+    // TODO: Move replay logic into own place and make it part of ingress.
     let nacked_log_ranges = acked
         .nacked_log_ranges(from)
         .await
@@ -371,9 +384,8 @@ where
                     // Receive the next ready event from any imported local source.
                     Some((input, signal_tx)) = import_local_rx.recv() => {
                         match input {
-                            LocalStreamDestination::Delivery(operation) => {
+                            EgressDestination::Delivery(operation) => {
                                 let operation_id = operation.hash();
-
                                 if sync_handle.publish(operation).is_err() {
                                     warn!(
                                         %operation_id,
@@ -385,24 +397,9 @@ where
 
                                 continue;
                             }
-                            LocalStreamDestination::Processing(operation, events) => {
-                                let events = if events.is_empty() {
-                                    None
-                                } else {
-                                    Some(events)
-                                };
-
-                                process_operation_in(
-                                    operation,
-                                    Source::LocalStore,
-                                    topic,
-                                    &pipeline,
-                                    None,
-                                    events
-                                ).await;
-
+                            EgressDestination::Processing(event) => {
+                                pipeline.process(event).await;
                                 let _ = signal_tx.send(());
-
                                 continue;
                             },
                         }
@@ -1015,6 +1012,10 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Source when an operation was published locally or replayed.
+    /// Operation was published locally or replayed.
+    // TODO
     LocalStore,
+
+    /// Operation was forged locally and handled in egress.
+    Egress,
 }

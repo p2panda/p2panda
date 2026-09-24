@@ -76,7 +76,7 @@ where
             operation
                 .try_into()
                 .expect("values from the database are valid"),
-            Source::LocalStore,
+            Source::Egress,
             topic,
             pipeline,
             None,

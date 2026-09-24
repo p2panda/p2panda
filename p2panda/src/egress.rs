@@ -15,13 +15,17 @@ use tracing::error;
 
 use crate::operation::Operation;
 use crate::spaces::types::SpacesEvent;
-use crate::streams::{ImportLocalTx, LocalStreamDestination};
+use crate::streams::{Event, ImportLocalTx, Source};
 
 /// Configure event-delivery & -processing policies for locally forged or remotely received
 /// operations.
 #[derive(Clone, Default, Debug)]
 pub struct EgressConfig {
+    /// Determines if and how the operation is pushed to the event delivery layer.
     pub delivery: EventDeliveryPolicy,
+
+    /// Determines if an operation is processed by an event processing pipeline for one or more
+    /// topic streams.
     pub processing: EventProcessingPolicy,
 }
 
@@ -30,27 +34,6 @@ impl EgressConfig {
         Self {
             delivery: EventDeliveryPolicy::Topic(topic),
             processing: EventProcessingPolicy::Topic(topic),
-        }
-    }
-
-    pub fn spaces() -> Self {
-        Self {
-            delivery: EventDeliveryPolicy::OnlySpaces,
-            processing: EventProcessingPolicy::OnlySpaces,
-        }
-    }
-
-    pub fn all() -> Self {
-        Self {
-            delivery: EventDeliveryPolicy::All,
-            processing: EventProcessingPolicy::All,
-        }
-    }
-
-    pub fn disabled() -> Self {
-        Self {
-            delivery: EventDeliveryPolicy::Disabled,
-            processing: EventProcessingPolicy::Disabled,
         }
     }
 }
@@ -75,18 +58,6 @@ pub enum EventDeliveryPolicy {
 
     /// Push operation to all channels which are currently exchanging over encrypted spaces.
     OnlySpaces,
-
-    /// Push operation to all currently active event delivery channels.
-    All,
-}
-
-impl EventDeliveryPolicy {
-    pub fn topic(&self) -> Option<Topic> {
-        match self {
-            Self::Topic(topic) => Some(*topic),
-            _ => None,
-        }
-    }
 }
 
 /// Determines if an operation is processed by an event processing pipeline for one or more topic
@@ -105,19 +76,19 @@ pub enum EventProcessingPolicy {
 
     /// Process operation in pipeline for a particular topic (if active stream exists).
     Topic(Topic),
-
-    /// Process operation only in active pipelines concerned with encrypted spaces.
-    OnlySpaces,
-
-    /// Process operation in all currently active pipelines.
-    All,
 }
 
-impl EventProcessingPolicy {
-    pub fn topic(&self) -> Option<Topic> {
+#[allow(clippy::large_enum_variant)]
+pub enum EgressDestination {
+    Delivery(Operation),
+    Processing(Event),
+}
+
+impl EgressDestination {
+    pub fn operation(&self) -> &Operation {
         match self {
-            Self::Topic(topic) => Some(*topic),
-            _ => None,
+            Self::Delivery(operation) => operation,
+            Self::Processing(event) => &event.operation,
         }
     }
 }
@@ -150,16 +121,6 @@ impl EgressInner {
 
         result
     }
-
-    fn all(&self) -> Vec<(Topic, ImportLocalTx)> {
-        let mut result = Vec::new();
-
-        for (topic, tx) in &self.handles {
-            result.push((*topic, tx.clone()));
-        }
-
-        result
-    }
 }
 
 impl Egress {
@@ -172,9 +133,8 @@ impl Egress {
         }
     }
 
-    pub fn handle(&self, config: EgressConfig) -> EgressHandle {
+    pub fn handle(&self) -> EgressHandle {
         EgressHandle {
-            config,
             inner: self.inner.clone(),
         }
     }
@@ -195,6 +155,8 @@ impl Egress {
         }
     }
 
+    // TODO: Make sure we're removing streams as well.
+    #[allow(unused)]
     pub async fn remove_stream(&self, topic: Topic) -> bool {
         let mut inner = self.inner.write().await;
         inner.space_ids.remove(&topic);
@@ -204,27 +166,42 @@ impl Egress {
 
 #[derive(Clone, Debug)]
 pub struct EgressHandle {
-    config: EgressConfig,
     inner: Arc<RwLock<EgressInner>>,
 }
 
 impl EgressHandle {
-    pub async fn submit_enriched(
+    pub async fn submit(
         &self,
         operation: Operation,
-        events: Vec<SpacesEvent>,
+        topic: Topic,
     ) -> Result<SubmitFuture, SubmitError> {
-        self.submit_inner(operation, events).await
+        let config = EgressConfig::topic(topic);
+        self.submit_inner(operation, &config, None).await
     }
 
-    pub async fn submit(&self, operation: Operation) -> Result<SubmitFuture, SubmitError> {
-        self.submit_inner(operation, vec![]).await
-    }
-
-    pub async fn submit_inner(
+    pub async fn submit_with_config(
         &self,
         operation: Operation,
-        events: Vec<SpacesEvent>,
+        config: &EgressConfig,
+    ) -> Result<SubmitFuture, SubmitError> {
+        self.submit_inner(operation, config, None).await
+    }
+
+    pub async fn submit_with_spaces_events(
+        &self,
+        operation: Operation,
+        topic: Topic,
+        spaces_events: Option<Vec<SpacesEvent>>,
+    ) -> Result<SubmitFuture, SubmitError> {
+        let config = EgressConfig::topic(topic);
+        self.submit_inner(operation, &config, spaces_events).await
+    }
+
+    async fn submit_inner(
+        &self,
+        operation: Operation,
+        config: &EgressConfig,
+        spaces_events: Option<Vec<SpacesEvent>>,
     ) -> Result<SubmitFuture, SubmitError> {
         let mut broken_channels = Vec::new();
 
@@ -232,14 +209,13 @@ impl EgressHandle {
         let to_delivery = {
             let inner = self.inner.read().await;
 
-            match self.config.delivery {
+            match config.delivery {
                 EventDeliveryPolicy::Disabled => Vec::new(),
                 EventDeliveryPolicy::Topic(topic) => inner
                     .topic(topic)
                     .map(|tx| Vec::from([tx]))
                     .unwrap_or_default(),
                 EventDeliveryPolicy::OnlySpaces => inner.spaces(),
-                EventDeliveryPolicy::All => inner.all(),
             }
         };
 
@@ -247,12 +223,8 @@ impl EgressHandle {
         let delivery_count = to_delivery.len();
 
         for (topic, tx) in to_delivery {
-            match send_to_import_tx(
-                LocalStreamDestination::Delivery(operation.clone()),
-                &topic,
-                &tx,
-            )
-            .await
+            match send_to_import_tx(EgressDestination::Delivery(operation.clone()), &topic, &tx)
+                .await
             {
                 Err(SubmitError::SendEvent(_)) => {
                     broken_channels.push(topic);
@@ -270,31 +242,20 @@ impl EgressHandle {
         let to_processing = {
             let inner = self.inner.read().await;
 
-            match self.config.processing {
-                EventProcessingPolicy::Disabled => Vec::new(),
-                EventProcessingPolicy::Topic(topic) => inner
-                    .topic(topic)
-                    .map(|tx| Vec::from([tx]))
-                    .unwrap_or_default(),
-                EventProcessingPolicy::OnlySpaces => inner.spaces(),
-                EventProcessingPolicy::All => inner.all(),
+            match config.processing {
+                EventProcessingPolicy::Disabled => None,
+                EventProcessingPolicy::Topic(topic) => {
+                    inner.topic(topic).map(|tx| Some(tx)).unwrap_or_default()
+                }
             }
         };
 
         let mut processing_futures = Vec::new();
-        let processing_count = to_processing.len();
+        let processing_count = if to_processing.is_some() { 1 } else { 0 };
 
-        for (topic, tx) in to_processing {
-            match send_to_import_tx(
-                // TODO: Here we are potentially sending enriched events to many topics, I'm not
-                // sure if this ever happens, maybe enrichment is a per-topic action? If so we could
-                // refactor to account for that expectation.
-                LocalStreamDestination::Processing(operation.clone(), events.clone()),
-                &topic,
-                &tx,
-            )
-            .await
-            {
+        if let Some((topic, tx)) = to_processing {
+            let event = to_event(operation.clone(), topic, spaces_events.clone());
+            match send_to_import_tx(EgressDestination::Processing(event), &topic, &tx).await {
                 Err(SubmitError::SendEvent(_)) => {
                     broken_channels.push(topic);
                 }
@@ -326,7 +287,7 @@ impl EgressHandle {
 }
 
 async fn send_to_import_tx(
-    destination: LocalStreamDestination,
+    destination: EgressDestination,
     topic: &Topic,
     import_local_tx: &ImportLocalTx,
 ) -> Result<oneshot::Receiver<()>, SubmitError> {
@@ -342,6 +303,24 @@ async fn send_to_import_tx(
     }
 
     Ok(ready_rx)
+}
+
+fn to_event(operation: Operation, topic: Topic, spaces_events: Option<Vec<SpacesEvent>>) -> Event {
+    let source = Source::Egress;
+
+    let log_id = operation.header.extensions.log_id();
+    let prune_flag = operation.header.extensions.prune_flag();
+    let spaces_args = operation.header.extensions.spaces_args();
+
+    Event::new(
+        operation,
+        source,
+        log_id,
+        topic,
+        prune_flag,
+        spaces_args,
+        spaces_events,
+    )
 }
 
 #[derive(Debug, Error)]

@@ -24,7 +24,7 @@ use tracing::debug;
 
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
-use crate::egress::{Egress, EgressConfig};
+use crate::egress::Egress;
 use crate::forge::{Forge, OperationForge};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
@@ -35,7 +35,7 @@ use crate::spaces::{
     AccessLevel, ActorId, ConnectionAuthoriserHook, DEFAULT_REPAIR_STRATEGY, Group, GroupError,
     KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError,
     SpaceSubscription, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
-    submit_enriched, to_initial_members,
+    submit_enriched_space_messages, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -122,7 +122,7 @@ impl Node {
         let tasks = TaskTracker::new();
 
         // Spawn background tasks which run for the duration of the whole program.
-        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone(), &egress).await;
+        let key_bundle_task = KeyBundleTask::spawn(spaces_manager.clone(), egress.handle()).await;
 
         let (events_tx, events_rx) = broadcast::channel::<SystemEvent>(256);
 
@@ -467,7 +467,7 @@ impl Node {
             Some(inner) => {
                 let topic = actor_to_topic(inner.id());
                 let (tx, rx) = self.stream::<NoBody>(topic).await?;
-                let egress_handle = self.egress.handle(EgressConfig::topic(topic));
+                let egress_handle = self.egress.handle();
                 let events_rx = self.resubscribe_event_stream();
                 Ok(Some(Group::new(inner, egress_handle, tx, rx, events_rx)))
             }
@@ -479,22 +479,26 @@ impl Node {
         &self,
         initial_members: &[(ActorId, AccessLevel)],
     ) -> Result<Group, GroupError> {
-        // We don't persist the groups state here as we can rely on the spaces processor to do
-        // this. This is important because we rely on groups events being emitted from the
-        // pipeline so that we can react to them for eg. repairing spaces. If we persisted the
-        // state here, the processor would detect that we already processed this control message
-        // and therefore not emit any events.
+        // We don't persist the groups state here as we can rely on the spaces processor to do this.
+        //
+        // This is important because we rely on groups events being emitted from the pipeline so
+        // that we can react to them for eg. repairing spaces. If we persisted the state here, the
+        // processor would detect that we already processed this control message and therefore not
+        // emit any events.
         let initial_members = to_initial_members(initial_members);
 
-        let (_, group_id, message, _events) =
+        let (_, group_id, message, _group_events) =
             self.spaces_manager.create_group(&initial_members).await?;
 
         let topic = actor_to_topic(group_id);
         let (tx, rx) = self.stream::<NoBody>(topic).await?;
 
-        let egress_handle = self.egress.handle(EgressConfig::topic(topic));
-        let submit_fut = egress_handle.submit(message.into_operation()).await?;
-        submit_fut.await?;
+        let egress_handle = self.egress.handle();
+
+        let processed = egress_handle
+            .submit(message.into_operation(), topic)
+            .await?;
+        processed.await?;
 
         let events_rx = self.resubscribe_event_stream();
 
@@ -560,27 +564,27 @@ impl Node {
             .spaces_manager
             .space(space_id)
             .await?
-            // @TODO: even if there is no space yet we allow the user to subscribe and get a
-            // handle to the as-yet-non-existent space. In the current API if they tried to use
-            // the space API _before_ the space is instantiated then an error would occur. We
-            // maybe want to consider how we communicate to the user that they are subscribed to
-            // the space topic but only to announce their key bundles and await receiving control
-            // messages.
+            // TODO: even if there is no space yet we allow the user to subscribe and get a handle
+            // to the as-yet-non-existent space. In the current API if they tried to use the space
+            // API _before_ the space is instantiated then an error would occur. We maybe want to
+            // consider how we communicate to the user that they are subscribed to the space topic
+            // but only to announce their key bundles and await receiving control messages.
             .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
 
-        // Populate the connection authoriser block-list based on members who were removed from,
-        // and not later re-admitted to, the space. It is possible this is the first time
-        // subscribing to the space in which case there is no state to query yet. For this reason
-        // we ignore errors and fallback to a default empty vec.
+        // Populate the connection authoriser block-list based on members who were removed from, and
+        // not later re-admitted to, the space. It is possible this is the first time subscribing to
+        // the space in which case there is no state to query yet. For this reason we ignore errors
+        // and fallback to a default empty vec.
         let removed = inner.removed().await.ok().unwrap_or_default();
         for node in removed {
             self.connection_authoriser
                 .topic_block(node, space_id.into())
                 .await;
         }
+
         let (tx, rx) = self.space_stream_from_inner(space_id, from).await?;
 
-        let egress_handle = self.egress.handle(EgressConfig::topic(space_id.into()));
+        let egress_handle = self.egress.handle();
 
         // Spawn per-space repair background task.
         let repair_task = RepairTask::spawn(
@@ -637,20 +641,15 @@ impl Node {
                 .await
         })?;
 
-        // Establish a topic pub/sub stream using the space id as a topic.
+        // Establish a topic stream using the space id as a topic.
         let (tx, rx) = self
             .space_stream_from_inner(space_id, StreamFrom::Frontier)
             .await?;
 
-        // Issue the events to create a space.
+        // Create a space.
         //
         // We always create a space with only us as the initial members.
-        //
-        // TODO: Consider if we want an alternative method for instantiating a space with initial
-        // members. I (sam) removed it from the API for now as without a manual member registration
-        // flow a user likely doesn't have access to any member key bundles at the point of space
-        // creation.
-        let (groups_y, space_y, create_space_messages, events) =
+        let (groups_y, space_y, create_space_messages, spaces_events) =
             self.spaces_manager.create_space(space_id, &[]).await?;
 
         // Persist the computed groups- and spaces-state to the stores.
@@ -664,8 +663,15 @@ impl Node {
                 .await?;
         });
 
-        let egress_handle = self.egress.handle(EgressConfig::topic(space_id.into()));
-        submit_enriched(&egress_handle, create_space_messages, events).await?;
+        let egress_handle = self.egress.handle();
+
+        submit_enriched_space_messages(
+            &egress_handle,
+            space_id,
+            create_space_messages,
+            spaces_events,
+        )
+        .await?;
 
         let inner = self
             .spaces_manager
@@ -674,6 +680,7 @@ impl Node {
             .expect("materialised space after processing operations");
 
         // Spawn per-space repair background task.
+        // TODO: Can this be moved into spaces_stream?
         let repair_task = RepairTask::spawn(
             inner.id(),
             self.spaces_manager.clone(),
