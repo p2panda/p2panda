@@ -19,7 +19,7 @@ use crate::utils::to_verifying_key;
 
 /// Connection authoriser mode for determining how connections are accepted and rejected.
 #[derive(Clone, Debug)]
-enum ConnectionAuthoriserMode {
+pub enum ConnectionAuthoriserMode {
     /// Allow all connections except for nodes which have been explicitly blocked.
     Permissive,
 
@@ -107,10 +107,15 @@ impl ConnectionAuthoriser {
     /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are not
     /// explicitly blocked will be accepted.
     pub fn new() -> Self {
+        Self::with_mode(ConnectionAuthoriserMode::Permissive)
+    }
+
+    /// Returns a connection authoriser and a receiver for authoriser events.
+    pub fn with_mode(mode: ConnectionAuthoriserMode) -> Self {
         let (tx, rx) = broadcast::channel(128);
 
         let inner = ConnectionAuthoriserInner {
-            mode: ConnectionAuthoriserMode::Permissive,
+            mode,
             allow: HashSet::new(),
             block: HashSet::new(),
             tx,
@@ -251,12 +256,12 @@ impl EndpointHooks for ConnectionAuthoriser {
 
 #[cfg(test)]
 mod tests {
-    use p2panda_core::{SigningKey, Topic};
+    use p2panda_core::SigningKey;
 
-    use crate::connection_authoriser::ConnectionAuthoriser;
+    use super::{ConnectionAuthoriser, ConnectionAuthoriserMode};
 
     #[tokio::test]
-    async fn authorise_connection_attempts() {
+    async fn permissive() {
         let connection_authoriser = ConnectionAuthoriser::default();
 
         let node_a = SigningKey::generate().verifying_key();
@@ -267,5 +272,20 @@ mod tests {
         connection_authoriser.block(node_a).await;
         assert!(!connection_authoriser.can_connect(node_a).await);
         assert!(connection_authoriser.can_connect(node_b).await);
+    }
+
+    #[tokio::test]
+    async fn restrictive() {
+        let connection_authoriser =
+            ConnectionAuthoriser::with_mode(ConnectionAuthoriserMode::Restrictive);
+
+        let node_a = SigningKey::generate().verifying_key();
+        let node_b = SigningKey::generate().verifying_key();
+
+        assert!(!connection_authoriser.can_connect(node_a).await);
+
+        connection_authoriser.allow(node_a).await;
+        assert!(connection_authoriser.can_connect(node_a).await);
+        assert!(!connection_authoriser.can_connect(node_b).await);
     }
 }
