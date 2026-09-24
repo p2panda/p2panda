@@ -140,7 +140,7 @@ impl Group {
 
         let processed = self
             .egress_handle
-            .submit(message.into_operation(), self.id().into())
+            .dispatch(message.into_operation(), self.id().into())
             .await?;
 
         Ok(GroupFuture {
@@ -169,7 +169,7 @@ impl Group {
 
         let processed = self
             .egress_handle
-            .submit(message.into_operation(), self.id().into())
+            .dispatch(message.into_operation(), self.id().into())
             .await?;
 
         Ok(GroupFuture {

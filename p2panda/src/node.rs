@@ -496,7 +496,7 @@ impl Node {
         let egress_handle = self.egress.handle();
 
         let processed = egress_handle
-            .submit(message.into_operation(), topic)
+            .dispatch(message.into_operation(), topic)
             .await?;
         processed.await?;
 

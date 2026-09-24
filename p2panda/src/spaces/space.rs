@@ -110,7 +110,7 @@ where
         // processor can re-process this event.
         let processed = self
             .egress_handle
-            .submit(message.into_operation(), self.id().into())
+            .dispatch(message.into_operation(), self.id().into())
             .await?;
 
         Ok(SpaceFuture {
@@ -374,14 +374,14 @@ pub(crate) async fn submit_enriched_space_messages(
 
     for message in messages {
         let processed = egress_handle
-            .submit(message.into_operation(), topic)
+            .dispatch(message.into_operation(), topic)
             .await?;
         processed.await?;
     }
 
     // The final spaces event is enriched.
     let processed = egress_handle
-        .submit_with_spaces_events(last.into_operation(), topic, Some(spaces_events))
+        .dispatch_with_spaces_events(last.into_operation(), topic, Some(spaces_events))
         .await?;
     processed.await?;
 

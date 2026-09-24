@@ -17,19 +17,18 @@ use crate::operation::Operation;
 use crate::spaces::types::SpacesEvent;
 use crate::streams::{Event, ImportLocalTx, Source};
 
-/// Configure event-delivery & -processing policies for locally forged or remotely received
-/// operations.
+/// Configure where operations should be dispatched to.
 #[derive(Clone, Default, Debug)]
-pub struct EgressConfig {
-    /// Determines if and how the operation is pushed to the event delivery layer.
+pub struct DispatchConfig {
+    /// Determines if and how the operation is sent to the event delivery layer.
     pub delivery: EventDeliveryPolicy,
 
-    /// Determines if an operation is processed by an event processing pipeline for one or more
-    /// topic streams.
+    /// Determines if an operation is sent to an event processing pipeline for one or more topic
+    /// streams.
     pub processing: EventProcessingPolicy,
 }
 
-impl EgressConfig {
+impl DispatchConfig {
     pub fn topic(topic: Topic) -> Self {
         Self {
             delivery: EventDeliveryPolicy::Topic(topic),
@@ -170,37 +169,37 @@ pub struct EgressHandle {
 }
 
 impl EgressHandle {
-    pub async fn submit(
+    pub async fn dispatch(
         &self,
         operation: Operation,
         topic: Topic,
     ) -> Result<SubmitFuture, SubmitError> {
-        let config = EgressConfig::topic(topic);
-        self.submit_inner(operation, &config, None).await
+        let config = DispatchConfig::topic(topic);
+        self.dispatch_inner(operation, &config, None).await
     }
 
-    pub async fn submit_with_config(
+    pub async fn dispatch_with_config(
         &self,
         operation: Operation,
-        config: &EgressConfig,
+        config: &DispatchConfig,
     ) -> Result<SubmitFuture, SubmitError> {
-        self.submit_inner(operation, config, None).await
+        self.dispatch_inner(operation, config, None).await
     }
 
-    pub async fn submit_with_spaces_events(
+    pub async fn dispatch_with_spaces_events(
         &self,
         operation: Operation,
         topic: Topic,
         spaces_events: Option<Vec<SpacesEvent>>,
     ) -> Result<SubmitFuture, SubmitError> {
-        let config = EgressConfig::topic(topic);
-        self.submit_inner(operation, &config, spaces_events).await
+        let config = DispatchConfig::topic(topic);
+        self.dispatch_inner(operation, &config, spaces_events).await
     }
 
-    async fn submit_inner(
+    async fn dispatch_inner(
         &self,
         operation: Operation,
-        config: &EgressConfig,
+        config: &DispatchConfig,
         spaces_events: Option<Vec<SpacesEvent>>,
     ) -> Result<SubmitFuture, SubmitError> {
         let mut broken_channels = Vec::new();
@@ -245,7 +244,7 @@ impl EgressHandle {
             match config.processing {
                 EventProcessingPolicy::Disabled => None,
                 EventProcessingPolicy::Topic(topic) => {
-                    inner.topic(topic).map(|tx| Some(tx)).unwrap_or_default()
+                    inner.topic(topic).map(Some).unwrap_or_default()
                 }
             }
         };

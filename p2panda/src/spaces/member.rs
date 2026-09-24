@@ -56,7 +56,7 @@ use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error};
 
-use crate::egress::{EgressConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
+use crate::egress::{DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
@@ -222,7 +222,7 @@ async fn renew_expired_key_bundles(
     ready_signal: Arc<Notify>,
     frequency: Duration,
 ) -> Result<(), SpacesManagerError> {
-    let config = EgressConfig {
+    let config = DispatchConfig {
         delivery: EventDeliveryPolicy::OnlySpaces,
         processing: EventProcessingPolicy::Disabled,
     };
@@ -247,7 +247,7 @@ async fn renew_expired_key_bundles(
         );
 
         // TODO: Handle error?
-        let _ = egress_handle.submit_with_config(operation, &config).await;
+        let _ = egress_handle.dispatch_with_config(operation, &config).await;
 
         ready_signal.notify_one();
     }

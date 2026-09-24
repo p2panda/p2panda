@@ -167,7 +167,7 @@ pub(crate) async fn repair_space(
     store.commit(permit).await?;
 
     for operation in groups_operations {
-        let processed = egress_handle.submit(operation, space_id.into()).await?;
+        let processed = egress_handle.dispatch(operation, space_id.into()).await?;
         processed.await?;
     }
 
