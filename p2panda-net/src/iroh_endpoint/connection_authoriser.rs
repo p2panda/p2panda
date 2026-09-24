@@ -23,6 +23,7 @@ use crate::utils::{ShortFormat, to_verifying_key};
 enum ConnectionAuthoriserMode {
     /// Allow all connections except for nodes which have been explicitly blocked.
     Permissive,
+
     /// Block all connections except for nodes which have been explicitly allowed.
     Restrictive,
 }
