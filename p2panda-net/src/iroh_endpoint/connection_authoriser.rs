@@ -129,18 +129,11 @@ impl ConnectionAuthoriser {
     /// Sends an authoriser event into the events stream.
     ///
     /// All subscribers will be notified of the event.
-    pub async fn send_event(&self, event: ConnectionAuthoriserEvent) {
+    async fn send_event(&self, event: ConnectionAuthoriserEvent) {
         let connection_authoriser = self.inner.write().await;
 
-        // Only send the event if there are active receivers.
-        //
-        // This is primarily to prevent flooding the logs with warnings when events are emitted but
-        // no event stream subscription exists.
-        if connection_authoriser.tx.receiver_count() > 0
-            && let Err(err) = connection_authoriser.tx.send(event)
-        {
-            warn!("failed to send authoriser event: {}", err)
-        }
+        // Surpress errors when events are emitted but no event stream subscription exists.
+        let _ = connection_authoriser.tx.send(event);
     }
 
     /// Sets the authoriser mode to permissive.
