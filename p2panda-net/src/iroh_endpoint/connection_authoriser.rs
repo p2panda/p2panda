@@ -102,7 +102,7 @@ impl Default for ConnectionAuthoriser {
 }
 
 impl ConnectionAuthoriser {
-    /// Returns a connection authoriser and a receiver for authoriser events.
+    /// Returns a connection authoriser.
     ///
     /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are not
     /// explicitly blocked will be accepted.
@@ -110,7 +110,7 @@ impl ConnectionAuthoriser {
         Self::with_mode(ConnectionAuthoriserMode::Permissive)
     }
 
-    /// Returns a connection authoriser and a receiver for authoriser events.
+    /// Returns a connection authoriser.
     pub fn with_mode(mode: ConnectionAuthoriserMode) -> Self {
         let (tx, rx) = broadcast::channel(128);
 

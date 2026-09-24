@@ -9,11 +9,11 @@ use p2panda_store::topics::TopicStore;
 use p2panda_sync::manager::TopicSyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
-use crate::connection_authoriser::ConnectionAuthoriser;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
 use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
+use crate::sync::sync_authoriser::SyncAuthoriser;
 
 pub struct Builder<S, L, E>
 where
@@ -28,7 +28,7 @@ where
     store: S,
     endpoint: Endpoint,
     gossip: Gossip,
-    connection_authoriser: ConnectionAuthoriser,
+    authoriser: SyncAuthoriser,
     _marker: PhantomData<(L, E)>,
 }
 
@@ -43,18 +43,18 @@ where
     E: Extensions + Send + 'static,
 {
     pub fn new(store: S, endpoint: Endpoint, gossip: Gossip) -> Self {
-        let connection_authoriser = ConnectionAuthoriser::new();
+        let authoriser = SyncAuthoriser::new();
         Self {
             store,
             endpoint,
             gossip,
-            connection_authoriser,
+            authoriser,
             _marker: PhantomData,
         }
     }
 
-    pub fn connection_authoriser(mut self, connection_authoriser: ConnectionAuthoriser) -> Self {
-        self.connection_authoriser = connection_authoriser;
+    pub fn authoriser(mut self, authoriser: SyncAuthoriser) -> Self {
+        self.authoriser = authoriser;
         self
     }
 
@@ -67,7 +67,7 @@ where
                 self.store,
                 self.endpoint,
                 self.gossip,
-                self.connection_authoriser,
+                self.authoriser,
             );
 
             SyncManager::<TopicSyncManager<Topic, S, L, E>>::spawn(None, args, thread_pool).await?
