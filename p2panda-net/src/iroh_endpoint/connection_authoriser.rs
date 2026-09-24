@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Connection authoriser for maintaining and enforcing allowlists and blocklists.
+//! Manage lists to allow and block iroh connections.
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
 use iroh::endpoint::Side;
-use p2panda_core::{Topic, VerifyingKey};
-use thiserror::Error;
+use p2panda_core::VerifyingKey;
+use p2panda_core::traits::ShortFormat;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tracing::warn;
 
-use crate::NetworkId;
 use crate::iroh_endpoint::{
     AfterHandshakeOutcome, BeforeConnectOutcome, EndpointAddr, EndpointHooks,
 };
-use crate::utils::{ShortFormat, to_verifying_key};
+use crate::utils::to_verifying_key;
 
 /// Connection authoriser mode for determining how connections are accepted and rejected.
 #[derive(Clone, Debug)]
@@ -53,14 +52,6 @@ pub enum ConnectionAuthoriserEvent {
         node: VerifyingKey,
         role: ConnectionRole,
     },
-    TopicBlocked {
-        topic: Topic,
-        node: VerifyingKey,
-    },
-    TopicAllowed {
-        topic: Topic,
-        node: VerifyingKey,
-    },
 }
 
 impl Display for ConnectionAuthoriserEvent {
@@ -74,28 +65,12 @@ impl Display for ConnectionAuthoriserEvent {
                     node.fmt_short(),
                 )
             }
-            ConnectionAuthoriserEvent::TopicBlocked { topic, node } => {
-                write!(
-                    f,
-                    "blocked connection attempt to {} on topic {}",
-                    node.fmt_short(),
-                    topic.fmt_short()
-                )
-            }
             ConnectionAuthoriserEvent::Allowed { node, role } => {
                 write!(
                     f,
                     "allowed {} connection attempt to {}",
                     role,
                     node.fmt_short(),
-                )
-            }
-            ConnectionAuthoriserEvent::TopicAllowed { topic, node } => {
-                write!(
-                    f,
-                    "allowed connection attempt to {} on topic {}",
-                    node.fmt_short(),
-                    topic.fmt_short()
                 )
             }
         }
@@ -105,20 +80,17 @@ impl Display for ConnectionAuthoriserEvent {
 /// Connection authoriser.
 ///
 /// The authoriser is used to maintain and enforce allowlists and blocklists; these can be defined
-/// per node (ie. allow or block all connections with a specific node) or per node-topic
-/// combinations (ie. allow or block all sync sessions with a specific node for a specific topic).
+/// per node (ie. allow or block all connections with a specific node).
 #[derive(Clone, Debug)]
 pub struct ConnectionAuthoriser {
     inner: Arc<RwLock<ConnectionAuthoriserInner>>,
 }
 
-#[derive(Clone, Debug)]
-pub struct ConnectionAuthoriserInner {
+#[derive(Debug)]
+struct ConnectionAuthoriserInner {
     mode: ConnectionAuthoriserMode,
-    global_allowlist: HashSet<VerifyingKey>,
-    global_blocklist: HashSet<VerifyingKey>,
-    topic_allowlist: HashSet<(Topic, VerifyingKey)>,
-    topic_blocklist: HashSet<(Topic, VerifyingKey)>,
+    allow: HashSet<VerifyingKey>,
+    block: HashSet<VerifyingKey>,
     tx: Sender<ConnectionAuthoriserEvent>,
 }
 
@@ -131,18 +103,16 @@ impl Default for ConnectionAuthoriser {
 impl ConnectionAuthoriser {
     /// Returns a connection authoriser and a receiver for authoriser events.
     ///
-    /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are
-    /// not explicitly blocked will be accepted.
+    /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are not
+    /// explicitly blocked will be accepted.
     pub fn new() -> Self {
         let (tx, _rx) = broadcast::channel(128);
 
         let inner = ConnectionAuthoriserInner {
             mode: ConnectionAuthoriserMode::Permissive,
+            allow: HashSet::new(),
+            block: HashSet::new(),
             tx,
-            global_allowlist: Default::default(),
-            global_blocklist: Default::default(),
-            topic_allowlist: Default::default(),
-            topic_blocklist: Default::default(),
         };
 
         Self {
@@ -194,52 +164,15 @@ impl ConnectionAuthoriser {
     /// Allows connections to the given node.
     pub async fn allow(&self, node: VerifyingKey) {
         let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.global_allowlist.insert(node);
-        connection_authoriser.global_blocklist.remove(&node);
+        connection_authoriser.allow.insert(node);
+        connection_authoriser.block.remove(&node);
     }
 
     /// Blocks connections to the given node.
     pub async fn block(&self, node: VerifyingKey) {
         let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.global_blocklist.insert(node);
-        connection_authoriser.global_allowlist.remove(&node);
-    }
-
-    /// Allows connections to the given node for a single topic.
-    pub async fn topic_allow(&self, node: VerifyingKey, topic: Topic) {
-        let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.topic_allowlist.insert((topic, node));
-        connection_authoriser.topic_blocklist.remove(&(topic, node));
-    }
-
-    /// Blocks connections to the given node for a single topic.
-    pub async fn topic_block(&self, node: VerifyingKey, topic: Topic) {
-        let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.topic_blocklist.insert((topic, node));
-        connection_authoriser.topic_allowlist.remove(&(topic, node));
-    }
-
-    /// Queries the authoriser state for the given node-topic combination.
-    pub async fn can_connect_on_topic(&self, node: VerifyingKey, topic: Topic) -> bool {
-        let connection_authoriser = self.inner.read().await;
-
-        match connection_authoriser.mode {
-            ConnectionAuthoriserMode::Permissive => {
-                let global_block = connection_authoriser.global_blocklist.contains(&node);
-                let topic_block = connection_authoriser
-                    .topic_blocklist
-                    .contains(&(topic, node));
-                !global_block && !topic_block
-            }
-            ConnectionAuthoriserMode::Restrictive => {
-                let global_allow = connection_authoriser.global_allowlist.contains(&node);
-                let topic_allow = connection_authoriser
-                    .topic_allowlist
-                    .contains(&(topic, node));
-
-                global_allow && topic_allow
-            }
-        }
+        connection_authoriser.block.insert(node);
+        connection_authoriser.allow.remove(&node);
     }
 
     /// Queries the authoriser state for the given node.
@@ -247,12 +180,8 @@ impl ConnectionAuthoriser {
         let connection_authoriser = self.inner.read().await;
 
         match connection_authoriser.mode {
-            ConnectionAuthoriserMode::Permissive => {
-                !connection_authoriser.global_blocklist.contains(&node)
-            }
-            ConnectionAuthoriserMode::Restrictive => {
-                connection_authoriser.global_allowlist.contains(&node)
-            }
+            ConnectionAuthoriserMode::Permissive => !connection_authoriser.block.contains(&node),
+            ConnectionAuthoriserMode::Restrictive => connection_authoriser.allow.contains(&node),
         }
     }
 }
@@ -290,7 +219,8 @@ impl EndpointHooks for ConnectionAuthoriser {
 
     // Runs after the QUIC/TLS handshake completes for both incoming and outgoing connections.
     //
-    // The remote endpoint ID, ALPN, and other metadata are available, but no application data has been sent or received yet.
+    // The remote endpoint ID, ALPN, and other metadata are available, but no application data has
+    // been sent or received yet.
     async fn after_handshake<'a>(
         &'a self,
         conn: &'a iroh::endpoint::Connection,
@@ -319,19 +249,6 @@ impl EndpointHooks for ConnectionAuthoriser {
     }
 }
 
-/// Hash the concatenation of the given topic and network id.
-pub fn hash_topic_with_network_id(topic: Topic, network_id: NetworkId) -> Vec<u8> {
-    p2panda_core::Hash::digest([topic.to_bytes().as_ref(), &network_id].concat())
-        .as_bytes()
-        .to_vec()
-}
-
-#[derive(Debug, Error)]
-pub enum ConnectionAuthoriserError {
-    #[error("not authorised")]
-    NotAuthorised,
-}
-
 #[cfg(test)]
 mod tests {
     use p2panda_core::{SigningKey, Topic};
@@ -342,54 +259,13 @@ mod tests {
     async fn authorise_connection_attempts() {
         let connection_authoriser = ConnectionAuthoriser::default();
 
-        let topic_a = Topic::random();
-        let topic_b = Topic::random();
-
         let node_a = SigningKey::generate().verifying_key();
         let node_b = SigningKey::generate().verifying_key();
 
         assert!(connection_authoriser.can_connect(node_a).await);
-        assert!(
-            connection_authoriser
-                .can_connect_on_topic(node_a, topic_a)
-                .await
-        );
-
-        connection_authoriser.topic_block(node_a, topic_a).await;
-        assert!(connection_authoriser.can_connect(node_a).await);
-        assert!(
-            !connection_authoriser
-                .can_connect_on_topic(node_a, topic_a)
-                .await
-        );
-        assert!(
-            connection_authoriser
-                .can_connect_on_topic(node_a, topic_b)
-                .await
-        );
-        assert!(
-            connection_authoriser
-                .can_connect_on_topic(node_b, topic_a)
-                .await
-        );
 
         connection_authoriser.block(node_a).await;
         assert!(!connection_authoriser.can_connect(node_a).await);
-        assert!(
-            !connection_authoriser
-                .can_connect_on_topic(node_a, topic_a)
-                .await
-        );
-        assert!(
-            !connection_authoriser
-                .can_connect_on_topic(node_a, topic_b)
-                .await
-        );
         assert!(connection_authoriser.can_connect(node_b).await);
-        assert!(
-            connection_authoriser
-                .can_connect_on_topic(node_b, topic_a)
-                .await
-        );
     }
 }
