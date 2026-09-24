@@ -9,7 +9,7 @@ use iroh::endpoint::Side;
 use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
 use tokio::sync::RwLock;
-use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::sync::broadcast;
 use tracing::warn;
 
 use crate::iroh_endpoint::{
@@ -91,7 +91,8 @@ struct ConnectionAuthoriserInner {
     mode: ConnectionAuthoriserMode,
     allow: HashSet<VerifyingKey>,
     block: HashSet<VerifyingKey>,
-    tx: Sender<ConnectionAuthoriserEvent>,
+    tx: broadcast::Sender<ConnectionAuthoriserEvent>,
+    rx: Option<broadcast::Receiver<ConnectionAuthoriserEvent>>,
 }
 
 impl Default for ConnectionAuthoriser {
@@ -106,13 +107,14 @@ impl ConnectionAuthoriser {
     /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are not
     /// explicitly blocked will be accepted.
     pub fn new() -> Self {
-        let (tx, _rx) = broadcast::channel(128);
+        let (tx, rx) = broadcast::channel(128);
 
         let inner = ConnectionAuthoriserInner {
             mode: ConnectionAuthoriserMode::Permissive,
             allow: HashSet::new(),
             block: HashSet::new(),
             tx,
+            rx: Some(rx),
         };
 
         Self {
@@ -121,9 +123,14 @@ impl ConnectionAuthoriser {
     }
 
     /// Subscribes to an authoriser events stream.
-    pub async fn events(&self) -> Receiver<ConnectionAuthoriserEvent> {
-        let connection_authoriser = self.inner.write().await;
-        connection_authoriser.tx.subscribe()
+    pub async fn events(&self) -> broadcast::Receiver<ConnectionAuthoriserEvent> {
+        let mut connection_authoriser = self.inner.write().await;
+
+        let next_rx = connection_authoriser.tx.subscribe();
+        connection_authoriser
+            .rx
+            .replace(next_rx)
+            .expect("there's always a receiver")
     }
 
     /// Sends an authoriser event into the events stream.
