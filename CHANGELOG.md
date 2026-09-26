@@ -65,6 +65,7 @@ Highlights are marked with a pancake 🥞
 - sync: Update examples to use new `api` module [#1413](https://github.com/p2panda/p2panda/pull/1413)
 - net: Separate sync- from connection authoriser [#1437](https://github.com/p2panda/p2panda/pull/1437)
 - spaces: Return output structs from public APIs [#1453](https://github.com/p2panda/p2panda/pull/1453)
+- node: Remove redundant authoriser updates [#1455](https://github.com/p2panda/p2panda/pull/1455)
 
 ### Fixed
 
@@ -72,6 +73,7 @@ Highlights are marked with a pancake 🥞
 - node: Allow event processing to handle out-of-order buffering by separating i/o streams and preserve input ordering [#1271](https://github.com/p2panda/)
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
+- spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
 
 ## [0.7.1] - 21/08/2026
 
