@@ -12,7 +12,6 @@ use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::space::SpaceOutput;
 use p2panda_spaces::{ActorId, MemberId, SpaceId, SpacesStoreState};
@@ -25,7 +24,6 @@ use tokio::sync::oneshot::error::RecvError;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
 use crate::operation::Extensions;
-use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::{
@@ -42,8 +40,6 @@ pub(crate) fn spaces_stream<M>(
     egress_handle: EgressHandle,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
-    // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    connection_authoriser: ConnectionAuthoriser,
 ) -> (Space<M>, SpaceSubscription<M>)
 where
     M: Serialize,
@@ -55,7 +51,6 @@ where
             repair_task,
             egress_handle,
             tx,
-            connection_authoriser,
         },
         SpaceSubscription { rx },
     )
@@ -71,7 +66,6 @@ where
     repair_task: RepairTask,
     egress_handle: EgressHandle,
     tx: StreamPublisher<M>,
-    connection_authoriser: ConnectionAuthoriser,
 }
 
 impl<M> Space<M>
@@ -149,9 +143,6 @@ where
             )
             .await?;
 
-        // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, output.events()).await;
-
         self.process_change(output).await?;
 
         Ok(())
@@ -175,10 +166,6 @@ where
         self.repair().await?;
 
         let output = self.inner.remove(actor).await?;
-
-        // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, output.events()).await;
-
         self.process_change(output).await?;
 
         Ok(())

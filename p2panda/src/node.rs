@@ -594,7 +594,6 @@ impl Node {
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
             egress_handle.clone(),
-            self.connection_authoriser.clone(),
         );
 
         Ok(spaces_stream::<M>(
@@ -604,7 +603,6 @@ impl Node {
             egress_handle,
             tx,
             rx,
-            self.connection_authoriser.clone(),
         ))
     }
 
@@ -681,7 +679,6 @@ impl Node {
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
             egress_handle.clone(),
-            self.connection_authoriser.clone(),
         );
 
         let (space, rx) = spaces_stream::<M>(
@@ -691,7 +688,6 @@ impl Node {
             egress_handle,
             tx,
             rx,
-            self.connection_authoriser.clone(),
         );
 
         Ok((space, rx))
