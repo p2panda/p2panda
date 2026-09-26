@@ -25,18 +25,18 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
+use crate::egress::EgressDestination;
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::InnerSpaceEvent;
+use crate::spaces::types::{InnerSpaceEvent, SpacesEvent};
 use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
-use crate::streams::local_stream::{LocalStream, LocalStreamEvent, LocalStreamFuture};
 use crate::streams::publisher::StreamPublisher;
 use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
 use crate::streams::subscription::StreamSubscription;
@@ -116,6 +116,9 @@ where
     let acked = Acked::new(store.clone(), topic);
 
     // Sync handle is used on the publisher and when importing from external streams.
+    //
+    // TODO: Event delivery should be handled outside of this and be connected to the pipeline via
+    // an ingress.
     let sync_handle = Arc::new(sync_handle);
 
     let mut sync_stream = sync_handle
@@ -128,10 +131,14 @@ where
 
     // Channel to send locally created operations to the processing pipeline. A "oneshot" callback
     // is attached to allow publishers to await the processing result.
+    //
+    // TODO: Remove this and make it part of egress.
     let (publish_tx, mut publish_rx) =
         mpsc::channel::<(Operation, Option<M>, oneshot::Sender<Event>)>(PUBLISH_BUFFER_SIZE);
 
     // Channel for importing external operation streams.
+    //
+    // TODO: Replace this with ingress.
     let (import_external_tx, mut import_external_rx) = mpsc::channel::<(
         BoxStream<'static, Operation>,
         oneshot::Sender<ExternalStreamFuture>,
@@ -140,16 +147,16 @@ where
     // Set of currently active external streams.
     let mut external_stream = ExternalStream::default();
 
-    // Channel for importing local operation streams.
-    let (import_local_tx, mut import_local_rx) = mpsc::channel::<(
-        BoxStream<'static, Operation>,
-        oneshot::Sender<LocalStreamFuture>,
-    )>(IMPORT_BUFFER_SIZE);
-
-    // Set of currently active local streams.
-    let mut local_stream = LocalStream::default();
+    // Channel for receiving messages from the egress.
+    //
+    // TODO: This should be two channels for different parts of the stack, one should go into the
+    // event delivery layer (sync handle), another into the ingress ("import local").
+    let (import_local_tx, mut import_local_rx) =
+        mpsc::channel::<(EgressDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
 
     // Determine from which point on we re-play locally stored operations.
+    //
+    // TODO: Move replay logic into own place and make it part of ingress.
     let nacked_log_ranges = acked
         .nacked_log_ranges(from)
         .await
@@ -254,15 +261,9 @@ where
             {
                 // This will block processing of the sync stream and of locally created operations
                 // until it is complete.
-                let replay_result = replay_log_ranges(
-                    topic,
-                    &store,
-                    &to_output_tx,
-                    &pipeline,
-                    &sync_handle,
-                    nacked_log_ranges,
-                )
-                .await;
+                let replay_result =
+                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
+                        .await;
 
                 // Errors occurring in the replay task which be returned to the user.
                 if let Err(error) = replay_result {
@@ -313,7 +314,7 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                process_operation_in(*operation, source, topic, &pipeline, &sync_handle).await;
+                                process_operation_in(*operation, source, topic, &pipeline, None, None).await;
                                 continue;
                             },
                         }
@@ -333,7 +334,8 @@ where
                             Source::LocalStore,
                             topic,
                             &pipeline,
-                            &sync_handle
+                            Some(&sync_handle),
+                            None
                         ).await;
 
                         // Inform publisher optionally about result of processor and that we're
@@ -365,7 +367,8 @@ where
                                     Source::ExternalStream { session_id },
                                     topic,
                                     &pipeline,
-                                    &sync_handle
+                                    Some(&sync_handle),
+                                    None
                                 ).await;
 
                                 continue;
@@ -378,30 +381,27 @@ where
                         }
                     },
 
-                    // Receive imported local source of operations.
-                    Some((stream, ready_tx)) = import_local_rx.recv() => {
-                        let local_stream_future = local_stream.insert(stream);
-                        if ready_tx.send(local_stream_future).is_err() {
-                            warn!("failed sending on local import ready channel")
-                        };
-                        continue;
-                    }
-
                     // Receive the next ready event from any imported local source.
-                    Some(event) = local_stream.next() => {
-                        match event {
-                            LocalStreamEvent::Operation(operation) => {
-                                process_operation_in(
-                                    *operation,
-                                    Source::LocalStore,
-                                    topic,
-                                    &pipeline,
-                                    &sync_handle
-                                ).await;
+                    Some((input, signal_tx)) = import_local_rx.recv() => {
+                        match input {
+                            EgressDestination::Delivery(operation) => {
+                                let operation_id = operation.hash();
+                                if sync_handle.publish(operation).is_err() {
+                                    warn!(
+                                        %operation_id,
+                                        "failed sending operation on sync handle"
+                                    )
+                                }
+
+                                let _ = signal_tx.send(());
 
                                 continue;
+                            }
+                            EgressDestination::Processing(event) => {
+                                pipeline.process(event).await;
+                                let _ = signal_tx.send(());
+                                continue;
                             },
-                            LocalStreamEvent::End => vec![] ,
                         }
                     },
 
@@ -426,7 +426,6 @@ where
         publish_tx,
         import_external_tx,
         import_local_tx,
-        to_output_tx,
         drop_guard.clone(),
     );
     let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx), drop_guard);
@@ -440,29 +439,26 @@ pub(crate) async fn process_operation_in(
     source: Source,
     topic: Topic,
     pipeline: &Pipeline,
-    sync_handle: &Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
+    sync_handle: Option<&Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>>,
+    spaces_events: Option<Vec<SpacesEvent>>,
 ) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
     let spaces_args = operation.header.extensions.spaces_args();
 
-    // TODO: Using the Source here to determine live-mode behaviour is not explicit enough and might
-    // lead to errors.
-    match source {
-        Source::ExternalStream { .. } | Source::LocalStore
-            // Try pushing operation to other nodes if we have an active and "live" sync session
-            // with them. This allows disseminating new messages quickly in the network.
-            //
-            // If no active live session exists, nodes will pick up the operation later when running
-            // the sync protocol.
-            if sync_handle.publish(operation.clone()).is_err() => {
-                warn!(
-                    operation_id = %operation.hash(),
-                    "failed sending operation on sync handle"
-                )
-            }
-        _ => (),
-    };
+    if let Some(sync_handle) = sync_handle {
+        // Try pushing operation to other nodes if we have an active and "live" sync session with
+        // them. This allows disseminating new messages quickly in the network.
+        //
+        // If no active live session exists, nodes will pick up the operation later when running the
+        // sync protocol.
+        if sync_handle.publish(operation.clone()).is_err() {
+            warn!(
+                operation_id = %operation.hash(),
+                "failed sending operation on sync handle"
+            )
+        }
+    }
 
     // Send operation to processor task. This blocks any parent stream and makes sure that all
     // events are handled in same order.
@@ -474,8 +470,7 @@ pub(crate) async fn process_operation_in(
             topic,
             prune_flag,
             spaces_args,
-            // TODO: inject events resulting from locally created spaces operations.
-            None,
+            spaces_events,
         ))
         .await;
 
@@ -1017,6 +1012,10 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Source when an operation was published locally or replayed.
+    /// Operation was published locally or replayed.
+    // TODO
     LocalStore,
+
+    /// Operation was forged locally and handled in egress.
+    Egress,
 }

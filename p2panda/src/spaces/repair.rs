@@ -11,7 +11,7 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
 use p2panda_store::topics::TopicStore;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
+use p2panda_store::{SqliteError, SqliteStore, Transaction, tx};
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::oneshot::Sender;
@@ -19,13 +19,12 @@ use tokio::sync::oneshot::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, trace, warn};
 
+use crate::egress::{EgressError, EgressHandle, SubmitError};
 use crate::operation::Operation;
 use crate::spaces::authoriser::update_authoriser;
+use crate::spaces::space::SpaceEgressError;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
-use crate::spaces::{SpacesManagerError, group_log_id};
-use crate::streams::{
-    ImportLocalTx, LocalStreamFuture, ToOutputTx, to_stream_event, to_system_event,
-};
+use crate::spaces::{SpacesManagerError, group_log_id, submit_enriched_space_messages};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
@@ -74,13 +73,12 @@ pub enum RepairStrategy {
 ///
 /// All new messages will be sent into the topic stream to be processed and forwarded to other
 /// peers.
-pub(crate) async fn repair_space<M>(
+pub(crate) async fn repair_space(
     space_id: SpaceId,
     strategy: &RepairStrategy,
     manager: &SpacesManager,
     store: &SqliteStore,
-    import_local_tx: &ImportLocalTx,
-    to_output_tx: &ToOutputTx<M>,
+    egress_handle: &EgressHandle,
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
     connection_authoriser: &ConnectionAuthoriser,
 ) -> Result<bool, RepairError> {
@@ -168,6 +166,11 @@ pub(crate) async fn repair_space<M>(
 
     store.commit(permit).await?;
 
+    for operation in groups_operations {
+        let processed = egress_handle.dispatch(operation, space_id.into()).await?;
+        processed.await?;
+    }
+
     // Attempt to repair the space. As we pass in an array containing a single space id there will
     // be only ever max one result returned.
     //
@@ -176,67 +179,26 @@ pub(crate) async fn repair_space<M>(
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let (space_y, spaces_messages, events) = manager.repair_space(space_id, &group_ids).await?;
+    let (space_y, spaces_messages, spaces_events) =
+        manager.repair_space(space_id, &group_ids).await?;
 
-    // If no space messages were forged during repairing then no state change occurred and we
-    // don't need to persist here. This occurs when we are not a _read_ member of the space (yet).
-    //
-    // @TODO: Once control messages are encrypted it will not be possible for non-read members to
-    // receives any control messages and so this logic can be refactored.
-    if !spaces_messages.is_empty() {
-        let permit = store.begin().await?;
-
-        let space_id = space_y.space_id;
+    // Persist spaces state.
+    tx!(spaces_store, {
         spaces_store
             .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
             .await?;
+    });
 
-        store.commit(permit).await?;
-    }
-
-    // If there are no messages to send then exit here.
-    if spaces_messages.is_empty() && groups_operations.is_empty() {
-        return Ok(false);
-    }
-
-    // Send all resulting operations into the stream.
-    let op_count = groups_operations.len() + spaces_messages.len();
-    let operations = groups_operations.into_iter().chain(
-        spaces_messages
-            .into_iter()
-            .map(|message| message.into_operation()),
-    );
-    let stream = Box::pin(futures_util::stream::iter(operations));
-    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-    import_local_tx
-        .send((stream, ready_tx))
-        .await
-        .map_err(|err| RepairError::SendToProcessor(err.to_string()))?;
-
-    // Await processing of operations to be complete.
-    ready_rx.await?;
-
+    // Update the connection authoriser.
+    //
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    update_authoriser(connection_authoriser, &events).await;
+    update_authoriser(connection_authoriser, &spaces_events).await;
 
-    let events = events
-        .into_iter()
-        .filter_map(|event| match event {
-            p2panda_spaces::Event::Spaces(space_event) => Some(to_stream_event(space_event).into()),
-            p2panda_spaces::Event::Groups(group_event) => Some(to_system_event(group_event).into()),
-            _ => None,
-        })
-        .collect();
-
-    to_output_tx
-        .send(events)
-        .await
-        .map_err(|_| RepairError::AppSend)?;
+    submit_enriched_space_messages(egress_handle, space_id, spaces_messages, spaces_events).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),
         space_id = space_id.fmt_short(),
-        operations = op_count,
         "space repaired"
     );
 
@@ -253,19 +215,15 @@ pub struct RepairTask {
 
 impl RepairTask {
     /// Spawn repair background task.
-    pub fn spawn<M>(
+    pub fn spawn(
         space_id: SpaceId,
         manager: SpacesManager,
         store: SqliteStore,
         strategy: RepairStrategy,
-        import_tx: ImportLocalTx,
-        to_output_tx: ToOutputTx<M>,
+        egress_handle: EgressHandle,
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
         connection_authoriser: ConnectionAuthoriser,
-    ) -> Self
-    where
-        M: Send + 'static,
-    {
+    ) -> Self {
         debug!("repair management task started");
 
         let (tx, mut rx) = mpsc::unbounded_channel();
@@ -282,8 +240,7 @@ impl RepairTask {
                             &strategy,
                             &manager,
                             &store,
-                            &import_tx,
-                            &to_output_tx,
+                            &egress_handle,
                             &connection_authoriser
                         )
                         .await;
@@ -307,8 +264,7 @@ impl RepairTask {
                                     &strategy,
                                     &manager,
                                     &store,
-                                    &import_tx,
-                                    &to_output_tx,
+                                    &egress_handle,
                                     &connection_authoriser
                                 )
                                 .await;
@@ -353,8 +309,14 @@ pub enum RepairError {
     #[error(transparent)]
     SpacesManager(#[from] SpacesManagerError),
 
-    #[error("could not send to processor pipeline: {0}")]
-    SendToProcessor(String),
+    #[error(transparent)]
+    Submit(#[from] SubmitError),
+
+    #[error(transparent)]
+    Egress(#[from] EgressError),
+
+    #[error(transparent)]
+    SpaceEgress(#[from] SpaceEgressError),
 
     #[error(transparent)]
     SendToTask(#[from] SendError<RepairTaskCommand>),

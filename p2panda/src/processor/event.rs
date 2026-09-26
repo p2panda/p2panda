@@ -104,20 +104,30 @@ where
                 }
             },
             log_prune: ProcessorStatus::Pending,
-            spaces_args: match spaces_args {
-                Some(args) => SpacesProcessorArgs::Process {
-                    msg: p2panda_spaces::SpacesMessage {
-                        id: operation.hash,
-                        author: operation.header.verifying_key,
-                        args,
+            spaces_args: {
+                match (spaces_args, spaces_events) {
+                    (Some(args), Some(events)) => SpacesProcessorArgs::AlreadyProcessed {
+                        msg: p2panda_spaces::SpacesMessage {
+                            id: operation.hash,
+                            author: operation.header.verifying_key,
+                            args,
+                        },
+                        events,
                     },
-                },
-                None => SpacesProcessorArgs::Ignore,
+
+                    (Some(args), None) => SpacesProcessorArgs::Process {
+                        msg: p2panda_spaces::SpacesMessage {
+                            id: operation.hash,
+                            author: operation.header.verifying_key,
+                            args,
+                        },
+                    },
+                    (None, _) => SpacesProcessorArgs::Ignore,
+                }
             },
-            spaces: match spaces_events {
-                Some(events) => ProcessorStatus::Completed(SpacesResult::Processed { events }),
-                None => ProcessorStatus::Pending,
-            },
+            // Even if this is an enriched event the spaces processor result is still pending as
+            // the processor will replace this in any case.
+            spaces: ProcessorStatus::Pending,
             operation,
             source,
         }

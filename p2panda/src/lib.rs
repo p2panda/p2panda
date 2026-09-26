@@ -253,6 +253,7 @@
 //! [p2panda]: https://p2panda.org
 mod builder;
 pub mod credentials;
+pub(crate) mod egress;
 mod forge;
 pub mod network;
 pub mod node;

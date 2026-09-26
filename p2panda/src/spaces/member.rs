@@ -39,7 +39,6 @@
 //!
 //! Since this log is maintained independent of a particular space we need to explicitly associate
 //! it when the space starts to depend on the member's key bundles.
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -54,14 +53,14 @@ use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use p2panda_stream::hooks::ProcessorHook;
 use thiserror::Error;
-use tokio::sync::{Notify, mpsc, oneshot};
+use tokio::sync::Notify;
 use tracing::{debug, error};
 
-use crate::operation::Operation;
+use crate::egress::{DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
 use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
-use crate::streams::{Event, ImportLocalTx, LocalStreamFuture};
+use crate::streams::Event;
 
 #[derive(Debug)]
 pub struct Member {
@@ -152,14 +151,10 @@ impl From<GroupActor> for ActorId {
 #[error(transparent)]
 pub struct MemberError(#[from] SpacesManagerError);
 
-pub type KeyBundleTaskSender = mpsc::UnboundedSender<KeyBundleTaskCommand>;
-
 /// Background task to automatically publish a new member message into all currently active space
 /// streams if the associated key bundle is about to expire.
 #[derive(Clone, Debug)]
-pub struct KeyBundleTask {
-    tx: KeyBundleTaskSender,
-}
+pub struct KeyBundleTask;
 
 impl KeyBundleTask {
     /// Spawn key bundle background task.
@@ -167,26 +162,35 @@ impl KeyBundleTask {
     /// This method awaits until we can be sure at least one valid key bundle was published into the
     /// member's log. This assures that all logic to subscribe to a space causes sync session to be
     /// initialised _after_ the log was checked & populated.
-    pub async fn spawn(manager: SpacesManager) -> Self {
-        Self::spawn_inner(manager, CHECK_KEY_BUNDLE_FREQUENCY).await
+    pub async fn spawn(manager: SpacesManager, egress_handle: EgressHandle) -> Self {
+        Self::spawn_inner(manager, egress_handle, CHECK_KEY_BUNDLE_FREQUENCY).await
     }
 
     #[cfg(test)]
-    pub async fn spawn_with_frequency(manager: SpacesManager, frequency: Duration) -> Self {
-        Self::spawn_inner(manager, frequency).await
+    pub async fn spawn_with_frequency(
+        manager: SpacesManager,
+        egress_handle: EgressHandle,
+        frequency: Duration,
+    ) -> Self {
+        Self::spawn_inner(manager, egress_handle, frequency).await
     }
 
-    async fn spawn_inner(manager: SpacesManager, frequency: Duration) -> Self {
+    async fn spawn_inner(
+        manager: SpacesManager,
+        egress_handle: EgressHandle,
+        frequency: Duration,
+    ) -> Self {
         debug!("key bundle management task started");
 
-        let (tx, rx) = mpsc::unbounded_channel();
         let ready_signal = Arc::new(Notify::new());
 
         {
             let ready_signal = ready_signal.clone();
 
             tokio::spawn(async move {
-                let result = renew_expired_key_bundles(manager, rx, ready_signal, frequency).await;
+                let result =
+                    renew_expired_key_bundles(manager, egress_handle, ready_signal, frequency)
+                        .await;
 
                 match result {
                     Ok(_) => debug!("key bundle management task ended"),
@@ -206,133 +210,47 @@ impl KeyBundleTask {
         // one valid key bundle should be available.
         ready_signal.notified().await;
 
-        Self { tx }
+        Self
     }
-
-    /// Use the returned sender to add and remove active space streams.
-    pub fn command_handle(&self) -> KeyBundleTaskSender {
-        self.tx.clone()
-    }
-}
-
-/// Command for key bundle management task.
-#[derive(Debug)]
-pub enum KeyBundleTaskCommand {
-    /// Add a new spaces stream to list.
-    ///
-    /// The task will automatically publish "member" messages with the newly generated key bundle
-    /// into each stream in the list when the current key bundle is about to expire.
-    ///
-    /// This allows currently connected nodes to directly receive these messages in "live-mode" as
-    /// they get eagerly pushed towards them. Offline nodes will pick them up later as part of the
-    /// regular sync protocol.
-    AddStream(SpaceId, ImportLocalTx),
-
-    /// Remove inactive / closed stream from the list.
-    RemoveStream(SpaceId),
 }
 
 const CHECK_KEY_BUNDLE_FREQUENCY: Duration = Duration::from_mins(15);
 
 async fn renew_expired_key_bundles(
     manager: SpacesManager,
-    mut rx: mpsc::UnboundedReceiver<KeyBundleTaskCommand>,
+    egress_handle: EgressHandle,
     ready_signal: Arc<Notify>,
     frequency: Duration,
 ) -> Result<(), SpacesManagerError> {
-    // Keep a list of all spaces streams where we publish the new "member" message into when a key
-    // bundle is about to expire.
-    //
-    // TODO: Instead of this space id -> import stream association the whole thing should be it's
-    // own object (something like an "local import handle"), we should be able to create one
-    // directly from a stream object.
-    let mut spaces_streams: HashMap<SpaceId, ImportLocalTx> = HashMap::new();
+    let config = DispatchConfig {
+        delivery: EventDeliveryPolicy::OnlySpaces,
+        processing: EventProcessingPolicy::Disabled,
+    };
 
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
     let mut interval = tokio::time::interval(frequency);
+
     loop {
-        tokio::select! {
-            biased;
+        interval.tick().await;
 
-            _ = interval.tick() => {
-                if !manager.key_bundle_expired().await? {
-                    ready_signal.notify_one();
-                    continue;
-                }
-
-                let operation = manager.key_bundle_message().await?.into_operation();
-
-                debug!(
-                    active_streams = spaces_streams.len(),
-                    seq_num = operation.header.seq_num,
-                    "key bundle non-existent or expired, automatically generate new one"
-                );
-
-                let mut failed_sends = Vec::new();
-
-                for (space_id, import_local_tx) in spaces_streams.iter() {
-                    let success = publish_member_message(
-                        operation.clone(),
-                        space_id,
-                        import_local_tx,
-                    )
-                    .await;
-
-                    if !success {
-                        failed_sends.push(*space_id);
-                    }
-                }
-
-                // Automatically remove streams from list where sending message failed.
-                for space_id in failed_sends.iter() {
-                    spaces_streams.remove(space_id);
-                }
-
-                ready_signal.notify_one();
-            }
-
-            command = rx.recv() => {
-                let Some(command) = command else {
-                    // Stop task when all senders were dropped.
-                    return Ok(());
-                };
-
-                match command {
-                    KeyBundleTaskCommand::AddStream(space_id, import_local_tx) => {
-                        spaces_streams.insert(space_id, import_local_tx);
-                    },
-                    KeyBundleTaskCommand::RemoveStream(space_id) => {
-                        spaces_streams.remove(&space_id);
-                    }
-                }
-            }
+        if !manager.key_bundle_expired().await? {
+            ready_signal.notify_one();
+            continue;
         }
-    }
-}
 
-async fn publish_member_message(
-    operation: Operation,
-    space_id: &SpaceId,
-    import_local_tx: &ImportLocalTx,
-) -> bool {
-    let stream = Box::pin(futures_util::stream::once(async { operation }));
+        let operation = manager.key_bundle_message().await?.into_operation();
 
-    let (ready_tx, ready_rx) = oneshot::channel::<LocalStreamFuture>();
-
-    if let Err(err) = import_local_tx.send((stream, ready_tx)).await {
         debug!(
-            space_id = %space_id.fmt_short(),
-            "sending member message failed due to error: {err}"
+            seq_num = operation.header.seq_num,
+            "key bundle non-existent or expired, automatically generate new one"
         );
 
-        return false;
+        // TODO: Handle error?
+        let _ = egress_handle.dispatch_with_config(operation, &config).await;
+
+        ready_signal.notify_one();
     }
-
-    // Wait until this member message was properly ingested.
-    let _ = ready_rx.await;
-
-    true
 }
 
 /// Associate member log's by observing spaces events.
@@ -445,13 +363,13 @@ mod tests {
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
     use tokio::sync::mpsc;
-    use tokio_stream::StreamExt;
 
     use crate::Credentials;
+    use crate::egress::Egress;
     use crate::forge::OperationForge;
     use crate::spaces::forge::member_log_id;
 
-    use super::{KeyBundleTask, KeyBundleTaskCommand};
+    use super::KeyBundleTask;
 
     async fn get_op_count(store: &SqliteStore, verifying_key: VerifyingKey) -> u32 {
         let result = store
@@ -467,6 +385,7 @@ mod tests {
 
         let credentials = Credentials::generate();
         let store = SqliteStore::temporary().await;
+        let egress = Egress::new();
 
         let spaces_manager = {
             let forge = OperationForge::new(credentials.clone(), store.clone());
@@ -484,7 +403,7 @@ mod tests {
 
         // 2. We launch the background task and expect a first key bundle to be published
         //    automatically in the member's log.
-        let _task = KeyBundleTask::spawn(spaces_manager.clone()).await;
+        let _task = KeyBundleTask::spawn(spaces_manager.clone(), egress.handle()).await;
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
 
         // 3. The key bundle exists and is valid. Calling "me" doesn't generate a new one.
@@ -499,6 +418,7 @@ mod tests {
 
         let credentials = Credentials::generate();
         let store = SqliteStore::temporary().await;
+        let egress = Egress::new();
 
         let spaces_manager = {
             let forge = OperationForge::new(credentials.clone(), store.clone());
@@ -517,14 +437,17 @@ mod tests {
 
         // 1. Spawn background task and register a mock spaces stream to it. We don't expect this
         //    stream to receive any key bundles yet as they were added _afterwards_.
-        let task =
-            KeyBundleTask::spawn_with_frequency(spaces_manager.clone(), Duration::from_millis(300))
-                .await;
-        let handle = task.command_handle();
+        let _task = KeyBundleTask::spawn_with_frequency(
+            spaces_manager.clone(),
+            egress.handle(),
+            Duration::from_millis(300),
+        )
+        .await;
 
         let space_id = Topic::random();
         let (import_tx, mut import_rx) = mpsc::channel(16);
-        let _ = handle.send(KeyBundleTaskCommand::AddStream(space_id.into(), import_tx));
+
+        egress.add_stream(space_id, true, import_tx).await;
 
         assert!(import_rx.is_empty());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
@@ -532,10 +455,10 @@ mod tests {
         // 2. Background task is going into next cycle which will cause generation of new key
         //    bundle. We expect all currently active streams (in "live-mode") to be informed about
         //    this update.
-        let (mut import_stream, _) = import_rx.recv().await.expect("import stream exists");
-        let operation = import_stream.next().await.expect("an operation was forged");
+        let (item, _) = import_rx.recv().await.expect("import stream exists");
 
-        let member_msg = match operation
+        let member_msg = match item
+            .operation()
             .header
             .extensions
             .spaces_args()
