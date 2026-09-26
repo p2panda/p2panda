@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 use p2panda_auth::traits::Conditions;
 use p2panda_core::Hash;
-use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError};
+use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError, ProcessOutput};
 use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_spaces::{Forge, SpacesArgs};
 use p2panda_store::Transaction;
@@ -67,7 +67,11 @@ where
         let result = match input_args {
             SpacesProcessorArgs::Process { msg } => {
                 // Process incoming event.
-                let (groups_y, space_y, mut events) = match self.manager.process(msg).await {
+                let ProcessOutput {
+                    groups_y,
+                    space_y,
+                    mut events,
+                } = match self.manager.process(msg).await {
                     Ok(result) => result,
                     Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
                 };

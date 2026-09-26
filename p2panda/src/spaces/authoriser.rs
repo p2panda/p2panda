@@ -45,7 +45,7 @@ impl ProcessorHook<Event> for SyncAuthoriserHook {
 
 pub(crate) async fn update_authoriser(
     sync_authoriser: &SyncAuthoriser,
-    events: &Vec<p2panda_spaces::Event<AuthCapabilities>>,
+    events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
 ) {
     for event in events {
         let p2panda_spaces::Event::Spaces(space_event) = event else {
