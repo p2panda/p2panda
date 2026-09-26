@@ -23,11 +23,12 @@ use tracing::debug;
 use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
-use crate::group::{Group, GroupError};
+use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
 use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
-use crate::space::{Space, SpaceError, SpacesState};
+use crate::space::RepairOutput;
+use crate::space::{Space, SpaceError, SpaceOutput, SpacesState};
 use crate::store::SpacesStoreState;
 use crate::types::AuthGroupState;
 use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
@@ -174,23 +175,14 @@ where
         &self,
         id: impl Into<SpaceId>,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            Vec<F::Message>,
-            Vec<Event<C>>,
-        ),
-        ManagerError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, ManagerError<F, C>> {
         let id = id.into();
 
-        let (groups_y, space_y, messages, events) =
-            Space::create(self.clone(), id, initial_members.to_owned())
-                .await
-                .map_err(ManagerError::Space)?;
+        let result = Space::create(self.clone(), id, initial_members.to_owned())
+            .await
+            .map_err(ManagerError::Space)?;
 
-        Ok((groups_y, space_y, messages, events))
+        Ok(result)
     }
 
     /// Create a new group containing initial members with associated access levels.
@@ -203,7 +195,7 @@ where
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(AuthGroupState<C>, GroupId, F::Message, Event<C>), ManagerError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, ManagerError<F, C>> {
         let groups_y = self.get_groups_state().await?;
 
         // Generate random group id.
@@ -213,12 +205,11 @@ where
             signing_key.verifying_key()
         };
 
-        let (groups_y, message, event) =
-            Group::create(self.clone(), groups_y, group_id, initial_members.to_owned())
-                .await
-                .map_err(ManagerError::Group)?;
+        let output = Group::create(self.clone(), groups_y, group_id, initial_members.to_owned())
+            .await
+            .map_err(ManagerError::Group)?;
 
-        Ok((groups_y, group_id, message, event))
+        Ok(output)
     }
 
     /// Process a spaces message.
@@ -226,17 +217,7 @@ where
     /// We expect messages to be signature-checked, dependency-checked & partially ordered.
     ///
     /// Returns events which inform users of any state changes which occurred.
-    pub async fn process<M>(
-        &self,
-        message: &M,
-    ) -> Result<
-        (
-            Option<AuthGroupState<C>>,
-            Option<SpacesState<C>>,
-            Vec<Event<C>>,
-        ),
-        ManagerError<F, C>,
-    >
+    pub async fn process<M>(&self, message: &M) -> Result<ProcessOutput<C>, ManagerError<F, C>>
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
@@ -251,8 +232,10 @@ where
             "process message"
         );
 
+        let mut output = ProcessOutput::default();
+
         // Route message to the regarding member-, group- or space processor.
-        let result = match args {
+        match args {
             // Received key bundle from a member.
             SpacesArgs::Member(member) => {
                 let mut manager = self.inner.write().await;
@@ -262,7 +245,7 @@ where
                     .await
                     .map_err(ManagerError::IdentityManager)?;
 
-                (None, None, vec![event])
+                output.events = vec![event];
             }
             SpacesArgs::Group { .. } => {
                 let event = Group::process(self.clone(), &SpacesMessage::auth(message))
@@ -270,9 +253,8 @@ where
                     .map_err(ManagerError::Group)?;
 
                 if let Some((groups_y, event)) = event {
-                    (Some(groups_y), None, vec![event])
-                } else {
-                    (None, None, vec![])
+                    output.groups_y = Some(groups_y);
+                    output.events = vec![event];
                 }
             }
             // Received control message related to a space.
@@ -284,9 +266,8 @@ where
                     )
                     .await?
                 {
-                    (None, Some(space_y), events)
-                } else {
-                    (None, None, vec![])
+                    output.space_y = Some(space_y);
+                    output.events = events;
                 }
             }
             SpacesArgs::SpaceUpdate { .. } => unimplemented!(),
@@ -301,14 +282,13 @@ where
                     .await
                     .map_err(ManagerError::Space)?
                 {
-                    (None, Some(space_y), events)
-                } else {
-                    (None, None, vec![])
+                    output.space_y = Some(space_y);
+                    output.events = events;
                 }
             }
         };
 
-        Ok(result)
+        Ok(output)
     }
 
     /// The public key of the local actor.
@@ -477,7 +457,7 @@ where
         &self,
         space_id: SpaceId,
         groups: &[GroupId],
-    ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
+    ) -> Result<RepairOutput<C, F::Message>, ManagerError<F, C>> {
         let Some(space) = self.space(space_id).await? else {
             return Err(ManagerError::SpaceNotFound(space_id));
         };
@@ -490,7 +470,7 @@ where
         {
             // Only members with Read or greater access can repair spaces.
             let space_y = space.state().await?;
-            return Ok((space_y, vec![], vec![]));
+            return Ok(RepairOutput::from(space_y, vec![]));
         }
 
         let result = space.repair(groups).await.map_err(ManagerError::Space)?;
@@ -551,6 +531,24 @@ where
     }
 }
 
+/// Output from Manager::process.
+#[derive(Debug)]
+pub struct ProcessOutput<C> {
+    pub groups_y: Option<AuthGroupState<C>>,
+    pub space_y: Option<SpacesState<C>>,
+    pub events: Vec<Event<C>>,
+}
+
+impl<C> Default for ProcessOutput<C> {
+    fn default() -> Self {
+        Self {
+            groups_y: Default::default(),
+            space_y: Default::default(),
+            events: Default::default(),
+        }
+    }
+}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl<S, F, C> Manager<S, F, C>
 where
@@ -570,11 +568,11 @@ where
     pub async fn create_group_persisted(
         &self,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<S, F, C>, F::Message, Event<C>), ManagerError<F, C>> {
-        let (groups_y, group_id, message, events) = self.create_group(initial_members).await?;
-        self.set_groups_state(&groups_y).await?;
-        let group = Group::new(self.clone(), group_id);
-        Ok((group, message, events))
+    ) -> Result<(Group<S, F, C>, GroupOutput<C, F::Message>), ManagerError<F, C>> {
+        let output = self.create_group(initial_members).await?;
+        self.set_groups_state(&output.groups_y).await?;
+        let group = Group::new(self.clone(), output.group_id);
+        Ok((group, output))
     }
 
     /// Create a new space containing initial members and access levels.
@@ -587,17 +585,17 @@ where
         &self,
         id: SpaceId,
         initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Space<S, F, C>, Vec<F::Message>, Vec<Event<C>>), ManagerError<F, C>> {
-        let (groups_y, space_y, messages, events) = self.create_space(id, initial_members).await?;
-        let space_id = space_y.space_id;
+    ) -> Result<(Space<S, F, C>, SpaceOutput<C, F::Message>), ManagerError<F, C>> {
+        let result = self.create_space(id, initial_members).await?;
+        let space_id = result.space_y.space_id;
 
-        self.set_groups_state(&groups_y).await?;
-        self.set_space_state(&space_id, &space_y.into())
+        self.set_groups_state(&result.groups_y).await?;
+        self.set_space_state(&space_id, &result.space_y.clone().into())
             .await
             .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
         let space = Space::new(self.clone(), space_id);
 
-        Ok((space, messages, events))
+        Ok((space, result))
     }
 
     /// Set the global auth state.
@@ -661,7 +659,11 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>> + Debug,
     {
-        let (groups_y, space_y, events) = self.process(message).await?;
+        let ProcessOutput {
+            groups_y,
+            space_y,
+            events,
+        } = self.process(message).await?;
 
         if let Some(groups_y) = groups_y {
             self.set_groups_state(&groups_y).await?;
@@ -678,7 +680,7 @@ where
     pub async fn repair_spaces(
         &self,
         space_ids: &[SpaceId],
-    ) -> Result<Vec<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>)>, ManagerError<F, C>> {
+    ) -> Result<Vec<RepairOutput<C, F::Message>>, ManagerError<F, C>> {
         let mut results = vec![];
 
         for id in space_ids {
@@ -694,7 +696,7 @@ where
             {
                 // Only members with Read or greater access can repair spaces.
                 let space_y = space.state().await?;
-                results.push((space_y, vec![], vec![]));
+                results.push(RepairOutput::from(space_y, vec![]));
                 continue;
             }
 
@@ -711,17 +713,16 @@ where
     pub async fn repair_spaces_persisted(
         &self,
         space_ids: &[SpaceId],
-    ) -> Result<Vec<F::Message>, ManagerError<F, C>> {
+    ) -> Result<Vec<RepairOutput<C, F::Message>>, ManagerError<F, C>> {
         let results = self.repair_spaces(space_ids).await?;
 
-        let mut messages = vec![];
-        for (space_y, messages_inner, _) in results {
-            let space_id = space_y.space_id;
-            self.set_space_state(&space_id, &space_y.into()).await?;
-            messages.extend(messages_inner);
+        for result in results.iter() {
+            let space_id = result.space_y.space_id;
+            self.set_space_state(&space_id, &result.space_y.clone().into())
+                .await?;
         }
 
-        Ok(messages)
+        Ok(results)
     }
 }
 
