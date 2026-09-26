@@ -53,6 +53,32 @@ pub struct Group<S, F, C> {
     id: GroupId,
 }
 
+pub struct GroupOutput<C, M> {
+    pub group_id: GroupId,
+    pub groups_y: AuthGroupState<C>,
+    pub message: M,
+    pub event: Event<C>,
+}
+
+impl<C, M> GroupOutput<C, M>
+where
+    C: Conditions,
+{
+    pub fn from(
+        group_id: GroupId,
+        groups_y: AuthGroupState<C>,
+        message: M,
+        event: Event<C>,
+    ) -> Self {
+        Self {
+            group_id,
+            groups_y,
+            message,
+            event,
+        }
+    }
+}
+
 impl<S, F, C> Group<S, F, C>
 where
     S: Clone
@@ -89,7 +115,7 @@ where
         y: AuthGroupState<C>,
         group_id: GroupId,
         initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         let initial_members = typed_members(&y, &initial_members);
         let action = AuthGroupAction::Create {
             initial_members: initial_members.clone(),
@@ -104,7 +130,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
         let member = typed_member(&y, member);
         let action = AuthGroupAction::Add { member, access };
@@ -117,7 +143,7 @@ where
     pub async fn remove(
         &self,
         member: ActorId,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
         let member = typed_member(&y, member);
         let action = AuthGroupAction::Remove { member };
@@ -131,7 +157,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
         let member = typed_member(&y, member);
         let action = AuthGroupAction::Promote { member, access };
@@ -145,7 +171,7 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         let y = self.manager.get_groups_state().await?;
         let member = typed_member(&y, member);
         let action = AuthGroupAction::Demote { member, access };
@@ -183,7 +209,7 @@ where
         y: AuthGroupState<C>,
         group_id: GroupId,
         action: GroupAction<ActorId, C>,
-    ) -> Result<(AuthGroupState<C>, F::Message, Event<C>), GroupError<F, C>> {
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
         // Compute the auth graph heads to include as dependencies based on the groups included in
         // this action. This means any groups being added / removed in the action, plus the id of
         // the ancestor group itself.
@@ -200,13 +226,12 @@ where
             manager.identity.forge(args).await?
         };
 
-        let auth_message = SpacesMessage::auth(&message);
-        let previous_ancestors = y.inner.ancestors(auth_message.group_id());
-        let y = AuthGroup::<C>::process(y, &auth_message).map_err(GroupError::AuthGroup)?;
+        let group_message = SpacesMessage::auth(&message);
+        let previous_ancestors = y.inner.ancestors(group_id);
+        let y = AuthGroup::<C>::process(y, &group_message).map_err(GroupError::AuthGroup)?;
+        let event = to_groups_event(&y, &group_message, &previous_ancestors);
 
-        let event = to_groups_event(&y, &auth_message, &previous_ancestors);
-
-        Ok((y, message, event))
+        Ok(GroupOutput::from(group_id, y, message, event))
     }
 
     /// Id of this group.
@@ -255,21 +280,24 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<F::Message, GroupError<F, C>> {
-        let (y, message, _) = self.add(member, access).await?;
-        self.manager.set_groups_state(&y).await?;
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
+        let output = self.add(member, access).await?;
+        self.manager.set_groups_state(&output.groups_y).await?;
 
-        Ok(message)
+        Ok(output)
     }
 
     /// Remove member from group.
     ///
     /// Persists resulting state and returns forged message.
-    pub async fn remove_persisted(&self, member: ActorId) -> Result<F::Message, GroupError<F, C>> {
-        let (y, message, _) = self.remove(member).await?;
-        self.manager.set_groups_state(&y).await?;
+    pub async fn remove_persisted(
+        &self,
+        member: ActorId,
+    ) -> Result<GroupOutput<C, F::Message>, GroupError<F, C>> {
+        let output = self.remove(member).await?;
+        self.manager.set_groups_state(&output.groups_y).await?;
 
-        Ok(message)
+        Ok(output)
     }
 }
 

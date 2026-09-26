@@ -24,7 +24,7 @@ use crate::operation::Operation;
 use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::space::SpaceEgressError;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
-use crate::spaces::{SpacesManagerError, group_log_id, submit_enriched_space_messages};
+use crate::spaces::{SpacesManagerError, dispatch_spaces_events, group_log_id};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
@@ -179,22 +179,21 @@ pub(crate) async fn repair_space(
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let (space_y, spaces_messages, spaces_events) =
-        manager.repair_space(space_id, &group_ids).await?;
-
-    // Persist spaces state.
-    tx!(spaces_store, {
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
-            .await?;
-    });
+    let output = manager.repair_space(space_id, &group_ids).await?;
 
     // Update the connection authoriser.
     //
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    update_authoriser(connection_authoriser, &spaces_events).await;
+    update_authoriser(connection_authoriser, output.events()).await;
 
-    submit_enriched_space_messages(egress_handle, space_id, spaces_messages, spaces_events).await?;
+    // Persist spaces state.
+    tx!(spaces_store, {
+        spaces_store
+            .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
+            .await?;
+    });
+
+    dispatch_spaces_events(egress_handle, space_id, output.messages).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),

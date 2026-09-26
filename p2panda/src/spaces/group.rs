@@ -127,7 +127,7 @@ impl Group {
             err,
         })?;
 
-        let (_, message, _) = self
+        let output = self
             .inner
             .add(
                 actor,
@@ -138,9 +138,10 @@ impl Group {
             )
             .await?;
 
+        // TODO: persist state and dispatch enriched event.
         let processed = self
             .egress_handle
-            .dispatch(message.into_operation(), self.id().into())
+            .dispatch(output.message.into_operation(), self.id().into())
             .await?;
 
         Ok(GroupFuture {
@@ -165,11 +166,12 @@ impl Group {
             }
         })?;
 
-        let (_, message, _) = self.inner.remove(actor).await?;
+        let output = self.inner.remove(actor).await?;
 
+        // TODO: persist state and dispatch enriched event.
         let processed = self
             .egress_handle
-            .dispatch(message.into_operation(), self.id().into())
+            .dispatch(output.message.into_operation(), self.id().into())
             .await?;
 
         Ok(GroupFuture {

@@ -273,7 +273,7 @@ async fn renew_expired_key_bundles(
 pub async fn associate_members(
     my_node_id: VerifyingKey,
     store: &SqliteStore,
-    events: &[p2panda_spaces::Event<AuthCapabilities>],
+    events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
 ) -> Option<(SpaceId, Vec<MemberId>)> {
     for event in events {
         let p2panda_spaces::Event::Spaces(space_event) = event else {

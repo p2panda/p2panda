@@ -14,8 +14,8 @@ use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
 use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::space::SpacesState;
-use p2panda_spaces::{ActorId, AuthGroupState, MemberId, SpaceId, SpacesStoreState};
+use p2panda_spaces::space::SpaceOutput;
+use p2panda_spaces::{ActorId, MemberId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, tx};
@@ -138,7 +138,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, spaces_events) = self
+        let output = self
             .inner
             .add(
                 actor,
@@ -150,15 +150,9 @@ where
             .await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &spaces_events).await;
+        update_authoriser(&self.connection_authoriser, output.events()).await;
 
-        self.process_change(
-            groups_y,
-            space_y,
-            [group_message, space_message],
-            spaces_events,
-        )
-        .await?;
+        self.process_change(output).await?;
 
         Ok(())
     }
@@ -180,19 +174,12 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, spaces_events) =
-            self.inner.remove(actor).await?;
+        let output = self.inner.remove(actor).await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &spaces_events).await;
+        update_authoriser(&self.connection_authoriser, output.events()).await;
 
-        self.process_change(
-            groups_y,
-            space_y,
-            [group_message, space_message],
-            spaces_events,
-        )
-        .await?;
+        self.process_change(output).await?;
 
         Ok(())
     }
@@ -220,7 +207,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, spaces_events) = self
+        let output = self
             .inner
             .promote(
                 actor,
@@ -231,13 +218,7 @@ where
             )
             .await?;
 
-        self.process_change(
-            groups_y,
-            space_y,
-            [group_message, space_message],
-            spaces_events,
-        )
-        .await?;
+        self.process_change(output).await?;
 
         Ok(())
     }
@@ -265,7 +246,7 @@ where
         // ensure we have incorporated the latest groups changes into the space.
         self.repair().await?;
 
-        let (groups_y, space_y, group_message, space_message, spaces_events) = self
+        let output = self
             .inner
             .demote(
                 actor,
@@ -276,48 +257,36 @@ where
             )
             .await?;
 
-        self.process_change(
-            groups_y,
-            space_y,
-            [group_message, space_message],
-            spaces_events,
-        )
-        .await?;
+        self.process_change(output).await?;
 
         Ok(())
     }
 
     async fn process_change(
         &self,
-        groups_y: AuthGroupState<AuthCapabilities>,
-        space_y: SpacesState<AuthCapabilities>,
-        messages: [SpacesMessage; 2],
-        spaces_events: Vec<SpacesEvent>,
+        space_output: SpaceOutput<AuthCapabilities, SpacesMessage>,
     ) -> Result<(), ProcessError> {
         // Associate member logs with this space. This is equivalent to the member association hook
         // which is registered on the event processing pipeline. Since locally issued events are not
         // going through the pipeline, we have to repeat it here as well.
-        associate_members(self.inner.me(), &self.store, &spaces_events).await;
+        associate_members(self.inner.me(), &self.store, space_output.events()).await;
 
         let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
 
         tx!(spaces_store, {
             // Persist the computed groups and spaces state to the stores.
             spaces_store
-                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+                .set_groups_state_tx(
+                    Hash::digest(GLOBAL_GROUPS_CONTEXT_ID),
+                    &space_output.groups_y,
+                )
                 .await?;
             spaces_store
-                .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_y))
+                .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_output.space_y))
                 .await?;
         });
 
-        submit_enriched_space_messages(
-            &self.egress_handle,
-            self.id(),
-            messages.to_vec(),
-            spaces_events,
-        )
-        .await?;
+        dispatch_spaces_events(&self.egress_handle, self.id(), space_output.messages).await?;
 
         Ok(())
     }
@@ -358,32 +327,26 @@ where
     }
 }
 
-pub(crate) async fn submit_enriched_space_messages(
+pub(crate) async fn dispatch_spaces_events(
     egress_handle: &EgressHandle,
     space_id: SpaceId,
-    mut messages: Vec<SpacesMessage>,
-    spaces_events: Vec<SpacesEvent>,
+    events: Vec<(SpacesMessage, Vec<SpacesEvent>)>,
 ) -> Result<(), SpaceEgressError> {
-    // TODO: Pop off the last spaces message, we will attach all system events to this one.
-    // Refactor after: https://github.com/p2panda/p2panda/issues/1432
-    let Some(last) = messages.pop() else {
-        return Ok(());
-    };
-
     let topic = space_id.into();
 
-    for message in messages {
-        let processed = egress_handle
-            .dispatch(message.into_operation(), topic)
-            .await?;
+    for (message, events) in events {
+        let processed = if events.is_empty() {
+            egress_handle
+                .dispatch(message.into_operation(), topic)
+                .await?
+        } else {
+            egress_handle
+                .dispatch_with_spaces_events(message.into_operation(), topic, Some(events))
+                .await?
+        };
+
         processed.await?;
     }
-
-    // The final spaces event is enriched.
-    let processed = egress_handle
-        .dispatch_with_spaces_events(last.into_operation(), topic, Some(spaces_events))
-        .await?;
-    processed.await?;
 
     Ok(())
 }

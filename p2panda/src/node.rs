@@ -34,8 +34,8 @@ use crate::spaces::types::{
 use crate::spaces::{
     AccessLevel, ActorId, ConnectionAuthoriserHook, DEFAULT_REPAIR_STRATEGY, Group, GroupError,
     KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError,
-    SpaceSubscription, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
-    submit_enriched_space_messages, to_initial_members,
+    SpaceSubscription, actor_to_topic, dispatch_spaces_events, group_log_id, member_log_id,
+    spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -487,16 +487,17 @@ impl Node {
         // emit any events.
         let initial_members = to_initial_members(initial_members);
 
-        let (_, group_id, message, _group_events) =
-            self.spaces_manager.create_group(&initial_members).await?;
+        let output = self.spaces_manager.create_group(&initial_members).await?;
+        let group_id = output.group_id;
 
         let topic = actor_to_topic(group_id);
         let (tx, rx) = self.stream::<NoBody>(topic).await?;
 
         let egress_handle = self.egress.handle();
 
+        // TODO: persist state and dispatch enriched event.
         let processed = egress_handle
-            .dispatch(message.into_operation(), topic)
+            .dispatch(output.message.into_operation(), topic)
             .await?;
         processed.await?;
 
@@ -649,29 +650,22 @@ impl Node {
         // Create a space.
         //
         // We always create a space with only us as the initial members.
-        let (groups_y, space_y, create_space_messages, spaces_events) =
-            self.spaces_manager.create_space(space_id, &[]).await?;
+        let output = self.spaces_manager.create_space(space_id, &[]).await?;
 
         // Persist the computed groups- and spaces-state to the stores.
         tx!(self.store, {
             let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
             spaces_store
-                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &groups_y)
+                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &output.groups_y)
                 .await?;
             spaces_store
-                .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+                .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
                 .await?;
         });
 
         let egress_handle = self.egress.handle();
 
-        submit_enriched_space_messages(
-            &egress_handle,
-            space_id,
-            create_space_messages,
-            spaces_events,
-        )
-        .await?;
+        dispatch_spaces_events(&egress_handle, space_id, output.messages).await?;
 
         let inner = self
             .spaces_manager

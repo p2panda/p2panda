@@ -31,7 +31,7 @@ pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceEgressError,
     SpaceFuture, SpaceSubscription,
 };
-pub(crate) use space::{spaces_stream, submit_enriched_space_messages};
+pub(crate) use space::{dispatch_spaces_events, spaces_stream};
 pub use types::{InnerGroupEvent, SpacesManagerError};
 
 use crate::Credentials;
