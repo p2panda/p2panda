@@ -382,6 +382,9 @@ where
             &current_ancestors,
         );
 
+        // Record any individuals that were removed from the space.
+        update_removed(&mut y.removed, &current_members, &events);
+
         Ok((y, space_message, events))
     }
 
@@ -479,19 +482,7 @@ where
         );
 
         // Record any individuals that were removed from the space.
-        for event in events.iter() {
-            if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
-                // We accumulate all members who were ever removed from a space here. If only the
-                // diff was used, it would be harder for consumers to implement block patterns
-                // based on this field as information about historic removals would be lost. To
-                // account for re-adds the current membership of the group can be compared against
-                // the remove list.
-                let removed = removed_members(&current_members, &context.members)
-                    .into_iter()
-                    .map(|(member, _)| member);
-                y.removed.extend(removed);
-            }
-        }
+        update_removed(&mut y.removed, &current_members, &events);
 
         events.extend(application_events);
 
@@ -826,11 +817,12 @@ where
     /// Returns all members who were removed from, and not re-admitted to, this space.
     pub async fn removed(&self) -> Result<Vec<MemberId>, SpaceError<F, C>> {
         let y = self.state().await?;
-        let mut members = y.groups_y.members(y.group_id).into_iter();
+        let members = y.groups_y.members(y.group_id);
         let removed = y
             .removed
             .iter()
-            .filter(|removed| members.any(|(member, _)| member != **removed))
+            // Filter out historically removed members which are now current members (they were re-added).
+            .filter(|removed| members.iter().all(|(member, _)| member != *removed))
             .cloned();
         Ok(removed.collect())
     }
@@ -906,6 +898,27 @@ where
         };
 
         Ok((y, message, event))
+    }
+}
+
+fn update_removed<C: Conditions>(
+    removed: &mut HashSet<MemberId>,
+    current_members: &[(MemberId, Access<C>)],
+    events: &Vec<Event<C>>,
+) {
+    for event in events.iter() {
+        if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
+            // We accumulate all members who were ever removed from a space here. If only the
+            // diff was used, it would be harder for consumers to implement block patterns
+            // based on this field as information about historic removals would be lost. To
+            // account for re-adds the current membership of the group can be compared against
+            // the remove list.
+            removed.extend(
+                removed_members(&current_members, &context.members)
+                    .into_iter()
+                    .map(|(member, _)| member),
+            );
+        }
     }
 }
 

@@ -2206,3 +2206,98 @@ async fn promote_demote() {
 
     assert_eq!(all_bob_events.len(), 6);
 }
+
+#[tokio::test]
+async fn removed_members() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+    let claire = <TestPeer>::new(2).await;
+    let dave = <TestPeer>::new(3).await;
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+    let dave_manager = dave.manager.clone();
+
+    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
+    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
+    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
+
+    for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
+        alice_manager.process_persisted(&bundle).await.unwrap();
+        bob_manager.process_persisted(&bundle).await.unwrap();
+    }
+
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+    let dave_id = dave.manager.id();
+
+    // Alice: Create Space with bob, claire and dave
+    // ~~~~~~~~~~~~
+
+    let space_id = SpaceId::digest(b"0");
+    let (alice_space, output) = alice_manager
+        .create_space_persisted(
+            space_id,
+            &[
+                (bob_id, Access::read()),
+                (claire_id, Access::read()),
+                (dave_id, Access::read()),
+            ],
+        )
+        .await
+        .unwrap();
+    let (mut alice_messages, _) = split_messages(output.messages);
+
+    // Alice: Removes claire and dave
+    // ~~~~~~~~~~~~
+
+    let (auth_message, space_message, _) =
+        split_space_output(alice_space.remove_persisted(claire_id).await.unwrap());
+    alice_messages.extend([auth_message, space_message]);
+
+    let (auth_message, space_message, _) =
+        split_space_output(alice_space.remove_persisted(dave_id).await.unwrap());
+    alice_messages.extend([auth_message, space_message]);
+
+    // Bob: Receive all of alice's messages
+    // ~~~~~~~~~~~~
+
+    for message in alice_messages {
+        bob.persist_operation(&message).await.unwrap();
+        bob_manager.process_persisted(&message).await.unwrap();
+    }
+
+    // Both claire and dave are listed as removed for alice and bob.
+    let expected = HashSet::from([claire_id, dave_id]);
+    let removed: HashSet<_> = alice_space.removed().await.unwrap().into_iter().collect();
+    assert_eq!(removed, expected);
+
+    let bob_space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let removed: HashSet<_> = bob_space.removed().await.unwrap().into_iter().collect();
+    assert_eq!(removed, expected);
+
+    // Alice: Re-adds claire
+    // ~~~~~~~~~~~~
+
+    let (auth_message, space_message, _) = split_space_output(
+        alice_space
+            .add_persisted(claire_id, Access::read())
+            .await
+            .unwrap(),
+    );
+
+    // Bob: Receive alice's messages
+    // ~~~~~~~~~~~~
+
+    for message in [auth_message, space_message] {
+        bob.persist_operation(&message).await.unwrap();
+        bob_manager.process_persisted(&message).await.unwrap();
+    }
+
+    // Claire was re-admitted, so only dave is listed as removed.
+    let expected = vec![dave_id];
+    assert_eq!(alice_space.removed().await.unwrap(), expected);
+    assert_eq!(bob_space.removed().await.unwrap(), expected);
+}
