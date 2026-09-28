@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use p2panda_core::traits::{Provenance, ShortFormat};
 use p2panda_core::{Hash, Topic};
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
+use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
@@ -80,7 +80,7 @@ pub(crate) async fn repair_space(
     store: &SqliteStore,
     egress_handle: &EgressHandle,
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    connection_authoriser: &ConnectionAuthoriser,
+    sync_authoriser: &SyncAuthoriser,
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
@@ -192,7 +192,7 @@ pub(crate) async fn repair_space(
     // Update the connection authoriser.
     //
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    update_authoriser(connection_authoriser, &spaces_events).await;
+    update_authoriser(sync_authoriser, &spaces_events).await;
 
     submit_enriched_space_messages(egress_handle, space_id, spaces_messages, spaces_events).await?;
 
@@ -222,7 +222,7 @@ impl RepairTask {
         strategy: RepairStrategy,
         egress_handle: EgressHandle,
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        connection_authoriser: ConnectionAuthoriser,
+        sync_authoriser: SyncAuthoriser,
     ) -> Self {
         debug!("repair management task started");
 
@@ -241,7 +241,7 @@ impl RepairTask {
                             &manager,
                             &store,
                             &egress_handle,
-                            &connection_authoriser
+                            &sync_authoriser
                         )
                         .await;
 
@@ -265,7 +265,7 @@ impl RepairTask {
                                     &manager,
                                     &store,
                                     &egress_handle,
-                                    &connection_authoriser
+                                    &sync_authoriser
                                 )
                                 .await;
 

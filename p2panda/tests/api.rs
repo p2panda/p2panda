@@ -636,11 +636,11 @@ mod shutdown {
     }
 }
 
-mod connection_authorisation {
+mod sync_authorisation {
     use p2panda::Topic;
     use p2panda::streams::SystemEvent;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_net::connection_authoriser::ConnectionAuthoriserEvent;
+    use p2panda_net::sync::sync_authoriser::SyncAuthoriserEvent;
     use tokio_stream::StreamExt;
 
     use crate::spawn_node;
@@ -672,14 +672,11 @@ mod connection_authorisation {
 
         let mut received_event = false;
 
-        // The discovery system will result in a connection attempt.
-        // Regardless of whether panda is the initiator or acceptor,
-        // we expect the connection establishment to be blocked.
+        // Regardless of whether panda is the initiator or acceptor, we expect the sync session to
+        // be blocked for any topic.
         while let Some(event) = events.next().await {
-            if let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::Blocked {
-                node,
-                role: _,
-            }) = event
+            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked { node, .. }) =
+                event
             {
                 assert_eq!(node, icebear.id());
                 received_event = true;
@@ -721,10 +718,8 @@ mod connection_authorisation {
         // Panda & Icebear will discover that they have similar interest in the chat topic, however
         // any sync attempt will be blocked..
         while let Some(event) = events.next().await {
-            if let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::TopicBlocked {
-                topic,
-                node,
-            }) = event
+            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked { topic, node }) =
+                event
             {
                 if node == icebear.id() && topic == chat_id {
                     received_event = true;
