@@ -288,9 +288,14 @@ pub(crate) async fn make_space_group_log_associations(
         // TODO: We only really need to make this association if we were ever group managers (this
         // is the only case where we would publish operations to this log). We could optimise here
         // based on that assumption by not always making this association.
-        store
-            .associate(&Topic::from(space_id), &me, &log_id)
-            .await?;
+        let topic = Topic::from(space_id);
+        store.associate(&topic, &me, &log_id).await?;
+
+        let logs = store.resolve(&topic).await?;
+        let trace_logs: Vec<(String, &Vec<LogId>)> =
+            logs.iter().map(|(k, v)| (k.fmt_short(), v)).collect();
+        println!("topic (node): {:?}", topic);
+        println!("logs  (node): {:?}", trace_logs);
     };
 
     let log_id = group_log_id(space_group_id);

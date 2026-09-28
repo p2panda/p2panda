@@ -146,6 +146,11 @@ where
             trace!(logs = ?trace_logs, "local topic logs retrieved");
         }
 
+        let trace_logs: Vec<(String, &Vec<L>)> =
+            logs.iter().map(|(k, v)| (k.fmt_short(), v)).collect();
+        println!("topic (sync): {:?}", self.topic);
+        println!("logs  (sync): {:?}", trace_logs);
+
         // Run the log sync protocol passing in our local topic logs.
         let (mut dedup, sync_metrics) = {
             let (mut log_sync_sink, mut log_sync_stream) = sync_channels(&mut sink, &mut stream);
