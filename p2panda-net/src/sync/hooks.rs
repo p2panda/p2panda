@@ -17,15 +17,15 @@ pub enum AfterHandshakeOutcome {
     Reject,
 }
 
+/// Sync hooks intercept the sync session establishment process.
 pub trait SyncHooks: std::fmt::Debug + Send + Sync {
-    /// Payload which was delivered during handshake.
+    /// Payload which was delivered during sync session handshake.
     ///
-    /// Usually this contains a negotation over what is being synced, like a topic.
+    /// Usually this contains what is being synced, like a topic.
     type Handshake: std::fmt::Debug + Send + Sync;
 
-    /// Intercept outgoing or incoming sync session before they are started.
-    ///
-    /// This is called whenever a new outgoing sync session is initiated.
+    /// Intercept outgoing or incoming sync session before it is started and actual application data
+    /// is exchanged.
     fn after_handshake<'a>(
         &'a self,
         _remote_node_id: NodeId,
@@ -67,18 +67,18 @@ impl<H> Clone for Box<dyn DynSyncHooks<H>> {
 
 #[derive(Debug, Default, Clone)]
 pub struct SyncHooksList<H> {
-    pub inner: Vec<Box<dyn DynSyncHooks<H>>>,
+    inner: Vec<Box<dyn DynSyncHooks<H>>>,
 }
 
 impl<H> SyncHooksList<H>
 where
     H: std::fmt::Debug + Send + Sync,
 {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self { inner: Vec::new() }
     }
 
-    pub(crate) fn push(&mut self, hook: impl SyncHooks<Handshake = H> + 'static + Clone) {
+    pub fn push(&mut self, hook: impl SyncHooks<Handshake = H> + 'static + Clone) {
         let hook = Box::new(hook);
         self.inner.push(hook);
     }

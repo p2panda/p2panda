@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Topic, VerifyingKey};
-use thiserror::Error;
 use tokio::sync::{RwLock, broadcast};
+
+use crate::NodeId;
+use crate::sync::hooks::{AfterHandshakeOutcome, SyncHooks};
 
 /// Sync authoriser mode for determining how sync sessions are accepted and rejected.
 #[derive(Clone, Debug)]
@@ -21,26 +23,38 @@ pub enum SyncAuthoriserMode {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyncAuthoriserEvent {
-    TopicBlocked { topic: Topic, node: VerifyingKey },
-    TopicAllowed { topic: Topic, node: VerifyingKey },
+    Blocked {
+        remote_node_id: NodeId,
+        topic: Topic,
+    },
+    Allowed {
+        remote_node_id: NodeId,
+        topic: Topic,
+    },
 }
 
 impl Display for SyncAuthoriserEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SyncAuthoriserEvent::TopicBlocked { topic, node } => {
+            SyncAuthoriserEvent::Blocked {
+                remote_node_id,
+                topic,
+            } => {
                 write!(
                     f,
-                    "blocked sync attempt to {} on topic {}",
-                    node.fmt_short(),
+                    "blocked sync attempt with {} on topic {}",
+                    remote_node_id.fmt_short(),
                     topic.fmt_short()
                 )
             }
-            SyncAuthoriserEvent::TopicAllowed { topic, node } => {
+            SyncAuthoriserEvent::Allowed {
+                remote_node_id,
+                topic,
+            } => {
                 write!(
                     f,
-                    "allowed sync attempt to {} on topic {}",
-                    node.fmt_short(),
+                    "allowed sync attempt with {} on topic {}",
+                    remote_node_id.fmt_short(),
                     topic.fmt_short()
                 )
             }
@@ -117,7 +131,7 @@ impl SyncAuthoriser {
     /// Sends an authoriser event into the events stream.
     ///
     /// All subscribers will be notified of the event.
-    pub(crate) async fn send_event(&self, event: SyncAuthoriserEvent) {
+    async fn send_event(&self, event: SyncAuthoriserEvent) {
         let inner = self.inner.write().await;
 
         // Surpress errors when events are emitted but no event stream subscription exists.
@@ -189,8 +203,110 @@ impl SyncAuthoriser {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum SyncAuthoriserError {
-    #[error("not authorised")]
-    NotAuthorised,
+impl SyncHooks for SyncAuthoriser {
+    type Handshake = Topic;
+
+    // Runs before an outgoing connection begins.
+    async fn after_handshake(
+        &self,
+        remote_node_id: NodeId,
+        topic: &Topic,
+    ) -> AfterHandshakeOutcome {
+        if self.can_sync(remote_node_id, *topic).await {
+            self.send_event(SyncAuthoriserEvent::Allowed {
+                remote_node_id,
+                topic: *topic,
+            })
+            .await;
+
+            AfterHandshakeOutcome::Accept
+        } else {
+            self.send_event(SyncAuthoriserEvent::Blocked {
+                remote_node_id,
+                topic: *topic,
+            })
+            .await;
+
+            AfterHandshakeOutcome::Reject
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use p2panda_core::{SigningKey, Topic};
+
+    use super::{SyncAuthoriser, SyncAuthoriserMode};
+
+    #[tokio::test]
+    async fn permissive() {
+        let authoriser = SyncAuthoriser::default();
+
+        let node_a = SigningKey::generate().verifying_key();
+        let node_b = SigningKey::generate().verifying_key();
+
+        let bears = Topic::random();
+        let beavers = Topic::random();
+
+        // In permissive mode anyone can sync anything without being explicitly blocked.
+        assert!(authoriser.can_sync(node_a, bears).await);
+        assert!(authoriser.can_sync(node_a, beavers).await);
+        assert!(authoriser.can_sync(node_b, bears).await);
+        assert!(authoriser.can_sync(node_b, beavers).await);
+
+        // Any topic is blocked for Node A.
+        authoriser.block(node_a).await;
+        assert!(!authoriser.can_sync(node_a, bears).await);
+        assert!(!authoriser.can_sync(node_a, beavers).await);
+
+        // Node B can stil sync anything.
+        assert!(authoriser.can_sync(node_b, bears).await);
+        assert!(authoriser.can_sync(node_b, beavers).await);
+
+        // Allow Node A to _only_ sync "beavers".
+        authoriser.allow_topic(node_a, beavers).await;
+        assert!(!authoriser.can_sync(node_a, bears).await);
+        assert!(authoriser.can_sync(node_a, beavers).await);
+
+        // Block Node B to not  sync "beavers".
+        authoriser.block_topic(node_b, beavers).await;
+        assert!(!authoriser.can_sync(node_b, beavers).await);
+        assert!(authoriser.can_sync(node_b, bears).await);
+    }
+
+    #[tokio::test]
+    async fn restrictive() {
+        let authoriser = SyncAuthoriser::with_mode(SyncAuthoriserMode::Restrictive);
+
+        let node_a = SigningKey::generate().verifying_key();
+        let node_b = SigningKey::generate().verifying_key();
+
+        let squirrels = Topic::random();
+        let wolves = Topic::random();
+
+        // In permissive mode nobody can sync anything without being explicitly allowed.
+        assert!(!authoriser.can_sync(node_a, squirrels).await);
+        assert!(!authoriser.can_sync(node_a, wolves).await);
+        assert!(!authoriser.can_sync(node_b, squirrels).await);
+        assert!(!authoriser.can_sync(node_b, wolves).await);
+
+        // Node A is allowed to sync any topic.
+        authoriser.allow(node_a).await;
+        assert!(authoriser.can_sync(node_a, squirrels).await);
+        assert!(authoriser.can_sync(node_a, wolves).await);
+
+        // Node B is still blocked.
+        assert!(!authoriser.can_sync(node_b, squirrels).await);
+        assert!(!authoriser.can_sync(node_b, wolves).await);
+
+        // Allow Node B to sync "wolves".
+        authoriser.allow_topic(node_b, wolves).await;
+        assert!(authoriser.can_sync(node_b, wolves).await);
+        assert!(!authoriser.can_sync(node_b, squirrels).await);
+
+        // Block Node A to sync "squirrels".
+        authoriser.block_topic(node_b, squirrels).await;
+        assert!(authoriser.can_sync(node_b, wolves).await);
+        assert!(!authoriser.can_sync(node_b, squirrels).await);
+    }
 }

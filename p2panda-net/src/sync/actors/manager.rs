@@ -23,8 +23,9 @@ use tracing::{debug, warn};
 use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
+use crate::sync::LogSyncRejected;
 use crate::sync::actors::{ToTopicManager, TopicManager};
-use crate::sync::authoriser::{SyncAuthoriser, SyncAuthoriserError, SyncAuthoriserEvent};
+use crate::sync::hooks::{AfterHandshakeOutcome, SyncHooks, SyncHooksList};
 use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
@@ -106,7 +107,7 @@ where
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
-    authoriser: SyncAuthoriser,
+    hooks: SyncHooksList<Topic>,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
@@ -235,14 +236,14 @@ where
 
     type Msg = ToSyncManager<M::Message, M::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, SyncAuthoriser);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, SyncHooksList<Topic>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip, authoriser) = args;
+        let (protocol_id, sync_args, endpoint, gossip, hooks) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -258,12 +259,12 @@ where
             protocol_id,
             endpoint,
             gossip,
-            authoriser,
             gossip_handles,
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
             sync_receivers,
             sync_args,
+            hooks,
             thread_pool,
         })
     }
@@ -301,7 +302,7 @@ where
                     .accept(
                         state.protocol_id.clone(),
                         SyncProtocolHandler {
-                            authoriser: state.authoriser.clone(),
+                            hooks: state.hooks.clone(),
                             stream_ref: myself.clone(),
                         },
                     )
@@ -401,25 +402,11 @@ where
                 // topic.
                 let _ = reply.send(());
             }
-            ToSyncManager::InitiateSync(topic, node_id) => {
-                // Authorise that we should be connecting on this topic with the remote node.
-                if state.authoriser.can_sync(node_id, topic).await {
-                    state
-                        .authoriser
-                        .send_event(SyncAuthoriserEvent::TopicAllowed {
-                            topic,
-                            node: node_id,
-                        })
-                        .await;
-                } else {
-                    let event = SyncAuthoriserEvent::TopicBlocked {
-                        topic,
-                        node: node_id,
-                    };
-                    warn!("{}", event);
-                    state.authoriser.send_event(event).await;
-
-                    // Do not initiate a sync session with a blocked topic-node combination.
+            ToSyncManager::InitiateSync(topic, remote_node_id) => {
+                // Authorise outgoing sync session with the remote node.
+                if let AfterHandshakeOutcome::Reject =
+                    state.hooks.after_handshake(remote_node_id, &topic).await
+                {
                     return Ok(());
                 }
 
@@ -428,12 +415,12 @@ where
                 {
                     debug!(
                         topic = topic.fmt_short(),
-                        node_id = node_id.fmt_short(),
+                        remote_node_id = remote_node_id.fmt_short(),
                         "initiate sync session",
                     );
 
                     sync_manager_actor.send_message(ToTopicManager::Initiate {
-                        node_id,
+                        node_id: remote_node_id,
                         topic,
                         live_mode: *live_mode,
                     })?;
@@ -536,7 +523,7 @@ where
     M: Send + 'static,
     E: Send + 'static,
 {
-    authoriser: SyncAuthoriser,
+    hooks: SyncHooksList<Topic>,
     stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
@@ -559,7 +546,7 @@ where
         &self,
         connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
-        let node_id = to_verifying_key(connection.remote_id());
+        let remote_node_id = to_verifying_key(connection.remote_id());
         let (tx, rx) = connection.accept_bi().await?;
 
         // As we are accepting a sync session here we don't yet know the topic which the initiator
@@ -584,35 +571,21 @@ where
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
-        let allow = self.authoriser.can_sync(node_id, topic).await;
-
-        // Authorise that we should be connecting on this topic with the remote node.
-        if allow {
-            self.authoriser
-                .send_event(SyncAuthoriserEvent::TopicAllowed {
-                    topic,
-                    node: node_id,
-                })
-                .await;
-        } else {
-            let event = SyncAuthoriserEvent::TopicBlocked {
-                topic,
-                node: node_id,
-            };
-            warn!("{}", event);
-            self.authoriser.send_event(event).await;
-
-            // Do not accept a sync session with a blocked topic-node combination.
+        // Authorise incoming sync session with the remote node.
+        if let AfterHandshakeOutcome::Reject =
+            self.hooks.after_handshake(remote_node_id, &topic).await
+        {
             connection.close(VarInt::from_u32(0), b"not authorised");
-            return Err(iroh::protocol::AcceptError::from_err(
-                SyncAuthoriserError::NotAuthorised,
-            ));
+
+            return Err(iroh::protocol::AcceptError::from_err(LogSyncRejected::new(
+                "hooks rejected incoming sync session",
+            )));
         }
 
         // We know the topic now and send an accept message to the stream actor where it will then
         // be routed to the correct sync manager.
         self.stream_ref
-            .send_message(ToSyncManager::Accept(node_id, topic, connection))
+            .send_message(ToSyncManager::Accept(remote_node_id, topic, connection))
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
         Ok(())
