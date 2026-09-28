@@ -11,7 +11,7 @@ use p2panda_net::gossip::{GossipConfig, GossipError};
 use p2panda_net::iroh_endpoint::{EndpointAddr, EndpointError, IrohConfig, RelayUrl};
 use p2panda_net::iroh_mdns::MdnsDiscoveryError;
 use p2panda_net::sync::LogSyncError;
-use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
+use p2panda_net::sync::authoriser::SyncAuthoriser;
 use p2panda_net::utils::from_verifying_key;
 use p2panda_net::{
     AddressBook, DEFAULT_NETWORK_ID, Discovery, Endpoint, Gossip, LogSync, MdnsDiscovery,

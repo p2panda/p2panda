@@ -640,7 +640,7 @@ mod sync_authorisation {
     use p2panda::Topic;
     use p2panda::streams::SystemEvent;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_net::sync::sync_authoriser::SyncAuthoriserEvent;
+    use p2panda_net::sync::authoriser::SyncAuthoriserEvent;
     use tokio_stream::StreamExt;
 
     use crate::spawn_node;

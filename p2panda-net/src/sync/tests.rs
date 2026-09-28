@@ -24,8 +24,8 @@ use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
+use crate::sync::authoriser::SyncAuthoriser;
 use crate::sync::handle::SyncHandle;
-use crate::sync::sync_authoriser::SyncAuthoriser;
 use crate::test_utils::{ApplicationArguments, test_args_from_seed};
 
 const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];

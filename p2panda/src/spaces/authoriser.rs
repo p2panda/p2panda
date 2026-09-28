@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
+use p2panda_net::sync::authoriser::SyncAuthoriser;
 use p2panda_spaces::SpaceEvent;
 use p2panda_stream::hooks::ProcessorHook;
 use p2panda_stream::spaces::SpacesResult;

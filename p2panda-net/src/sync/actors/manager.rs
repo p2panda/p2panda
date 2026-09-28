@@ -24,7 +24,7 @@ use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{ToTopicManager, TopicManager};
-use crate::sync::sync_authoriser::{SyncAuthoriser, SyncAuthoriserError, SyncAuthoriserEvent};
+use crate::sync::authoriser::{SyncAuthoriser, SyncAuthoriserError, SyncAuthoriserEvent};
 use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
