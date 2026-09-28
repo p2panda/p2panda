@@ -27,6 +27,7 @@ Highlights are marked with a pancake 🥞
 - node: Membership change validation in Space API [#1292](https://github.com/p2panda/p2panda/pull/1292)
 - node: Task for repairing spaces [#1277](https://github.com/p2panda/p2panda/pull/1277)
 - node: Configurable egress to "publish" and "import" locally forged operations [#1431](https://github.com/p2panda/p2panda/pull/1431)
+- node: Support optionally adding spaces events when constructing processor Event [#1430](https://github.com/p2panda/p2panda/pull/1430)
 - spaces: Compute and return events from local methods [#1290](https://github.com/p2panda/p2panda/pull/1290)
 - spaces: Introduce local stream import [#1296](https://github.com/p2panda/p2panda/pull/1296)
 - spaces: Safe key bundle registration by cross-signing X3DH identity- and verifying-keys [#1332](https://github.com/p2panda/p2panda/pull/1332)
@@ -47,7 +48,6 @@ Highlights are marked with a pancake 🥞
 - sync: Method to resolve log heights from topic [#1405](https://github.com/p2panda/p2panda/pull/1405)
 - sync: Re-export -stream ingest_operation in `api` module [#1406](https://github.com/p2panda/p2panda/pull/1406)
 - stream: Forward events of already processed operations in spaces processor [#1430](https://github.com/p2panda/p2panda/pull/1430)
-- p2panda: Support optionally adding spaces events when constructing processor Event [#1430](https://github.com/p2panda/p2panda/pull/1430)
 
 ### Changed
 
@@ -56,13 +56,13 @@ Highlights are marked with a pancake 🥞
 - node: Make `Group` sendsync [#1306](https://github.com/p2panda/p2panda/pull/1306)
 - node: Move repair task out of stream [#1347](https://github.com/p2panda/p2panda/pull/1347)
 - node: Use random network ids in tests [#1360](https://github.com/p2panda/p2panda/pull/1360)
+- node: Use unique network ids in API tests [#1425](https://github.com/p2panda/p2panda/pull/1425)
 - spaces: Only emit membership change events if local user is space member [#1304](https://github.com/p2panda/p2panda/pull/1304)
 - spaces: Remove auth resolver generic parameter [#1298](https://github.com/p2panda/p2panda/pull/1298)
 - store: sqlx 0.9.0, use safer query builder [#1322](https://github.com/p2panda/p2panda/pull/1322)
 - core: Infallible conversion from Operation<E> into AnyOperation [#1389](https://github.com/p2panda/p2panda/pull/1389)
 - store: Use `AnyOperation` on `LogStore` [#1391](https://github.com/p2panda/p2panda/pull/1391)
 - sync: Update examples to use new `api` module [#1413](https://github.com/p2panda/p2panda/pull/1413)
-- p2panda: Use unique network ids in API tests [#1425](https://github.com/p2panda/p2panda/pull/1425)
 
 ### Fixed
 
