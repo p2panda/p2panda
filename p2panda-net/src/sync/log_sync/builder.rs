@@ -12,7 +12,7 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
-use crate::sync::authoriser::SyncAuthoriser;
+use crate::sync::hooks::{SyncHooks, SyncHooksList};
 use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
 
 pub struct Builder<S, L, E>
@@ -28,7 +28,7 @@ where
     store: S,
     endpoint: Endpoint,
     gossip: Gossip,
-    authoriser: SyncAuthoriser,
+    hooks: SyncHooksList<Topic>,
     _marker: PhantomData<(L, E)>,
 }
 
@@ -43,18 +43,24 @@ where
     E: Extensions + Send + 'static,
 {
     pub fn new(store: S, endpoint: Endpoint, gossip: Gossip) -> Self {
-        let authoriser = SyncAuthoriser::new();
         Self {
             store,
             endpoint,
             gossip,
-            authoriser,
+            hooks: SyncHooksList::new(),
             _marker: PhantomData,
         }
     }
 
-    pub fn authoriser(mut self, authoriser: SyncAuthoriser) -> Self {
-        self.authoriser = authoriser;
+    /// Install hooks onto the sync manager.
+    ///
+    /// Sync hooks intercept the sync session establishment process.
+    ///
+    /// You can install multiple [`SyncHooks`] by calling this function multiple times. Order
+    /// matters: hooks are invoked in the order they were installed onto the endpoint builder. Once
+    /// a hook returns reject, further processing is aborted and other hooks won't be invoked.
+    pub fn hooks(mut self, hook: impl SyncHooks<Handshake = Topic> + 'static + Clone) -> Self {
+        self.hooks.push(hook);
         self
     }
 
@@ -67,7 +73,7 @@ where
                 self.store,
                 self.endpoint,
                 self.gossip,
-                self.authoriser,
+                self.hooks,
             );
 
             SyncManager::<TopicSyncManager<Topic, S, L, E>>::spawn(None, args, thread_pool).await?

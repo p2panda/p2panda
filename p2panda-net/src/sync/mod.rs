@@ -10,4 +10,4 @@ mod log_sync;
 mod tests;
 
 pub use handle::{SyncHandle, SyncHandleError, SyncSubscription};
-pub use log_sync::{Builder, LogSync, LogSyncError};
+pub use log_sync::{Builder, LogSync, LogSyncError, LogSyncRejected};
