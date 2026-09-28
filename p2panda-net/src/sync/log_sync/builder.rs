@@ -12,8 +12,8 @@ use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
+use crate::sync::authoriser::SyncAuthoriser;
 use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
-use crate::sync::sync_authoriser::SyncAuthoriser;
 
 pub struct Builder<S, L, E>
 where
