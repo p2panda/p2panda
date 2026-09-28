@@ -12,7 +12,7 @@ use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
+use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::space::SpacesState;
 use p2panda_spaces::{ActorId, AuthGroupState, MemberId, SpaceId, SpacesStoreState};
@@ -43,7 +43,7 @@ pub(crate) fn spaces_stream<M>(
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
     // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    connection_authoriser: ConnectionAuthoriser,
+    sync_authoriser: SyncAuthoriser,
 ) -> (Space<M>, SpaceSubscription<M>)
 where
     M: Serialize,
@@ -55,7 +55,7 @@ where
             repair_task,
             egress_handle,
             tx,
-            connection_authoriser,
+            sync_authoriser,
         },
         SpaceSubscription { rx },
     )
@@ -71,7 +71,7 @@ where
     repair_task: RepairTask,
     egress_handle: EgressHandle,
     tx: StreamPublisher<M>,
-    connection_authoriser: ConnectionAuthoriser,
+    sync_authoriser: SyncAuthoriser,
 }
 
 impl<M> Space<M>
@@ -150,7 +150,7 @@ where
             .await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &spaces_events).await;
+        update_authoriser(&self.sync_authoriser, &spaces_events).await;
 
         self.process_change(
             groups_y,
@@ -184,7 +184,7 @@ where
             self.inner.remove(actor).await?;
 
         // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        update_authoriser(&self.connection_authoriser, &spaces_events).await;
+        update_authoriser(&self.sync_authoriser, &spaces_events).await;
 
         self.process_change(
             groups_y,

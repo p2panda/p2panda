@@ -1256,11 +1256,10 @@ mod members {
     }
 }
 
-mod connection_authorisation {
-
+mod sync_authorisation {
     use p2panda::streams::{StreamEvent, SystemEvent};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_net::connection_authoriser::ConnectionAuthoriserEvent;
+    use p2panda_net::sync::sync_authoriser::SyncAuthoriserEvent;
     use tokio_stream::StreamExt;
 
     use super::{SecretData, spawn_node};
@@ -1322,7 +1321,7 @@ mod connection_authorisation {
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::TopicBlocked {
+            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked {
                 topic: topic_inner,
                 node,
             }) = event
@@ -1346,7 +1345,7 @@ mod connection_authorisation {
         let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::ConnectionAuthoriser(ConnectionAuthoriserEvent::TopicAllowed {
+            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicAllowed {
                 topic: topic_inner,
                 node,
             }) = event

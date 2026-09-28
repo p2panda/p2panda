@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_net::iroh_endpoint::RelayUrl;
+use p2panda_net::sync::sync_authoriser::SyncAuthoriser;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
@@ -32,9 +32,9 @@ use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, ConnectionAuthoriserHook, DEFAULT_REPAIR_STRATEGY, Group, GroupError,
-    KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError,
-    SpaceSubscription, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, KeyBundleTask, Member,
+    MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError, SpaceSubscription,
+    SyncAuthoriserHook, actor_to_topic, group_log_id, member_log_id, spaces_manager, spaces_stream,
     submit_enriched_space_messages, to_initial_members,
 };
 use crate::streams::{
@@ -60,7 +60,7 @@ pub struct Node {
     key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
-    connection_authoriser: ConnectionAuthoriser,
+    sync_authoriser: SyncAuthoriser,
 }
 
 impl Node {
@@ -99,14 +99,14 @@ impl Node {
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
-        let connection_authoriser = ConnectionAuthoriser::new();
-        connection_authoriser.permissive().await;
+        let sync_authoriser = SyncAuthoriser::new();
+        sync_authoriser.permissive().await;
 
         let network = Network::spawn(
             config.network.clone(),
             credentials.node_signing_key(),
             store.clone(),
-            connection_authoriser.clone(),
+            sync_authoriser.clone(),
         )
         .await?;
 
@@ -138,7 +138,7 @@ impl Node {
             key_bundle_task,
             events_tx,
             events_rx: Mutex::new(events_rx),
-            connection_authoriser,
+            sync_authoriser,
         })
     }
 
@@ -428,7 +428,7 @@ impl Node {
     pub async fn event_stream(
         &self,
     ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
-        let connection_authoriser_events = self.connection_authoriser.events().await;
+        let sync_authoriser_events = self.sync_authoriser.events().await;
 
         let discovery_events = self
             .network
@@ -437,11 +437,11 @@ impl Node {
             .await
             .map_err(|err| CreateStreamError(err.to_string()))?;
 
-        let events_rx = self.resubscribe_event_stream();
+        let system_events = self.resubscribe_event_stream();
 
         Ok(event_stream(
-            events_rx,
-            connection_authoriser_events,
+            system_events,
+            sync_authoriser_events,
             discovery_events,
         ))
     }
@@ -577,8 +577,8 @@ impl Node {
         // and fallback to a default empty vec.
         let removed = inner.removed().await.ok().unwrap_or_default();
         for node in removed {
-            self.connection_authoriser
-                .topic_block(node, space_id.into())
+            self.sync_authoriser
+                .block_topic(node, space_id.into())
                 .await;
         }
 
@@ -593,7 +593,7 @@ impl Node {
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
             egress_handle.clone(),
-            self.connection_authoriser.clone(),
+            self.sync_authoriser.clone(),
         );
 
         Ok(spaces_stream::<M>(
@@ -603,7 +603,7 @@ impl Node {
             egress_handle,
             tx,
             rx,
-            self.connection_authoriser.clone(),
+            self.sync_authoriser.clone(),
         ))
     }
 
@@ -616,9 +616,7 @@ impl Node {
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let mut post_pipeline = ProcessorHooksList::new();
-        post_pipeline.push(ConnectionAuthoriserHook::new(
-            self.connection_authoriser.clone(),
-        ));
+        post_pipeline.push(SyncAuthoriserHook::new(self.sync_authoriser.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
 
         self.stream_from_inner(topic, from, true, post_pipeline)
@@ -687,7 +685,7 @@ impl Node {
             self.store.clone(),
             DEFAULT_REPAIR_STRATEGY,
             egress_handle.clone(),
-            self.connection_authoriser.clone(),
+            self.sync_authoriser.clone(),
         );
 
         let (space, rx) = spaces_stream::<M>(
@@ -697,7 +695,7 @@ impl Node {
             egress_handle,
             tx,
             rx,
-            self.connection_authoriser.clone(),
+            self.sync_authoriser.clone(),
         );
 
         Ok((space, rx))
@@ -747,7 +745,7 @@ impl Node {
     /// The allowlist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn allow(&self, node_id: NodeId) {
-        self.connection_authoriser.allow(node_id).await;
+        self.sync_authoriser.allow(node_id).await;
     }
 
     /// Allows all connection attempts with the given node for a single topic.
@@ -755,7 +753,7 @@ impl Node {
     /// The allowlist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn topic_allow(&self, node_id: NodeId, topic: Topic) {
-        self.connection_authoriser.topic_allow(node_id, topic).await;
+        self.sync_authoriser.allow_topic(node_id, topic).await;
     }
 
     /// Blocks all connection attempts with the given node.
@@ -763,7 +761,7 @@ impl Node {
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn block(&self, node_id: NodeId) {
-        self.connection_authoriser.block(node_id).await;
+        self.sync_authoriser.block(node_id).await;
     }
 
     /// Blocks all connection attempts with the given node for a single topic.
@@ -771,7 +769,7 @@ impl Node {
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn topic_block(&self, node_id: NodeId, topic: Topic) {
-        self.connection_authoriser.topic_block(node_id, topic).await;
+        self.sync_authoriser.block_topic(node_id, topic).await;
     }
 }
 
