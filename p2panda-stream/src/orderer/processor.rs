@@ -84,7 +84,11 @@ where
     S: Clone + Transaction + OrdererStore<Hash> + OperationStore<Operation<E>, Hash>,
 {
     pub fn new(store: S) -> Self {
-        let inner = CausalOrderer::new(store.clone());
+        Self::from_namespace(store, "default")
+    }
+
+    pub fn from_namespace(store: S, namespace: impl AsRef<str>) -> Self {
+        let inner = CausalOrderer::new(store.clone()).with_namespace(namespace);
 
         Self {
             inner: Mutex::new(inner),
@@ -224,7 +228,7 @@ where
     async fn next(&self) -> Result<Self::Output, Self::Error> {
         // TODO: If we decide to handle all logic in the "process" part (less memory efficient
         // approach, see comment above) we should consider replacing the Processor trait with a
-        // Streamas "next" is not required anymore.
+        // Stream as "next" is not required anymore.
         loop {
             if let Some(output) = self.queue.borrow_mut().pop_front() {
                 return Ok(output);
@@ -267,10 +271,9 @@ mod tests {
     use tokio::task;
     use tokio_stream::StreamExt;
 
-    use crate::StreamLayerExt;
-    use crate::orderer::OrdererMetadata;
+    use crate::{Processor, StreamLayerExt};
 
-    use super::{Orderer, OrdererArgs, OrdererResult};
+    use super::{Orderer, OrdererArgs, OrdererMetadata, OrdererResult};
 
     #[derive(Clone, Debug, Default, Serialize, Deserialize)]
     struct TestExtension {
@@ -375,7 +378,7 @@ mod tests {
                 });
 
                 // Prepare processing pipeline for message ordering.
-                let orderer = Orderer::new(store);
+                let orderer_1 = Orderer::from_namespace(store.clone(), "first");
 
                 let mut stream = stream::iter(vec![
                     // Process Icebear's operation first. It will arrive "out of order".
@@ -383,7 +386,7 @@ mod tests {
                     // Process Pandas's operation next. It will "free" Icebear's operation.
                     event_panda.clone(),
                 ])
-                .layer(orderer);
+                .layer(orderer_1);
 
                 // Icebear's event has a dependency on Panda's event so it remains in a pending
                 // state for now.
@@ -405,6 +408,16 @@ mod tests {
                 let (event, result) = stream.next().await.unwrap().unwrap();
                 assert_matches!(result, OrdererResult::ReadyOutput);
                 assert_eq!(event, event_icebear);
+
+                // Make sure another, namespaced orderer is not affected:
+                let orderer_2 = Orderer::from_namespace(store, "second");
+                orderer_2.process(event_icebear.clone()).await.unwrap();
+                let (_event, result) = orderer_2.next().await.unwrap();
+                assert_matches!(
+                    result,
+                    OrdererResult::Pending,
+                    "panda's event was not processed yet for second orderer"
+                );
             })
             .await;
     }

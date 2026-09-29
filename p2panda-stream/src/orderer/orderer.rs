@@ -68,6 +68,7 @@ use p2panda_store::orderer::OrdererStore;
 #[derive(Clone, Debug)]
 pub struct CausalOrderer<ID, S> {
     pub(super) store: S,
+    namespace: String,
     _marker: PhantomData<ID>,
 }
 
@@ -79,25 +80,31 @@ where
     pub fn new(store: S) -> Self {
         Self {
             store,
+            namespace: "default".to_string(),
             _marker: PhantomData,
         }
     }
 
+    pub fn with_namespace(mut self, namespace: impl AsRef<str>) -> Self {
+        self.namespace = namespace.as_ref().to_string();
+        self
+    }
+
     /// Pop the next item from the ready queue.
     pub async fn next(&self) -> Result<Option<ID>, S::Error> {
-        self.store.take_next_ready().await
+        self.store.take_next_ready(&self.namespace).await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
     pub async fn process(&self, key: ID, dependencies: &[ID]) -> Result<bool, S::Error> {
-        if !self.store.ready(dependencies).await? {
+        if !self.store.ready(&self.namespace, dependencies).await? {
             self.store
-                .mark_pending(key.clone(), dependencies.to_vec())
+                .mark_pending(&self.namespace, key.clone(), dependencies.to_vec())
                 .await?;
             return Ok(false);
         }
 
-        self.store.mark_ready(key.clone()).await?;
+        self.store.mark_ready(&self.namespace, key.clone()).await?;
 
         // We added a new ready item to the store so now we want to process any pending items which
         // depend on it as they may now have transitioned into a ready state.
@@ -109,18 +116,24 @@ where
     /// Recursively check if any pending items now have their dependencies met.
     async fn process_pending(&self, key: ID) -> Result<(), S::Error> {
         // Get all items which depend on the passed key.
-        let Some(dependents) = self.store.get_next_pending(key.clone()).await? else {
+        let Some(dependents) = self
+            .store
+            .get_next_pending(&self.namespace, key.clone())
+            .await?
+        else {
             return Ok(());
         };
 
         // For each dependent check if it has all it's dependencies met, if not then we do nothing
         // as it is still in a pending state.
         for (next_key, next_deps) in dependents {
-            if !self.store.ready(&next_deps).await? {
+            if !self.store.ready(&self.namespace, &next_deps).await? {
                 continue;
             }
 
-            self.store.mark_ready(next_key.clone()).await?;
+            self.store
+                .mark_ready(&self.namespace, next_key.clone())
+                .await?;
 
             // Recurse down the dependency graph by now checking any pending items which depend on
             // the current item.
@@ -128,7 +141,7 @@ where
         }
 
         // Finally remove this item from the pending items queue.
-        self.store.remove_pending(key).await?;
+        self.store.remove_pending(&self.namespace, key).await?;
 
         Ok(())
     }

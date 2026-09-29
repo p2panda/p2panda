@@ -42,6 +42,7 @@ Highlights are marked with a pancake 🥞
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
 - stream: Out-of-order buffer for validating & inserting operations [#1402](https://github.com/p2panda/p2panda/pull/1402)
 - stream: Add `validate_operation` method checking against store [#1417](https://github.com/p2panda/p2panda/pull/1417)
+- stream: Namespaced items to allow multiple orderer states [#1460](https://github.com/p2panda/p2panda/pull/1460)
 - node: ConnectionAuthoriserHook updating authoriser based on space membership [#1359](https://github.com/p2panda/p2panda/pull/1359)
 - node: E2EE CLI chat example using spaces API [#1288](https://github.com/p2panda/p2panda/pull/1288)
 - sync: `api` module with useful methods to hack your own sync protocols [#1393](https://github.com/p2panda/p2panda/pull/1393)

@@ -19,7 +19,7 @@ where
 {
     type Error = SqliteError;
 
-    async fn mark_ready(&self, id: ID) -> Result<bool, Self::Error> {
+    async fn mark_ready(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
         self.tx(async |tx| {
             let queue_index = {
                 let last_index: (i64,) = query_as(
@@ -28,8 +28,11 @@ where
                         MAX(queue_index)
                     FROM
                         orderer_ready_v1
+                    WHERE
+                        namespace = ?
                     ",
                 )
+                .bind(namespace)
                 .fetch_one(&mut **tx)
                 .await?;
 
@@ -45,14 +48,16 @@ where
                 INSERT OR IGNORE
                 INTO
                     orderer_ready_v1 (
+                        namespace,
                         id,
                         queue_index,
                         in_queue
                     )
                 VALUES
-                    (?, ?, ?)
+                    (?, ?, ?, ?)
                 ",
             )
+            .bind(namespace)
             .bind(id.to_string())
             .bind(queue_index)
             .bind(in_queue)
@@ -76,9 +81,11 @@ where
                     FROM
                         orderer_ready_v1
                     WHERE
-                        id = ?
+                        namespace = ?
+                        AND id = ?
                     ",
                 )
+                .bind(namespace)
                 .bind(id.to_string())
                 .fetch_one(&mut **tx)
                 .await?;
@@ -97,11 +104,13 @@ where
                         queue_index = ?,
                         in_queue = ?
                     WHERE
-                        id = ?
+                        namespace = ?
+                        AND id = ?
                     ",
                 )
                 .bind(queue_index)
                 .bind(in_queue)
+                .bind(namespace)
                 .bind(id.to_string())
                 .execute(&mut **tx)
                 .await?;
@@ -116,6 +125,7 @@ where
 
     async fn mark_pending(
         &self,
+        namespace: &str,
         child_id: ID,
         mut parent_ids: Vec<ID>,
     ) -> Result<bool, Self::Error> {
@@ -147,9 +157,11 @@ where
                     FROM
                         orderer_ready_v1
                     WHERE
-                        id = ?
+                        namespace = ?
+                        AND id = ?
                     ",
                 )
+                .bind(namespace)
                 .bind(id.to_string())
                 .fetch_optional(&mut **tx)
                 .await?
@@ -170,15 +182,17 @@ where
                         INSERT OR IGNORE
                         INTO
                             orderer_pending_v1 (
+                                namespace,
                                 id,
                                 child_id,
                                 parent_id,
                                 set_digest
                             )
                         VALUES
-                            (?, ?, ?, ?)
+                            (?, ?, ?, ?, ?)
                         ",
                     )
+                    .bind(namespace)
                     .bind(&id)
                     .bind(&child_id)
                     .bind(&parent_id)
@@ -199,6 +213,7 @@ where
 
     async fn get_next_pending(
         &self,
+        namespace: &str,
         id: ID,
     ) -> Result<Option<HashSet<(ID, Vec<ID>)>>, Self::Error> {
         self.tx(async |tx| {
@@ -211,9 +226,11 @@ where
                 FROM
                     orderer_pending_v1
                 WHERE
-                    id = ?
+                    namespace = ?
+                    AND id = ?
                 ",
             )
+            .bind(namespace)
             .bind(id.to_string())
             .fetch_all(&mut **tx)
             .await?;
@@ -233,12 +250,14 @@ where
                     FROM
                         orderer_pending_v1
                     WHERE
-                        child_id = ?
+                        namespace = ?
+                        AND child_id = ?
                         AND set_digest = ?
                     ORDER BY
                         parent_id
                     ",
                 )
+                .bind(namespace)
                 .bind(&child_id)
                 .bind(&set_digest)
                 .fetch_all(&mut **tx)
@@ -263,7 +282,7 @@ where
         .await
     }
 
-    async fn take_next_ready(&self) -> Result<Option<ID>, Self::Error> {
+    async fn take_next_ready(&self, namespace: &str) -> Result<Option<ID>, Self::Error> {
         self.tx(async |tx| {
             let row: Option<(String,)> = query_as(
                 "
@@ -272,13 +291,15 @@ where
                 FROM
                     orderer_ready_v1
                 WHERE
-                    in_queue = TRUE
+                    namespace = ?
+                    AND in_queue = TRUE
                 ORDER BY
                     queue_index ASC
                 LIMIT
                     1
                 ",
             )
+            .bind(namespace)
             .fetch_optional(&mut **tx)
             .await?;
 
@@ -296,9 +317,11 @@ where
                 SET
                     in_queue = FALSE
                 WHERE
-                    id = ?
+                    namespace = ?
+                    AND id = ?
                 ",
             )
+            .bind(namespace)
             .bind(&id_str)
             .execute(&mut **tx)
             .await?;
@@ -308,16 +331,18 @@ where
         .await
     }
 
-    async fn remove_pending(&self, id: ID) -> Result<bool, Self::Error> {
+    async fn remove_pending(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
         self.tx(async |tx| {
             let result = query(
                 "
                 DELETE FROM
                     orderer_pending_v1
                 WHERE
-                    id = ?
+                    namespace = ?
+                    AND id = ?
                 ",
             )
+            .bind(namespace)
             .bind(id.to_string())
             .execute(&mut **tx)
             .await?;
@@ -327,9 +352,17 @@ where
         .await
     }
 
-    async fn ready(&self, dependencies: &[ID]) -> Result<bool, Self::Error> {
-        let mut query_builder =
-            QueryBuilder::new("SELECT COUNT(id) FROM orderer_ready_v1 WHERE id IN (");
+    async fn ready(&self, namespace: &str, dependencies: &[ID]) -> Result<bool, Self::Error> {
+        let mut query_builder = QueryBuilder::new(
+            "
+            SELECT
+                COUNT(id)
+            FROM
+                orderer_ready_v1
+            WHERE
+                id IN (
+            ",
+        );
 
         let mut separated = query_builder.separated(", ");
         for dep in dependencies {
@@ -337,6 +370,9 @@ where
         }
 
         separated.push_unseparated(") ");
+
+        query_builder.push("AND namespace = ");
+        query_builder.push_bind(namespace);
 
         let query = query_builder.build_query_as::<(i64,)>();
 
@@ -350,25 +386,7 @@ where
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OrdererTestExt for SqliteStore {
-    async fn ready_len(&self) -> usize {
-        self.tx(async |tx| {
-            let row: (i64,) = query_as(
-                "
-                SELECT
-                    COUNT(id)
-                FROM
-                    orderer_ready_v1
-                ",
-            )
-            .fetch_one(&mut **tx)
-            .await?;
-            Ok(row.0 as usize)
-        })
-        .await
-        .unwrap()
-    }
-
-    async fn ready_queue_len(&self) -> usize {
+    async fn ready_len(&self, namespace: &str) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(
                 "
@@ -377,9 +395,10 @@ impl OrdererTestExt for SqliteStore {
                 FROM
                     orderer_ready_v1
                 WHERE
-                    in_queue = TRUE
+                    namespace = ?
                 ",
             )
+            .bind(namespace)
             .fetch_one(&mut **tx)
             .await?;
             Ok(row.0 as usize)
@@ -388,7 +407,29 @@ impl OrdererTestExt for SqliteStore {
         .unwrap()
     }
 
-    async fn pending_len(&self) -> usize {
+    async fn ready_queue_len(&self, namespace: &str) -> usize {
+        self.tx(async |tx| {
+            let row: (i64,) = query_as(
+                "
+                SELECT
+                    COUNT(id)
+                FROM
+                    orderer_ready_v1
+                WHERE
+                    namespace = ?
+                    AND in_queue = TRUE
+                ",
+            )
+            .bind(namespace)
+            .fetch_one(&mut **tx)
+            .await?;
+            Ok(row.0 as usize)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn pending_len(&self, namespace: &str) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(
                 "
@@ -396,8 +437,11 @@ impl OrdererTestExt for SqliteStore {
                     COUNT(DISTINCT id)
                 FROM
                     orderer_pending_v1
+                WHERE
+                    namespace = ?
                 ",
             )
+            .bind(namespace)
             .fetch_one(&mut **tx)
             .await?;
             Ok(row.0 as usize)
