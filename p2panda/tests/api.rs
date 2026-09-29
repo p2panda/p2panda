@@ -675,10 +675,12 @@ mod sync_authorisation {
         // Regardless of whether panda is the initiator or acceptor, we expect the sync session to
         // be blocked for any topic.
         while let Some(event) = events.next().await {
-            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked { node, .. }) =
-                event
+            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
+                remote_node_id,
+                ..
+            }) = event
             {
-                assert_eq!(node, icebear.id());
+                assert_eq!(remote_node_id, icebear.id());
                 received_event = true;
                 break;
             }
@@ -718,10 +720,12 @@ mod sync_authorisation {
         // Panda & Icebear will discover that they have similar interest in the chat topic, however
         // any sync attempt will be blocked..
         while let Some(event) = events.next().await {
-            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked { topic, node }) =
-                event
+            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
+                topic,
+                remote_node_id,
+            }) = event
             {
-                if node == icebear.id() && topic == chat_id {
+                if remote_node_id == icebear.id() && topic == chat_id {
                     received_event = true;
                     break;
                 }
