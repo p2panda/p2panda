@@ -6,8 +6,6 @@ mod orderer;
 mod processor;
 #[cfg(test)]
 mod tests;
-mod traits;
 
 pub(crate) use orderer::CausalOrderer;
 pub use processor::{Orderer, OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
-pub use traits::Ordering;
