@@ -207,7 +207,8 @@ where
                     // Prepare event processing pipeline.
                     let ingest =
                         Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                    let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone());
+                    let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::new(store.clone())
+                        .with_namespace(pipeline_id.to_string());
                     let log_prune = LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
                     let spaces = {
                         let spaces_store = SqliteSpacesStore::new(store);

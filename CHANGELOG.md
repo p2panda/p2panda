@@ -74,6 +74,7 @@ Highlights are marked with a pancake 🥞
 - core: Make `cbor_decode` lenient [#1429](https://github.com/p2panda/p2panda/pull/1429)
 - node: Allow event processing to handle out-of-order buffering by separating i/o streams and preserve input ordering [#1271](https://github.com/p2panda/)
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
+- node: Manage separate orderer state per topic stream [#1461](https://github.com/p2panda/p2panda/pull/1461)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
 
