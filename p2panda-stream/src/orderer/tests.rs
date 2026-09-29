@@ -26,13 +26,15 @@ async fn partial_order() {
     // A has no dependencies and so it's added straight to the processed set and ready
     // queue.
 
-    let orderer = CausalOrderer::new(store.clone());
+    let namespace = "default";
+    let orderer = CausalOrderer::new(store.clone()).with_namespace(namespace);
+
     let item = graph[0].clone();
     tx_unwrap!(store, {
         orderer.process(item.0, &item.1).await.unwrap();
-        assert_eq!(orderer.store.ready_len().await, 1);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 1);
+        assert_eq!(orderer.store.ready_len(namespace).await, 1);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 1);
     });
 
     // B has it's dependencies met and so it too is added to the processed set and ready
@@ -40,18 +42,18 @@ async fn partial_order() {
     let item = graph[1].clone();
     tx_unwrap!(store, {
         orderer.process(item.0, &item.1).await.unwrap();
-        assert_eq!(orderer.store.ready_len().await, 2);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 2);
+        assert_eq!(orderer.store.ready_len(namespace).await, 2);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 2);
     });
 
     // D doesn't have both its dependencies met yet so it waits in the pending queue.
     let item = graph[3].clone();
     tx_unwrap!(store, {
         orderer.process(item.0, &item.1).await.unwrap();
-        assert_eq!(orderer.store.ready_len().await, 2);
-        assert_eq!(orderer.store.pending_len().await, 1);
-        assert_eq!(orderer.store.ready_queue_len().await, 2);
+        assert_eq!(orderer.store.ready_len(namespace).await, 2);
+        assert_eq!(orderer.store.pending_len(namespace).await, 1);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 2);
     });
 
     // C satisfies D's dependencies and so both C & D are added to the processed set
@@ -59,9 +61,9 @@ async fn partial_order() {
     let item = graph[2].clone();
     tx_unwrap!(store, {
         orderer.process(item.0, &item.1).await.unwrap();
-        assert_eq!(orderer.store.ready_len().await, 4);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 4);
+        assert_eq!(orderer.store.ready_len(namespace).await, 4);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 4);
     });
 
     let item = tx_unwrap!(store, orderer.next().await.unwrap());
@@ -89,7 +91,8 @@ async fn idempotency() {
         ("B".to_string(), vec!["A".to_string()]),
     ];
 
-    let orderer = CausalOrderer::new(store.clone());
+    let namespace = "default";
+    let orderer = CausalOrderer::new(store.clone()).with_namespace(namespace);
 
     let item_a = graph[0].clone();
     let item_b = graph[1].clone();
@@ -116,9 +119,9 @@ async fn idempotency() {
     );
 
     tx_unwrap!(store, {
-        assert_eq!(orderer.store.ready_len().await, 2);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 0);
+        assert_eq!(orderer.store.ready_len(namespace).await, 2);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 0);
     });
 
     // Re-process B, it should just get forwarded without changes to the orderer state.
@@ -132,9 +135,9 @@ async fn idempotency() {
     );
 
     tx_unwrap!(store, {
-        assert_eq!(orderer.store.ready_len().await, 2);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 0);
+        assert_eq!(orderer.store.ready_len(namespace).await, 2);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 0);
     });
 }
 
@@ -156,16 +159,17 @@ async fn partial_order_with_recursion() {
         ("G".to_string(), vec!["F".to_string()]),
     ];
 
-    let orderer = CausalOrderer::new(store.clone());
+    let namespace = "default";
+    let orderer = CausalOrderer::new(store.clone()).with_namespace(namespace);
 
     tx_unwrap!(store, {
         for (key, dependencies) in incomplete_graph {
             orderer.process(key, &dependencies).await.unwrap();
         }
 
-        assert_eq!(orderer.store.ready_len().await, 1);
-        assert_eq!(orderer.store.pending_len().await, 5);
-        assert_eq!(orderer.store.ready_queue_len().await, 1);
+        assert_eq!(orderer.store.ready_len(namespace).await, 1);
+        assert_eq!(orderer.store.pending_len(namespace).await, 5);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 1);
     });
 
     let missing_dependency = ("B".to_string(), vec!["A".to_string()]);
@@ -176,9 +180,9 @@ async fn partial_order_with_recursion() {
             .await
             .unwrap();
 
-        assert_eq!(orderer.store.ready_len().await, 7);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 7);
+        assert_eq!(orderer.store.ready_len(namespace).await, 7);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 7);
     });
 
     let item = tx_unwrap!(store, orderer.next().await.unwrap());
@@ -223,7 +227,8 @@ async fn complex_graph() {
         ),
     ];
 
-    let orderer = CausalOrderer::new(store.clone());
+    let namespace = "default";
+    let orderer = CausalOrderer::new(store.clone()).with_namespace(namespace);
 
     tx_unwrap!(store, {
         for (key, dependencies) in incomplete_graph {
@@ -233,9 +238,9 @@ async fn complex_graph() {
 
     // A1, B1 and C1 have dependencies met and were already processed.
     tx_unwrap!(store, {
-        assert!(orderer.store.ready_len().await == 3);
-        assert_eq!(orderer.store.pending_len().await, 3);
-        assert_eq!(orderer.store.ready_queue_len().await, 3);
+        assert!(orderer.store.ready_len(namespace).await == 3);
+        assert_eq!(orderer.store.pending_len(namespace).await, 3);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 3);
     });
 
     let item = tx_unwrap!(store, orderer.next().await.unwrap());
@@ -249,7 +254,7 @@ async fn complex_graph() {
 
     // No more ready items.
     tx_unwrap!(store, {
-        assert_eq!(orderer.store.ready_queue_len().await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 0);
     });
 
     // Process the missing item.
@@ -262,9 +267,9 @@ async fn complex_graph() {
             .unwrap();
 
         // All items have now been processed and new ones are waiting in the ready queue.
-        assert_eq!(orderer.store.ready_len().await, 7);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 4);
+        assert_eq!(orderer.store.ready_len(namespace).await, 7);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 4);
     });
 
     let mut concurrent_items = HashSet::from(["C2".to_string(), "C3".to_string()]);
@@ -304,7 +309,8 @@ async fn very_out_of_order() {
         ("A".to_string(), vec![]),
     ];
 
-    let orderer = CausalOrderer::new(store.clone());
+    let namespace = "default";
+    let orderer = CausalOrderer::new(store.clone()).with_namespace(namespace);
 
     tx_unwrap!(store, {
         for (key, dependencies) in out_of_order_graph {
@@ -313,9 +319,9 @@ async fn very_out_of_order() {
     });
 
     tx_unwrap!(store, {
-        assert_eq!(orderer.store.ready_len().await, 7);
-        assert_eq!(orderer.store.pending_len().await, 0);
-        assert_eq!(orderer.store.ready_queue_len().await, 7);
+        assert_eq!(orderer.store.ready_len(namespace).await, 7);
+        assert_eq!(orderer.store.pending_len(namespace).await, 0);
+        assert_eq!(orderer.store.ready_queue_len(namespace).await, 7);
     });
 
     let item = tx_unwrap!(store, orderer.next().await.unwrap());
