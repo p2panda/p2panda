@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Causal / partial order over a set of items which form a dependency graph.
+/// Causally order items which form a dependency graph.
 #[allow(clippy::module_inception)]
 mod orderer;
 mod processor;
