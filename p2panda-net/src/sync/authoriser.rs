@@ -191,13 +191,25 @@ impl SyncAuthoriser {
         match inner.mode {
             SyncAuthoriserMode::Permissive => {
                 let global_block = inner.global_blocklist.contains(&node);
-                let topic_block = inner.topic_blocklist.contains(&(topic, node));
-                !global_block && !topic_block
+
+                if global_block {
+                    
+                    inner.topic_allowlist.contains(&(topic, node))
+                } else {
+                    let topic_block = inner.topic_blocklist.contains(&(topic, node));
+                    !topic_block
+                }
             }
             SyncAuthoriserMode::Restrictive => {
                 let global_allow = inner.global_allowlist.contains(&node);
-                let topic_allow = inner.topic_allowlist.contains(&(topic, node));
-                global_allow && topic_allow
+
+                if global_allow {
+                    let topic_block = inner.topic_blocklist.contains(&(topic, node));
+                    !topic_block
+                } else {
+                    
+                    inner.topic_allowlist.contains(&(topic, node))
+                }
             }
         }
     }
