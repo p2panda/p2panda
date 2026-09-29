@@ -3,9 +3,9 @@
 //! Establish encrypted, direct connections over Internet Protocol with QUIC.
 mod actors;
 mod api;
+pub mod authoriser;
 mod builder;
 mod config;
-pub mod connection_authoriser;
 mod discovery;
 mod hooks;
 #[cfg(feature = "supervisor")]

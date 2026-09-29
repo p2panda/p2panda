@@ -1259,7 +1259,7 @@ mod members {
 mod sync_authorisation {
     use p2panda::streams::{StreamEvent, SystemEvent};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_net::sync::authoriser::SyncAuthoriserEvent;
+    use p2panda_net::sync::authoriser::SyncBlockListEvent;
     use tokio_stream::StreamExt;
 
     use super::{SecretData, spawn_node};
@@ -1321,7 +1321,7 @@ mod sync_authorisation {
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
+            let SystemEvent::SyncAuthoriser(SyncBlockListEvent::Blocked {
                 topic: topic_inner,
                 remote_node_id,
             }) = event
@@ -1345,7 +1345,7 @@ mod sync_authorisation {
         let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Allowed {
+            let SystemEvent::SyncAuthoriser(SyncBlockListEvent::Allowed {
                 topic: topic_inner,
                 remote_node_id,
             }) = event

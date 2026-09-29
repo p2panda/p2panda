@@ -6,7 +6,7 @@ use futures_util::Stream;
 use futures_util::stream::{SelectAll, StreamExt};
 use p2panda_auth::AccessLevel;
 use p2panda_net::discovery::DiscoveryEvent;
-use p2panda_net::sync::authoriser::SyncAuthoriserEvent;
+use p2panda_net::sync::authoriser::SyncBlockListEvent;
 use p2panda_spaces::{ActorId, GroupId};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
@@ -22,7 +22,7 @@ use crate::spaces::types::InnerGroupEvent;
 #[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
     /// Allow / block events from sync sessions.
-    SyncAuthoriser(SyncAuthoriserEvent),
+    SyncAuthoriser(SyncBlockListEvent),
 
     /// Discovery protocol events.
     Discovery(DiscoveryEvent),
@@ -49,7 +49,7 @@ pub type EventStream = Pin<Box<dyn Stream<Item = SystemEvent> + Send + Unpin + '
 /// Merge the provided event streams into a single, unified system event stream.
 pub(crate) fn event_stream(
     system_events: broadcast::Receiver<SystemEvent>,
-    sync_authoriser_events: broadcast::Receiver<SyncAuthoriserEvent>,
+    sync_authoriser_events: broadcast::Receiver<SyncBlockListEvent>,
     discovery_events: broadcast::Receiver<DiscoveryEvent>,
 ) -> EventStream {
     let sync_authoriser_stream = BroadcastStream::new(sync_authoriser_events);

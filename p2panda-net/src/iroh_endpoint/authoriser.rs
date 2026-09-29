@@ -6,20 +6,20 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use iroh::endpoint::Side;
-use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use tracing::warn;
 
+use crate::NodeId;
 use crate::iroh_endpoint::{
     AfterHandshakeOutcome, BeforeConnectOutcome, EndpointAddr, EndpointHooks,
 };
 use crate::utils::to_verifying_key;
 
-/// Connection authoriser mode for determining how connections are accepted and rejected.
+/// Determines if the block/allow list is permissive or restrictive.
 #[derive(Clone, Debug)]
-pub enum ConnectionAuthoriserMode {
+pub enum BlockListMode {
     /// Allow all connections except for nodes which have been explicitly blocked.
     Permissive,
 
@@ -43,21 +43,15 @@ impl Display for ConnectionRole {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ConnectionAuthoriserEvent {
-    Blocked {
-        node: VerifyingKey,
-        role: ConnectionRole,
-    },
-    Allowed {
-        node: VerifyingKey,
-        role: ConnectionRole,
-    },
+pub enum ConnectionBlockListEvent {
+    Blocked { node: NodeId, role: ConnectionRole },
+    Allowed { node: NodeId, role: ConnectionRole },
 }
 
-impl Display for ConnectionAuthoriserEvent {
+impl Display for ConnectionBlockListEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionAuthoriserEvent::Blocked { node, role } => {
+            ConnectionBlockListEvent::Blocked { node, role } => {
                 write!(
                     f,
                     "blocked {} connection attempt to {}",
@@ -65,7 +59,7 @@ impl Display for ConnectionAuthoriserEvent {
                     node.fmt_short(),
                 )
             }
-            ConnectionAuthoriserEvent::Allowed { node, role } => {
+            ConnectionBlockListEvent::Allowed { node, role } => {
                 write!(
                     f,
                     "allowed {} connection attempt to {}",
@@ -77,44 +71,41 @@ impl Display for ConnectionAuthoriserEvent {
     }
 }
 
-/// Connection authoriser.
-///
-/// The authoriser is used to maintain and enforce allowlists and blocklists; these can be defined
-/// per node (ie. allow or block all connections with a specific node).
+/// Accept or reject iroh connections with a managed allow/block list.
 #[derive(Clone, Debug)]
-pub struct ConnectionAuthoriser {
-    inner: Arc<RwLock<ConnectionAuthoriserInner>>,
+pub struct ConnectionBlockList {
+    inner: Arc<RwLock<Inner>>,
 }
 
 #[derive(Debug)]
-struct ConnectionAuthoriserInner {
-    mode: ConnectionAuthoriserMode,
-    allow: HashSet<VerifyingKey>,
-    block: HashSet<VerifyingKey>,
-    tx: broadcast::Sender<ConnectionAuthoriserEvent>,
-    rx: Option<broadcast::Receiver<ConnectionAuthoriserEvent>>,
+struct Inner {
+    mode: BlockListMode,
+    allow: HashSet<NodeId>,
+    block: HashSet<NodeId>,
+    tx: broadcast::Sender<ConnectionBlockListEvent>,
+    rx: Option<broadcast::Receiver<ConnectionBlockListEvent>>,
 }
 
-impl Default for ConnectionAuthoriser {
+impl Default for ConnectionBlockList {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ConnectionAuthoriser {
-    /// Returns a connection authoriser.
+impl ConnectionBlockList {
+    /// Returns allow/block list to authorise connection attempts.
     ///
     /// Defaults to `permissive` mode, meaning that connection attempts from all nodes which are not
     /// explicitly blocked will be accepted.
     pub fn new() -> Self {
-        Self::with_mode(ConnectionAuthoriserMode::Permissive)
+        Self::with_mode(BlockListMode::Permissive)
     }
 
-    /// Returns a connection authoriser.
-    pub fn with_mode(mode: ConnectionAuthoriserMode) -> Self {
+    /// Returns allow/block list to authorise connection attempts.
+    pub fn with_mode(mode: BlockListMode) -> Self {
         let (tx, rx) = broadcast::channel(128);
 
-        let inner = ConnectionAuthoriserInner {
+        let inner = Inner {
             mode,
             allow: HashSet::new(),
             block: HashSet::new(),
@@ -127,8 +118,8 @@ impl ConnectionAuthoriser {
         }
     }
 
-    /// Subscribes to an authoriser events stream.
-    pub async fn events(&self) -> broadcast::Receiver<ConnectionAuthoriserEvent> {
+    /// Subscribes to events stream.
+    pub async fn events(&self) -> broadcast::Receiver<ConnectionBlockListEvent> {
         let mut connection_authoriser = self.inner.write().await;
 
         let next_rx = connection_authoriser.tx.subscribe();
@@ -138,60 +129,59 @@ impl ConnectionAuthoriser {
             .expect("there's always a receiver")
     }
 
-    /// Sends an authoriser event into the events stream.
+    /// Sends an event into the events stream.
     ///
     /// All subscribers will be notified of the event.
-    async fn send_event(&self, event: ConnectionAuthoriserEvent) {
+    async fn send_event(&self, event: ConnectionBlockListEvent) {
         let connection_authoriser = self.inner.write().await;
 
         // Surpress errors when events are emitted but no event stream subscription exists.
         let _ = connection_authoriser.tx.send(event);
     }
 
-    /// Sets the authoriser mode to permissive.
+    /// Sets the mode to permissive.
     ///
-    /// Any connection or sync session with a node or node-topic combination will be allowed, as
-    /// long as it has not been explicitly added to the blocklist.
+    /// Any connection will be allowed, as long as it has not been explicitly added to the
+    /// blocklist.
     pub async fn permissive(&self) {
         let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.mode = ConnectionAuthoriserMode::Permissive;
+        connection_authoriser.mode = BlockListMode::Permissive;
     }
 
-    /// Sets the authoriser mode to restrictive.
+    /// Sets the mode to restrictive.
     ///
-    /// Any connection or sync session with a node or node-topic combination will be blocked,
-    /// unless it has been explictly added to the allowlist.
+    /// Any connection will be blocked, unless it has been explictly added to the allowlist.
     pub async fn restrictive(&self) {
         let mut connection_authoriser = self.inner.write().await;
-        connection_authoriser.mode = ConnectionAuthoriserMode::Restrictive;
+        connection_authoriser.mode = BlockListMode::Restrictive;
     }
 
-    /// Allows connections to the given node.
-    pub async fn allow(&self, node: VerifyingKey) {
+    /// Allows connections to/from the given node.
+    pub async fn allow(&self, node: NodeId) {
         let mut connection_authoriser = self.inner.write().await;
         connection_authoriser.allow.insert(node);
         connection_authoriser.block.remove(&node);
     }
 
-    /// Blocks connections to the given node.
-    pub async fn block(&self, node: VerifyingKey) {
+    /// Blocks connections to/from the given node.
+    pub async fn block(&self, node: NodeId) {
         let mut connection_authoriser = self.inner.write().await;
         connection_authoriser.block.insert(node);
         connection_authoriser.allow.remove(&node);
     }
 
     /// Queries the authoriser state for the given node.
-    pub async fn can_connect(&self, node: VerifyingKey) -> bool {
+    pub async fn can_connect(&self, node: NodeId) -> bool {
         let connection_authoriser = self.inner.read().await;
 
         match connection_authoriser.mode {
-            ConnectionAuthoriserMode::Permissive => !connection_authoriser.block.contains(&node),
-            ConnectionAuthoriserMode::Restrictive => connection_authoriser.allow.contains(&node),
+            BlockListMode::Permissive => !connection_authoriser.block.contains(&node),
+            BlockListMode::Restrictive => connection_authoriser.allow.contains(&node),
         }
     }
 }
 
-impl EndpointHooks for ConnectionAuthoriser {
+impl EndpointHooks for ConnectionBlockList {
     // Runs before an outgoing connection begins.
     async fn before_connect(
         &self,
@@ -203,7 +193,7 @@ impl EndpointHooks for ConnectionAuthoriser {
         // Accept or reject the connection attempt based on the authoriser state for the remote
         // node.
         if self.can_connect(node).await {
-            self.send_event(ConnectionAuthoriserEvent::Allowed {
+            self.send_event(ConnectionBlockListEvent::Allowed {
                 node,
                 role: ConnectionRole::Initiator,
             })
@@ -211,7 +201,7 @@ impl EndpointHooks for ConnectionAuthoriser {
 
             BeforeConnectOutcome::Accept
         } else {
-            let event = ConnectionAuthoriserEvent::Blocked {
+            let event = ConnectionBlockListEvent::Blocked {
                 node,
                 role: ConnectionRole::Initiator,
             };
@@ -237,12 +227,12 @@ impl EndpointHooks for ConnectionAuthoriser {
         };
 
         if self.can_connect(node).await {
-            self.send_event(ConnectionAuthoriserEvent::Allowed { node, role })
+            self.send_event(ConnectionBlockListEvent::Allowed { node, role })
                 .await;
 
             AfterHandshakeOutcome::Accept
         } else {
-            let event = ConnectionAuthoriserEvent::Blocked { node, role };
+            let event = ConnectionBlockListEvent::Blocked { node, role };
             warn!("{}", event);
             self.send_event(event).await;
 
@@ -258,34 +248,33 @@ impl EndpointHooks for ConnectionAuthoriser {
 mod tests {
     use p2panda_core::SigningKey;
 
-    use super::{ConnectionAuthoriser, ConnectionAuthoriserMode};
+    use super::{BlockListMode, ConnectionBlockList};
 
     #[tokio::test]
     async fn permissive() {
-        let connection_authoriser = ConnectionAuthoriser::default();
+        let list = ConnectionBlockList::default();
 
         let node_a = SigningKey::generate().verifying_key();
         let node_b = SigningKey::generate().verifying_key();
 
-        assert!(connection_authoriser.can_connect(node_a).await);
+        assert!(list.can_connect(node_a).await);
 
-        connection_authoriser.block(node_a).await;
-        assert!(!connection_authoriser.can_connect(node_a).await);
-        assert!(connection_authoriser.can_connect(node_b).await);
+        list.block(node_a).await;
+        assert!(!list.can_connect(node_a).await);
+        assert!(list.can_connect(node_b).await);
     }
 
     #[tokio::test]
     async fn restrictive() {
-        let connection_authoriser =
-            ConnectionAuthoriser::with_mode(ConnectionAuthoriserMode::Restrictive);
+        let list = ConnectionBlockList::with_mode(BlockListMode::Restrictive);
 
         let node_a = SigningKey::generate().verifying_key();
         let node_b = SigningKey::generate().verifying_key();
 
-        assert!(!connection_authoriser.can_connect(node_a).await);
+        assert!(!list.can_connect(node_a).await);
 
-        connection_authoriser.allow(node_a).await;
-        assert!(connection_authoriser.can_connect(node_a).await);
-        assert!(!connection_authoriser.can_connect(node_b).await);
+        list.allow(node_a).await;
+        assert!(list.can_connect(node_a).await);
+        assert!(!list.can_connect(node_b).await);
     }
 }

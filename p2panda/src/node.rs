@@ -7,7 +7,7 @@ use futures_util::Stream;
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
 use p2panda_net::iroh_endpoint::RelayUrl;
-use p2panda_net::sync::authoriser::SyncAuthoriser;
+use p2panda_net::sync::authoriser::SyncBlockList;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
@@ -60,7 +60,7 @@ pub struct Node {
     key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
-    sync_authoriser: SyncAuthoriser,
+    sync_authoriser: SyncBlockList,
 }
 
 impl Node {
@@ -99,7 +99,7 @@ impl Node {
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
-        let sync_authoriser = SyncAuthoriser::new();
+        let sync_authoriser = SyncBlockList::new();
         sync_authoriser.permissive().await;
 
         let network = Network::spawn(

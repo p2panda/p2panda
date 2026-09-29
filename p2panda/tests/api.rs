@@ -640,7 +640,7 @@ mod sync_authorisation {
     use p2panda::Topic;
     use p2panda::streams::SystemEvent;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_net::sync::authoriser::SyncAuthoriserEvent;
+    use p2panda_net::sync::authoriser::SyncBlockListEvent;
     use tokio_stream::StreamExt;
 
     use crate::spawn_node;
@@ -675,9 +675,8 @@ mod sync_authorisation {
         // Regardless of whether panda is the initiator or acceptor, we expect the sync session to
         // be blocked for any topic.
         while let Some(event) = events.next().await {
-            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
-                remote_node_id,
-                ..
+            if let SystemEvent::SyncAuthoriser(SyncBlockListEvent::Blocked {
+                remote_node_id, ..
             }) = event
             {
                 assert_eq!(remote_node_id, icebear.id());
@@ -720,7 +719,7 @@ mod sync_authorisation {
         // Panda & Icebear will discover that they have similar interest in the chat topic, however
         // any sync attempt will be blocked..
         while let Some(event) = events.next().await {
-            if let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
+            if let SystemEvent::SyncAuthoriser(SyncBlockListEvent::Blocked {
                 topic,
                 remote_node_id,
             }) = event

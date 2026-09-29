@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_net::sync::authoriser::SyncAuthoriser;
+use p2panda_net::sync::authoriser::SyncBlockList;
 use p2panda_spaces::SpaceEvent;
 use p2panda_stream::hooks::ProcessorHook;
 use p2panda_stream::spaces::SpacesResult;
@@ -20,11 +20,11 @@ use crate::streams::Event;
 //
 // See related issue: <https://github.com/p2panda/p2panda/issues/1441>.
 pub struct SyncAuthoriserHook {
-    inner: SyncAuthoriser,
+    inner: SyncBlockList,
 }
 
 impl SyncAuthoriserHook {
-    pub fn new(inner: SyncAuthoriser) -> Self {
+    pub fn new(inner: SyncBlockList) -> Self {
         Self { inner }
     }
 }
@@ -44,7 +44,7 @@ impl ProcessorHook<Event> for SyncAuthoriserHook {
 }
 
 pub(crate) async fn update_authoriser(
-    sync_authoriser: &SyncAuthoriser,
+    sync_authoriser: &SyncBlockList,
     events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
 ) {
     for event in events {
