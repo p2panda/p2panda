@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(
+    clippy::result_large_err,
+    reason = "https://github.com/p2panda/p2panda/issues/1458"
+)]
 
 mod auth;
 mod config;
