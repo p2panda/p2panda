@@ -83,7 +83,7 @@ impl Network {
             .await?;
 
         let log_sync = LogSync::builder(store.clone(), endpoint.clone(), gossip.clone())
-            .authoriser(sync_authoriser)
+            .hooks(sync_authoriser)
             .spawn()
             .await?;
 

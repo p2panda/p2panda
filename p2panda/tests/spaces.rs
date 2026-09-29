@@ -1321,15 +1321,15 @@ mod sync_authorisation {
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicBlocked {
+            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Blocked {
                 topic: topic_inner,
-                node,
+                remote_node_id,
             }) = event
             else {
                 continue;
             };
 
-            assert_eq!(node, penguin_id);
+            assert_eq!(remote_node_id, penguin_id);
             assert_eq!(topic_inner, topic);
             break;
         }
@@ -1345,15 +1345,15 @@ mod sync_authorisation {
         let (_penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
-            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::TopicAllowed {
+            let SystemEvent::SyncAuthoriser(SyncAuthoriserEvent::Allowed {
                 topic: topic_inner,
-                node,
+                remote_node_id,
             }) = event
             else {
                 continue;
             };
 
-            assert_eq!(node, penguin_id);
+            assert_eq!(remote_node_id, penguin_id);
             assert_eq!(topic_inner, topic);
             break;
         }
