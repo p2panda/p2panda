@@ -4,15 +4,11 @@ use std::error::Error;
 
 use p2panda_core::Hash;
 
-use crate::spaces::SpacesMessage;
-
-pub trait SpacesMessageStore<ARG> {
+pub trait SpacesMessageStore<T> {
     type Error: Error;
 
-    fn get_spaces_message(
-        &self,
-        id: &Hash,
-    ) -> impl Future<Output = Result<Option<SpacesMessage<ARG>>, Self::Error>>;
+    fn get_spaces_message(&self, id: &Hash)
+    -> impl Future<Output = Result<Option<T>, Self::Error>>;
 }
 
 // TODO: Consider moving SpacesStoreState here. It makes sense that we have the object which gets

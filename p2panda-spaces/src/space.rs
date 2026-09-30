@@ -74,7 +74,7 @@ impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
@@ -648,19 +648,20 @@ where
         let mut manager = manager_ref.inner.write().await;
         let mut space_dependencies = vec![];
         for id in groups_y.inner.toposort(include) {
-            let operation = groups_y
-                .inner
-                .operations
-                .get(&id)
+            let operation = manager
+                .store
+                .get_spaces_message(&id)
+                .await
+                .map_err(|err| StoreError::SpacesMessageStore(err.to_string()))?
                 .expect("all auth operations exist");
 
             // Apply the group message from the global state onto the local space state.
-            y.groups_y = AuthGroup::<C>::process(y.groups_y, operation)?;
+            y.groups_y = AuthGroup::<C>::process(y.groups_y, &SpacesMessage::auth(&operation))?;
 
             let args = SpacesArgs::SpaceMembership {
                 space_id: y.space_id,
                 group_id: y.group_id,
-                auth_message_id: operation.id(),
+                auth_message_id: operation.hash(),
                 direct_messages: vec![],
                 space_dependencies: space_dependencies.clone(),
             };
@@ -931,7 +932,7 @@ impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore

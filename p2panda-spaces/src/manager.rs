@@ -78,7 +78,7 @@ impl<S, F, C> Manager<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
@@ -554,7 +554,7 @@ impl<S, F, C> Manager<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
@@ -742,6 +742,9 @@ impl<S, F, C> Clone for Manager<S, F, C> {
 pub enum StoreError {
     #[error("spaces store error: {0}")]
     SpacesStore(String),
+
+    #[error("spaces message store error: {0}")]
+    SpacesMessageStore(String),
 
     #[error("groups store error: {0}")]
     GroupsStore(String),

@@ -70,6 +70,7 @@ Highlights are marked with a pancake 🥞
 - net: Update iroh `v1.0.3` -> `v1.3.0` [#1465](https://github.com/p2panda/p2panda/pull/1465)
 - spaces: Return output structs from public APIs [#1453](https://github.com/p2panda/p2panda/pull/1453)
 - node: Remove redundant authoriser updates [#1455](https://github.com/p2panda/p2panda/pull/1455)
+- spaces: Make SpacesMessageStore::get_message return F::Message type [#1481](https://github.com/p2panda/p2panda/pull/1481)
 
 ### Fixed
 
