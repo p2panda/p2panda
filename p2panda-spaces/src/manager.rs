@@ -31,7 +31,7 @@ use crate::space::RepairOutput;
 use crate::space::{Space, SpaceError, SpaceOutput, SpacesState};
 use crate::store::SpacesStoreState;
 use crate::types::AuthGroupState;
-use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
+use crate::{ActorId, Config, Credentials, GroupId, OperationId, SpaceId};
 
 /// Identifier used to store groups state into database.
 pub const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
@@ -339,6 +339,19 @@ where
             .key_bundle_message()
             .await
             .map_err(ManagerError::IdentityManager)
+    }
+
+    /// Get a space message from the store.
+    pub(crate) async fn get_space_message(
+        &self,
+        id: OperationId,
+    ) -> Result<Option<F::Message>, StoreError> {
+        let manager = self.inner.read().await;
+        manager
+            .store
+            .get_spaces_message(&id)
+            .await
+            .map_err(|err| StoreError::MessageStore(err.to_string()))
     }
 
     /// Get the global auth state.
@@ -742,9 +755,6 @@ impl<S, F, C> Clone for Manager<S, F, C> {
 pub enum StoreError {
     #[error("spaces store error: {0}")]
     SpacesStore(String),
-
-    #[error("spaces message store error: {0}")]
-    SpacesMessageStore(String),
 
     #[error("groups store error: {0}")]
     GroupsStore(String),

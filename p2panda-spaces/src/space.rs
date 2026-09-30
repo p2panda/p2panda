@@ -146,6 +146,8 @@ where
             Group::create(manager_ref.clone(), groups_y, group_id, initial_members).await?;
         let create_group_message = SpacesMessage::auth(&group_output.message);
 
+        messages.push((group_output.message, vec![group_output.event]));
+
         // Apply the "create" auth message to the space state.
         let (space_y, message, events) =
             Space::process_auth_message(manager_ref.clone(), space_y, &create_group_message)
@@ -153,7 +155,11 @@ where
 
         messages.push((message, events));
 
-        Ok(SpaceOutput::from(group_output, space_y, messages))
+        Ok(SpaceOutput {
+            groups_y: group_output.groups_y,
+            space_y,
+            messages,
+        })
     }
 
     /// Add a member to the space with assigned access level.
@@ -594,6 +600,9 @@ where
     }
 
     /// Incorporate any missing groups messages into the space state.
+    ///
+    /// Returns all existing group messages which needed incorporating into the space as well as
+    /// any newly forge space membership messages.
     pub async fn repair(
         &self,
         groups: &[GroupId],
@@ -612,11 +621,21 @@ where
                 continue;
             };
 
-            let operation = groups_y.inner.operations.get(&id).unwrap();
-            let (space_y_i, space_message, space_events) =
-                Space::process_auth_message(self.manager.clone(), space_y, operation).await?;
+            let group_message = self
+                .manager
+                .get_space_message(id)
+                .await?
+                .expect("all auth messages exist");
+
+            let (space_y_i, space_message, space_events) = Space::process_auth_message(
+                self.manager.clone(),
+                space_y,
+                &SpacesMessage::auth(&group_message),
+            )
+            .await?;
 
             space_y = space_y_i;
+            messages.push((group_message, vec![]));
             messages.push((space_message, space_events));
         }
 
@@ -648,31 +667,33 @@ where
         let mut manager = manager_ref.inner.write().await;
         let mut space_dependencies = vec![];
         for id in groups_y.inner.toposort(include) {
-            let operation = manager
+            let group_message = manager
                 .store
                 .get_spaces_message(&id)
                 .await
-                .map_err(|err| StoreError::SpacesMessageStore(err.to_string()))?
+                .map_err(|err| StoreError::MessageStore(err.to_string()))?
                 .expect("all auth operations exist");
 
             // Apply the group message from the global state onto the local space state.
-            y.groups_y = AuthGroup::<C>::process(y.groups_y, &SpacesMessage::auth(&operation))?;
+            y.groups_y = AuthGroup::<C>::process(y.groups_y, &SpacesMessage::auth(&group_message))?;
 
             let args = SpacesArgs::SpaceMembership {
                 space_id: y.space_id,
                 group_id: y.group_id,
-                auth_message_id: operation.hash(),
+                auth_message_id: group_message.hash(),
                 direct_messages: vec![],
                 space_dependencies: space_dependencies.clone(),
             };
-            let message = manager.identity.forge(args).await?;
+            let space_message = manager.identity.forge(args).await?;
 
             y.encryption_y
                 .orderer
-                .add_dependency(message.hash(), &space_dependencies);
+                .add_dependency(space_message.hash(), &space_dependencies);
 
-            space_dependencies = vec![message.hash()];
-            messages.push(message);
+            space_dependencies = vec![space_message.hash()];
+
+            messages.push(group_message);
+            messages.push(space_message);
         }
 
         Ok((y, messages))
