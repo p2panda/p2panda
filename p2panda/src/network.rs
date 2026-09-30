@@ -38,7 +38,7 @@ impl Network {
         config: NetworkConfig,
         signing_key: SigningKey,
         store: SqliteStore,
-        sync_authoriser: SyncBlockList,
+        sync_block_list: SyncBlockList,
     ) -> Result<Self, NetworkError> {
         let address_book = AddressBook::builder().store(store.clone()).spawn().await?;
 
@@ -83,7 +83,7 @@ impl Network {
             .await?;
 
         let log_sync = LogSync::builder(store.clone(), endpoint.clone(), gossip.clone())
-            .hooks(sync_authoriser)
+            .hooks(sync_block_list)
             .spawn()
             .await?;
 

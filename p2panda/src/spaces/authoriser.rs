@@ -44,7 +44,7 @@ impl ProcessorHook<Event> for SyncAuthoriserHook {
 }
 
 pub(crate) async fn update_authoriser(
-    sync_authoriser: &SyncBlockList,
+    sync_block_list: &SyncBlockList,
     events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
 ) {
     for event in events {
@@ -66,7 +66,7 @@ pub(crate) async fn update_authoriser(
             } => {
                 // For remove events add removed members to the topic block-list.
                 for (member, _) in removed {
-                    sync_authoriser
+                    sync_block_list
                         .block_topic(*member, { *space_id }.into())
                         .await;
                 }
@@ -80,7 +80,7 @@ pub(crate) async fn update_authoriser(
         //
         // This catches the case where a previously removed member has been re-added.
         for (member, _) in members {
-            sync_authoriser
+            sync_block_list
                 .allow_topic(*member, { *space_id }.into())
                 .await;
         }

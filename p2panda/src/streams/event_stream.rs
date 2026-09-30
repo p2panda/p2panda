@@ -49,12 +49,12 @@ pub type EventStream = Pin<Box<dyn Stream<Item = SystemEvent> + Send + Unpin + '
 /// Merge the provided event streams into a single, unified system event stream.
 pub(crate) fn event_stream(
     system_events: broadcast::Receiver<SystemEvent>,
-    sync_authoriser_events: broadcast::Receiver<SyncBlockListEvent>,
+    sync_block_list_events: broadcast::Receiver<SyncBlockListEvent>,
     discovery_events: broadcast::Receiver<DiscoveryEvent>,
 ) -> EventStream {
-    let sync_authoriser_stream = BroadcastStream::new(sync_authoriser_events);
-    let sync_authoriser_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
-        sync_authoriser_stream
+    let sync_block_stream = BroadcastStream::new(sync_block_list_events);
+    let sync_block_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
+        sync_block_stream
             .filter_map(|event| async { event.ok().map(SystemEvent::SyncAuthoriser) })
             .boxed(),
     );
@@ -71,7 +71,7 @@ pub(crate) fn event_stream(
         Box::pin(system_events_stream.filter_map(|event| async { event.ok() }));
 
     let mut stream_set = SelectAll::new();
-    stream_set.push(sync_authoriser_stream);
+    stream_set.push(sync_block_stream);
     stream_set.push(discovery_stream);
     stream_set.push(system_events_stream);
 
