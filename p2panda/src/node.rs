@@ -60,7 +60,7 @@ pub struct Node {
     key_bundle_task: KeyBundleTask,
     events_tx: broadcast::Sender<SystemEvent>,
     events_rx: Mutex<broadcast::Receiver<SystemEvent>>,
-    sync_authoriser: SyncBlockList,
+    sync_block_list: SyncBlockList,
 }
 
 impl Node {
@@ -99,14 +99,14 @@ impl Node {
     ) -> Result<Self, SpawnError> {
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
-        let sync_authoriser = SyncBlockList::new();
-        sync_authoriser.permissive().await;
+        let sync_block_list = SyncBlockList::new();
+        sync_block_list.permissive().await;
 
         let network = Network::spawn(
             config.network.clone(),
             credentials.node_signing_key(),
             store.clone(),
-            sync_authoriser.clone(),
+            sync_block_list.clone(),
         )
         .await?;
 
@@ -138,7 +138,7 @@ impl Node {
             key_bundle_task,
             events_tx,
             events_rx: Mutex::new(events_rx),
-            sync_authoriser,
+            sync_block_list,
         })
     }
 
@@ -428,7 +428,7 @@ impl Node {
     pub async fn event_stream(
         &self,
     ) -> Result<impl Stream<Item = SystemEvent> + Send + Unpin + 'static, CreateStreamError> {
-        let sync_authoriser_events = self.sync_authoriser.events().await;
+        let sync_block_events = self.sync_block_list.events().await;
 
         let discovery_events = self
             .network
@@ -441,7 +441,7 @@ impl Node {
 
         Ok(event_stream(
             system_events,
-            sync_authoriser_events,
+            sync_block_events,
             discovery_events,
         ))
     }
@@ -578,7 +578,7 @@ impl Node {
         // and fallback to a default empty vec.
         let removed = inner.removed().await.ok().unwrap_or_default();
         for node in removed {
-            self.sync_authoriser
+            self.sync_block_list
                 .block_topic(node, space_id.into())
                 .await;
         }
@@ -615,7 +615,7 @@ impl Node {
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
         let mut post_pipeline = ProcessorHooksList::new();
-        post_pipeline.push(SyncAuthoriserHook::new(self.sync_authoriser.clone()));
+        post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
 
         self.stream_from_inner(topic, from, true, post_pipeline)
@@ -730,36 +730,36 @@ impl Node {
         self.network.insert_bootstrap(node_id, relay_url).await
     }
 
-    /// Allows all connection attempts with the given node.
+    /// Allows all sync sessions with the given node.
     ///
     /// The allowlist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn allow(&self, node_id: NodeId) {
-        self.sync_authoriser.allow(node_id).await;
+        self.sync_block_list.allow(node_id).await;
     }
 
-    /// Allows all connection attempts with the given node for a single topic.
+    /// Allows all sync sessions with the given node for a single topic.
     ///
     /// The allowlist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn topic_allow(&self, node_id: NodeId, topic: Topic) {
-        self.sync_authoriser.allow_topic(node_id, topic).await;
+        self.sync_block_list.allow_topic(node_id, topic).await;
     }
 
-    /// Blocks all connection attempts with the given node.
+    /// Blocks all sync sessions with the given node.
     ///
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn block(&self, node_id: NodeId) {
-        self.sync_authoriser.block(node_id).await;
+        self.sync_block_list.block(node_id).await;
     }
 
-    /// Blocks all connection attempts with the given node for a single topic.
+    /// Blocks all sync sessions with the given node for a single topic.
     ///
     /// The blocklist is not currently persisted. This means it will need to be repopulated by
     /// calling this method after each process restart.
     pub async fn topic_block(&self, node_id: NodeId, topic: Topic) {
-        self.sync_authoriser.block_topic(node_id, topic).await;
+        self.sync_block_list.block_topic(node_id, topic).await;
     }
 }
 
