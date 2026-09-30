@@ -654,6 +654,9 @@ where
                 .get(&id)
                 .expect("all auth operations exist");
 
+            // Apply the group message from the global state onto the local space state.
+            y.groups_y = AuthGroup::<C>::process(y.groups_y, operation)?;
+
             let args = SpacesArgs::SpaceMembership {
                 space_id: y.space_id,
                 group_id: y.group_id,
@@ -670,7 +673,6 @@ where
             space_dependencies = vec![message.hash()];
             messages.push(message);
         }
-        y.groups_y = groups_y;
 
         Ok((y, messages))
     }
