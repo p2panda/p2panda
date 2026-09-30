@@ -900,16 +900,33 @@ async fn space_from_existing_auth_state() {
     // Expect one auth and one spaces event.
     assert_eq!(events.len(), 2);
 
-    // There are 3 messages:
-    // 1) auth message containing "create" for the space group
+    // There are 4 messages:
+    // 1) auth message containing "create" message for the member group
     // 2) space message containing reference to auth "create" message for the member group
-    // 3) space message containing reference to auth "create" message for the space
-    assert_eq!(messages.len(), 3);
-    let message_02 = messages[0].clone();
-    let message_03 = messages[1].clone();
-    let message_04 = messages[2].clone();
+    // 3) auth message containing "create" message for the space group
+    // 4) space message containing reference to auth "create" message for the space
+    assert_eq!(messages.len(), 4);
+    assert_eq!(message_01.hash, messages[0].clone().hash);
+    let message_02 = messages[1].clone();
+    let message_03 = messages[2].clone();
+    let message_04 = messages[3].clone();
 
-    let SpacesArgs::Group { group_action, .. } = message_02.borrow() else {
+    let SpacesArgs::SpaceMembership {
+        direct_messages,
+        auth_message_id,
+        ..
+    } = message_02.borrow()
+    else {
+        panic!("expected system message");
+    };
+
+    // Space message references auth "create" message for the member group.
+    assert_eq!(*auth_message_id, message_01.hash());
+
+    // There are no encryption control message.
+    assert!(direct_messages.is_empty());
+
+    let SpacesArgs::Group { group_action, .. } = message_03.borrow() else {
         panic!("expected auth message");
     };
 
@@ -928,28 +945,13 @@ async fn space_from_existing_auth_state() {
         direct_messages,
         auth_message_id,
         ..
-    } = message_03.borrow()
-    else {
-        panic!("expected system message");
-    };
-
-    // Space message references auth "create" message for the member group.
-    assert_eq!(*auth_message_id, message_01.hash());
-
-    // There are no encryption control message.
-    assert!(direct_messages.is_empty());
-
-    let SpacesArgs::SpaceMembership {
-        direct_messages,
-        auth_message_id,
-        ..
     } = message_04.borrow()
     else {
         panic!("expected system message");
     };
 
     // Space message references auth "create" message for space group.
-    assert_eq!(*auth_message_id, message_02.hash());
+    assert_eq!(*auth_message_id, message_03.hash());
 
     // There are two direct messages.
     assert_eq!(direct_messages.len(), 2);
@@ -1283,7 +1285,7 @@ async fn shared_auth_state() {
             .unwrap()
             .messages,
     );
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     assert_eq!(events.len(), 0);
     let (messages, events) = split_messages(
         space_1
@@ -1292,7 +1294,7 @@ async fn shared_auth_state() {
             .unwrap()
             .messages,
     );
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     assert_eq!(events.len(), 0);
 
     // Add group A to space 0
@@ -1327,7 +1329,7 @@ async fn shared_auth_state() {
             .unwrap()
             .messages,
     );
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     // This change brings claire into the space membership group so we expect one space event
     // signaling this change.
     assert_eq!(events.len(), 1);
@@ -1339,7 +1341,7 @@ async fn shared_auth_state() {
             .unwrap()
             .messages,
     );
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     assert_eq!(events.len(), 1);
 
     // Both space 0 and space 1 should now include claire.
@@ -1395,7 +1397,7 @@ async fn events() {
     let auth_message = output.message;
     let member_group_id = group.id();
 
-    alice_messages.push(auth_message);
+    alice_messages.push(auth_message.clone());
 
     // Create Space with group as member
     let space_id = SpaceId::digest(b"0");
@@ -1403,11 +1405,14 @@ async fn events() {
         .create_space_persisted(space_id, &[(member_group_id, Access::read())])
         .await
         .unwrap();
-    let (messages, events) = split_messages(output.messages);
+    let (mut messages, events) = split_messages(output.messages);
     let space_group_id = space.group_id().await.unwrap();
-    assert_eq!(messages.len(), 3);
+    assert_eq!(messages.len(), 4);
     // 1 auth groups event, 1 space event
     assert_eq!(events.len(), 2);
+
+    // Remove the first message as it is a duplicate of the "create group" message.
+    assert_eq!(auth_message, messages.remove(0));
     alice_messages.extend(messages);
 
     // Add dave to space with read access
@@ -1452,16 +1457,15 @@ async fn events() {
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ author, .. }, .. }) if author == alice_id);
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ members, .. }, .. }) if members.len() == 2);
             }
+            // No change to encryption context.
+            1 => assert_eq!(bob_events.len(), 0),
             // Space auth group created.
-            1 => {
+            2 => {
                 assert_eq!(bob_events.len(), 1);
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { group_id, .. }) if group_id == space_group_id);
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ author, .. }, .. }) if author == alice_id);
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ members, .. }, .. }) if members.len() == 3);
             }
-            // Both previous auth messages published to newly created space, initial members added
-            // to encryption context.
-            2 => assert_eq!(bob_events.len(), 0),
             3 => {
                 assert_eq!(bob_events.len(), 1);
                 std::assert_matches!(bob_events[0].clone(), Event::Spaces(SpaceEvent::Created { space_id, context: SpaceContext{group_id, ..}, .. }) if space_id == space.id() && group_id == space_group_id);
@@ -1653,9 +1657,10 @@ async fn repair_space() {
     let (messages, _) = split_messages(output.messages);
     drop(space);
 
-    let message_02 = messages[0].clone();
-    let message_03 = messages[1].clone();
-    let message_04 = messages[2].clone();
+    assert_eq!(message_01.hash, messages[0].clone().hash);
+    let message_02 = messages[1].clone();
+    let message_03 = messages[2].clone();
+    let message_04 = messages[3].clone();
 
     // Bob: Process message_01 (create group) and add a member to the group without learning about
     // any space yet.
@@ -1688,7 +1693,8 @@ async fn repair_space() {
         .into_iter()
         .flat_map(|result| split_messages(result.messages).0)
         .collect();
-    let message_05 = messages[0].clone();
+    assert_eq!(bob_message_01.hash, messages[0].clone().hash);
+    let message_05 = messages[1].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
@@ -1777,9 +1783,10 @@ async fn duplicate_auth_state_references() {
     let (messages, _) = split_messages(output.messages);
     drop(space);
 
-    let message_02 = messages[0].clone();
-    let message_03 = messages[1].clone();
-    let message_04 = messages[2].clone();
+    assert_eq!(message_01.hash, messages[0].clone().hash);
+    let message_02 = messages[1].clone();
+    let message_03 = messages[2].clone();
+    let message_04 = messages[3].clone();
 
     // Bob: Process message_01 (create group) and add a member to the group without learning about any space yet.
     // ~~~~~~~~~~~~
@@ -1812,6 +1819,7 @@ async fn duplicate_auth_state_references() {
         .flat_map(|result| split_messages(result.messages).0)
         .collect();
     let message_05 = messages[0].clone();
+    let message_06 = messages[1].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
@@ -1827,7 +1835,7 @@ async fn duplicate_auth_state_references() {
     // Bob: processes Alice's messages except the "auth pointer" published to repair the space.
     // ~~~~~~~~~~~~
 
-    for message in [message_02, message_03, message_04] {
+    for message in [message_02, message_03, message_04, message_05] {
         bob.persist_operation(&message).await.unwrap();
         bob_manager.process_persisted(&message).await.unwrap();
     }
@@ -1848,8 +1856,8 @@ async fn duplicate_auth_state_references() {
     // Bob: processes Alice's (duplicate) auth state pointer.
     // ~~~~~~~~~~~~
 
-    bob.persist_operation(&message_05).await.unwrap();
-    bob_manager.process_persisted(&message_05).await.unwrap();
+    bob.persist_operation(&message_06).await.unwrap();
+    bob_manager.process_persisted(&message_06).await.unwrap();
 
     // Bob arrived at the expected state without error.
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
@@ -2350,11 +2358,12 @@ async fn add_group_from_shared_groups_state_regression() {
         .unwrap();
     let (messages, _events) = split_messages(output.messages);
 
-    // There are 3 new messages:
-    // 1) space membership message referencing "create" for bob device group
-    // 2) auth message containing "create" for space group
-    // 3) space membership message referencing "create" for space group
-    assert_eq!(messages.len(), 3);
+    // There are 4 new messages:
+    // 1) group message containing "create" for bob device group
+    // 2) space membership message referencing "create" for bob device group
+    // 3) group message containing "create" for space group
+    // 4) space membership message referencing "create" for space group
+    assert_eq!(messages.len(), 4);
 
     let y = space.state().await.unwrap();
 
@@ -2372,8 +2381,9 @@ async fn add_group_from_shared_groups_state_regression() {
 
     // There is one forged message:
     //
-    // 1) space membership message referencing "create" for claire device group
-    assert_eq!(output.messages.len(), 1);
+    // 1) group message containing "create" for claire device group
+    // 2) space membership message referencing "create" for claire device group
+    assert_eq!(output.messages.len(), 2);
 
     // There is one more operation on the space-local groups state.
     //
@@ -2392,8 +2402,9 @@ async fn add_group_from_shared_groups_state_regression() {
     let (messages, _events) = split_messages(output.messages);
 
     // There are 2 new messages:
-    // 1) auth message containing "add" for space group
-    // 2) space membership message referencing "add" for space group
+    //
+    // 1) group message containing "add" for space group
+    // 2) space membership message referencing "create" for space group
     assert_eq!(messages.len(), 2);
 
     // There is one more operations on the space-local groups state.

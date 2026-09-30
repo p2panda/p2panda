@@ -71,6 +71,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Return output structs from public APIs [#1453](https://github.com/p2panda/p2panda/pull/1453)
 - node: Remove redundant authoriser updates [#1455](https://github.com/p2panda/p2panda/pull/1455)
 - spaces: Make SpacesMessageStore::get_message return F::Message type [#1481](https://github.com/p2panda/p2panda/pull/1481)
+- spaces: Return all message deps from Space::repair and Space::create [#1483](https://github.com/p2panda/p2panda/pull/1483)
 
 ### Fixed
 
