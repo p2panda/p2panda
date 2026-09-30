@@ -66,6 +66,7 @@ Highlights are marked with a pancake 🥞
 - store: Use `AnyOperation` on `LogStore` [#1391](https://github.com/p2panda/p2panda/pull/1391)
 - sync: Update examples to use new `api` module [#1413](https://github.com/p2panda/p2panda/pull/1413)
 - net: Separate sync- from connection authoriser [#1437](https://github.com/p2panda/p2panda/pull/1437)
+- net: Update iroh `v1.0.3` -> `v1.3.0` [#1465](https://github.com/p2panda/p2panda/pull/1465)
 - spaces: Return output structs from public APIs [#1453](https://github.com/p2panda/p2panda/pull/1453)
 - node: Remove redundant authoriser updates [#1455](https://github.com/p2panda/p2panda/pull/1455)
 
