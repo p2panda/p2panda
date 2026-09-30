@@ -1359,3 +1359,293 @@ mod sync_authorisation {
         }
     }
 }
+
+mod spaces_groups_membership {
+    use p2panda::operation::Extensions;
+    use p2panda::spaces::{Group, InnerGroupEvent};
+    use p2panda::streams::{StreamEvent, SystemEvent};
+    use p2panda::{NetworkId, Node, Topic};
+    use p2panda_auth::AccessLevel;
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_core::traits::ShortFormat;
+    use p2panda_spaces::{SpaceEvent, SpacesStoreState};
+    use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
+    use p2panda_store::tx_unwrap;
+    use tokio_stream::StreamExt;
+
+    use super::{SecretData, spawn_node};
+
+    async fn spawn_node_with_device_group(network_id: NetworkId) -> (Node, Group) {
+        let node = spawn_node(network_id).await;
+        let device_group = node
+            .create_group(&[(node.id(), AccessLevel::Manage)])
+            .await
+            .unwrap();
+        (node, device_group)
+    }
+
+    #[tokio::test]
+    async fn add_device_groups_to_team_in_space() {
+        setup_logging();
+
+        let network_id = Topic::random().into();
+        let topic = Topic::random();
+
+        // Alice, Bob and Claire each create a device group with only themselves inside.
+        let (alice, alice_device) = spawn_node_with_device_group(network_id).await;
+        let (bob, bob_device) = spawn_node_with_device_group(network_id).await;
+        let (claire, claire_device) = spawn_node_with_device_group(network_id).await;
+
+        let mut alice_system_rx = alice.event_stream().await.unwrap();
+        let mut bob_system_rx = bob.event_stream().await.unwrap();
+
+        // Alice creates a space.
+        let (alice_space, mut alice_rx) = alice.create_space::<SecretData>(topic).await.unwrap();
+        let space_group_id = alice_space.group_id().await.unwrap();
+
+        let store = SqliteSpacesStore::<Extensions>::new(alice.store());
+        let y: SpacesStoreState<()> =
+            tx_unwrap!(store, { store.get_space_state_tx(&alice_space.id()).await })
+                .unwrap()
+                .unwrap();
+        assert_eq!(y.groups_y.inner.operations.len(), 1);
+
+        while let Some(event) = alice_rx.next().await {
+            if let StreamEvent::Space {
+                inner: SpaceEvent::Created { .. },
+                ..
+            } = event
+            {
+                break;
+            };
+        }
+
+        // Alice creates a team group with their device group as a member.
+        //
+        // NOTE: As groups can't be assigned manager access level yet we have to add Alice
+        // directly as a member as well.
+        let team = alice
+            .create_group(&[
+                (alice_device.id(), AccessLevel::Write),
+                (alice.id(), AccessLevel::Manage),
+            ])
+            .await
+            .unwrap();
+
+        // Alice receives the team group.
+        while let Some(event) = alice_system_rx.next().await {
+            if let SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Created { .. },
+                ..
+            } = event
+            {
+                if group_id == team.id() {
+                    break;
+                }
+            };
+        }
+
+        // Alice adds the team group as a member of the space.
+        alice_space
+            .add(team.id(), AccessLevel::Write)
+            .await
+            .unwrap();
+
+        while let Some(event) = alice_system_rx.next().await {
+            if let SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Added { added, .. },
+                ..
+            } = event
+            {
+                if group_id == space_group_id && added.id() == team.id() {
+                    break;
+                }
+            };
+        }
+
+        // Bob subscribes to the space.
+        let (bob_space, mut bob_rx) = bob.space::<SecretData>(topic).await.unwrap();
+
+        // Alice receives Bob's device group.
+        while let Some(event) = alice_system_rx.next().await {
+            if let SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Created { .. },
+                ..
+            } = event
+            {
+                if group_id == bob_device.id() {
+                    break;
+                }
+            };
+        }
+
+        // Alice receives Bob's key bundle.
+        while let Some(event) = alice_rx.next().await {
+            if let StreamEvent::Member(member) = event {
+                if member == bob.id() {
+                    break;
+                }
+            };
+        }
+
+        // Alice adds Bob's device group to the team group.
+        //
+        // NOTE: Integrating this change into the space is handled by the repair task.
+        let ready = team.add(bob_device.id(), AccessLevel::Write).await.unwrap();
+        ready.await.unwrap();
+
+        // Alice and Bob both arrive at the same membership state.
+        loop {
+            let Some(event) = alice_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+            if !members.iter().any(|(member, _)| *member == bob.id()) {
+                continue;
+            }
+            assert_eq!(members.len(), 2);
+            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
+            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            break;
+        }
+
+        // Bob receives space group.
+        let mut space_group_seen = false;
+        let mut alice_device_group_seen = false;
+        let mut team_group_seen = false;
+        while let Some(event) = bob_system_rx.next().await {
+            if let SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Created { .. },
+                ..
+            } = event
+            {
+                if group_id == space_group_id {
+                    space_group_seen = true;
+                }
+
+                if group_id == alice_device.id() {
+                    alice_device_group_seen = true;
+                }
+
+                if group_id == team.id() {
+                    team_group_seen = true;
+                }
+
+                if space_group_seen && alice_device_group_seen && team_group_seen {
+                    break;
+                }
+            };
+        }
+
+        loop {
+            let Some(event) = bob_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+            if !members.iter().any(|(member, _)| *member == bob.id()) {
+                continue;
+            }
+            assert_eq!(members.len(), 2);
+            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
+            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            break;
+        }
+
+        bob_space.close().await.unwrap();
+
+        // Claire subscribes to the space.
+        let (claire_space, mut claire_rx) = claire.space::<SecretData>(topic).await.unwrap();
+
+        // Alice receives Claire's device group.
+        while let Some(event) = alice_system_rx.next().await {
+            if let SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Created { .. },
+                ..
+            } = event
+            {
+                if group_id == claire_device.id() {
+                    break;
+                }
+            };
+        }
+
+        // Alice receives Claire's key bundle.
+        while let Some(event) = alice_rx.next().await {
+            if let StreamEvent::Member(member) = event {
+                if member == claire.id() {
+                    break;
+                }
+            };
+        }
+
+        // Alice adds Claire's device group to the team group.
+        let ready = team
+            .add(claire_device.id(), AccessLevel::Read)
+            .await
+            .unwrap();
+        ready.await.unwrap();
+
+        let (bob_space, mut bob_rx) = bob.space::<SecretData>(topic).await.unwrap();
+
+        // Alice, Bob and Claire all arrive at the same membership state.
+        loop {
+            let Some(event) = alice_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+            if !members.iter().any(|(member, _)| *member == claire.id()) {
+                continue;
+            }
+            assert_eq!(members.len(), 3);
+            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
+            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            break;
+        }
+
+        loop {
+            let Some(event) = bob_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+            if !members.iter().any(|(member, _)| *member == claire.id()) {
+                continue;
+            }
+            assert_eq!(members.len(), 3);
+            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
+            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            break;
+        }
+
+        loop {
+            let Some(event) = claire_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Space { members, .. } = event else {
+                continue;
+            };
+            if !members.iter().any(|(member, _)| *member == claire.id()) {
+                continue;
+            }
+            assert_eq!(members.len(), 3);
+            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
+            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            break;
+        }
+    }
+}

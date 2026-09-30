@@ -324,6 +324,11 @@ where
         Ok(groups_y.groups_global())
     }
 
+    pub async fn group_id(&self) -> Result<ActorId, InnerSpaceError> {
+        let group_id = self.inner.group_id().await?;
+        Ok(group_id)
+    }
+
     /// Gracefully close the space and any associated sync sessions.
     pub async fn close(self) -> Result<(), CloseError> {
         self.tx.close().await
