@@ -38,7 +38,7 @@ use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
 use crate::streams::publisher::StreamPublisher;
-use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
+use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges, reset_orderer};
 use crate::streams::subscription::StreamSubscription;
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 use crate::streams::{Event, Pipeline, SystemEvent};
@@ -158,7 +158,7 @@ where
     //
     // TODO: Move replay logic into own place and make it part of ingress.
     let nacked_log_ranges = acked
-        .nacked_log_ranges(from)
+        .nacked_log_ranges(from.clone())
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
@@ -259,27 +259,57 @@ where
             // =======================
 
             {
-                // This will block processing of the sync stream and of locally created operations
-                // until it is complete.
-                let replay_result =
-                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
-                        .await;
+                // TODO: This replay logic should be factored out into an own module.
+                // See related issue: <https://github.com/p2panda/p2panda/issues/1443>
 
-                // Errors occurring in the replay task which be returned to the user.
-                if let Err(error) = replay_result {
+                // Before a replay we need to reset the orderer by removing all operations we want
+                // to replay before, otherwise the orderer will not respect their causal ordering.
+                let namespace = topic.to_string(); // Needs to match orderer namespace given in pipeline.
+                let reset_result =
+                    reset_orderer(&store, &from, &namespace, nacked_log_ranges.clone()).await;
+
+                if let Err(error) = reset_result {
                     warn!(
                         topic = %topic.fmt_short(),
-                        "error occurred in replay task: {error}"
+                        "error occurred in replay task when resetting orderer: {error}"
                     );
 
                     let _ = to_output_tx
                         .send(vec![
                             StreamEvent::ReplayFailed {
-                                error: Arc::new(error),
+                                error: Arc::new(error.into()),
                             }
                             .into(),
                         ])
                         .await;
+                } else {
+                    // This will block processing of the sync stream and of locally created
+                    // operations until it is complete.
+                    let replay_result = replay_log_ranges(
+                        topic,
+                        &store,
+                        &to_output_tx,
+                        &pipeline,
+                        nacked_log_ranges,
+                    )
+                    .await;
+
+                    // Errors occurring in the replay task which be returned to the user.
+                    if let Err(error) = replay_result {
+                        warn!(
+                            topic = %topic.fmt_short(),
+                            "error occurred in replay task: {error}"
+                        );
+
+                        let _ = to_output_tx
+                            .send(vec![
+                                StreamEvent::ReplayFailed {
+                                    error: Arc::new(error),
+                                }
+                                .into(),
+                            ])
+                            .await;
+                    }
                 }
             }
 
@@ -331,7 +361,7 @@ where
                     Some((operation, _message, processed_tx)) = publish_rx.recv() => {
                         let event = process_operation_in(
                             operation,
-                            Source::LocalStore,
+                            Source::Publish,
                             topic,
                             &pipeline,
                             Some(&sync_handle),
@@ -1018,9 +1048,11 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Operation was published locally or replayed.
-    // TODO
-    LocalStore,
+    /// Operation was published locally.
+    Publish,
+
+    /// Operation was replayed.
+    Replay,
 
     /// Operation was forged locally and handled in egress.
     Egress,
