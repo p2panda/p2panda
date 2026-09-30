@@ -3,7 +3,7 @@
 use p2panda_core::Hash;
 
 use crate::orderer::OrdererStore;
-use crate::{SqliteStore, Transaction};
+use crate::{SqliteStore, Transaction, tx_unwrap};
 
 #[tokio::test]
 async fn ready() {
@@ -141,4 +141,44 @@ async fn namespaces() {
     );
 
     store.commit(permit).await.unwrap();
+}
+
+#[tokio::test]
+async fn clear() {
+    let store = SqliteStore::temporary().await;
+
+    let namespace_1 = "ett";
+    let namespace_2 = "två";
+
+    let hash_1 = Hash::digest(b"eins");
+    let hash_2 = Hash::digest(b"zwei");
+    let hash_3 = Hash::digest(b"drei");
+    let hash_4 = Hash::digest(b"vier");
+
+    tx_unwrap!(store, {
+        // Populate first namespace.
+        store.mark_ready(namespace_1, hash_1).await.unwrap();
+        store.mark_ready(namespace_1, hash_2).await.unwrap();
+        assert!(store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
+        assert!(store.ready(namespace_1, &[hash_1]).await.unwrap());
+        assert!(!store.ready(namespace_1, &[hash_3, hash_4]).await.unwrap());
+
+        // Populate second namespace.
+        store.mark_ready(namespace_2, hash_3).await.unwrap();
+        store.mark_ready(namespace_2, hash_4).await.unwrap();
+        assert!(!store.ready(namespace_2, &[hash_1, hash_2]).await.unwrap());
+        assert!(store.ready(namespace_2, &[hash_3, hash_4]).await.unwrap());
+
+        // Clear all state for second namespace.
+        <SqliteStore as OrdererStore<Hash>>::clear(&store, namespace_2)
+            .await
+            .unwrap();
+        assert!(store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
+        assert!(!store.ready(namespace_2, &[hash_3, hash_4]).await.unwrap());
+
+        // Remove one item from first namespace.
+        store.clear_keys(namespace_1, &[hash_2]).await.unwrap();
+        assert!(!store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
+        assert!(store.ready(namespace_1, &[hash_1]).await.unwrap());
+    });
 }
