@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::borrow::Borrow;
-
-use p2panda_core::Hash;
+use p2panda_core::{Hash, Operation};
 use serde::{Deserialize, Serialize};
 
 use crate::spaces::{SpacesMessageStore, SpacesStore};
@@ -15,17 +13,20 @@ struct SpacesArgs;
 // Here we fix the generic arguments on SpacesMessage, this would happen in p2panda-spaces.
 type SpacesMessage = crate::spaces::SpacesMessage<SpacesArgs>;
 
+impl From<Operation<SpacesExtensions>> for SpacesMessage {
+    fn from(operation: Operation<SpacesExtensions>) -> Self {
+        SpacesMessage {
+            id: operation.hash,
+            author: operation.header.verifying_key,
+            args: operation.header.extensions.args,
+        }
+    }
+}
+
 // Extension type defined in p2panda.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct SpacesExtensions {
     args: SpacesArgs,
-}
-
-// Required Borrow<SpacesArgs> will be implemented in p2panda.
-impl Borrow<SpacesArgs> for SpacesExtensions {
-    fn borrow(&self) -> &SpacesArgs {
-        &self.args
-    }
 }
 
 type SqliteSpacesStore = crate::spaces::SqliteSpacesStore<SpacesExtensions>;
