@@ -729,38 +729,6 @@ impl Node {
     ) -> Result<(), NetworkError> {
         self.network.insert_bootstrap(node_id, relay_url).await
     }
-
-    /// Allows all sync sessions with the given node.
-    ///
-    /// The allowlist is not currently persisted. This means it will need to be repopulated by
-    /// calling this method after each process restart.
-    pub async fn allow(&self, node_id: NodeId) {
-        self.sync_block_list.allow(node_id).await;
-    }
-
-    /// Allows all sync sessions with the given node for a single topic.
-    ///
-    /// The allowlist is not currently persisted. This means it will need to be repopulated by
-    /// calling this method after each process restart.
-    pub async fn topic_allow(&self, node_id: NodeId, topic: Topic) {
-        self.sync_block_list.allow_topic(node_id, topic).await;
-    }
-
-    /// Blocks all sync sessions with the given node.
-    ///
-    /// The blocklist is not currently persisted. This means it will need to be repopulated by
-    /// calling this method after each process restart.
-    pub async fn block(&self, node_id: NodeId) {
-        self.sync_block_list.block(node_id).await;
-    }
-
-    /// Blocks all sync sessions with the given node for a single topic.
-    ///
-    /// The blocklist is not currently persisted. This means it will need to be repopulated by
-    /// calling this method after each process restart.
-    pub async fn topic_block(&self, node_id: NodeId, topic: Topic) {
-        self.sync_block_list.block_topic(node_id, topic).await;
-    }
 }
 
 #[cfg(any(test, feature = "test_utils"))]
@@ -772,9 +740,12 @@ impl Node {
         self.store.clone()
     }
 
-    /// Access the inner spaces manager.
     pub fn spaces_manager(&self) -> SpacesManager {
         self.spaces_manager.clone()
+    }
+
+    pub fn sync_block_list(&self) -> &SyncBlockList {
+        &self.sync_block_list
     }
 }
 
