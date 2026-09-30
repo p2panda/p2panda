@@ -34,8 +34,7 @@ use crate::spaces::{
     AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupError, GroupsScope, InviteError,
     InviteTask, KeyBundleTask, Member, MemberAssociationHook, MemberError, RepairTask, Space,
     SpaceEgressError, SpaceSubscription, SyncAuthoriserHook, actor_to_topic,
-    dispatch_spaces_events, member_log_id, spaces_manager, spaces_stream,
-    to_initial_members,
+    dispatch_spaces_events, member_log_id, spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,

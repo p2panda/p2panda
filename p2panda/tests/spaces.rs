@@ -1367,7 +1367,6 @@ mod spaces_groups_membership {
     use p2panda::{NetworkId, Node, Topic};
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_core::traits::ShortFormat;
     use p2panda_spaces::{SpaceEvent, SpacesStoreState};
     use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
     use p2panda_store::tx_unwrap;
@@ -1562,7 +1561,7 @@ mod spaces_groups_membership {
         bob_space.close().await.unwrap();
 
         // Claire subscribes to the space.
-        let (claire_space, mut claire_rx) = claire.space::<SecretData>(topic).await.unwrap();
+        let (_claire_space, mut claire_rx) = claire.space::<SecretData>(topic).await.unwrap();
 
         // Alice receives Claire's device group.
         while let Some(event) = alice_system_rx.next().await {
@@ -1594,7 +1593,7 @@ mod spaces_groups_membership {
             .unwrap();
         ready.await.unwrap();
 
-        let (bob_space, mut bob_rx) = bob.space::<SecretData>(topic).await.unwrap();
+        let (_bob_space, mut bob_rx) = bob.space::<SecretData>(topic).await.unwrap();
 
         // Alice, Bob and Claire all arrive at the same membership state.
         loop {
