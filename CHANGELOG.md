@@ -79,6 +79,7 @@ Highlights are marked with a pancake 🥞
 - node: Manage separate orderer state per topic stream [#1461](https://github.com/p2panda/p2panda/pull/1461)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
+- spaces: Fix bug instantiating space from existing groups state [#1457](https://github.com/p2panda/p2panda/pull/1457)
 
 ## [0.7.1] - 21/08/2026
 

@@ -2301,3 +2301,105 @@ async fn removed_members() {
     assert_eq!(alice_space.removed().await.unwrap(), expected);
     assert_eq!(bob_space.removed().await.unwrap(), expected);
 }
+
+#[tokio::test]
+async fn add_group_from_shared_groups_state_regression() {
+    let alice = TestPeer::new(0).await;
+    let bob = <TestPeer>::new(1).await;
+    let claire = <TestPeer>::new(2).await;
+
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+
+    let alice_manager = alice.manager.clone();
+    let bob_manager = bob.manager.clone();
+    let claire_manager = claire.manager.clone();
+
+    // Manually register all key bundles on alice.
+
+    alice_manager
+        .register_member(&bob_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    alice_manager
+        .register_member(&claire_manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Create Group with bob and claire as managers.
+    // ~~~~~~~~~~~~
+
+    let (bob_device, _output) = alice_manager
+        .create_group_persisted(&[(bob_id, Access::manage())])
+        .await
+        .unwrap();
+
+    let (claire_device, _output) = alice_manager
+        .create_group_persisted(&[(claire_id, Access::manage())])
+        .await
+        .unwrap();
+
+    // Create Space with bob device as member
+    // ~~~~~~~~~~~~
+
+    let space_id = SpaceId::digest(b"0");
+    let (space, output) = alice_manager
+        .create_space_persisted(space_id, &[(bob_device.id(), Access::read())])
+        .await
+        .unwrap();
+    let (messages, _events) = split_messages(output.messages);
+
+    // There are 3 new messages:
+    // 1) space membership message referencing "create" for bob device group
+    // 2) auth message containing "create" for space group
+    // 3) space membership message referencing "create" for space group
+    assert_eq!(messages.len(), 3);
+
+    let y = space.state().await.unwrap();
+
+    // There are two operations on the space-local groups state.
+    //
+    // 1) Create operation for bob device group
+    // 2) Create operation for space group
+    let mut expected_operations = 2;
+    assert_eq!(y.groups_y.inner.operations.len(), expected_operations);
+
+    // Integrate claire device group into space
+    // ~~~~~~~~~~~~
+
+    let output = space.repair_persisted(&[claire_device.id()]).await.unwrap();
+
+    // There is one forged message:
+    //
+    // 1) space membership message referencing "create" for claire device group
+    assert_eq!(output.messages.len(), 1);
+
+    // There is one more operation on the space-local groups state.
+    //
+    // 1) create message for claire device group
+    let y = space.state().await.unwrap();
+    expected_operations += 1;
+    assert_eq!(y.groups_y.inner.operations.len(), expected_operations);
+
+    // Add claire device group to Space
+    // ~~~~~~~~~~~~
+
+    let output = space
+        .add_persisted(claire_device.id(), Access::read())
+        .await
+        .unwrap();
+    let (messages, _events) = split_messages(output.messages);
+
+    // There are 2 new messages:
+    // 1) auth message containing "add" for space group
+    // 2) space membership message referencing "add" for space group
+    assert_eq!(messages.len(), 2);
+
+    // There is one more operations on the space-local groups state.
+    //
+    // 1) add message for claire device group on space group
+    let y = space.state().await.unwrap();
+    expected_operations += 1;
+    assert_eq!(y.groups_y.inner.operations.len(), expected_operations);
+}
