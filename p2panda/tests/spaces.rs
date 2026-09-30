@@ -1018,9 +1018,8 @@ mod filtered_messages {
         // Panda subscribes again.
         let (_panda_space, mut panda_rx) = panda.space::<SecretData>(topic).await.unwrap();
 
-        // And manually adds penguin to the allow-list as removed members are automatically
-        // blocked.
-        panda.topic_allow(penguin_id, topic).await;
+        // And manually adds penguin to the allow-list as removed members are automatically blocked.
+        panda.sync_block_list().allow_topic(penguin_id, topic).await;
 
         // Panda will be sent the second message from penguin, however it will not be forwarded to
         // the app layer as they know penguin has been removed (concurrent to the application
