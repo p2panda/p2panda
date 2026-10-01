@@ -1,14 +1,26 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda::{NetworkId, Node};
+use p2panda::{NetworkId, Node, Topic};
 use serde::{Deserialize, Serialize};
 
-async fn spawn_node(network_id: NetworkId) -> Node {
-    p2panda::builder()
-        .network_id(network_id)
-        .spawn()
-        .await
-        .unwrap()
+struct Swarm {
+    network_id: NetworkId,
+}
+
+impl Swarm {
+    pub fn new() -> Self {
+        Self {
+            network_id: Topic::random().into(),
+        }
+    }
+
+    pub async fn spawn_node(&self) -> Node {
+        p2panda::builder()
+            .network_id(self.network_id)
+            .spawn()
+            .await
+            .unwrap()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -22,21 +34,21 @@ mod spaces_api {
 
     use p2panda::Topic;
     use p2panda::spaces::InnerGroupEvent;
-    use p2panda::streams::{StreamEvent, SystemEvent};
-    use p2panda_auth::AccessLevel;
+    use p2panda::streams::{StreamEvent, StreamFrom, SystemEvent};
+    use p2panda_auth::{Access, AccessLevel};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_spaces::SpaceEvent;
+    use p2panda_spaces::{MemberId, SpaceEvent};
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[tokio::test]
     async fn create_space_for_multiple_members() -> Result<(), Box<dyn std::error::Error>> {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await?;
 
         // Spaces behave like topic-streams, just that they're encrypted towards members.
@@ -57,8 +69,8 @@ mod spaces_api {
         }
 
         // We can manage (nested) groups (useful for multi-device, etc.)
-        let penguin_laptop = spawn_node(network_id).await;
-        let penguin_mobile = spawn_node(network_id).await;
+        let penguin_laptop = swarm.spawn_node().await;
+        let penguin_mobile = swarm.spawn_node().await;
         let mut penguin_mobile_system_rx = penguin_mobile.event_stream().await?;
 
         // Penguin subscribes to the space in order to publish some key bundles.
@@ -295,11 +307,11 @@ mod spaces_api {
     async fn spaces_sync() -> Result<(), Box<dyn std::error::Error>> {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
-        let penguin = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
 
         // Penguin subscribes to the space (and publishes a key bundle).
         let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
@@ -394,18 +406,18 @@ mod spaces_repair_task {
     use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[tokio::test]
     async fn sync_repair_space() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
-        let penguin = spawn_node(network_id).await;
+        let penguin = swarm.spawn_node().await;
         let mut penguin_system_rx = penguin.event_stream().await.unwrap();
 
         // Penguin creates a group before subscribing to the space.
@@ -486,12 +498,12 @@ mod spaces_repair_task {
     async fn live_repair_space() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
-        let penguin = spawn_node(network_id).await;
+        let penguin = swarm.spawn_node().await;
 
         // Penguin subscribes to the space.
         let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -570,16 +582,16 @@ mod spaces_api_validation {
     use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[tokio::test]
     async fn api_validation() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
 
         let (panda_space, mut panda_rx) = panda.create_space::<String>(topic).await.unwrap();
 
@@ -606,7 +618,7 @@ mod spaces_api_validation {
         );
 
         // Tiger subscribes to the space.
-        let tiger = spawn_node(network_id).await;
+        let tiger = swarm.spawn_node().await;
         let (tiger_space, mut tiger_rx) = tiger.space::<String>(topic).await.unwrap();
 
         while let Some(event) = panda_rx.next().await {
@@ -662,11 +674,11 @@ mod spaces_api_validation {
     async fn groups_api_validation() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
 
-        let panda = spawn_node(network_id).await;
-        let lion = spawn_node(network_id).await;
-        let tiger = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
+        let lion = swarm.spawn_node().await;
+        let tiger = swarm.spawn_node().await;
 
         let topic = Topic::random();
 
@@ -770,16 +782,16 @@ mod spaces_events {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[ignore = "group streams are not stable yet"]
     #[tokio::test]
     async fn group_events() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
 
         let topic = Topic::random();
@@ -788,8 +800,8 @@ mod spaces_events {
         // the group operations.
         let (_panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
-        let penguin_laptop = spawn_node(network_id).await;
-        let penguin_mobile = spawn_node(network_id).await;
+        let penguin_laptop = swarm.spawn_node().await;
+        let penguin_mobile = swarm.spawn_node().await;
         let mut penguin_laptop_system_rx = penguin_laptop.event_stream().await.unwrap();
 
         let (_penguin_laptop_space, _penguin_laptop_rx) =
@@ -959,24 +971,23 @@ mod spaces_events {
 mod filtered_messages {
     use std::time::Duration;
 
+    use p2panda::Topic;
     use p2panda::streams::StreamEvent;
+    use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[tokio::test]
     async fn concurrently_removed_members_filtered() {
         setup_logging();
 
-        use p2panda::Topic;
-        use p2panda_auth::AccessLevel;
-
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
-        let penguin = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
 
         // Panda creates a space.
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
@@ -1093,15 +1104,12 @@ mod filtered_messages {
     async fn causally_later_removed_members_not_filtered() {
         setup_logging();
 
-        use p2panda::Topic;
-        use p2panda_auth::AccessLevel;
-
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
-        let penguin = spawn_node(network_id).await;
-        let tiger = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
+        let tiger = swarm.spawn_node().await;
 
         // Panda creates a space.
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
@@ -1197,7 +1205,7 @@ mod members {
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
-    use crate::spawn_node;
+    use super::Swarm;
 
     // 1. Node A creates space S with {A, B, C, D} inside
     // 2. Node B removes C from S
@@ -1209,13 +1217,13 @@ mod members {
     async fn indirect_members_log_sync() {
         setup_logging();
 
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let node_a = spawn_node(network_id).await;
-        let node_b = spawn_node(network_id).await;
-        let node_c = spawn_node(network_id).await;
-        let node_d = spawn_node(network_id).await;
+        let node_a = swarm.spawn_node().await;
+        let node_b = swarm.spawn_node().await;
+        let node_c = swarm.spawn_node().await;
+        let node_d = swarm.spawn_node().await;
 
         let (node_a_space, mut node_a_rx) = node_a.create_space::<String>(topic).await.unwrap();
 
@@ -1299,26 +1307,25 @@ mod members {
 }
 
 mod sync_authorisation {
+    use p2panda::Topic;
     use p2panda::streams::{StreamEvent, SystemEvent};
+    use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use p2panda_net::sync::authoriser::SyncBlockListEvent;
     use tokio_stream::StreamExt;
 
-    use super::{SecretData, spawn_node};
+    use super::{SecretData, Swarm};
 
     #[tokio::test]
     async fn member_allow_and_block() {
         setup_logging();
 
-        use p2panda::Topic;
-        use p2panda_auth::AccessLevel;
-
-        let network_id = Topic::random().into();
+        let swarm = Swarm::new();
         let topic = Topic::random();
 
-        let panda = spawn_node(network_id).await;
+        let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
-        let penguin = spawn_node(network_id).await;
+        let penguin = swarm.spawn_node().await;
 
         // Panda creates a space.
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
