@@ -395,6 +395,130 @@ mod spaces_api {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn replay_causally_ordered() {
+        setup_logging();
+
+        let swarm = Swarm::new();
+
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
+
+        {
+            let penguin_member_info = penguin.me().await.unwrap();
+            panda
+                .spaces_manager()
+                .register_member(&penguin_member_info.into())
+                .await
+                .unwrap();
+        }
+
+        // Creating a space effectively creates two operations:
+        //
+        // 1. Group CREATE message
+        // 2. Space CREATE membership ("key-agreement") message (depends on 1.)
+        //
+        // Causal order: The second operation points at the first to declare it as a dependency.
+        let topic = Topic::random();
+        let out = panda
+            .spaces_manager()
+            .create_space(
+                topic,
+                &[
+                    (panda.id(), Access::write()),
+                    (penguin.id(), Access::write()),
+                ],
+            )
+            .await
+            .unwrap();
+
+        let mut operations = out
+            .messages
+            .into_iter()
+            .map(|(msg, _)| msg.into_operation());
+        let op_1 = operations.next().unwrap();
+        let op_2 = operations.next().unwrap();
+
+        // Penguin processes the operations in the "wrong" order (op2 first, then op1).
+        let (penguin_space, mut penguin_rx) = penguin.space::<String>(topic).await.unwrap();
+        let processed = penguin_space
+            .inner_tx()
+            .import(futures_util::stream::iter([op_2, op_1]))
+            .await
+            .unwrap();
+        processed.await.unwrap();
+
+        // We expect Penguin to be fine with processing out-of-order operations and normally joining
+        // the space.
+        while let Some(stream_event) = penguin_rx.next().await {
+            if let StreamEvent::Space {
+                inner: SpaceEvent::Created { space_id, .. },
+                ..
+            } = stream_event
+            {
+                if space_id == topic.into() {
+                    break;
+                }
+            }
+        }
+
+        let members: Vec<MemberId> = penguin_space
+            .members()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert!(members.contains(&panda.id()));
+        assert!(members.contains(&penguin.id()));
+        assert_eq!(members.len(), 2);
+
+        // Penguin encrypts an application message with the space.
+        //
+        // Causal order: The resulting operation op3 should point at op2 as a dependency.
+        let processed = penguin_space.publish("Chaos!".to_string()).await.unwrap();
+        processed.await.unwrap();
+
+        // Processing and receiving the event on application layer will automatically ack it.
+        while let Some(stream_event) = penguin_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = stream_event {
+                if operation.message() == &"Chaos!".to_string() {
+                    break;
+                }
+            }
+        }
+
+        // Create the space stream again and re-play from start.
+        drop(penguin_space);
+        drop(penguin_rx);
+
+        let (_penguin_space, mut penguin_rx) = penguin
+            .space_from::<String>(topic, StreamFrom::Start)
+            .await
+            .unwrap();
+
+        // We expect the re-played events to arrive in the same, causal order again.
+        while let Some(stream_event) = penguin_rx.next().await {
+            if let StreamEvent::Space {
+                inner: SpaceEvent::Created { space_id, .. },
+                ..
+            } = stream_event
+            {
+                if space_id == topic.into() {
+                    break;
+                }
+            }
+        }
+
+        while let Some(stream_event) = penguin_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = stream_event {
+                if operation.message() == &"Chaos!".to_string() {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 mod spaces_repair_task {
