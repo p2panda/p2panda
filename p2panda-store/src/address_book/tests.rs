@@ -242,3 +242,55 @@ async fn sample_random_nodes() {
     }
     assert!(samples.len() > 25);
 }
+
+/// Encodes a node info record as a CBOR map with keys in struct-declaration order, which is *not*
+/// canonical CBOR key order. This mimics records written by earlier `ciborium`-based versions.
+fn encode_non_canonical(info: &TestNodeInfo) -> Vec<u8> {
+    let mut buf = vec![0xa4]; // definite-length map with four entries
+    for (key, value) in [
+        ("id", cbor_core::Value::serialized(&info.id).unwrap()),
+        (
+            "bootstrap",
+            cbor_core::Value::serialized(&info.bootstrap).unwrap(),
+        ),
+        ("stale", cbor_core::Value::serialized(&info.stale).unwrap()),
+        (
+            "transports",
+            cbor_core::Value::serialized(&info.transports).unwrap(),
+        ),
+    ] {
+        buf.extend(cbor_core::Value::from(key).encode());
+        buf.extend(value.encode());
+    }
+    buf
+}
+
+#[tokio::test]
+async fn decode_legacy_non_canonical_node_info() {
+    let mut rng = ChaCha20Rng::from_seed([1; 32]);
+
+    let node_id = SigningKey::generate().verifying_key();
+    let node_info = TestNodeInfo::new(node_id).with_random_address(&mut rng);
+    let bytes = encode_non_canonical(&node_info);
+
+    // Insert a record with non-canonical map key ordering directly, then read it back through the
+    // store to confirm the sqlite node info decoding tolerates it.
+    let store = SqliteStore::temporary().await;
+    sqlx::query(
+        "
+        INSERT INTO
+            node_infos_v1 (node_id, node_info, bootstrap, stale)
+        VALUES
+            (?, ?, ?, ?)
+        ",
+    )
+    .bind(node_id.to_hex())
+    .bind(bytes)
+    .bind(node_info.is_bootstrap())
+    .bind(node_info.is_stale())
+    .execute(&store.pool)
+    .await
+    .unwrap();
+
+    assert_eq!(store.node_info(&node_id).await.unwrap(), Some(node_info));
+}

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::fmt::Display;
+
+use p2panda_core::Author;
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +19,7 @@ pub enum GroupMember<ID> {
 
 impl<ID> GroupMember<ID>
 where
-    ID: Copy,
+    ID: Author,
 {
     /// Return the ID of a group member.
     pub fn id(&self) -> ID {
@@ -37,5 +40,17 @@ where
     /// Return true if this group member is an individual.
     pub fn is_individual(&self) -> bool {
         !self.is_group()
+    }
+}
+
+impl<ID> Display for GroupMember<ID>
+where
+    ID: Author,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GroupMember::Individual(id) => write!(f, "Individual({id})",),
+            GroupMember::Group(id) => write!(f, "Group({id})",),
+        }
     }
 }

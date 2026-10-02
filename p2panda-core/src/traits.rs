@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0tra
 
 //! Traits expressing core features of peer-to-peer data types.
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash as StdHash;
 
 use serde::{Deserialize, Serialize};
@@ -11,12 +11,21 @@ use crate::operation::{Body, PayloadSize};
 
 /// Identifier of an operation author.
 pub trait Author:
-    Copy + Clone + Debug + PartialEq + Eq + Ord + StdHash + Serialize + for<'de> Deserialize<'de>
+    Copy
+    + Clone
+    + Display
+    + Debug
+    + PartialEq
+    + Eq
+    + Ord
+    + StdHash
+    + Serialize
+    + for<'de> Deserialize<'de>
 {
 }
 
 /// Identifier of a single operation.
-pub trait OperationId: Copy + Clone + Debug + PartialEq + Eq + Ord + StdHash {}
+pub trait OperationId: Copy + Clone + Display + Debug + PartialEq + Eq + Ord + StdHash {}
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OperationId for u32 {}
@@ -122,3 +131,9 @@ pub trait Offchain<ID> {
 pub trait Extensions: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
 
 impl<T> Extensions for T where T: Clone + Debug + for<'de> Deserialize<'de> + Serialize {}
+
+/// Returns a displayable string representing the underlying value in a short format, easy to read
+/// during debugging and logging.
+pub trait ShortFormat {
+    fn fmt_short(&self) -> String;
+}

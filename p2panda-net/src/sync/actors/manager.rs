@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use iroh::endpoint::Connection;
+use iroh::endpoint::{Connection, VarInt};
 use iroh::protocol::ProtocolHandler;
 use p2panda_core::Topic;
 use p2panda_sync::FromSync;
@@ -16,14 +16,16 @@ use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, Topic
 use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
 use crate::codec::{into_codec_sink, into_codec_stream};
 use crate::gossip::{Gossip, GossipEvent, GossipHandle};
 use crate::iroh_endpoint::Endpoint;
+use crate::sync::LogSyncRejected;
 use crate::sync::actors::{ToTopicManager, TopicManager};
+use crate::sync::hooks::{AfterHandshakeOutcome, SyncHooks, SyncHooksList};
 use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
@@ -55,7 +57,10 @@ pub enum ToSyncManager<M, E> {
     ),
 
     /// Close all streams for the given topic.
-    Close(Topic),
+    ///
+    /// A response can be awaited on the receiver of the provided oneshot channel to ensure that
+    /// state cleanup has been completed for any relevant sync sessions.
+    Close(Topic, oneshot::Sender<()>),
 
     /// Initiate sync session.
     InitiateSync(Topic, NodeId),
@@ -102,6 +107,7 @@ where
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
+    hooks: SyncHooksList<Topic>,
     gossip_handles: GossipHandles,
     topic_managers: TopicManagers<M::Message>,
     sync_receivers: TopicManagerReceivers<M::Event>,
@@ -136,10 +142,10 @@ where
         myself: &ActorRef<ToSyncManager<M::Message, M::Event>>,
         topic: Topic,
     ) -> Result<(), ActorProcessingErr> {
-        // To avoid collisions when topics are re-used across the application for different
-        // purposes (membership algorithms aiding sync protocols or ephemeral messaging gossip
-        // overlays), we're defining a constant with which topics from the user will be mixed to
-        // derive a new one.
+        // To avoid collisions when topics are re-used across the application for different purposes
+        // (membership algorithms aiding sync protocols or ephemeral messaging gossip overlays),
+        // we're defining a constant with which topics from the user will be mixed to derive a new
+        // one.
         let gossip_topic = derive_topic(topic, GOSSIP_TOPIC_MIX_VALUE);
         self.gossip_topics.write().await.insert(gossip_topic, topic);
 
@@ -230,18 +236,18 @@ where
 
     type Msg = ToSyncManager<M::Message, M::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip);
+    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, SyncHooksList<Topic>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip) = args;
+        let (protocol_id, sync_args, endpoint, gossip, hooks) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
-        let sync_managers = Default::default();
+        let sync_managers = TopicManagers::default();
 
         // Sync manager actors are all spawned in a dedicated thread.
         let thread_pool = ThreadLocalActorSpawner::new();
@@ -258,6 +264,7 @@ where
             gossip_topics: Arc::default(),
             sync_receivers,
             sync_args,
+            hooks,
             thread_pool,
         })
     }
@@ -269,7 +276,9 @@ where
     ) -> Result<(), ActorProcessingErr> {
         // Close all active sync sessions.
         for (_, (actor, _)) in state.topic_managers.topic_manager_map.drain() {
-            actor.send_message(ToTopicManager::CloseAll)?;
+            let (reply, reply_rx) = oneshot::channel();
+            actor.send_message(ToTopicManager::CloseAll(reply))?;
+            let _ = reply_rx.await;
         }
 
         Ok(())
@@ -293,6 +302,7 @@ where
                     .accept(
                         state.protocol_id.clone(),
                         SyncProtocolHandler {
+                            hooks: state.hooks.clone(),
                             stream_ref: myself.clone(),
                         },
                     )
@@ -361,10 +371,14 @@ where
                     let _ = reply.send(None);
                 }
             }
-            ToSyncManager::Close(topic) => {
+            ToSyncManager::Close(topic, reply) => {
+                debug!(topic = topic.fmt_short(), "close sync in manager");
+
                 // Close all sync sessions running over this topic.
                 if let Some((actor, _)) = state.topic_managers.topic_manager_map.get(&topic) {
-                    actor.send_message(ToTopicManager::CloseAll)?;
+                    let (reply, reply_rx) = oneshot::channel();
+                    actor.send_message(ToTopicManager::CloseAll(reply))?;
+                    let _ = reply_rx.await;
                 }
 
                 // Drop the sync manager state for this topic.
@@ -384,20 +398,29 @@ where
                 // overlay will automatically remove the entry from the address book.
                 state.drop_topic_state(&topic);
 
-                debug!(topic = topic.fmt_short(), "close sync manager");
+                // Inform the caller that termination is complete for sync sessions over this
+                // topic.
+                let _ = reply.send(());
             }
-            ToSyncManager::InitiateSync(topic, node_id) => {
+            ToSyncManager::InitiateSync(topic, remote_node_id) => {
+                // Authorise outgoing sync session with the remote node.
+                if let AfterHandshakeOutcome::Reject =
+                    state.hooks.after_handshake(remote_node_id, &topic).await
+                {
+                    return Ok(());
+                }
+
                 if let Some((sync_manager_actor, live_mode)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
                     debug!(
                         topic = topic.fmt_short(),
-                        node_id = node_id.fmt_short(),
+                        remote_node_id = remote_node_id.fmt_short(),
                         "initiate sync session",
                     );
 
                     sync_manager_actor.send_message(ToTopicManager::Initiate {
-                        node_id,
+                        node_id: remote_node_id,
                         topic,
                         live_mode: *live_mode,
                     })?;
@@ -431,7 +454,9 @@ where
                         "end sync session",
                     );
 
-                    sync_manager_actor.send_message(ToTopicManager::Close { node_id })?;
+                    // We don't wish to await termination so we ignore / drop the receiver.
+                    let (reply, _reply_rx) = oneshot::channel();
+                    sync_manager_actor.send_message(ToTopicManager::Close { node_id, reply })?;
                 }
             }
         }
@@ -481,7 +506,9 @@ where
                         "sync manager failed: {panic_msg:#?}",
                     );
 
-                    myself.send_message(ToSyncManager::Close(topic))?;
+                    let (reply, reply_rx) = oneshot::channel();
+                    myself.send_message(ToSyncManager::Close(topic, reply))?;
+                    let _ = reply_rx.await;
                 }
             }
             _ => (),
@@ -496,6 +523,7 @@ where
     M: Send + 'static,
     E: Send + 'static,
 {
+    hooks: SyncHooksList<Topic>,
     stream_ref: ActorRef<ToSyncManager<M, E>>,
 }
 
@@ -518,7 +546,7 @@ where
         &self,
         connection: iroh::endpoint::Connection,
     ) -> Result<(), iroh::protocol::AcceptError> {
-        let node_id = to_verifying_key(connection.remote_id());
+        let remote_node_id = to_verifying_key(connection.remote_id());
         let (tx, rx) = connection.accept_bi().await?;
 
         // As we are accepting a sync session here we don't yet know the topic which the initiator
@@ -543,10 +571,21 @@ where
             .await
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
+        // Authorise incoming sync session with the remote node.
+        if let AfterHandshakeOutcome::Reject =
+            self.hooks.after_handshake(remote_node_id, &topic).await
+        {
+            connection.close(VarInt::from_u32(0), b"not authorised");
+
+            return Err(iroh::protocol::AcceptError::from_err(LogSyncRejected::new(
+                "hooks rejected incoming sync session",
+            )));
+        }
+
         // We know the topic now and send an accept message to the stream actor where it will then
         // be routed to the correct sync manager.
         self.stream_ref
-            .send_message(ToSyncManager::Accept(node_id, topic, connection))
+            .send_message(ToSyncManager::Accept(remote_node_id, topic, connection))
             .map_err(|err| iroh::protocol::AcceptError::from_err(err))?;
 
         Ok(())

@@ -59,4 +59,14 @@ pub trait TopicStore<T, A, D> {
 
     /// Retrieve all associations for the provided topic.
     fn resolve(&self, topic: &T) -> impl Future<Output = Result<BTreeMap<A, Vec<D>>, Self::Error>>;
+
+    /// Given a prior association, return the associated topics.
+    fn resolve_topics(
+        &self,
+        author: &A,
+        data_id: &D,
+    ) -> impl Future<Output = Result<Vec<T>, Self::Error>>;
+
+    /// Retrieve all topics for which active associations exist.
+    fn topics(&self) -> impl Future<Output = Result<Vec<T>, Self::Error>>;
 }

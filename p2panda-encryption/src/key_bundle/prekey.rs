@@ -119,3 +119,36 @@ pub fn latest_prekey<'a>(prekeys: Vec<&'a PreKey>) -> Option<&'a PreKey> {
 
     latest
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use crate::Rng;
+    use crate::crypto::x25519::SecretKey;
+    use crate::key_bundle::Lifetime;
+
+    use super::PreKey;
+
+    #[test]
+    fn latest_prekey() {
+        let rng = Rng::from_seed([1; 32]);
+        let public_key = SecretKey::from_rng(&rng).unwrap().verifying_key().unwrap();
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        //      NOW
+        // ===|=== (1)
+        //   =|====== (2) <-- "latest"
+        //    |      === (3)
+        let prekey_1 = PreKey::new(public_key, Lifetime::from_range(now - 30, now + 30));
+        let prekey_2 = PreKey::new(public_key, Lifetime::from_range(now - 10, now + 60));
+        let prekey_3 = PreKey::new(public_key, Lifetime::from_range(now + 60, now + 90));
+
+        let result = super::latest_prekey(vec![&prekey_1, &prekey_2, &prekey_3]);
+        assert_eq!(result, Some(&prekey_2));
+    }
+}

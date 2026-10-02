@@ -11,12 +11,12 @@ use crate::{MemberId, OperationId};
 /// Placeholder for DGM implementation which satisfies required trait interfaces in
 /// p2panda-encryption. Most methods perform no actual actions as group management is handled by
 /// p2panda-auth.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EncryptionGroupMembership;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptionMembershipState {
-    pub(crate) members: HashSet<MemberId>,
+    pub(crate) members: Vec<MemberId>,
 }
 
 impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
@@ -26,7 +26,7 @@ impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
 
     fn create(_my_id: MemberId, initial_members: &[MemberId]) -> Result<Self::State, Self::Error> {
         Ok(EncryptionMembershipState {
-            members: HashSet::from_iter(initial_members.iter().cloned()),
+            members: initial_members.to_vec(),
         })
     }
 
@@ -57,6 +57,6 @@ impl GroupMembership<MemberId, OperationId> for EncryptionGroupMembership {
     }
 
     fn members(y: &Self::State) -> Result<HashSet<MemberId>, Self::Error> {
-        Ok(y.members.clone())
+        Ok(y.members.clone().into_iter().collect())
     }
 }

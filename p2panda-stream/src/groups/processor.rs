@@ -21,8 +21,7 @@ use crate::groups::{GroupsArgs, GroupsOperation};
 
 type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
 
-type GroupsCrdtError<C> =
-    group::GroupCrdtError<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+type GroupsCrdtError = group::GroupCrdtError<VerifyingKey, Hash>;
 
 type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
 
@@ -74,7 +73,7 @@ where
 {
     type Output = (T, GroupsResult);
 
-    type Error = (T, GroupsError<C>);
+    type Error = (T, GroupsError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
         let input_args: &GroupsArgs<C> = input.borrow();
@@ -157,15 +156,12 @@ where
 /// Error types which can occur in the groups processor.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Error)]
-pub enum GroupsError<C>
-where
-    C: Conditions,
-{
+pub enum GroupsError {
     #[error(transparent)]
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    Groups(#[from] GroupsCrdtError<C>),
+    Groups(#[from] GroupsCrdtError),
 }
 
 #[cfg(test)]
@@ -184,7 +180,6 @@ mod tests {
     use crate::Processor;
     use crate::groups::{GroupsArgs, GroupsOperation};
     use crate::ingest::{Ingest, IngestArgs};
-    use crate::orderer::Ordering;
 
     type LogId = usize;
 
@@ -254,14 +249,6 @@ mod tests {
     impl Borrow<Operation<TestExtensions>> for Event {
         fn borrow(&self) -> &Operation<TestExtensions> {
             &self.operation
-        }
-    }
-
-    // Orderer
-
-    impl Ordering<Hash> for Operation<TestExtensions> {
-        fn dependencies(&self) -> &[Hash] {
-            &self.header.extensions.dependencies
         }
     }
 
@@ -423,7 +410,7 @@ mod tests {
                     (GroupMember::Group(bobby_device_group), Access::write()),
                 ],
             },
-            dependencies: y.heads_filtered(&[alice_device_group, bobby_device_group]),
+            dependencies: y.heads(&[alice_device_group, bobby_device_group]),
         };
         let create_alice_bobby_chat_03: Operation<TestExtensions> =
             alice_log.operation(&[], TestExtensions::from(args));
@@ -479,7 +466,7 @@ mod tests {
                     (GroupMember::Group(cathy_device_group), Access::write()),
                 ],
             },
-            dependencies: y.heads_filtered(&[bobby_device_group, cathy_device_group]),
+            dependencies: y.heads(&[bobby_device_group, cathy_device_group]),
         };
         let create_bobby_cathy_chat_04: Operation<TestExtensions> =
             cathy_log.operation(&[], TestExtensions::from(args));

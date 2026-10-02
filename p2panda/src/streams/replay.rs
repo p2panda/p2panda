@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use futures_util::StreamExt;
 use p2panda_core::logs::LogRanges;
 use p2panda_core::{Cursor, Topic, VerifyingKey};
-use p2panda_store::logs::LogStore;
 use p2panda_store::{SqliteError, SqliteStore};
+use p2panda_sync::api::{LogEntry, log_ranges};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::debug;
 
-use crate::node::AckPolicy;
-use crate::operation::{Extensions, LogId, Operation};
+use crate::operation::{Extensions, LogId};
 use crate::processor::Pipeline;
-use crate::streams::StreamEvent;
-use crate::streams::acked::Acked;
-use crate::streams::stream::{Source, process_operation};
+use crate::streams::stream::{Source, process_operation_in};
+use crate::streams::{ForwardEvent, StreamEvent};
 
 /// Determines the starting point of a subscription stream.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
@@ -47,64 +46,47 @@ impl From<Cursor<VerifyingKey, LogId>> for StreamFrom {
 pub(crate) async fn replay_log_ranges<M>(
     topic: Topic,
     store: &SqliteStore,
-    app_tx: &mpsc::Sender<StreamEvent<M>>,
+    to_output_tx: &mpsc::Sender<Vec<ForwardEvent<M>>>,
     pipeline: &Pipeline<LogId, Extensions, Topic>,
-    ack_policy: AckPolicy,
-    acked: &Acked,
-    log_ranges: LogRanges<VerifyingKey, LogId>,
+    ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), ReplayError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    let total_operations = total_operations(&log_ranges);
+    let total_operations = total_operations(&ranges);
     debug!("replay {total_operations} operations");
 
     if total_operations == 0 {
         return Ok(());
     }
 
-    app_tx
-        .send(StreamEvent::ReplayStarted { total_operations })
+    to_output_tx
+        .send(vec![StreamEvent::ReplayStarted { total_operations }.into()])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 
-    for (author, logs) in log_ranges {
-        for (log_id, (after, until)) in logs {
-            let Some(operations): Option<Vec<(Operation, _)>> = store
-                .get_log_entries(&author, &log_id, after, until)
-                .await?
-            else {
-                // If the log was concurrently deleted since calling TopicStore::resolve then None
-                // is returned here. This is not considered an error, as no log integrity is broken
-                // and deletes should be immediately respected.
-                continue;
-            };
+    let mut operations = log_ranges(store, ranges);
 
-            for (operation, _) in operations {
-                match process_operation::<M>(
-                    operation,
-                    topic,
-                    pipeline,
-                    ack_policy,
-                    acked,
-                    Source::LocalStore,
-                )
-                .await
-                {
-                    Some(event) => {
-                        app_tx
-                            .send(event)
-                            .await
-                            .map_err(|_| ReplayError::CriticalError)?;
-                    }
-                    None => continue,
-                }
-            }
-        }
+    while let Some(result) = operations.next().await {
+        let LogEntry {
+            entry: operation, ..
+        } = result?;
+
+        process_operation_in(
+            operation
+                .try_into()
+                .expect("values from the database are valid"),
+            Source::Egress,
+            topic,
+            pipeline,
+            None,
+            None,
+        )
+        .await;
     }
 
-    app_tx
-        .send(StreamEvent::ReplayEnded)
+    to_output_tx
+        .send(vec![StreamEvent::ReplayEnded.into()])
         .await
         .map_err(|_| ReplayError::CriticalError)?;
 

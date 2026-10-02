@@ -11,7 +11,8 @@ use std::task::{Context, Poll};
 use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{
-    Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum, VerifyingKey,
+    AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
+    VerifyingKey,
 };
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
@@ -55,7 +56,7 @@ pub struct TopicLogSync<T, S, L, E> {
 impl<T, S, L, E> TopicLogSync<T, S, L, E>
 where
     T: Eq + StdHash + Serialize + for<'a> Deserialize<'a>,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
@@ -102,7 +103,7 @@ where
 impl<T, S, L, E> Protocol for TopicLogSync<T, S, L, E>
 where
     T: Debug + Eq + StdHash + Serialize + for<'a> Deserialize<'a> + Send + 'static,
-    S: LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<T, VerifyingKey, L>
         + Clone
         + Send
@@ -244,7 +245,6 @@ where
                                     // connection.
 
                                     debug!("closing sync session");
-
                                     let result = sink
                                         .send(TopicLogSyncMessage::Close)
                                         .await

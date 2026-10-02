@@ -6,12 +6,15 @@ mod tests;
 
 use std::collections::BTreeMap;
 
+use async_stream::try_stream;
+use futures_util::TryStreamExt;
 use p2panda_core::cbor::encode_cbor;
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
-use sqlx::{query, query_as};
+use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
+use sqlx::{QueryBuilder, query, query_as};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
+use crate::logs::traits::{LogEntry, LogStream};
 use crate::operations::OperationRow;
 use crate::sqlite::{SqliteError, SqliteStore};
 
@@ -29,10 +32,29 @@ const GET_LATEST_ENTRY: &str = "
         seq_num DESC LIMIT 1
 ";
 
-impl<L, E> LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash> for SqliteStore
+const GET_LOG_ENTRIES: &str = "
+    SELECT
+        hash,
+        header,
+        body
+    FROM
+        operations_v1
+    WHERE
+        verifying_key = $1
+        AND log_id = $2
+        AND (
+            ($3 == true AND seq_num >= $4)
+            OR
+            ($3 == false AND seq_num > $4)
+        )
+        AND seq_num <= $5
+    ORDER BY
+        seq_num
+";
+
+impl<L> LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> for SqliteStore
 where
-    E: Extensions,
-    L: LogId,
+    L: LogId + Send + 'static,
 {
     type Error = SqliteError;
 
@@ -41,7 +63,7 @@ where
         &self,
         author: &VerifyingKey,
         log_id: &L,
-    ) -> Result<Option<Operation<E>>, Self::Error> {
+    ) -> Result<Option<AnyOperation>, Self::Error> {
         if let Some(latest) = query_as::<_, OperationRow>(GET_LATEST_ENTRY)
             .bind(author.to_string())
             .bind(
@@ -71,7 +93,7 @@ where
         &self,
         author: &VerifyingKey,
         log_id: &L,
-    ) -> Result<Option<Operation<E>>, Self::Error> {
+    ) -> Result<Option<AnyOperation>, Self::Error> {
         let result = self
             .tx(async |tx| {
                 query_as::<_, OperationRow>(GET_LATEST_ENTRY)
@@ -101,54 +123,43 @@ where
         author: &VerifyingKey,
         logs: &[L],
     ) -> Result<Option<BTreeMap<L, SeqNum>>, Self::Error> {
-        let mut encoded_log_ids = Vec::new();
-        for log in logs {
-            let encoded_log_id =
-                encode_cbor(&log).map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
-            encoded_log_ids.push(encoded_log_id);
-        }
-
-        // This query formation approach is required since there is currently no
-        // way to directly bind arrays as comma-separated lists in sqlx.
-        let params = format!("?{}", ", ?".repeat(encoded_log_ids.len() - 1));
-        let query_str = format!(
-            "
-            SELECT
+        let mut query_builder = QueryBuilder::new(
+            r#"SELECT
                 log_id,
                 MAX(seq_num) as seq_num
             FROM
                 operations_v1
             WHERE
-                verifying_key = ?
-                AND log_id IN ( {} )
-            GROUP BY
-                log_id
-            ",
-            params
+                verifying_key = "#,
         );
 
-        let mut query = query_as::<_, LogHeightRow>(&query_str).bind(author.to_string());
+        query_builder.push_bind(author.to_string());
+        query_builder.push(" AND log_id IN ( ");
 
-        for log_id in encoded_log_ids {
-            query = query.bind(log_id)
-        }
-
-        let log_heights_query = query.fetch_all(&self.pool).await?;
-
-        let log_heights = if log_heights_query.is_empty() {
-            None
-        } else {
-            let mut log_heights = BTreeMap::new();
-
-            for row in log_heights_query {
-                let (log_id, seq_num) = row.try_into()?;
-                log_heights.insert(log_id, seq_num);
+        {
+            let mut separated = query_builder.separated(", ");
+            for log in logs {
+                let encoded_log_id = encode_cbor(&log)
+                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
+                separated.push_bind(encoded_log_id);
             }
 
-            Some(log_heights)
-        };
+            separated.push_unseparated(") GROUP BY log_id");
+        }
 
-        Ok(log_heights)
+        let log_heights = query_builder
+            .build_query_as::<LogHeightRow>()
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(|row| row.try_into())
+            .collect::<Result<BTreeMap<L, u32>, _>>()?;
+
+        if log_heights.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(log_heights))
+        }
     }
 
     /// Retrieve the count and total byte size of all operations in an author's log.
@@ -159,10 +170,7 @@ where
         after: Option<SeqNum>,
         until: Option<SeqNum>,
     ) -> Result<Option<(u32, u32)>, Self::Error> {
-        // We need to use an inclusive greater-than to ensure our
-        // query includes the operation with sequence number 0.
-        let after_operator = if after.is_none() { ">=" } else { ">" };
-        let query_str = format!(
+        let log_meta: Option<LogMetaRow> = query_as::<_, LogMetaRow>(
             "
             SELECT
                 SUM(header_size) AS total_header_bytes,
@@ -171,24 +179,25 @@ where
             FROM
                 operations_v1
             WHERE
-                verifying_key = ?
-                AND log_id = ?
-                AND seq_num {} ?
-                AND seq_num <= ?
+                verifying_key = $1
+                AND log_id =$2
+                AND (
+                    ($3 == true AND seq_num >= $4)
+                    OR
+                    ($3 == false AND seq_num > $4)
+                )
+                AND seq_num <= $5
             ",
-            after_operator
-        );
-
-        let log_meta: Option<LogMetaRow> = query_as::<_, LogMetaRow>(&query_str)
-            .bind(author.to_string())
-            .bind(
-                encode_cbor(&log_id)
-                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-            )
-            .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(SeqNum::MAX).to_string())
-            .fetch_optional(&self.pool)
-            .await?;
+        )
+        .bind(author.to_string())
+        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
+        // We need to use an inclusive greater-than to ensure our
+        // query includes the operation with sequence number 0.
+        .bind(after.is_none())
+        .bind(after.unwrap_or(0).to_string())
+        .bind(until.unwrap_or(SeqNum::MAX).to_string())
+        .fetch_optional(&self.pool)
+        .await?;
 
         let Some(row) = log_meta else {
             return Ok(None);
@@ -200,59 +209,41 @@ where
         )))
     }
 
-    /// Retrieve log entries representing operations from an author's log.
-    async fn get_log_entries(
+    /// Stream all entries in a log after an optional starting point. This is the memory efficient
+    /// equivalent to `get_log_entries` and should only keep one entry in memory at a time.
+    fn log_entries(
         &self,
         author: &VerifyingKey,
         log_id: &L,
         after: Option<SeqNum>,
         until: Option<SeqNum>,
-    ) -> Result<Option<Vec<(Operation<E>, Vec<u8>)>>, Self::Error> {
-        // We need to use an inclusive greater-than to ensure our
-        // query includes the operation with sequence number 0.
-        let after_operator = if after.is_none() { ">=" } else { ">" };
+    ) -> Result<LogStream<AnyOperation, L, Self::Error>, Self::Error> {
+        let author = author.to_string();
+        let log_id = log_id.clone();
+        let log_id_bytes =
+            encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?;
+        let after_is_none = after.is_none();
+        let after_value = after.unwrap_or(0).to_string();
+        let until_value = until.unwrap_or(SeqNum::MAX).to_string();
+        let pool = self.pool.clone();
 
-        let query_str = format!(
-            "
-            SELECT
-                hash,
-                header,
-                body
-            FROM
-                operations_v1
-            WHERE
-                verifying_key = ?
-                AND log_id = ?
-                AND seq_num {} ?
-                AND seq_num <= ?
-            ORDER BY
-                seq_num
-            ",
-            after_operator
-        );
+        let stream = try_stream! {
+            let mut rows = query_as::<_, OperationRow>(GET_LOG_ENTRIES)
+                .bind(author)
+                .bind(log_id_bytes)
+                .bind(after_is_none)
+                .bind(after_value)
+                .bind(until_value)
+                .fetch(&pool);
 
-        let operations = query_as::<_, OperationRow>(&query_str)
-            .bind(author.to_string())
-            .bind(
-                encode_cbor(&log_id)
-                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-            )
-            .bind(after.unwrap_or(0).to_string())
-            .bind(until.unwrap_or(SeqNum::MAX).to_string())
-            .fetch_all(&self.pool)
-            .await?;
+            while let Some(row) = rows.try_next().await? {
+                let header = row.header.clone();
+                let operation: AnyOperation = row.try_into()?;
+                yield LogEntry { entry: operation, log_id: log_id.clone(), bytes: header };
+            }
+        };
 
-        let mut entries = Vec::new();
-        for operation in operations {
-            let header = operation.header.clone();
-            entries.push((operation.try_into()?, header))
-        }
-
-        if entries.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(entries))
-        }
+        Ok(Box::pin(stream))
     }
 
     /// Prune entries from an author's log.

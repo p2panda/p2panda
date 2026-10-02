@@ -7,11 +7,12 @@ use p2panda_auth::group::GroupAction;
 use p2panda_auth::traits::Conditions;
 use p2panda_core::traits::{Digest, Provenance};
 use p2panda_core::{Hash, VerifyingKey};
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
-use p2panda_encryption::{crypto::xchacha20::XAeadNonce, key_bundle::LongTermKeyBundle};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::message::AuthMessage;
+use crate::member::Member;
 use crate::types::EncryptionDirectMessage;
 use crate::{ActorId, GroupId, OperationId, SpaceId};
 
@@ -25,6 +26,12 @@ pub struct SpacesMessage<C> {
     pub id: Hash,
     pub author: VerifyingKey,
     pub args: SpacesArgs<C>,
+}
+
+impl<C> SpacesMessage<C> {
+    pub fn is_application_message(&self) -> bool {
+        matches!(self.args, SpacesArgs::Application { .. })
+    }
 }
 
 impl<C> Borrow<SpacesArgs<C>> for SpacesMessage<C> {
@@ -64,6 +71,7 @@ pub(crate) struct ApplicationMessage {
     pub id: Hash,
     pub author: VerifyingKey,
     pub space_dependencies: Vec<Hash>,
+    pub proof: Vec<Hash>,
     pub group_secret_id: GroupSecretId,
     pub nonce: XAeadNonce,
     pub ciphertext: Vec<u8>,
@@ -102,7 +110,7 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
-        let SpacesArgs::Auth {
+        let SpacesArgs::Group {
             group_id,
             group_action,
             auth_dependencies,
@@ -126,6 +134,7 @@ where
     {
         let SpacesArgs::Application {
             space_dependencies,
+            proof,
             group_secret_id,
             nonce,
             ciphertext,
@@ -139,6 +148,7 @@ where
             id: message.hash(),
             author: message.author(),
             space_dependencies,
+            proof,
             group_secret_id,
             nonce,
             ciphertext,
@@ -147,15 +157,13 @@ where
 }
 
 /// Enum representing all possible message types.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SpacesArgs<C> {
-    /// System message, contains key bundle of the given author.
-    ///
-    /// Note: Applications should check if the key bundle was authored by the sender.
-    KeyBundle { key_bundle: LongTermKeyBundle },
+    /// System message, contains key bundle of the given member.
+    Member(Member),
 
-    /// System message containing an auth control message.
-    Auth {
+    /// System message containing group control message.
+    Group {
         /// id of the group this message applies to.
         group_id: GroupId,
 
@@ -166,7 +174,7 @@ pub enum SpacesArgs<C> {
         auth_dependencies: Vec<OperationId>,
     },
 
-    /// System message containing a reference to an `SpacesArgs::Auth` message and additional
+    /// System message containing a reference to an `SpacesArgs::Group` message and additional
     /// fields for applying the resulting membership change to a specific space.
     SpaceMembership {
         /// Space this message should be applied to.
@@ -209,6 +217,10 @@ pub enum SpacesArgs<C> {
         /// Last known space operation graph tips.
         space_dependencies: Vec<OperationId>,
 
+        /// Current heads of the space's auth graph. For this message to be considered valid the
+        /// author must have the required write access at this point.
+        proof: Vec<OperationId>,
+
         /// Used key id for AEAD.
         group_secret_id: GroupSecretId,
 
@@ -228,8 +240,8 @@ impl<C> SpacesArgs<C> {
     /// themselves been processed.
     pub fn dependencies(&self) -> Vec<Hash> {
         match self {
-            SpacesArgs::KeyBundle { .. } => vec![],
-            SpacesArgs::Auth {
+            SpacesArgs::Member { .. } => vec![],
+            SpacesArgs::Group {
                 auth_dependencies, ..
             } => auth_dependencies.to_owned(),
             SpacesArgs::SpaceMembership {
@@ -247,6 +259,16 @@ impl<C> SpacesArgs<C> {
             SpacesArgs::Application {
                 space_dependencies, ..
             } => space_dependencies.to_owned(),
+        }
+    }
+
+    pub fn variant_str(&self) -> String {
+        match self {
+            SpacesArgs::Member { .. } => "key bundle".to_string(),
+            SpacesArgs::Group { .. } => "auth group".to_string(),
+            SpacesArgs::SpaceMembership { .. } => "space membership".to_string(),
+            SpacesArgs::SpaceUpdate { .. } => "space update".to_string(),
+            SpacesArgs::Application { .. } => "application".to_string(),
         }
     }
 }

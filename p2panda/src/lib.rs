@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(
+    clippy::result_large_err,
+    reason = "https://github.com/p2panda/p2panda/issues/1458"
+)]
 
 //! p2panda's high-level API is an opinionated, out-of-the-box peer-to-peer stack which orchestrates
 //! all individual [p2panda] modules.
@@ -252,24 +256,30 @@
 //! [local-first]: https://www.inkandswitch.com/local-first-software/
 //! [p2panda]: https://p2panda.org
 mod builder;
+pub mod credentials;
+pub(crate) mod egress;
 mod forge;
 pub mod network;
 pub mod node;
 pub mod operation;
 pub mod processor;
+pub mod spaces;
 pub mod streams;
-#[cfg(any(test, feature = "test_utils"))]
-pub mod test_utils;
 
 // Useful external types we want to re-export for convenience.
+#[doc(no_inline)]
+pub use p2panda_auth::AccessLevel;
 #[doc(no_inline)]
 pub use p2panda_core::{Cursor, Hash, SigningKey, Topic, VerifyingKey};
 #[doc(no_inline)]
 pub use p2panda_net::iroh_endpoint::{EndpointAddr, RelayUrl};
 #[doc(no_inline)]
 pub use p2panda_net::{NetworkId, NodeId};
+#[doc(no_inline)]
+pub use p2panda_spaces::SpaceEvent;
 
 pub use builder::NodeBuilder;
+pub use credentials::Credentials;
 #[doc(inline)]
 pub use node::Node;
 

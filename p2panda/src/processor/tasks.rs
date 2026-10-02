@@ -12,6 +12,8 @@ use tokio::sync::{Mutex, Notify, RwLock};
 /// whenever they've finished they mark the task as "ready". All processes which observe this task
 /// will be notified on this "ready" signal.
 ///
+/// ## Multiple-consumers notifier
+///
 /// Tasks are automatically de-duplicated internally, so whenever multiple processes add the same
 /// task, they will look at the same instance and get notified about it's readyness at the same
 /// time.

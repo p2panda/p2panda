@@ -47,7 +47,7 @@ pub enum HeaderError {
     EncodingExtensions(cbor_core::SerdeError),
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, PartialEq, Error)]
 pub enum OperationError {
     #[error("operation version {0} is not supported, needs to be <= {1}")]
     UnsupportedVersion(Version, Version),

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use futures_channel::mpsc;
 use futures_util::{FutureExt, SinkExt, Stream, StreamExt};
+use p2panda_core::logs::Logs;
 use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -18,7 +19,7 @@ use tokio::sync::broadcast;
 use crate::ToSync;
 use crate::manager::TopicSyncManager;
 use crate::protocols::{
-    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, Logs, TopicLogSync, TopicLogSyncError,
+    LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
 };
 use crate::traits::Protocol;
@@ -81,7 +82,7 @@ impl Peer {
     /// Return a log sync protocol.
     pub fn log_sync_protocol(
         &mut self,
-        logs: &Logs<TestLogId>,
+        logs: &Logs<VerifyingKey, TestLogId>,
     ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
         let (event_tx, event_rx) = broadcast::channel(512);
         let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
@@ -119,19 +120,13 @@ impl Peer {
         body: &Body,
         log_id: TestLogId,
     ) -> (Header<TestExtensions>, Vec<u8>) {
-        let (seq_num, backlink) = <SqliteStore as LogStore<
-            Operation<TestExtensions>,
-            VerifyingKey,
-            TestLogId,
-            SeqNum,
-            p2panda_core::Hash,
-        >>::get_latest_entry(
-            &self.store, &self.signing_key.verifying_key(), &log_id
-        )
-        .await
-        .unwrap()
-        .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-        .unwrap_or((0, None));
+        let (seq_num, backlink) = self
+            .store
+            .get_latest_entry(&self.signing_key.verifying_key(), &log_id)
+            .await
+            .unwrap()
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+            .unwrap_or((0, None));
 
         let (header, header_bytes) =
             create_operation(&self.signing_key, body, seq_num, backlink, log_id);

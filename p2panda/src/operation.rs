@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::borrow::Borrow;
+
 // ## Node Extensions Format
 //
 // The Node Extensions Format (NEF) defines a specialised extensions data-type used in p2panda's
@@ -170,7 +172,9 @@
 // )
 // ```
 //
-// #### `0x00_01 (1)`: "Causal Extensions" (example)
+// #### `0x00_01 (1)`: "Space Extensions"
+//
+// TODO: Proper specification of all fields.
 //
 // ```plain
 // (
@@ -181,7 +185,6 @@
 //     // Extension variant
 //     log_id[32],
 //     timestamp[u64],
-//     previous[Vec[32]],
 // )
 // ```
 //
@@ -340,7 +343,6 @@
 // | Remove field       | Yes (nullify non-zero) | Maybe (if null-safe)
 // | Change field       | Maybe (CBOR-dependent) | Maybe (CBOR-dependent)
 //
-use std::collections::HashSet;
 use std::hash::Hash as StdHash;
 
 use p2panda_core::hash::{HASH_LEN, Hash};
@@ -348,6 +350,8 @@ use p2panda_core::{PruneFlag, Timestamp, Topic};
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
+
+use crate::spaces::types::SpacesArgs;
 
 /// Extensions version type.
 pub type Version = u16;
@@ -368,14 +372,15 @@ pub(crate) const EXTENSIONS_VERSION: Version = 1;
 /// example pruning.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Extensions {
-    version: Version,
-    variant: ExtensionsVariantV1,
+    pub version: Version,
+    pub variant: ExtensionsVariantV1,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExtensionsVariantV1 {
     Basic(BasicExtensions),
-    Causal(CausalExtensions),
+    Space(SpaceExtensions),
 }
 
 impl ExtensionsVariantV1 {
@@ -383,7 +388,57 @@ impl ExtensionsVariantV1 {
     pub fn code(&self) -> VariantCode {
         match self {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::VARIANT_CODE,
-            ExtensionsVariantV1::Causal(_) => CausalExtensions::VARIANT_CODE,
+            ExtensionsVariantV1::Space(_) => SpaceExtensions::VARIANT_CODE,
+        }
+    }
+}
+
+pub struct Builder {
+    pub log_id: LogId,
+    pub timestamp: Timestamp,
+    pub prune_flag: PruneFlag,
+}
+
+impl Builder {
+    pub fn new(log_id: LogId) -> Self {
+        Self {
+            log_id,
+            timestamp: Timestamp::now(),
+            prune_flag: PruneFlag::default(),
+        }
+    }
+
+    pub fn prune_flag(mut self, prune_flag: impl Into<PruneFlag>) -> Self {
+        self.prune_flag = prune_flag.into();
+        self
+    }
+
+    pub fn timestamp(mut self, timestamp: impl Into<Timestamp>) -> Self {
+        self.timestamp = timestamp.into();
+        self
+    }
+
+    /// Returns "basic" extensions.
+    pub fn build(self) -> Extensions {
+        Extensions {
+            version: EXTENSIONS_VERSION,
+            variant: ExtensionsVariantV1::Basic(BasicExtensions {
+                log_id: self.log_id,
+                timestamp: self.timestamp,
+                prune_flag: self.prune_flag,
+            }),
+        }
+    }
+
+    /// Returns "space" extensions.
+    pub fn build_space(self, args: SpacesArgs) -> Extensions {
+        Extensions {
+            version: EXTENSIONS_VERSION,
+            variant: ExtensionsVariantV1::Space(SpaceExtensions {
+                log_id: self.log_id,
+                timestamp: self.timestamp,
+                args,
+            }),
         }
     }
 }
@@ -400,44 +455,33 @@ impl BasicExtensions {
     const FIELDS_COUNT: usize = 3;
 }
 
-#[allow(unused)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CausalExtensions {
+pub struct SpaceExtensions {
     pub log_id: LogId,
     pub timestamp: Timestamp,
-    pub previous: HashSet<Hash>,
+
+    // TODO: We likely want to split spaces args into more extensions types. At least one for
+    // application messages & key bundles, potentially also auth / group messages.
+    //
+    // TODO: The serialization of spaces args is not-optimal, we probably want to bring our own
+    // types in here and convert between them.
+    //
+    // TODO: Is causally ordering information encoded here or in another field?
+    pub args: SpacesArgs,
 }
 
-impl CausalExtensions {
+impl SpaceExtensions {
     const VARIANT_CODE: VariantCode = 0x00_01;
     const FIELDS_COUNT: usize = 3;
 }
 
 impl Extensions {
-    pub fn from_topic(topic: Topic) -> Self {
-        Self {
-            version: EXTENSIONS_VERSION,
-            variant: ExtensionsVariantV1::Basic(BasicExtensions {
-                log_id: LogId::from_topic(topic),
-                prune_flag: PruneFlag::default(),
-                timestamp: Timestamp::now(),
-            }),
-        }
+    pub fn from_topic(topic: Topic) -> Extensions {
+        Builder::new(LogId::from_topic(topic)).build()
     }
 
-    pub fn set_prune_flag(mut self, prune_flag: bool) -> Self {
-        match self.variant {
-            ExtensionsVariantV1::Basic(mut extensions) => {
-                extensions.prune_flag = prune_flag.into();
-                self.variant = ExtensionsVariantV1::Basic(extensions);
-                self
-            }
-            ExtensionsVariantV1::Causal(_) => {
-                // NOTE: We're using the causal variant only as an example placeholder for now, it
-                // is not integrated or even complete yet.
-                unimplemented!()
-            }
-        }
+    pub fn builder(log_id: LogId) -> Builder {
+        Builder::new(log_id)
     }
 
     pub fn version(&self) -> Version {
@@ -448,7 +492,7 @@ impl Extensions {
     pub(crate) fn variant_code(&self) -> VariantCode {
         match &self.variant {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::VARIANT_CODE,
-            ExtensionsVariantV1::Causal(_) => CausalExtensions::VARIANT_CODE,
+            ExtensionsVariantV1::Space(_) => SpaceExtensions::VARIANT_CODE,
         }
     }
 
@@ -458,7 +502,7 @@ impl Extensions {
 
         let variant_field_count = match &self.variant {
             ExtensionsVariantV1::Basic(_) => BasicExtensions::FIELDS_COUNT,
-            ExtensionsVariantV1::Causal(_) => CausalExtensions::FIELDS_COUNT,
+            ExtensionsVariantV1::Space(_) => SpaceExtensions::FIELDS_COUNT,
         };
 
         header_field_count + variant_field_count
@@ -467,21 +511,28 @@ impl Extensions {
     pub fn log_id(&self) -> LogId {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.log_id,
-            ExtensionsVariantV1::Causal(extensions) => extensions.log_id,
+            ExtensionsVariantV1::Space(extensions) => extensions.log_id,
         }
     }
 
     pub fn prune_flag(&self) -> PruneFlag {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.prune_flag,
-            ExtensionsVariantV1::Causal(_) => PruneFlag::new(false),
+            ExtensionsVariantV1::Space(_) => false.into(),
         }
     }
 
     pub fn timestamp(&self) -> Timestamp {
         match &self.variant {
             ExtensionsVariantV1::Basic(extensions) => extensions.timestamp,
-            ExtensionsVariantV1::Causal(extensions) => extensions.timestamp,
+            ExtensionsVariantV1::Space(extensions) => extensions.timestamp,
+        }
+    }
+
+    pub fn spaces_args(&self) -> Option<SpacesArgs> {
+        match &self.variant {
+            ExtensionsVariantV1::Basic(_) => None,
+            ExtensionsVariantV1::Space(extensions) => Some(extensions.args.clone()),
         }
     }
 }
@@ -509,10 +560,10 @@ impl Serialize for Extensions {
                 seq.serialize_element(&extensions.timestamp)?;
                 seq.serialize_element(&extensions.prune_flag)?;
             }
-            ExtensionsVariantV1::Causal(extensions) => {
+            ExtensionsVariantV1::Space(extensions) => {
                 seq.serialize_element(&extensions.log_id)?;
                 seq.serialize_element(&extensions.timestamp)?;
-                seq.serialize_element(&extensions.previous)?;
+                seq.serialize_element(&extensions.args)?;
             }
         }
 
@@ -568,7 +619,7 @@ impl<'de> Deserialize<'de> for Extensions {
                         timestamp,
                         prune_flag,
                     })
-                } else if variant_code == CausalExtensions::VARIANT_CODE {
+                } else if variant_code == SpaceExtensions::VARIANT_CODE {
                     let log_id: LogId = seq
                         .next_element()?
                         .ok_or(SerdeError::custom("log id missing"))?;
@@ -577,14 +628,14 @@ impl<'de> Deserialize<'de> for Extensions {
                         .next_element()?
                         .ok_or(SerdeError::custom("timestamp missing"))?;
 
-                    let previous: HashSet<Hash> = seq
+                    let args: SpacesArgs = seq
                         .next_element()?
-                        .ok_or(SerdeError::custom("previous field missing"))?;
+                        .ok_or(SerdeError::custom("spaces arguments missing"))?;
 
-                    ExtensionsVariantV1::Causal(CausalExtensions {
+                    ExtensionsVariantV1::Space(SpaceExtensions {
                         log_id,
                         timestamp,
-                        previous,
+                        args,
                     })
                 } else {
                     return Err(SerdeError::custom("unsupported extensions variant"));
@@ -598,12 +649,27 @@ impl<'de> Deserialize<'de> for Extensions {
     }
 }
 
+impl Borrow<SpacesArgs> for Extensions {
+    fn borrow(&self) -> &SpacesArgs {
+        match &self.variant {
+            ExtensionsVariantV1::Space(extensions) => &extensions.args,
+            _ => unreachable!(
+                "before passing operations to p2panda-spaces we make sure they have spaces args"
+            ),
+        }
+    }
+}
+
 /// Append-only log identifier used by the Node API.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct LogId(Hash);
 
 impl LogId {
+    pub fn digest(bytes: &[u8]) -> Self {
+        Self(Hash::digest(bytes))
+    }
+
     /// Derive log id from a topic.
     ///
     /// Since topics are randomly generated we get the guarantee that every log and thus operation
@@ -619,17 +685,18 @@ impl LogId {
     }
 }
 
+impl From<Hash> for LogId {
+    fn from(value: Hash) -> Self {
+        Self(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use p2panda_core::cbor::{decode_cbor, encode_cbor};
     use p2panda_core::{PruneFlag, Timestamp, Topic};
 
-    use super::{
-        BasicExtensions, CausalExtensions, EXTENSIONS_VERSION, Extensions, ExtensionsVariantV1,
-        LogId,
-    };
+    use super::{BasicExtensions, EXTENSIONS_VERSION, Extensions, ExtensionsVariantV1, LogId};
 
     #[test]
     fn derive_from_topic() {
@@ -655,21 +722,6 @@ mod tests {
             let bytes = encode_cbor(&basic).unwrap();
             let result: Extensions = decode_cbor(&bytes[..]).unwrap();
             assert_eq!(result, basic);
-        }
-
-        {
-            let causal = Extensions {
-                version: EXTENSIONS_VERSION,
-                variant: ExtensionsVariantV1::Causal(CausalExtensions {
-                    log_id: LogId::from_topic(topic),
-                    timestamp: Timestamp::zero(),
-                    previous: HashSet::from([]),
-                }),
-            };
-
-            let bytes = encode_cbor(&causal).unwrap();
-            let result: Extensions = decode_cbor(&bytes[..]).unwrap();
-            assert_eq!(result, causal);
         }
     }
 

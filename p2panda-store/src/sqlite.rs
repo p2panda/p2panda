@@ -136,8 +136,8 @@ impl SqliteStoreBuilder {
     ///
     /// Any connection with a lifetime greater than this will be closed.
     ///
-    /// When set to `None`, all connections live until either reaped by [`idle_timeout`] or
-    /// explicitly disconnected.
+    /// When set to `None`, all connections live until either reaped by `idle_timeout` or explicitly
+    /// disconnected.
     ///
     /// Infinite connections are not recommended due to the unfortunate reality of memory/resource
     /// leaks on the database-side. It is better to retire connections periodically (even if only

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{LogId, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, query_scalar};
 
 use crate::sqlite::{DecodeError, SqliteError, SqliteStore};
 use crate::topics::TopicStore;
@@ -131,6 +131,76 @@ where
 
             // All items in the returned data set will be unique due to the SQL UNIQUE constraint.
             result.entry(author).or_default().push(data_id);
+        }
+
+        Ok(result)
+    }
+
+    /// Given a prior association, return the associated topics.
+    async fn resolve_topics(
+        &self,
+        author: &VerifyingKey,
+        data_id: &L,
+    ) -> Result<Vec<T>, Self::Error> {
+        let topics = self
+            .execute(async |pool| {
+                query_scalar::<_, Vec<u8>>(
+                    "
+                    SELECT
+                        topic
+                    FROM
+                        topics_v1
+                    WHERE
+                        author = ?
+                        AND data_id = ?
+                    ",
+                )
+                .bind(author.to_string())
+                .bind(
+                    encode_cbor(&data_id)
+                        .map_err(|err| SqliteError::Encode("data_id".to_string(), err))?,
+                )
+                .fetch_all(pool)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        let topics = topics
+            .into_iter()
+            .map(|topic| {
+                decode_cbor(&topic[..])
+                    .map_err(|err| SqliteError::Decode("topic".into(), err.into()))
+            })
+            .collect::<Result<Vec<T>, SqliteError>>()?;
+
+        Ok(topics)
+    }
+
+    /// Retrieve all topics for which active associations exist.
+    async fn topics(&self) -> Result<Vec<T>, Self::Error> {
+        let topics = self
+            .tx(async |tx| {
+                query_as::<_, (Vec<u8>,)>(
+                    "
+                    SELECT DISTINCT
+                        topic
+                    FROM
+                        topics_v1
+                    ",
+                )
+                .fetch_all(&mut **tx)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
+
+        let mut result: Vec<T> = Vec::new();
+
+        for (topic,) in topics {
+            let topic = decode_cbor(&topic[..])
+                .map_err(|err| SqliteError::Decode("topic".into(), err.into()))?;
+            result.push(topic);
         }
 
         Ok(result)

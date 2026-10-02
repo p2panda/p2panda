@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use p2panda_core::{Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
+use p2panda_core::{AnyOperation, Extensions, Hash, LogId, Operation, SeqNum, VerifyingKey};
 use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
@@ -14,20 +14,20 @@ use tokio::sync::Notify;
 
 use crate::Processor;
 use crate::ingest::args::IngestArgs;
-use crate::ingest::operation::{IngestError, ingest_operation};
+use crate::ingest::operation::{IngestError, IngestResult, ingest_operation};
 
 pub struct Ingest<S, T, L, E, TP> {
     store: S,
     notify: Notify,
-    queue: RefCell<VecDeque<(T, IngestResult)>>,
-    _marker: PhantomData<(L, E, TP)>,
+    queue: RefCell<VecDeque<(T, IngestResult<E>)>>,
+    _marker: PhantomData<(L, TP)>,
 }
 
 impl<S, T, L, E, TP> Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash>
-        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     L: LogId,
     E: Extensions,
@@ -46,13 +46,13 @@ impl<S, T, L, E, TP> Processor<T> for Ingest<S, T, L, E, TP>
 where
     S: Transaction
         + OperationStore<Operation<E>, Hash>
-        + LogStore<Operation<E>, VerifyingKey, L, SeqNum, Hash>
+        + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>
         + TopicStore<TP, VerifyingKey, L>,
     T: Borrow<Operation<E>> + Borrow<IngestArgs<L, TP>>,
     L: LogId,
     E: Extensions,
 {
-    type Output = (T, IngestResult);
+    type Output = (T, IngestResult<E>);
 
     type Error = (T, IngestError);
 
@@ -62,6 +62,7 @@ where
 
         let result = ingest_operation(
             &self.store,
+            None,
             operation,
             &args.log_id,
             &args.topic,
@@ -70,11 +71,9 @@ where
         .await;
 
         let result = match result {
-            Ok(true) => IngestResult::Inserted,
-            Ok(false) => IngestResult::AlreadyExists,
+            Ok(result) => result,
             Err(err) => {
-                // Return the input arguments next to the error to allow mapping it back to it's
-                // source.
+                // Return input arguments next to error to allow mapping it back to it's source.
                 return Err((input, err));
             }
         };
@@ -95,12 +94,6 @@ where
             self.notify.notified().await;
         }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum IngestResult {
-    AlreadyExists,
-    Inserted,
 }
 
 #[cfg(test)]

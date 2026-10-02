@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use p2panda_core::logs::{LogHeights, LogRanges};
-use p2panda_core::{Cursor, Hash, SeqNum, Topic, VerifyingKey};
+use p2panda_core::{AnyOperation, Cursor, Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_store::cursors::CursorStore;
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
@@ -13,7 +13,7 @@ use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 
-use crate::operation::{Header, LogId, Operation};
+use crate::operation::{Header, LogId};
 use crate::streams::StreamFrom;
 
 pub type Logs = BTreeMap<VerifyingKey, Vec<LogId>>;
@@ -119,11 +119,6 @@ impl Acked {
 
         let header = header.borrow();
 
-        // Make sure we're only acking operations for the given topic.
-        if LogId::from_topic(self.topic) != header.extensions.log_id() {
-            return Err(AckedError::InvalidTopic(self.topic));
-        }
-
         let mut cursor = self.cursor().await?;
         cursor.advance(
             header.verifying_key,
@@ -161,7 +156,7 @@ async fn get_log_heights(
 
     for (verifying_key, log_ids) in logs {
         let Some(log_heights) =
-            LogStore::<Operation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
+            LogStore::<AnyOperation, VerifyingKey, LogId, SeqNum, Hash>::get_log_heights(
                 store,
                 verifying_key,
                 log_ids,
@@ -195,6 +190,7 @@ mod tests {
     use p2panda_core::Topic;
     use p2panda_store::SqliteStore;
 
+    use crate::Credentials;
     use crate::forge::{Forge, OperationForge};
     use crate::operation::{Extensions, LogId};
     use crate::streams::StreamFrom;
@@ -205,7 +201,8 @@ mod tests {
     async fn nacked_log_ranges() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         let acked = Acked::new(store.clone(), topic);
@@ -225,7 +222,7 @@ mod tests {
         // Publish first operation.
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),
@@ -259,7 +256,8 @@ mod tests {
     async fn custom_name() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         // We keep track of the same topic but with two independent "acked" cursors.
@@ -271,7 +269,7 @@ mod tests {
 
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),
@@ -307,7 +305,8 @@ mod tests {
     async fn replaying_mutates_cursor_state() {
         let topic = Topic::random();
         let store = SqliteStore::temporary().await;
-        let forge = OperationForge::new(store.clone());
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials, store.clone());
         let log_id = LogId::from_topic(topic);
 
         let acked = Acked::new(store.clone(), topic);
@@ -315,7 +314,7 @@ mod tests {
         // Publish first operation and acknowledge it.
         let operation_0 = forge
             .create_operation(
-                topic,
+                Some(topic),
                 log_id,
                 Some(b"la".to_vec()),
                 Extensions::from_topic(topic),

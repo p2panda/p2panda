@@ -135,6 +135,20 @@ mod tests {
     use super::Lifetime;
 
     #[test]
+    fn order() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("SystemTime before UNIX EPOCH!")
+            .as_secs();
+
+        let lifetime_1 = Lifetime::from_range(now - 60, now + 30);
+        let lifetime_2 = Lifetime::from_range(now - 30, now + 60);
+
+        assert!(lifetime_1 < lifetime_2);
+        assert!(lifetime_1 != lifetime_2);
+    }
+
+    #[test]
     fn verify() {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)

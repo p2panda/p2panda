@@ -22,7 +22,8 @@
 //! [`p2panda-net`]: https://docs.rs/p2panda-net/latest/p2panda_net/
 use p2panda_core::VerifyingKey;
 
-mod dedup;
+pub mod api;
+pub mod dedup;
 pub mod manager;
 pub mod protocols;
 #[doc(hidden)]

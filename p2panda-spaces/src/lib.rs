@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(
+    clippy::result_large_err,
+    reason = "https://github.com/p2panda/p2panda/issues/1458"
+)]
 
 mod auth;
 mod config;
@@ -11,7 +15,7 @@ mod forge;
 pub mod group;
 pub mod identity;
 pub mod manager;
-mod member;
+pub mod member;
 mod message;
 pub mod space;
 mod store;
@@ -27,11 +31,11 @@ use p2panda_core::{Hash, VerifyingKey};
 pub use auth::message::AuthMessage;
 pub use config::Config;
 pub use credentials::Credentials;
-pub use event::Event;
+pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
 pub use message::{SpacesArgs, SpacesMessage};
 pub use store::SpacesStoreState;
-pub use types::StrongRemoveResolver;
+pub use types::{AuthGroupState, StrongRemoveResolver};
 
 pub type SpaceId = Hash;
 

@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Topic manager actor.
+//!
+//! The topic manager holds state for all sync sessions associated with a single topic. It provides
+//! a means of initating new sync sessions, accepting inbound sync sessions and publishing messages
+//! to all active sync sessions for the associated topic.
+//!
+//! A separate topic manager actor is spawned by the sync manager for each topic of interest.
+
 use std::collections::{HashMap, HashSet};
 use std::error::Error as StdError;
 use std::fmt::Debug;
@@ -14,7 +22,7 @@ use p2panda_sync::traits::Manager as SyncManagerTrait;
 use p2panda_sync::{FromSync, SessionConfig, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, SupervisionEvent};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, oneshot};
 use tokio::time::Duration;
 use tracing::{debug, warn};
 
@@ -60,10 +68,13 @@ pub enum ToTopicManager<T> {
 
     /// Close all active sync sessions running over the given topic. This essentially shuts down
     /// the whole manager.
-    CloseAll,
+    CloseAll(oneshot::Sender<()>),
 
     /// Close all active sync sessions running with the given node id.
-    Close { node_id: NodeId },
+    Close {
+        node_id: NodeId,
+        reply: oneshot::Sender<()>,
+    },
 }
 
 pub struct TopicManagerState<M>
@@ -311,7 +322,7 @@ where
                     let _ = handle.send(ToSync::Payload(data.clone())).await;
                 }
             }
-            ToTopicManager::CloseAll => {
+            ToTopicManager::CloseAll(reply) => {
                 // Get a handle onto any sync sessions running over the subscription topic and send
                 // a Close message. The session will send a close message to the remote then
                 // immediately drop the session.
@@ -332,8 +343,12 @@ where
                         node_id.fmt_short()
                     );
                 }
+
+                // The receiver may have been dropped immediately if the caller is not interested
+                // in awaiting the termination signal, so we ignore any potential error here.
+                let _ = reply.send(());
             }
-            ToTopicManager::Close { node_id } => {
+            ToTopicManager::Close { node_id, reply } => {
                 if state.active_sync_set.remove(&node_id) {
                     debug!(
                         topic = state.topic.fmt_short(),
@@ -363,6 +378,8 @@ where
                         let _ = handle.send(ToSync::Close).await;
                     }
                 };
+
+                let _ = reply.send(());
             }
         }
 

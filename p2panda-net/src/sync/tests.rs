@@ -24,7 +24,9 @@ use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
+use crate::sync::authoriser::SyncBlockList;
 use crate::sync::handle::SyncHandle;
+use crate::sync::hooks::SyncHooksList;
 use crate::test_utils::{ApplicationArguments, test_args_from_seed};
 
 const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
@@ -62,10 +64,20 @@ impl FailingNode {
             .unwrap();
 
         let thread_pool = ThreadLocalActorSpawner::new();
+
+        let mut hooks = SyncHooksList::new();
+        hooks.push(SyncBlockList::default());
+
         let (sync_ref, _) =
             SyncManager::<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>::spawn(
                 None,
-                (TEST_PROTOCOL_ID.to_vec(), sync_args, endpoint, gossip),
+                (
+                    TEST_PROTOCOL_ID.to_vec(),
+                    sync_args,
+                    endpoint,
+                    gossip,
+                    hooks,
+                ),
                 thread_pool,
             )
             .await
