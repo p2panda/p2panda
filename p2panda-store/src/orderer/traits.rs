@@ -59,6 +59,20 @@ pub trait OrdererStore<ID> {
         namespace: &str,
         keys: &[ID],
     ) -> impl Future<Output = Result<bool, Self::Error>>;
+
+    /// Clears _all_ state (ready and pending).
+    ///
+    /// Returns the number of deleted "ready" and "pending" table rows.
+    fn clear(&self, namespace: &str) -> impl Future<Output = Result<(usize, usize), Self::Error>>;
+
+    /// Clears ready and pending state for items with given keys.
+    ///
+    /// Returns the number of deleted "ready" and "pending" table rows.
+    fn clear_keys(
+        &self,
+        namespace: &str,
+        keys: &[ID],
+    ) -> impl Future<Output = Result<(usize, usize), Self::Error>>;
 }
 
 // Test abstraction for other crates so they can write tests without getting caught up by

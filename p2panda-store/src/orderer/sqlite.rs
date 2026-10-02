@@ -6,7 +6,7 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use p2panda_core::Hash;
-use sqlx::{QueryBuilder, query, query_as};
+use sqlx::{QueryBuilder, Sqlite, query, query_as};
 
 use crate::orderer::OrdererStore;
 #[cfg(any(test, feature = "test_utils"))]
@@ -360,25 +360,101 @@ where
             FROM
                 orderer_ready_v1
             WHERE
-                id IN (
+                (namespace, id) IN
             ",
         );
 
-        let mut separated = query_builder.separated(", ");
-        for dep in dependencies {
-            separated.push_bind(dep.to_string());
-        }
-
-        separated.push_unseparated(") ");
-
-        query_builder.push("AND namespace = ");
-        query_builder.push_bind(namespace);
+        query_builder.push_tuples(dependencies, |mut b, key| {
+            b.push_bind(namespace).push_bind(key.to_string());
+        });
 
         let query = query_builder.build_query_as::<(i64,)>();
 
         self.tx(async |tx| {
             let result = query.fetch_one(&mut **tx).await?;
             Ok(result.0 as usize == dependencies.len())
+        })
+        .await
+    }
+
+    async fn clear(&self, namespace: &str) -> Result<(usize, usize), Self::Error> {
+        self.tx(async |tx| {
+            let ready = query(
+                "
+                DELETE FROM
+                    orderer_ready_v1
+                WHERE
+                    namespace = ?
+                ",
+            )
+            .bind(namespace)
+            .execute(&mut **tx)
+            .await?;
+
+            let pending = query(
+                "
+                DELETE FROM
+                    orderer_pending_v1
+                WHERE
+                    namespace = ?
+                ",
+            )
+            .bind(namespace)
+            .execute(&mut **tx)
+            .await?;
+
+            Ok((
+                ready.rows_affected() as usize,
+                pending.rows_affected() as usize,
+            ))
+        })
+        .await
+    }
+
+    async fn clear_keys(
+        &self,
+        namespace: &str,
+        keys: &[ID],
+    ) -> Result<(usize, usize), Self::Error> {
+        self.tx(async |tx| {
+            // Ready.
+            let mut query_builder = QueryBuilder::<Sqlite>::new(
+                "
+                DELETE FROM
+                    orderer_ready_v1
+                WHERE
+                    (namespace, id) IN
+                "
+                .to_string(),
+            );
+
+            query_builder.push_tuples(keys, |mut b, key| {
+                b.push_bind(namespace).push_bind(key.to_string());
+            });
+
+            let ready = query_builder.build().execute(&mut **tx).await?;
+
+            // Pending.
+            let mut query_builder = QueryBuilder::<Sqlite>::new(
+                "
+                DELETE FROM
+                    orderer_pending_v1
+                WHERE
+                    (namespace, id) IN
+                "
+                .to_string(),
+            );
+
+            query_builder.push_tuples(keys, |mut b, key| {
+                b.push_bind(namespace).push_bind(key.to_string());
+            });
+
+            let pending = query_builder.build().execute(&mut **tx).await?;
+
+            Ok((
+                ready.rows_affected() as usize,
+                pending.rows_affected() as usize,
+            ))
         })
         .await
     }

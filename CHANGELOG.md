@@ -37,6 +37,7 @@ Highlights are marked with a pancake 🥞
 - store: Add `resolve_topics` method to `TopicStore` trait [#1261](https://github.com/p2panda/p2panda/pull/1261)
 - store: Introduce `ProcessorStore` for storing event metadata from p2panda pipeline [#1262](https://github.com/p2panda/p2panda/pull/1262)
 - store: Add method on TopicStore to get all topics - [#1388](https://github.com/p2panda/p2panda/pull/1388)
+- store: `clear` & `clear_keys` methods for OrdererStore - [#1466](https://github.com/p2panda/p2panda/pull/1466)
 - stream: Filter out spaces application messages from concurrently removed members [#1291](https://github.com/p2panda/p2panda/pull/1291)
 - stream: Hooks processor to register event callbacks in streaming pipeline [#1339](https://github.com/p2panda/p2panda/pull/1339)
 - stream: Move orderer processor from node to stream [#1312](https://github.com/p2panda/p2panda/pull/1312)
