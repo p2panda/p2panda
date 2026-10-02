@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -9,7 +10,7 @@ use futures_util::stream::BoxStream;
 use p2panda_auth::AccessLevel;
 use p2panda_core::cbor::{DecodeError, decode_cbor};
 use p2panda_core::traits::Digest;
-use p2panda_core::{Hash, Topic, VerifyingKey};
+use p2panda_core::{Hash, SeqNum, Topic, VerifyingKey};
 use p2panda_net::NodeId;
 use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
@@ -17,7 +18,8 @@ use p2panda_net::sync::SyncHandle;
 use p2panda_net::utils::ShortFormat;
 use p2panda_spaces::{ActorId, SpaceContext, SpaceId};
 use p2panda_store::SqliteStore;
-use p2panda_stream::spaces::SpacesResult;
+use p2panda_store::logs::LogStore;
+use p2panda_store::operations::OperationStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -55,6 +57,7 @@ const PUBLISH_BUFFER_SIZE: usize = 128;
 /// Number of streams which can stay in the import buffer. If the buffer runs full importing of
 /// new streams will have backpressure applied.
 const IMPORT_BUFFER_SIZE: usize = 16;
+const SYNC_REORDER_BUFFER_SIZE: usize = 4096;
 
 /// Returns publish and subscribe halfs of an eventually consistent messaging stream for a given
 /// topic.
@@ -288,8 +291,18 @@ where
             // =========================
 
             let mut aggregator = Aggregator::new();
+            let mut ready_events = VecDeque::new();
+            let mut pending_sync: BTreeMap<
+                (VerifyingKey, LogId),
+                BTreeMap<SeqNum, (Operation, Source)>,
+            > = BTreeMap::new();
             loop {
-                let forward_events: Vec<ForwardEvent<M>> = tokio::select! {
+                if let Some(event) = ready_events.pop_front() {
+                    let _ = app_tx.send(event).await;
+                    continue;
+                }
+
+                let event = tokio::select! {
                     // Received incoming operation from remote source.
                     item = sync_stream.next() => {
                         let Some(result) = item else {
@@ -314,7 +327,75 @@ where
                             sync_metrics::SyncEvent::SyncStarted { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::SyncEnded { .. } => vec![event.into()],
                             sync_metrics::SyncEvent::OperationReceived { operation, source } => {
-                                process_operation_in(*operation, source, topic, &pipeline, None, None).await;
+                                let operation = *operation;
+                                let author = operation.header.verifying_key;
+                                let log_id = operation.header.extensions.log_id();
+                                let key = (author, log_id);
+                                let expected = <SqliteStore as LogStore<
+                                    Operation,
+                                    VerifyingKey,
+                                    LogId,
+                                    SeqNum,
+                                    Hash,
+                                >>::get_latest_entry(&store, &author, &log_id)
+                                .await
+                                .ok()
+                                .flatten()
+                                .map(|operation| operation.header.seq_num.saturating_add(1))
+                                .unwrap_or(0);
+
+                                if operation.header.seq_num > expected {
+                                    let pending = pending_sync.entry(key).or_default();
+                                    if pending.len() < SYNC_REORDER_BUFFER_SIZE {
+                                        pending.entry(operation.header.seq_num)
+                                            .or_insert((operation, source));
+                                    }
+                                    continue;
+                                }
+
+                                let mut process_queue = VecDeque::from([(operation, source)]);
+                                while let Some((operation, source)) = process_queue.pop_front() {
+                                    let author = operation.header.verifying_key;
+                                    let log_id = operation.header.extensions.log_id();
+                                    let key = (author, log_id);
+                                    if let Some(event) = process_operation::<M>(
+                                        operation,
+                                        topic,
+                                        &pipeline,
+                                        ack_policy,
+                                        &acked,
+                                        source,
+                                    ).await {
+                                        let failed = matches!(event, StreamEvent::ProcessingFailed { .. });
+                                        ready_events.push_back(event);
+                                        if failed {
+                                            break;
+                                        }
+                                    }
+
+                                    let expected = <SqliteStore as LogStore<
+                                        Operation,
+                                        VerifyingKey,
+                                        LogId,
+                                        SeqNum,
+                                        Hash,
+                                    >>::get_latest_entry(&store, &author, &log_id)
+                                    .await
+                                    .ok()
+                                    .flatten()
+                                    .map(|operation| operation.header.seq_num.saturating_add(1))
+                                    .unwrap_or(0);
+
+                                    let next = pending_sync
+                                        .get_mut(&key)
+                                        .and_then(|pending| pending.remove(&expected));
+                                    if let Some(next) = next {
+                                        process_queue.push_back(next);
+                                    } else {
+                                        break;
+                                    }
+                                }
+
                                 continue;
                             },
                         }
