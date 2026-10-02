@@ -338,6 +338,17 @@ pub(crate) async fn dispatch_spaces_events(
     Ok(())
 }
 
+#[cfg(any(test, feature = "test_utils"))]
+impl<M> Space<M>
+where
+    M: Serialize,
+{
+    /// Inner topic stream publishing handle (tx).
+    pub fn inner_tx(&self) -> &StreamPublisher<M> {
+        &self.tx
+    }
+}
+
 pub struct SpaceSubscription<M> {
     rx: StreamSubscription<M>,
 }

@@ -331,7 +331,7 @@ where
                     Some((operation, _message, processed_tx)) = publish_rx.recv() => {
                         let event = process_operation_in(
                             operation,
-                            Source::LocalStore,
+                            Source::Publish,
                             topic,
                             &pipeline,
                             Some(&sync_handle),
@@ -1012,9 +1012,11 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Operation was published locally or replayed.
-    // TODO
-    LocalStore,
+    /// Operation was published locally.
+    Publish,
+
+    /// Operation was replayed.
+    Replay,
 
     /// Operation was forged locally and handled in egress.
     Egress,

@@ -2,7 +2,8 @@
 
 use futures_util::StreamExt;
 use p2panda_core::logs::LogRanges;
-use p2panda_core::{Cursor, Topic, VerifyingKey};
+use p2panda_core::{Cursor, Hash, Topic, VerifyingKey};
+use p2panda_store::orderer::OrdererStore;
 use p2panda_store::{SqliteError, SqliteStore};
 use p2panda_sync::api::{LogEntry, log_ranges};
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,33 @@ impl From<Cursor<VerifyingKey, LogId>> for StreamFrom {
     }
 }
 
+/// Reset orderer from given point on.
+pub(crate) async fn reset_orderer(
+    store: &SqliteStore,
+    from: StreamFrom,
+    namespace: &str,
+    ranges: LogRanges<VerifyingKey, LogId>,
+) -> Result<(), SqliteError> {
+    match from {
+        StreamFrom::Start => {
+            <SqliteStore as OrdererStore<Hash>>::clear(store, namespace).await?;
+        }
+        StreamFrom::Frontier | StreamFrom::Cursor(_) => {
+            let mut operations = log_ranges(store, ranges);
+            let mut ids = Vec::new();
+
+            while let Some(result) = operations.next().await {
+                let row = result?;
+                ids.push(row.entry.header.hash());
+            }
+
+            store.clear_keys(namespace, &ids).await?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Re-play and re-process locally stored operations.
 pub(crate) async fn replay_log_ranges<M>(
     topic: Topic,
@@ -60,6 +88,7 @@ where
         return Ok(());
     }
 
+    // Stream re-played operations into pipeline to re-process them.
     to_output_tx
         .send(vec![StreamEvent::ReplayStarted { total_operations }.into()])
         .await
@@ -75,8 +104,8 @@ where
         process_operation_in(
             operation
                 .try_into()
-                .expect("values from the database are valid"),
-            Source::Egress,
+                .expect("operations from database have already validated extensions"),
+            Source::Replay,
             topic,
             pipeline,
             None,
