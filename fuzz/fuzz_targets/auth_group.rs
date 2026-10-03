@@ -384,11 +384,7 @@ impl Member {
                 y
             }
             Err(err) => {
-                if let GroupCrdtError::DuplicateOperation(_, _) = err {
-                    self.groups_y.clone()
-                    // The fuzz tests may suggest operations which cause a cycle so we ignore
-                    // these errors.
-                } else if let GroupCrdtError::GroupCycle(_, _, _) = err {
+                if let GroupCrdtError::GroupCycle(_, _, _) = err {
                     self.groups_y.clone()
                 } else {
                     if let Suggestion::Valid(_) = suggestion {
