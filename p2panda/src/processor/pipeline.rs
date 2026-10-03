@@ -12,6 +12,7 @@ use p2panda_core::{Extensions, Hash, LogId};
 use p2panda_store::SqliteStore;
 use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
+use p2panda_stream::groups::Groups;
 use p2panda_stream::hooks::{Hooks, ProcessorHooksList};
 use p2panda_stream::ingest::Ingest;
 use p2panda_stream::log_prune::LogPrune;
@@ -26,7 +27,7 @@ use tracing::warn;
 
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
-use crate::spaces::types::{SpacesManager, SpacesProcessor};
+use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesProcessor};
 
 /// Number of items which can stay in the pipeline input buffer before backpressure is applied.
 ///
@@ -212,6 +213,10 @@ where
                         pipeline_id.to_string(),
                     );
                     let log_prune = LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
+                    let groups = Groups::<SqliteStore, Event<L, E, TP>, AuthCapabilities>::new(
+                        store.clone(),
+                        pipeline_id,
+                    );
                     let spaces = {
                         let spaces_store = SqliteSpacesStore::new(store);
                         SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
@@ -256,6 +261,17 @@ where
                             }
                             Err((mut event, err)) => {
                                 event.log_prune = ProcessorStatus::Failed(err);
+                                event.noop()
+                            }
+                        })
+                        .layer(groups)
+                        .map(|result| match result {
+                            Ok((mut event, result)) => {
+                                event.groups = ProcessorStatus::Completed(result);
+                                event
+                            }
+                            Err((mut event, err)) => {
+                                event.groups = ProcessorStatus::Failed(err);
                                 event.noop()
                             }
                         })
