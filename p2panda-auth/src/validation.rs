@@ -62,6 +62,18 @@ where
     Ok(members)
 }
 
+/// Returns `true` if the passed actor id represents a group.
+pub fn is_group<ID, OP, M, C, RS>(y: &GroupCrdtState<ID, OP, M, C>, actor: ID) -> bool
+where
+    ID: Author,
+    OP: OperationId,
+    M: Operation<ID, OP, C> + Clone,
+    C: Conditions,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
+{
+    y.groups_global().iter().any(|id| id == &actor)
+}
+
 pub(crate) fn is_member<ID>(member: ID, members: &[(ID, AccessLevel)]) -> bool
 where
     ID: Copy + Debug + PartialEq,
