@@ -53,6 +53,7 @@ Highlights are marked with a pancake 🥞
 - stream: Forward events of already processed operations in spaces processor [#1430](https://github.com/p2panda/p2panda/pull/1430)
 - auth: Add method for checking if actor id is a group [1483](https://github.com/p2panda/p2panda/pull/1483)
 - node: Add groups processor to pipeline [#1485](https://github.com/p2panda/p2panda/pull/1485)
+- node: Groups hook for associating group logs with topic [#1487](https://github.com/p2panda/p2panda/pull/1487)
 
 ### Changed
 
