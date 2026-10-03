@@ -7,25 +7,24 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use p2panda_auth::group;
-use p2panda_auth::traits::{Conditions, Operation as GroupsOperationTrait};
-use p2panda_core::{Extensions, Hash, LogId, VerifyingKey};
+use p2panda_auth::traits::{Conditions, Operation as AuthOperationTrait};
+use p2panda_core::{Hash, VerifyingKey};
+use p2panda_spaces::AuthMessage;
+use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
-use p2panda_store::{SqliteError, SqliteStore, Transaction};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::debug;
 
 use crate::Processor;
-use crate::groups::{GroupsArgs, GroupsOperation};
+use crate::groups::GroupsProcessorArgs;
 
-type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, GroupsOperation<C>, C, StrongRemove<C>>;
+type GroupsCrdt<C> = group::GroupCrdt<VerifyingKey, Hash, AuthMessage<C>, C, StrongRemove<C>>;
 
-type GroupsCrdtError = group::GroupCrdtError<VerifyingKey, Hash>;
+type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, AuthMessage<C>, C>;
 
-type StrongRemove<C> = group::resolver::StrongRemove<VerifyingKey, Hash, GroupsOperation<C>, C>;
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum GroupsResult {
     Processed,
     Noop,
@@ -41,22 +40,22 @@ impl GroupsResult {
 }
 
 /// Processor for groups operations.
-pub struct Groups<T, E, L, C = ()> {
-    store: SqliteStore,
+pub struct Groups<S, T, C> {
+    store: S,
+    state_id: Hash,
     notify: Notify,
     queue: RefCell<VecDeque<(T, GroupsResult)>>,
-    _marker: PhantomData<(E, L, C)>,
+    _marker: PhantomData<C>,
 }
 
-impl<T, E, L, C> Groups<T, E, L, C>
+impl<S, T, C> Groups<S, T, C>
 where
-    E: Extensions,
-    L: LogId,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
-    pub fn new(store: SqliteStore) -> Self {
+    pub fn new(store: S, state_id: Hash) -> Self {
         Self {
             store,
+            state_id,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
             _marker: PhantomData,
@@ -64,11 +63,10 @@ where
     }
 }
 
-impl<T, E, L, C> Processor<T> for Groups<T, E, L, C>
+impl<S, T, C> Processor<T> for Groups<S, T, C>
 where
-    T: Borrow<GroupsArgs<C>>,
-    E: Extensions,
-    L: LogId,
+    S: GroupsStore<AuthMessage<C>, C> + Transaction,
+    T: Borrow<GroupsProcessorArgs<C>>,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
 {
     type Output = (T, GroupsResult);
@@ -76,58 +74,54 @@ where
     type Error = (T, GroupsError);
 
     async fn process(&self, input: T) -> Result<(), Self::Error> {
-        let input_args: &GroupsArgs<C> = input.borrow();
+        let input_args: &GroupsProcessorArgs<C> = input.borrow();
 
         // Extract GroupArgs from the extension headers of an Operation<E>.
         //
         // If this returns None then the groups extension was not present and we consider this a
         // non-groups operation which does not require processing.
-        let result = if let GroupsArgs::Process {
-            state_id,
-            operation,
-        } = input_args
-        {
+        let result = if let GroupsProcessorArgs::Process { message } = input_args {
             let permit = match self.store.begin().await {
                 Ok(permit) => permit,
-                Err(err) => return Err((input, err.into())),
+                Err(err) => return Err((input, GroupsError::Store(err.to_string()))),
             };
 
-            let mut y = match GroupsStore::<GroupsOperation<C>, C>::get_groups_state_tx(
+            let mut y = match GroupsStore::<AuthMessage<C>, C>::get_groups_state_tx(
                 &self.store,
-                *state_id,
+                self.state_id,
             )
             .await
             {
-                Err(err) => return Err((input, err.into())),
+                Err(err) => return Err((input, GroupsError::Store(err.to_string()))),
                 Ok(Some(y)) => y,
                 Ok(None) => Default::default(),
             };
 
             debug!(
-                group_id = %operation.group_id(),
+                group_id = %message.group_id(),
                 "current group membership: {:?}",
-                y.members(operation.group_id())
+                y.members(message.group_id())
             );
 
-            debug!(id = %operation.id, "apply operation to group state");
+            debug!(id = %message.operation_id, "apply message to group state");
 
-            y = match GroupsCrdt::process(y, operation) {
+            y = match GroupsCrdt::process(y, message) {
                 Ok(y) => y,
-                Err(err) => return Err((input, err.into())),
+                Err(err) => return Err((input, GroupsError::Groups(err.to_string()))),
             };
 
-            if let Err(err) = self.store.set_groups_state_tx(*state_id, &y).await {
-                return Err((input, err.into()));
+            if let Err(err) = self.store.set_groups_state_tx(self.state_id, &y).await {
+                return Err((input, GroupsError::Store(err.to_string())));
             }
 
             if let Err(err) = self.store.commit(permit).await {
-                return Err((input, err.into()));
+                return Err((input, GroupsError::Store(err.to_string())));
             }
 
             debug!(
-                group_id = %operation.group_id(),
+                group_id = %message.group_id(),
                 "new group membership: {:?}",
-                y.members(operation.group_id())
+                y.members(message.group_id())
             );
 
             (input, GroupsResult::Processed)
@@ -155,13 +149,14 @@ where
 
 /// Error types which can occur in the groups processor.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum GroupsError {
-    #[error(transparent)]
-    Store(#[from] SqliteError),
+    /// Critical storage failure occurred. This is usually a reason to panic.
+    #[error("critical storage failure: {0}")]
+    Store(String),
 
-    #[error(transparent)]
-    Groups(#[from] GroupsCrdtError),
+    #[error("error processing groups operation: {0}")]
+    Groups(String),
 }
 
 #[cfg(test)]
@@ -173,19 +168,20 @@ mod tests {
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::{Digest, Provenance};
     use p2panda_core::{Hash, Operation, SigningKey, Topic, VerifyingKey};
+    use p2panda_spaces::AuthMessage;
     use p2panda_store::groups::GroupsStore;
     use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
     use serde::{Deserialize, Serialize};
 
     use crate::Processor;
-    use crate::groups::{GroupsArgs, GroupsOperation};
+    use crate::groups::GroupsProcessorArgs;
     use crate::ingest::{Ingest, IngestArgs};
 
     type LogId = usize;
 
-    type GroupsState = GroupCrdtState<VerifyingKey, Hash, GroupsOperation, ()>;
+    type GroupsState = GroupCrdtState<VerifyingKey, Hash, AuthMessage<()>, ()>;
 
-    type Groups = crate::groups::Groups<Event, TestExtensions, LogId, ()>;
+    type Groups = crate::groups::Groups<SqliteStore, Event, ()>;
 
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct TestExtensions {
@@ -208,7 +204,7 @@ mod tests {
     struct Event {
         pub operation: Operation<TestExtensions>,
         pub ingest_args: IngestArgs<LogId, Topic>,
-        pub groups_args: GroupsArgs<()>,
+        pub groups_args: GroupsProcessorArgs<()>,
     }
 
     impl From<Operation<TestExtensions>> for Event {
@@ -220,18 +216,16 @@ mod tests {
                     prune_flag: false,
                 },
                 groups_args: match operation.header.extensions.groups {
-                    Some(ref groups) => GroupsArgs::Process {
-                        // All operations are processed on the same groups state context.
-                        state_id: Hash::digest("default"),
-                        operation: GroupsOperation {
-                            id: operation.hash(),
+                    Some(ref groups) => GroupsProcessorArgs::Process {
+                        message: AuthMessage {
+                            operation_id: operation.hash(),
                             author: operation.author(),
                             dependencies: operation.header.extensions.dependencies.clone(),
                             group_id: groups.group_id,
                             action: groups.action.clone(),
                         },
                     },
-                    None => GroupsArgs::Ignore,
+                    None => GroupsProcessorArgs::Ignore,
                 },
                 operation,
             }
@@ -254,8 +248,8 @@ mod tests {
 
     // Groups
 
-    impl Borrow<GroupsArgs<()>> for Event {
-        fn borrow(&self) -> &GroupsArgs<()> {
+    impl Borrow<GroupsProcessorArgs<()>> for Event {
+        fn borrow(&self) -> &GroupsProcessorArgs<()> {
             &self.groups_args
         }
     }
@@ -295,7 +289,7 @@ mod tests {
         let ingest = Ingest::new(store.clone());
         ingest.process(event.clone()).await.unwrap();
 
-        let groups = Groups::new(store.clone());
+        let groups = Groups::new(store.clone(), Hash::digest("default"));
         groups.process(event).await.unwrap();
 
         let (_processed_op, result) = groups.next().await.unwrap();
@@ -336,9 +330,9 @@ mod tests {
         let bobby_ingest = Ingest::new(bobby_store.clone());
         let cathy_ingest = Ingest::new(cathy_store.clone());
 
-        let alice_groups = Groups::new(alice_store.clone());
-        let bobby_groups = Groups::new(bobby_store.clone());
-        let cathy_groups = Groups::new(cathy_store.clone());
+        let alice_groups = Groups::new(alice_store.clone(), Hash::digest("default"));
+        let bobby_groups = Groups::new(bobby_store.clone(), Hash::digest("default"));
+        let cathy_groups = Groups::new(cathy_store.clone(), Hash::digest("default"));
 
         // All members create their own device groups and process them on their own stores.
 

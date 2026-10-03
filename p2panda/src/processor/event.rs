@@ -6,6 +6,8 @@ use p2panda_core::traits::Digest;
 use p2panda_core::{
     Body, Extensions, Hash, Header, LogId, Operation, PruneFlag, SeqNum, VerifyingKey,
 };
+use p2panda_spaces::AuthMessage;
+use p2panda_stream::groups::{GroupsError, GroupsProcessorArgs, GroupsResult};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
 use p2panda_stream::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
@@ -57,6 +59,12 @@ pub struct Event<L, E, TP> {
     /// Status of the "log prune" processor.
     pub log_prune: ProcessorStatus<LogPruneResult, LogPruneError>,
 
+    /// Input arguments for the "groups" processor.
+    pub groups_args: GroupsProcessorArgs<AuthCapabilities>,
+
+    /// Status of the "groups" processor.
+    pub groups: ProcessorStatus<GroupsResult, GroupsError>,
+
     /// Input arguments for the "spaces" processor.
     pub spaces_args: SpacesProcessorArgs<AuthCapabilities>,
 
@@ -104,6 +112,26 @@ where
                 }
             },
             log_prune: ProcessorStatus::Pending,
+            groups_args: {
+                if let Some(SpacesArgs::Group {
+                    group_id,
+                    group_action,
+                    auth_dependencies,
+                }) = &spaces_args
+                {
+                    let message = AuthMessage {
+                        operation_id: operation.hash,
+                        author: operation.header.verifying_key,
+                        dependencies: auth_dependencies.clone(),
+                        group_id: *group_id,
+                        action: group_action.clone(),
+                    };
+                    GroupsProcessorArgs::Process { message }
+                } else {
+                    GroupsProcessorArgs::Ignore
+                }
+            },
+            groups: ProcessorStatus::Pending,
             spaces_args: {
                 match (spaces_args, spaces_events) {
                     (Some(args), Some(events)) => SpacesProcessorArgs::AlreadyProcessed {
@@ -148,6 +176,7 @@ where
         matches!(self.ingest, ProcessorStatus::Completed(_))
             && matches!(self.orderer, ProcessorStatus::Completed(_))
             && matches!(self.log_prune, ProcessorStatus::Completed(_))
+            && matches!(self.groups, ProcessorStatus::Completed(_))
             && matches!(self.spaces, ProcessorStatus::Completed(_))
     }
 
@@ -156,6 +185,7 @@ where
         matches!(self.ingest, ProcessorStatus::Failed(_))
             || matches!(self.orderer, ProcessorStatus::Failed(_))
             || matches!(self.log_prune, ProcessorStatus::Failed(_))
+            || matches!(self.groups, ProcessorStatus::Failed(_))
             || matches!(self.spaces, ProcessorStatus::Failed(_))
     }
 
@@ -184,6 +214,10 @@ where
             return Some(err.to_owned().into());
         }
 
+        if let ProcessorStatus::Failed(err) = &self.groups {
+            return Some(err.to_owned().into());
+        }
+
         if let ProcessorStatus::Failed(err) = &self.spaces {
             return Some(err.to_owned().into());
         }
@@ -209,6 +243,8 @@ where
             orderer: self.orderer,
             log_prune_args: LogPruneArgs::Ignore,
             log_prune: self.log_prune,
+            groups_args: GroupsProcessorArgs::Ignore,
+            groups: self.groups,
             spaces_args: SpacesProcessorArgs::Ignore,
             spaces: self.spaces,
         }
@@ -291,6 +327,9 @@ pub enum ProcessorError {
     #[error("log_prune processor failed with: {0}")]
     LogPrune(#[from] LogPruneError),
 
+    #[error("groups processor failed with: {0}")]
+    Groups(#[from] GroupsError),
+
     #[error("spaces processor failed with: {0}")]
     Spaces(#[from] SpacesError),
 }
@@ -344,6 +383,16 @@ where
 {
     fn borrow(&self) -> &SpacesProcessorArgs<AuthCapabilities> {
         &self.spaces_args
+    }
+}
+
+impl<L, E, TP> Borrow<GroupsProcessorArgs<AuthCapabilities>> for Event<L, E, TP>
+where
+    L: LogId,
+    TP: Clone,
+{
+    fn borrow(&self) -> &GroupsProcessorArgs<AuthCapabilities> {
+        &self.groups_args
     }
 }
 

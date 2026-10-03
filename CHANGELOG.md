@@ -51,6 +51,8 @@ Highlights are marked with a pancake 🥞
 - sync: Method to resolve log heights from topic [#1405](https://github.com/p2panda/p2panda/pull/1405)
 - sync: Re-export -stream ingest_operation in `api` module [#1406](https://github.com/p2panda/p2panda/pull/1406)
 - stream: Forward events of already processed operations in spaces processor [#1430](https://github.com/p2panda/p2panda/pull/1430)
+- auth: Add method for checking if actor id is a group [1483](https://github.com/p2panda/p2panda/pull/1483)
+- node: Add groups processor to pipeline [#1485](https://github.com/p2panda/p2panda/pull/1485)
 
 ### Changed
 
@@ -73,6 +75,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Make SpacesMessageStore::get_message return F::Message type [#1481](https://github.com/p2panda/p2panda/pull/1481)
 - spaces: Return all message deps from Space::repair and Space::create [#1483](https://github.com/p2panda/p2panda/pull/1483)
 - auth: Don't error when processing operation again [#1483](https://github.com/p2panda/p2panda/pull/1483)
+- stream: Namespace group state by stream id in group processor [#1485](https://github.com/p2panda/p2panda/pull/1485)
 
 ### Fixed
 
