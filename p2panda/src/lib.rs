@@ -259,6 +259,7 @@ mod builder;
 pub mod credentials;
 pub(crate) mod egress;
 mod forge;
+mod hooks;
 pub mod network;
 pub mod node;
 pub mod operation;
