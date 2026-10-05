@@ -248,27 +248,24 @@ where
                 output.events = vec![event];
             }
             SpacesArgs::Group { .. } => {
-                let event = Group::process(self.clone(), &SpacesMessage::auth(message))
+                let (groups_y, event) = Group::process(self.clone(), &SpacesMessage::auth(message))
                     .await
                     .map_err(ManagerError::Group)?;
 
-                if let Some((groups_y, event)) = event {
-                    output.groups_y = Some(groups_y);
-                    output.events = vec![event];
-                }
+                output.groups_y = groups_y;
+                output.events = vec![event];
             }
             // Received control message related to a space.
             SpacesArgs::SpaceMembership { space_id, .. } => {
-                if let Some((space_y, events)) = self
+                let (space_y, events) = self
                     .handle_space_membership_message(
                         *space_id,
                         &SpacesMessage::space_membership(message),
                     )
-                    .await?
-                {
-                    output.space_y = Some(space_y);
-                    output.events = events;
-                }
+                    .await?;
+
+                output.space_y = space_y;
+                output.events = events;
             }
             SpacesArgs::SpaceUpdate { .. } => unimplemented!(),
             // Received encrypted application data for a space.
@@ -495,7 +492,7 @@ where
         &self,
         space_id: SpaceId,
         message: &SpaceMembershipMessage,
-    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, ManagerError<F, C>> {
+    ) -> Result<(Option<SpacesState<C>>, Vec<Event<C>>), ManagerError<F, C>> {
         // Get auth message.
         let auth_message = {
             let inner = self.inner.read().await;
@@ -530,9 +527,9 @@ where
                     return Err(ManagerError::UnexpectedMessage(message.id));
                 }
 
-                // @TODO: This is a bit strange. What are the API guarantees here over
-                // "inexistant" spaces. We should tell from the outside that a new one is
-                // initialised instead of pointing at an existing one.
+                // TODO: This is a bit strange. What are the API guarantees here over "inexistant"
+                // spaces. We should tell from the outside that a new one is initialised instead of
+                // pointing at an existing one.
                 Space::new(self.clone(), space_id)
             }
         };
