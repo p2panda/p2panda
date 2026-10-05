@@ -123,6 +123,15 @@ impl From<p2panda_spaces::GroupActor> for GroupActor {
     }
 }
 
+impl From<p2panda_auth::group::GroupMember<VerifyingKey>> for GroupActor {
+    fn from(actor: p2panda_auth::group::GroupMember<VerifyingKey>) -> Self {
+        Self {
+            id: actor.id(),
+            group: actor.is_group(),
+        }
+    }
+}
+
 impl From<Member> for GroupActor {
     fn from(member: Member) -> Self {
         Self {

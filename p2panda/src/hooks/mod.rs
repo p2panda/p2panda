@@ -2,5 +2,4 @@
 
 mod groups;
 
-#[allow(unused)]
 pub(crate) use groups::GroupsHook;
