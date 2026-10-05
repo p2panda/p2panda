@@ -145,6 +145,11 @@ impl<C> Access<C> {
     pub fn is_manage(&self) -> bool {
         matches!(self.level, AccessLevel::Manage)
     }
+
+    /// Access level.
+    pub fn level(&self) -> AccessLevel {
+        self.level
+    }
 }
 
 impl<C: PartialOrd> PartialOrd for Access<C> {

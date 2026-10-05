@@ -21,8 +21,9 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 
 pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::{group_log_id, member_log_id};
+pub(crate) use group::group_stream;
 pub use group::{
-    AddGroupMemberError, Group, GroupError, GroupEvent, GroupFuture, RemoveGroupMemberError,
+    AddGroupMemberError, Group, GroupError, GroupSubscription, RemoveGroupMemberError,
 };
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};

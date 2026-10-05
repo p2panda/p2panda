@@ -91,7 +91,7 @@ mod spaces_api {
         }
 
         // Penguin creates a device group (on their laptop).
-        let penguin = penguin_laptop
+        let (penguin, _) = penguin_laptop
             .create_group(&[
                 (penguin_laptop.id(), AccessLevel::Write),
                 (penguin_mobile.id(), AccessLevel::Read),
@@ -545,7 +545,7 @@ mod spaces_repair_task {
         let mut penguin_system_rx = penguin.event_stream().await.unwrap();
 
         // Penguin creates a group before subscribing to the space.
-        let penguin_group = penguin
+        let (penguin_group, _) = penguin
             .create_group(&[(penguin.id(), AccessLevel::Manage)])
             .await
             .unwrap();
@@ -644,7 +644,7 @@ mod spaces_repair_task {
         }
 
         // And then creates a group.
-        let penguin_group = penguin
+        let (penguin_group, _) = penguin
             .create_group(&[(penguin.id(), AccessLevel::Manage)])
             .await
             .unwrap();
@@ -814,7 +814,7 @@ mod spaces_api_validation {
         let mut lion_system_rx = lion.event_stream().await.unwrap();
         let mut tiger_system_rx = tiger.event_stream().await.unwrap();
 
-        let panda_group = panda
+        let (panda_group, _) = panda
             .create_group(&[
                 (panda.id(), AccessLevel::Manage),
                 (lion.id(), AccessLevel::Read),
@@ -873,7 +873,7 @@ mod spaces_api_validation {
         }
 
         // Tiger isn't a recognized group actor.
-        let panda_group_on_tiger = tiger.group(panda_group.id()).await.unwrap();
+        let (panda_group_on_tiger, _) = tiger.group(panda_group.id()).await.unwrap();
         let result = panda_group_on_tiger
             .add(tiger.id(), AccessLevel::Write)
             .await;
@@ -886,7 +886,7 @@ mod spaces_api_validation {
         );
 
         // Lion doesn't have required access level.
-        let panda_group_on_lion = lion.group(panda_group.id()).await.unwrap();
+        let (panda_group_on_lion, _) = lion.group(panda_group.id()).await.unwrap();
         let result = panda_group_on_lion.remove(panda.id()).await;
         assert_matches!(
             result.err().unwrap(),
@@ -898,9 +898,9 @@ mod spaces_api_validation {
     }
 }
 
-mod spaces_events {
+mod system_events {
     use p2panda::Topic;
-    use p2panda::spaces::{GroupEvent, InnerGroupEvent};
+    use p2panda::spaces::InnerGroupEvent;
     use p2panda::streams::SystemEvent;
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
@@ -908,184 +908,62 @@ mod spaces_events {
 
     use super::{SecretData, Swarm};
 
-    #[ignore = "group streams are not stable yet"]
     #[tokio::test]
-    async fn group_events() {
+    async fn group_system_events_via_spaces() {
         setup_logging();
 
         let swarm = Swarm::new();
 
         let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
+
         let mut panda_system_rx = panda.event_stream().await.unwrap();
+        let mut penguin_system_rx = penguin.event_stream().await.unwrap();
 
         let topic = Topic::random();
+        let (space, _) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (_space_on_penguin, _) = penguin.space::<SecretData>(topic).await.unwrap();
 
-        // Create a space with only us inside. Having a space in this test is only required to sync
-        // the group operations.
-        let (_panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
-
-        let penguin_laptop = swarm.spawn_node().await;
-        let penguin_mobile = swarm.spawn_node().await;
-        let mut penguin_laptop_system_rx = penguin_laptop.event_stream().await.unwrap();
-
-        let (_penguin_laptop_space, _penguin_laptop_rx) =
-            penguin_laptop.space::<SecretData>(topic).await.unwrap();
-        let (_penguin_mobile_space, _penguin_mobile_rx) =
-            penguin_mobile.space::<SecretData>(topic).await.unwrap();
-
-        // Penguin creates a device group.
-        let device_group = penguin_laptop
-            .create_group(&[(penguin_laptop.id(), AccessLevel::Manage)])
+        // Panda creates a device group.
+        let (device_group, _) = panda
+            .create_group(&[(panda.id(), AccessLevel::Manage)])
             .await
             .unwrap();
 
+        // And adds it to the space.
+        space
+            .add(device_group.id(), AccessLevel::Write)
+            .await
+            .unwrap();
+
+        // Panda receives the device group event on their system stream.
+        //
+        // Whichever stream a group operation arrives and is processed on the resulting change is
+        // emitted as an event on the system event stream. This "enriched" event is only emitted
+        // the first time it is processed.
+        loop {
+            if let Some(SystemEvent::Groups {
+                group_id,
+                inner: InnerGroupEvent::Created { .. },
+                ..
+            }) = panda_system_rx.next().await
+            {
+                if group_id == device_group.id() {
+                    break;
+                }
+            };
+        }
         // Penguin receives the device group event on their system stream.
         loop {
             if let Some(SystemEvent::Groups {
                 group_id,
                 inner: InnerGroupEvent::Created { .. },
                 ..
-            }) = penguin_laptop_system_rx.next().await
+            }) = penguin_system_rx.next().await
             {
                 if group_id == device_group.id() {
                     break;
                 }
-            };
-        }
-
-        // Panda receives the device group event on their system stream.
-        loop {
-            if let Some(SystemEvent::Groups {
-                group_id,
-                inner: InnerGroupEvent::Created { .. },
-                ..
-            }) = panda_system_rx.next().await
-            {
-                if group_id == device_group.id() {
-                    break;
-                }
-            };
-        }
-
-        // Panda creates a team group with Penguin's device group as a member.
-        //
-        // TODO(adz): The test is ignored as the following line panics with:
-        //
-        // ```
-        // thread 'spaces_events::group_events' (86468) panicked at p2panda/src/node.rs:532:14:
-        // newly created group exists
-        // ```
-        //
-        // 1. Penguin creates a group A, op1 gets created and processed with the orderer, namespaced
-        //    for this group (state s1).
-        // 2. Panda creates a group B with A as a member, op2 gets created, it depends on op1 and is
-        //    processed with orderer (state s2).
-        // 3. op2 is never forwarded by orderer (state s2), it's stuck here. => panic!
-        //
-        // Both of them use a space stream to sync operations, but that space stream has a different
-        // id than group A and B, aka a different orderer state s3:
-        //
-        // Panda receives op1 from Penguin via sync, the spaces stream processed it, but applies the
-        // orderer state change to it's own orderer.
-        //
-        // I assume that for the spaces stream all is good and correct. Groups logs are correctly
-        // associated, processed and all in that stream. Maybe it's not a bug but just a sign that
-        // using group streams outside of spaces is not stable and requires more log association
-        // wrangling?
-        let team_group = panda
-            .create_group(&[
-                (panda.id(), AccessLevel::Manage),
-                (device_group.id(), AccessLevel::Write),
-            ])
-            .await
-            .unwrap();
-        let team_group_id = team_group.id();
-
-        // Penguin receives the team group event on their system stream.
-        loop {
-            let event = penguin_laptop_system_rx.next().await;
-
-            if let Some(SystemEvent::Groups {
-                group_id,
-                inner: InnerGroupEvent::Created { .. },
-                ..
-            }) = event
-            {
-                if group_id == team_group.id() {
-                    break;
-                }
-            };
-        }
-
-        // Panda receives the team group event on their system stream.
-        loop {
-            if let Some(SystemEvent::Groups {
-                group_id,
-                inner: InnerGroupEvent::Created { .. },
-                ..
-            }) = panda_system_rx.next().await
-            {
-                if group_id == team_group.id() {
-                    break;
-                }
-            };
-        }
-
-        // Panda subscribes to the group event stream.
-        let mut panda_team_group_rx = team_group.event_stream();
-        // Penguin subscribes to the group event stream.
-        let panda_team_group_on_penguin = penguin_laptop.group(team_group_id).await.unwrap();
-        let mut panda_team_group_on_penguin_rx = panda_team_group_on_penguin.event_stream();
-
-        // Penguin adds their mobile to the device group.
-        let ready = device_group
-            .add(penguin_mobile.id(), AccessLevel::Read)
-            .await
-            .unwrap();
-
-        ready.await.unwrap();
-
-        // Penguin receives the add event on the team group rx.
-        loop {
-            if let Some(GroupEvent {
-                members,
-                actors,
-                inner:
-                    InnerGroupEvent::Added {
-                        group_id: action_group_id,
-                        ..
-                    },
-                ..
-            }) = panda_team_group_on_penguin_rx.next().await
-            {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Write)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                assert_eq!(actors.len(), 2);
-                assert_eq!(action_group_id, device_group.id());
-                break;
-            };
-        }
-
-        // Panda receives the add event on the team group rx.
-        loop {
-            if let Some(GroupEvent {
-                members,
-                actors,
-                inner:
-                    InnerGroupEvent::Added {
-                        group_id: action_group_id,
-                        ..
-                    },
-                ..
-            }) = panda_team_group_rx.next().await
-            {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Write)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                assert_eq!(actors.len(), 2);
-                assert_eq!(action_group_id, device_group.id());
-                break;
             };
         }
     }

@@ -31,7 +31,7 @@ pub(crate) use publisher::ImportLocalTx;
 pub use publisher::{CloseError, ImportError, PublishError, PublishFuture, StreamPublisher};
 pub use replay::{ReplayError, StreamFrom};
 pub(crate) use stream::processed_stream;
-pub use stream::{ForwardEvent, ProcessedOperation, Source, StreamEvent};
+pub use stream::{ForwardEvent, GroupAction, ProcessedOperation, Source, StreamEvent};
 pub use subscription::StreamSubscription;
 pub use sync_metrics::{SessionPhase, SyncError};
 

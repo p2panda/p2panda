@@ -15,8 +15,9 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
-use p2panda_spaces::{ActorId, SpaceContext, SpaceId};
+use p2panda_spaces::{ActorId, AuthMessage, GroupId, SpaceContext, SpaceId};
 use p2panda_store::SqliteStore;
+use p2panda_stream::groups::{GroupsProcessorArgs, GroupsResult};
 use p2panda_stream::spaces::SpacesResult;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
@@ -30,7 +31,7 @@ use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::{InnerSpaceEvent, SpacesEvent};
+use crate::spaces::types::{AuthCapabilities, InnerSpaceEvent, SpacesEvent};
 use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
@@ -544,6 +545,15 @@ where
     // processing any other event will only yield a single user event.
     let mut forward_events = Vec::new();
 
+    // Process group processor events.
+    if let ProcessorStatus::Completed(GroupsResult::Processed) = &event.groups
+        && let GroupsProcessorArgs::Process { message } = &event.groups_args
+    {
+        forward_events.push(ForwardEvent::Topic(Box::new(to_group_stream_event(
+            &event, message,
+        ))));
+    }
+
     // Process spaces events.
     if let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces {
         // Multiple events can be released at once.
@@ -657,6 +667,29 @@ where
     }
 
     Some(forward_events)
+}
+
+/// Membership change action which has been applied to a group.
+#[derive(Clone, Debug, PartialEq)]
+pub enum GroupAction {
+    Created {
+        initial_actors: Vec<(GroupActor, AccessLevel)>,
+    },
+    Added {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
+    Removed {
+        actor: GroupActor,
+    },
+    Promoted {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
+    Demoted {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
 }
 
 /// Operations with application messages, system events and errors coming from a topic stream
@@ -784,6 +817,20 @@ pub enum StreamEvent<M> {
         error: Arc<AckedError>,
     },
 
+    /// Membership of the subscribed group has changed.
+    ///
+    /// This may be a change in the "root" or any nested group.
+    Group {
+        /// Event which caused this group change.
+        event: Event,
+
+        /// Id of the group which the action applies to.
+        group_id: GroupId,
+
+        /// The membership change applied to the group.
+        action: GroupAction,
+    },
+
     /// Space has been created or modified.
     ///
     /// An event is emitted for every space membership change which occurs. This could be the result
@@ -852,6 +899,42 @@ pub(crate) fn to_stream_event<M>(spaces_event: InnerSpaceEvent, event: Event) ->
             actors: vec![],
             inner: spaces_event,
         },
+    }
+}
+
+/// Convert a AuthMessage into p2panda::GroupEvent.
+pub fn to_group_stream_event<M>(
+    event: &Event,
+    message: &AuthMessage<AuthCapabilities>,
+) -> StreamEvent<M> {
+    let action = match message.action.clone() {
+        p2panda_auth::group::GroupAction::Create { initial_members } => GroupAction::Created {
+            initial_actors: initial_members
+                .into_iter()
+                .map(|(actor, access)| (actor.into(), access.level()))
+                .collect::<Vec<_>>(),
+        },
+        p2panda_auth::group::GroupAction::Add { member, access } => GroupAction::Added {
+            actor: member.into(),
+            level: access.level(),
+        },
+        p2panda_auth::group::GroupAction::Remove { member } => GroupAction::Removed {
+            actor: member.into(),
+        },
+        p2panda_auth::group::GroupAction::Promote { member, access } => GroupAction::Promoted {
+            actor: member.into(),
+            level: access.level(),
+        },
+        p2panda_auth::group::GroupAction::Demote { member, access } => GroupAction::Demoted {
+            actor: member.into(),
+            level: access.level(),
+        },
+    };
+
+    StreamEvent::Group {
+        event: event.clone(),
+        group_id: message.group_id,
+        action,
     }
 }
 

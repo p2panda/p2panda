@@ -27,16 +27,17 @@ pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::egress::{Egress, EgressError, SubmitError};
 use crate::forge::{Forge, OperationForge};
+use crate::hooks::GroupsHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::operation::Extensions;
 use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, NoBody, SpacesManager, SpacesManagerError,
 };
 use crate::spaces::{
-    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, KeyBundleTask, Member,
+    AccessLevel, ActorId, DEFAULT_REPAIR_STRATEGY, Group, GroupSubscription, KeyBundleTask, Member,
     MemberAssociationHook, MemberError, RepairTask, Space, SpaceEgressError, SpaceSubscription,
-    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_log_id, member_log_id,
-    spaces_manager, spaces_stream, to_initial_members,
+    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_log_id, group_stream,
+    member_log_id, spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -465,17 +466,20 @@ impl Node {
 
     /// Subscribe to an existing group.
     ///
-    /// Returns a `Group` for accessing the group API and event stream.
-    pub async fn group(&self, group_id: impl Into<GroupId>) -> Result<Group, SubscribeGroupError> {
+    /// Returns a `Group` for accessing the group API and it's event stream.
+    pub async fn group(
+        &self,
+        group_id: impl Into<GroupId>,
+    ) -> Result<(Group, GroupSubscription), SubscribeGroupError> {
         self.group_from(group_id, StreamFrom::Frontier).await
     }
 
-    // TODO: Make public when group events are streamed per-group.
-    async fn group_from(
+    /// Subscribe to an existing group and stream events starting from a given point.
+    pub async fn group_from(
         &self,
         group_id: impl Into<GroupId>,
         from: StreamFrom,
-    ) -> Result<Group, SubscribeGroupError> {
+    ) -> Result<(Group, GroupSubscription), SubscribeGroupError> {
         let group_id = group_id.into();
         let topic = actor_to_topic(group_id);
 
@@ -486,14 +490,12 @@ impl Node {
             .await;
         let egress_handle = self.egress.handle();
 
-        let events_rx = self.resubscribe_event_stream();
-
         let inner = match self.spaces_manager.group(group_id).await? {
             Some(inner) => inner,
             None => InnerGroup::new(self.spaces_manager.clone(), group_id),
         };
 
-        Ok(Group::new(inner, egress_handle, tx, rx, events_rx))
+        Ok(group_stream(inner, egress_handle, tx, rx))
     }
 
     async fn group_stream_from_inner<M>(
@@ -506,18 +508,21 @@ impl Node {
     {
         let topic = topic.into();
 
-        // TODO: Add "groups" and "repair" processor hooks.
-        self.stream_from_inner(topic, from, false, ProcessorHooksList::new())
+        let mut post_pipeline = ProcessorHooksList::new();
+        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
+
+        // TODO: Add "repair" processor hooks.
+        self.stream_from_inner(topic, from, false, post_pipeline)
             .await
     }
 
     /// Create a new group.
     ///
-    /// Returns a `Group` for accessing the group API and event stream.
+    /// Returns a `Group` for accessing the group API and it's event stream.
     pub async fn create_group(
         &self,
         initial_members: &[(ActorId, AccessLevel)],
-    ) -> Result<Group, CreateGroupError> {
+    ) -> Result<(Group, GroupSubscription), CreateGroupError> {
         let initial_members = to_initial_members(initial_members);
 
         let output = self.spaces_manager.create_group(&initial_members).await?;
@@ -539,15 +544,13 @@ impl Node {
             .await?;
         processed.await?;
 
-        let events_rx = self.resubscribe_event_stream();
-
         let inner = self
             .spaces_manager
             .group(group_id)
             .await?
             .expect("newly created group exists");
 
-        Ok(Group::new(inner, egress_handle, tx, rx, events_rx))
+        Ok(group_stream(inner, egress_handle, tx, rx))
     }
 
     pub async fn space<M>(
@@ -652,9 +655,12 @@ impl Node {
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
+        let topic = topic.into();
+
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
+        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
 
         self.stream_from_inner(topic, from, true, post_pipeline)
             .await
@@ -871,9 +877,6 @@ pub enum CreateSpaceError {
 
     #[error(transparent)]
     ImportKeyBundle(#[from] ImportError),
-
-    #[error("couldn't send event due to broken app channel")]
-    AppSend,
 }
 
 /// Errors which can occur when subscribing to a stream.
@@ -888,9 +891,6 @@ pub enum SubscribeGroupError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
-
-    #[error(transparent)]
-    ImportKeyBundle(#[from] ImportError),
 }
 
 /// Errors which can occur when creating a group.
@@ -905,9 +905,6 @@ pub enum CreateGroupError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
-
-    #[error(transparent)]
-    ImportKeyBundle(#[from] ImportError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
