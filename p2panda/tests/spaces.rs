@@ -873,7 +873,7 @@ mod spaces_api_validation {
         }
 
         // Tiger isn't a recognized group actor.
-        let panda_group_on_tiger = tiger.group(panda_group.id()).await.unwrap().unwrap();
+        let panda_group_on_tiger = tiger.group(panda_group.id()).await.unwrap();
         let result = panda_group_on_tiger
             .add(tiger.id(), AccessLevel::Write)
             .await;
@@ -886,7 +886,7 @@ mod spaces_api_validation {
         );
 
         // Lion doesn't have required access level.
-        let panda_group_on_lion = lion.group(panda_group.id()).await.unwrap().unwrap();
+        let panda_group_on_lion = lion.group(panda_group.id()).await.unwrap();
         let result = panda_group_on_lion.remove(panda.id()).await;
         assert_matches!(
             result.err().unwrap(),
@@ -1034,8 +1034,7 @@ mod spaces_events {
         // Panda subscribes to the group event stream.
         let mut panda_team_group_rx = team_group.event_stream();
         // Penguin subscribes to the group event stream.
-        let panda_team_group_on_penguin =
-            penguin_laptop.group(team_group_id).await.unwrap().unwrap();
+        let panda_team_group_on_penguin = penguin_laptop.group(team_group_id).await.unwrap();
         let mut panda_team_group_on_penguin_rx = panda_team_group_on_penguin.event_stream();
 
         // Penguin adds their mobile to the device group.

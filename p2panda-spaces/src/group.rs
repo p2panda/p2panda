@@ -93,7 +93,7 @@ where
     F: Forge<C>,
     C: Conditions,
 {
-    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: GroupId) -> Self {
+    pub fn new(manager_ref: Manager<S, F, C>, id: GroupId) -> Self {
         Self {
             manager: manager_ref,
             id,
