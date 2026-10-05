@@ -1286,7 +1286,7 @@ async fn shared_auth_state() {
             .messages,
     );
     assert_eq!(messages.len(), 2);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
     let (messages, events) = split_messages(
         space_1
             .repair_persisted(&[group.id()])
@@ -1295,7 +1295,7 @@ async fn shared_auth_state() {
             .messages,
     );
     assert_eq!(messages.len(), 2);
-    assert_eq!(events.len(), 0);
+    assert_eq!(events.len(), 1);
 
     // Add group A to space 0
     // ~~~~~~~~~~~~
@@ -1458,7 +1458,7 @@ async fn events() {
                 std::assert_matches!(bob_events[0].clone(), Event::Groups(GroupEvent::Created { context: GroupContext{ members, .. }, .. }) if members.len() == 2);
             }
             // No change to encryption context.
-            1 => assert_eq!(bob_events.len(), 0),
+            1 => assert_eq!(bob_events.len(), 1),
             // Space auth group created.
             2 => {
                 assert_eq!(bob_events.len(), 1);
@@ -1528,7 +1528,7 @@ async fn events() {
         }
     }
 
-    assert_eq!(all_bob_events.len(), 12);
+    assert_eq!(all_bob_events.len(), 13);
 }
 
 #[tokio::test]
@@ -1569,12 +1569,12 @@ async fn idempotent_api() {
     let message_01 = messages[0].clone();
     let message_02 = messages[1].clone();
 
-    // Alice can process both messages again, no state should change, and no events should be
+    // Alice can process both messages again, no state should change, but the events should be
     // returned.
     let events = alice_manager.process_persisted(&message_01).await.unwrap();
-    assert!(events.is_empty());
+    assert!(!events.is_empty());
     let events = alice_manager.process_persisted(&message_02).await.unwrap();
-    assert!(events.is_empty());
+    assert!(!events.is_empty());
     let space = alice_manager.space(space_id).await.unwrap().unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
@@ -1587,12 +1587,12 @@ async fn idempotent_api() {
     bob.persist_operation(&message_02).await.unwrap();
     bob_manager.process_persisted(&message_02).await.unwrap();
 
-    // Bob can process both messages again, no state should change, and no events should be
+    // Bob can process both messages again, no state should change, but the events should be
     // returned.
     let events = bob_manager.process_persisted(&message_01).await.unwrap();
-    assert!(events.is_empty());
+    assert!(!events.is_empty());
     let events = bob_manager.process_persisted(&message_02).await.unwrap();
-    assert!(events.is_empty());
+    assert!(!events.is_empty());
     let space = bob_manager.space(space_id).await.unwrap().unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);

@@ -186,23 +186,29 @@ where
     pub(crate) async fn process(
         manager_ref: Manager<S, F, C>,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(AuthGroupState<C>, Event<C>)>, GroupError<F, C>> {
+    ) -> Result<(Option<AuthGroupState<C>>, Event<C>), GroupError<F, C>> {
         let mut groups_y = manager_ref.get_groups_state().await?;
 
-        // If we already processed this auth message then return now.
-        if groups_y.inner.operations.contains_key(&auth_message.id()) {
+        let previous_ancestors = groups_y.inner.ancestors(auth_message.group_id());
+        let has_seen = groups_y.inner.operations.contains_key(&auth_message.id());
+
+        if has_seen {
             debug!(
                 message_id = auth_message.id().fmt_short(),
                 "ignore already processed auth groups message"
             );
-            return Ok(None);
+        } else {
+            groups_y =
+                AuthGroup::<C>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
         }
 
-        let previous_ancestors = groups_y.inner.ancestors(auth_message.group_id());
-        groups_y =
-            AuthGroup::<C>::process(groups_y, auth_message).map_err(GroupError::AuthGroup)?;
         let events = to_groups_event(&groups_y, auth_message, &previous_ancestors);
-        Ok(Some((groups_y, events)))
+
+        if has_seen {
+            Ok((None, events))
+        } else {
+            Ok((Some(groups_y), events))
+        }
     }
 
     /// Process a local control message.
