@@ -117,32 +117,38 @@ mod spaces_api {
         panda_space.add(penguin.id(), AccessLevel::Read).await?;
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 3);
+                    assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
+                    assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
+                    assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_laptop_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 3);
+                    assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
+                    assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
+                    assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_mobile_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 3);
+                    assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
+                    assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
+                    assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
@@ -323,18 +329,22 @@ mod spaces_api {
         panda_space.add(penguin.id(), AccessLevel::Read).await?;
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
@@ -452,18 +462,22 @@ mod spaces_repair_task {
             .unwrap();
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
     }
@@ -520,18 +534,22 @@ mod spaces_repair_task {
             .unwrap();
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_rx.next().await {
-            if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 2);
-                assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
-                break;
+            if let StreamEvent::Space { members, inner, .. } = event {
+                if let SpaceEvent::Added { .. } = inner {
+                    assert_eq!(members.len(), 2);
+                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    break;
+                }
             };
         }
     }
