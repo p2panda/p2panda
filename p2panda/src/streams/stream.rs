@@ -562,9 +562,12 @@ where
                     ForwardEvent::system(to_system_event(group_event.to_owned())),
                 ),
 
-                p2panda_spaces::Event::Spaces(space_event) => forward_events.push(
-                    ForwardEvent::topic_stream(to_stream_event(space_event.to_owned())),
-                ),
+                p2panda_spaces::Event::Spaces(space_event) => {
+                    forward_events.push(ForwardEvent::topic_stream(to_stream_event(
+                        space_event.to_owned(),
+                        event.clone(),
+                    )))
+                }
             }
         }
     } else {
@@ -753,11 +756,12 @@ pub enum StreamEvent<M> {
 
     /// Space has been created or modified.
     ///
-    /// An event is emitted for every space membership change which occurs. This could be the
-    /// result of a change of membership in a child group. In all cases the new membership of the
-    /// space is included directly in the event along with additional meta-information, including
-    /// regarding the action (possibly targeting a child group) which caused the membership change.
+    /// An event is emitted for every space membership change which occurs. This could be the result
+    /// of a change of membership in a child group. In all cases the new membership of the space is
+    /// included directly in the event along with additional meta-information, including regarding
+    /// the action (possibly targeting a child group) which caused the membership change.
     Space {
+        event: Box<Event>,
         space_id: SpaceId,
         members: Vec<(ActorId, AccessLevel)>,
         actors: Vec<(GroupActor, AccessLevel)>,
@@ -768,8 +772,8 @@ pub enum StreamEvent<M> {
     Member(VerifyingKey),
 }
 
-pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
-    match &event {
+pub(crate) fn to_stream_event<M>(spaces_event: InnerSpaceEvent, event: Event) -> StreamEvent<M> {
+    match &spaces_event {
         p2panda_spaces::SpaceEvent::Created {
             space_id,
             context: SpaceContext {
@@ -805,16 +809,18 @@ pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
             },
             ..
         } => StreamEvent::Space {
+            event: Box::new(event),
             space_id: *space_id,
             members: to_members(members),
             actors: to_actors(actors),
-            inner: event,
+            inner: spaces_event,
         },
         p2panda_spaces::SpaceEvent::Ejected { space_id } => StreamEvent::Space {
+            event: Box::new(event),
             space_id: *space_id,
             members: vec![],
             actors: vec![],
-            inner: event,
+            inner: spaces_event,
         },
     }
 }
