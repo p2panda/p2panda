@@ -92,7 +92,7 @@ impl EgressDestination {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Egress {
     inner: Arc<RwLock<EgressInner>>,
 }
@@ -101,6 +101,7 @@ pub struct Egress {
 struct EgressInner {
     handles: HashMap<Topic, ImportLocalTx>,
     space_ids: HashSet<Topic>,
+    group_ids: HashSet<Topic>,
 }
 
 impl EgressInner {
@@ -109,6 +110,7 @@ impl EgressInner {
         self.handles.get(&topic).map(|tx| (topic, tx.clone()))
     }
 
+    // TODO: Update API to allow adding group streams as well.
     fn spaces(&self) -> Vec<(Topic, ImportLocalTx)> {
         let mut result = Vec::new();
 
@@ -128,6 +130,7 @@ impl Egress {
             inner: Arc::new(RwLock::new(EgressInner {
                 handles: HashMap::with_capacity(16),
                 space_ids: HashSet::with_capacity(8),
+                group_ids: HashSet::with_capacity(8),
             })),
         }
     }
@@ -138,6 +141,7 @@ impl Egress {
         }
     }
 
+    // TODO: Update API to allow adding group streams as well.
     pub async fn add_stream(&self, topic: Topic, is_space: bool, import_tx: ImportLocalTx) -> bool {
         let mut inner = self.inner.write().await;
 
@@ -154,11 +158,24 @@ impl Egress {
         }
     }
 
+    #[allow(unused)]
+    pub async fn group_topics(&self) -> HashSet<Topic> {
+        let inner = self.inner.read().await;
+        inner.group_ids.clone()
+    }
+
+    #[allow(unused)]
+    pub async fn space_topics(&self) -> HashSet<Topic> {
+        let inner = self.inner.read().await;
+        inner.space_ids.clone()
+    }
+
     // TODO: Make sure we're removing streams as well.
     #[allow(unused)]
     pub async fn remove_stream(&self, topic: Topic) -> bool {
         let mut inner = self.inner.write().await;
         inner.space_ids.remove(&topic);
+        inner.group_ids.remove(&topic);
         inner.handles.remove(&topic).is_some()
     }
 }
@@ -272,6 +289,7 @@ impl EgressHandle {
 
             for topic in broken_channels.iter() {
                 inner.space_ids.remove(topic);
+                inner.group_ids.remove(topic);
                 inner.handles.remove(topic);
             }
         }

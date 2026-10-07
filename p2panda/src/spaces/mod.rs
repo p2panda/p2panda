@@ -5,7 +5,9 @@ mod forge;
 mod group;
 mod member;
 pub(crate) mod message;
-mod repair;
+pub(crate) mod repair;
+#[allow(unused)]
+pub(crate) mod repair_v2;
 mod space;
 pub(crate) mod types;
 
