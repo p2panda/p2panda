@@ -83,6 +83,7 @@ Highlights are marked with a pancake 🥞
 - node: Introduce `GroupSubscription` and `StreamEvent::Group` [#1489](https://github.com/p2panda/p2panda/pull/1489)
 - store: Namespace event metadata entries [#1521](https://github.com/p2panda/p2panda/pull/1521)
 - node: Repair task re-write with hook trigger [#1500](https://github.com/p2panda/p2panda/pull/1500)
+- node: Integrate new repair task into Node, Space and Group [#1498](https://github.com/p2panda/p2panda/pull/1498)
 
 ### Fixed
 
