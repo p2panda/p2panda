@@ -5,7 +5,7 @@ use p2panda_stream::spaces::SpacesProcessorArgs;
 use tracing::warn;
 
 use crate::processor::ProcessorStatus;
-use crate::spaces::repair_v2::RepairTask;
+use crate::spaces::repair::RepairTask;
 use crate::spaces::types::SpacesArgs;
 use crate::streams::Event;
 

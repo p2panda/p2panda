@@ -51,6 +51,7 @@ impl Default for Debouncer {
 
 impl Debouncer {
     /// Construct a new debouncer with `quiet_period` and `throttle` arguments.
+    #[allow(unused)]
     pub fn new(quiet_period: Duration, throttle: Duration) -> Self {
         Self {
             quiet_period,

@@ -374,7 +374,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::Credentials;
-    use crate::egress::Egress;
+    use crate::egress::{Egress, StreamType};
     use crate::forge::OperationForge;
     use crate::spaces::forge::member_log_id;
 
@@ -456,7 +456,9 @@ mod tests {
         let space_id = Topic::random();
         let (import_tx, mut import_rx) = mpsc::channel(16);
 
-        egress.add_stream(space_id, true, import_tx).await;
+        egress
+            .add_stream(space_id, StreamType::Space, import_tx)
+            .await;
 
         assert!(import_rx.is_empty());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
