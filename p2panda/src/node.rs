@@ -640,6 +640,13 @@ impl Node {
 
         let (tx, rx) = self.space_stream_from_inner(space_id, from).await?;
 
+        self.egress
+            .add_stream(
+                space_id.into(),
+                StreamType::Space,
+                tx.import_local_tx.clone(),
+            )
+            .await;
         let egress_handle = self.egress.handle();
 
         // Trigger repair so that any missing operations can be incorporated into the space.

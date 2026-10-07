@@ -118,7 +118,6 @@ impl EgressInner {
         self.handles.get(&topic).map(|tx| (topic, tx.clone()))
     }
 
-    // TODO: Update API to allow adding group streams as well.
     fn spaces(&self) -> Vec<(Topic, ImportLocalTx)> {
         let mut result = Vec::new();
 

@@ -299,6 +299,9 @@ pub enum AddGroupMemberError {
 
     #[error(transparent)]
     Egress(#[from] EgressError),
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]

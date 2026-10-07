@@ -748,7 +748,6 @@ mod spaces_repair_task {
             };
         }
 
-        // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
                 if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
