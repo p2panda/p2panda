@@ -5,30 +5,39 @@ use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt};
 use p2panda_auth::validation::{
-    AddMemberError, RemoveMemberError, can_add_member, can_remove_member,
+    self, AddMemberError, RemoveMemberError, can_add_member, can_remove_member,
 };
 use p2panda_auth::{Access, AccessLevel};
+use p2panda_core::Hash;
 use p2panda_core::traits::ShortFormat;
-use p2panda_spaces::{ActorId, GroupId, MemberId};
+use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
+use p2panda_spaces::{ActorId, AuthGroupState, GroupId, MemberId};
+use p2panda_store::groups::GroupsStore;
+use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError};
-use crate::node::CreateStreamError;
-use crate::processor::ProcessorError;
-use crate::spaces::types::{InnerGroup, InnerGroupError, NoBody, SpacesManagerError};
-use crate::streams::{StreamEvent, StreamPublisher, StreamSubscription};
+use crate::spaces::repair::{RepairCommandError, RepairTask};
+use crate::spaces::types::{
+    AuthCapabilities, InnerGroup, InnerGroupError, NoBody, SpacesManagerError,
+};
+use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised group stream.
 pub(crate) fn group_stream(
     inner: InnerGroup,
+    store: SqliteStore,
     egress_handle: EgressHandle,
+    repair_task: RepairTask,
     tx: StreamPublisher<NoBody>,
     rx: StreamSubscription<NoBody>,
 ) -> (Group, GroupSubscription) {
     (
         Group {
             inner,
+            store,
             egress_handle,
+            repair_task,
             tx,
         },
         GroupSubscription { rx },
@@ -38,7 +47,9 @@ pub(crate) fn group_stream(
 #[derive(Debug)]
 pub struct Group {
     inner: InnerGroup,
+    store: SqliteStore,
     egress_handle: EgressHandle,
+    repair_task: RepairTask,
     #[allow(unused)]
     tx: StreamPublisher<NoBody>,
 }
@@ -57,13 +68,18 @@ impl Group {
         access: AccessLevel,
     ) -> Result<(), AddGroupMemberError> {
         let me = self.inner.my_id();
+        let group_id = self.id();
         let actor = actor.into();
         let members = self.actors().await?;
         can_add_member(me, actor, &members).map_err(|err| AddGroupMemberError::Validation {
             actor,
-            group_id: self.id(),
+            group_id,
             err,
         })?;
+
+        if is_group(&self.store, actor).await? {
+            self.repair_task.sync_groups(group_id, vec![actor]).await?;
+        }
 
         let output = self
             .inner
@@ -135,6 +151,23 @@ impl Group {
                 .collect()
         })
     }
+
+    /// Gracefully close the group and any associated sync sessions.
+    pub async fn close(self) -> Result<(), CloseError> {
+        self.tx.close().await
+    }
+}
+
+pub(crate) async fn is_group(store: &SqliteStore, actor: ActorId) -> Result<bool, SqliteError> {
+    let groups_y: AuthGroupState<AuthCapabilities> = tx!(
+        store,
+        store
+            .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+            .await?
+    )
+    .unwrap_or_default();
+
+    Ok(validation::is_group(&groups_y, actor))
 }
 
 impl From<Group> for ActorId {
@@ -161,19 +194,16 @@ pub enum GroupError {
     Group(#[from] InnerGroupError),
 
     #[error(transparent)]
-    Processor(#[from] ProcessorError),
-
-    #[error(transparent)]
     Manager(#[from] SpacesManagerError),
-
-    #[error(transparent)]
-    Submit(#[from] SubmitError),
 
     #[error(transparent)]
     Egress(#[from] EgressError),
 
     #[error(transparent)]
-    CreateStream(#[from] CreateStreamError),
+    Repair(#[from] RepairCommandError),
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]
@@ -197,6 +227,12 @@ pub enum AddGroupMemberError {
 
     #[error(transparent)]
     Egress(#[from] EgressError),
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Repair(#[from] RepairCommandError),
 }
 
 #[derive(Debug, Error)]

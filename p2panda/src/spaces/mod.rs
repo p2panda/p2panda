@@ -6,8 +6,6 @@ mod group;
 mod member;
 pub(crate) mod message;
 pub(crate) mod repair;
-#[allow(unused)]
-pub(crate) mod repair_v2;
 mod space;
 pub(crate) mod types;
 
@@ -23,13 +21,12 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 
 pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::{group_log_id, member_log_id};
-pub(crate) use group::group_stream;
 pub use group::{
     AddGroupMemberError, Group, GroupError, GroupSubscription, RemoveGroupMemberError,
 };
+pub(crate) use group::{group_stream, is_group};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
-pub(crate) use repair::{DEFAULT_REPAIR_STRATEGY, RepairError, RepairTask};
 pub use space::{
     AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceEgressError,
     SpaceFuture, SpaceSubscription,
