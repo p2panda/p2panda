@@ -82,6 +82,7 @@ Highlights are marked with a pancake 🥞
 - stream: Namespace group state by stream id in group processor [#1485](https://github.com/p2panda/p2panda/pull/1485)
 - node: Introduce `GroupSubscription` and `StreamEvent::Group` [#1489](https://github.com/p2panda/p2panda/pull/1489)
 - store: Namespace event metadata entries [#1521](https://github.com/p2panda/p2panda/pull/1521)
+- node: Repair task re-write with hook trigger [#1500](https://github.com/p2panda/p2panda/pull/1500)
 
 ### Fixed
 
