@@ -458,16 +458,19 @@ impl TransactionPermit {
 
 impl Drop for TransactionPermit {
     fn drop(&mut self) {
+        // Lock the mutex synchronously to make sure this happens - even if the async runtime got
+        // dropped.
+        let tx = self.tx.try_lock().ok().and_then(|mut slot| slot.take());
+
         // If the permit was never used (due to an early return / error / etc.) we automatically
         // roll-back the transaction.
-        if !self.committed {
+        if let Some(tx) = tx
+            && !self.committed
+        {
             let permit = self.permit.clone();
-            let tx = self.tx.clone();
 
             tokio::spawn(async move {
-                if let Some(tx) = tx.lock().await.take() {
-                    let _ = tx.rollback().await;
-                }
+                let _ = tx.rollback().await;
 
                 drop(permit); // Semaphore released only after rollback completes.
             });
@@ -800,5 +803,39 @@ mod tests {
         assert_eq!(stored, 2, "both connections stored their row");
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn dropping_runtime_interrupted_write_tx() {
+        // Related issue: <https://github.com/p2panda/p2panda/issues/1479>
+        let runtime = || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+        };
+
+        let first = runtime();
+        let store = first.block_on(async {
+            let store = SqliteStore::temporary().await;
+
+            // The application starts a write of its own and is interrupted before committing it.
+            let interrupted_write = store.begin().await.unwrap();
+            drop(interrupted_write);
+
+            store
+        });
+
+        // The runtime stops here, before the interrupted write was rolled back.
+        drop(first);
+
+        let second = runtime();
+        second.block_on(async {
+            let write = store
+                .begin()
+                .await
+                .expect("the application can write to the database after the restart");
+            store.commit(write).await.unwrap();
+        });
     }
 }
