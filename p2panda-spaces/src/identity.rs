@@ -398,12 +398,17 @@ mod tests {
         let bundle_1 = alice_1.key_bundle().clone();
 
         // Override max. lifetime of 90 days (default) with pre-rotation window to force rotation.
-        alice_identity_manager.config.pre_key_rotate_after =
-            Duration::from_secs(60 * 60 * 24 * 1024);
+        //
+        // TODO: Use Duration::from_days() once stabilized:
+        // https://github.com/rust-lang/rust/issues/120301
+        alice_identity_manager.config.pre_key_rotate_after = Duration::from_hours(24 * 1024);
 
         // Make lifetime of next key longer to "win" over the previous one, in case it is still
         // considered valid due to a race condition (both keys can be generated "at the same time").
-        alice_identity_manager.config.pre_key_lifetime = Duration::from_secs(60 * 60 * 24 * 2048);
+        //
+        // TODO: Use Duration::from_days() once stabilized:
+        // https://github.com/rust-lang/rust/issues/120301
+        alice_identity_manager.config.pre_key_rotate_after = Duration::from_hours(24 * 1024);
 
         let alice_2 = alice_identity_manager.me().await.unwrap();
         let bundle_2 = alice_2.key_bundle().clone();

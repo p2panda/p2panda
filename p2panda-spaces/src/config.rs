@@ -22,8 +22,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            pre_key_lifetime: Duration::from_secs(60 * 60 * 24 * 90), // 90 days
-            pre_key_rotate_after: Duration::from_secs(60 * 60 * 24 * 60), // 60 days
+            // TODO: Use Duration::from_days() once stabilized:
+            // https://github.com/rust-lang/rust/issues/120301
+            pre_key_lifetime: Duration::from_hours(24 * 90), // 90 days
+            pre_key_rotate_after: Duration::from_hours(24 * 60), // 60 days
         }
     }
 }
