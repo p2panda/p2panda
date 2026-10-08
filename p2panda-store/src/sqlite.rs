@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! SQLite database implementation with associated utility functions.
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use p2panda_core::cbor::EncodeError;
 use sqlx::migrate::{MigrateDatabase, Migrator};
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Sqlite, migrate};
 use thiserror::Error;
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
@@ -65,6 +66,7 @@ pub struct SqliteStoreBuilder {
     max_lifetime: Option<Duration>,
     run_migrations: bool,
     create_database: bool,
+    busy_timeout: Duration,
 }
 
 impl Default for SqliteStoreBuilder {
@@ -77,6 +79,7 @@ impl Default for SqliteStoreBuilder {
             max_lifetime: Some(Duration::from_secs(30 * 60)),
             create_database: true,
             run_migrations: true,
+            busy_timeout: Duration::from_secs(5),
         }
     }
 }
@@ -164,18 +167,30 @@ impl SqliteStoreBuilder {
         self
     }
 
+    /// Sets a timeout value to wait when the database is locked, before returning a busy timeout
+    /// error.
+    ///
+    /// Defaults to 5 seconds.
+    pub fn busy_timeout(mut self, duration: impl Into<Duration>) -> Self {
+        self.busy_timeout = duration.into();
+        self
+    }
+
     /// Builds the `SqliteStore`.
     pub async fn build(self) -> Result<SqliteStore, SqliteError> {
         if self.create_database {
             create_database(&self.url).await?;
         }
 
+        let connection_opts =
+            SqliteConnectOptions::from_str(&self.url)?.busy_timeout(self.busy_timeout);
+
         let pool: sqlx::SqlitePool = SqlitePoolOptions::new()
             .min_connections(self.min_connections)
             .max_connections(self.max_connections)
             .idle_timeout(self.idle_timeout)
             .max_lifetime(self.max_lifetime)
-            .connect(&self.url)
+            .connect_with(connection_opts)
             .await?;
 
         if self.run_migrations {
@@ -342,7 +357,33 @@ impl crate::traits::Transaction for SqliteStore {
             tx_ref.is_none(),
             "can't have an already existing transaction after an just-acquired permit"
         );
-        let tx = self.pool.begin().await?;
+
+        // By default SQLite BEGINs transactions in DEFERRED mode, meaning that if a transaction
+        // starts it'll lazily upgrade to an exclusive lock when detecting a WRITE statement:
+        //
+        // ```text
+        // Start with shared lock:
+        //
+        // tx: [READ, READ, WRITE, READ, ..]
+        //                  ^^^^^
+        //                  Upgrade now to exclusive lock
+        // ```
+        //
+        // The problem here is that if an exclusive lock already exists SQlite will just fail with
+        // an SQLITE_BUSY error _without_ waiting until that lock gets freed by the other write
+        // transaction when it detects a deadlock situation (ignoring the busy timeout config).
+        //
+        // When using IMMEDIATE mode we gain two things:
+        //
+        // 1. The exclusive lock will be acquired _before_ the transaction begins
+        // 2. We can rely on a timeout if the lock is busy and do not fail immediately as in
+        //    DEFERRED mode (since there's no risk for a deadlock)
+        //
+        // This comes with a slight SQLite locking overhead but since we only run our transactions
+        // API for writes nonetheless, this is okay.
+        //
+        // Read more about transaction modes here: <https://sqlite.org/lang_transaction.html>
+        let tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         tx_ref.replace(tx);
 
         Ok(TransactionPermit::new(permit, self.tx.clone()))
@@ -485,6 +526,7 @@ mod tests {
     use sqlx::{Executor, query, query_as, query_scalar};
     use tokio::pin;
 
+    use crate::SqliteStoreBuilder;
     use crate::sqlite::{SqliteError, SqliteStore};
     use crate::traits::Transaction;
 
@@ -660,5 +702,103 @@ mod tests {
 
         // Make sure we give pool 2 the time it needs to finish.
         handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn exclusive_writes_across_processes() {
+        // Related issue: <https://github.com/p2panda/p2panda/issues/1475>
+        let path = std::env::temp_dir().join(format!(
+            "p2panda-store-shared-{}.db",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock is past the epoch")
+                .as_nanos()
+        ));
+        let url = { format!("sqlite://{}", path.display()) };
+
+        let open_db = async || {
+            SqliteStoreBuilder::new()
+                .database_url(&url)
+                .build()
+                .await
+                .expect("store opens")
+        };
+
+        // Processes maintain two independent connection pools to the same database file. This means
+        // that the SQLite locking mechanisms will be managed on OS file-level.
+        let process_1 = open_db().await;
+        let process_2 = open_db().await;
+
+        process_1
+            .execute(async |pool| {
+                pool.execute("CREATE TABLE probe (id NUMBER PRIMARY KEY)")
+                    .await?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // The first process opens a transaction which begins with a READ, followed by a WRITE. This
+        // WRITE will attempt upgrading to an exclusive lock in SQLite transaction DEFERRED mode.
+        let process_1_permit = process_1.begin().await.unwrap();
+        process_1
+            .tx(async |tx| {
+                let _: i64 = query_scalar("SELECT COUNT(*) FROM probe")
+                    .fetch_one(&mut **tx)
+                    .await?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+
+        // Meanwhile the other connection writes and commits.
+        let writer = tokio::spawn({
+            let process_2 = process_2.clone();
+
+            async move {
+                let permit = process_2.begin().await.unwrap();
+
+                process_2
+                    .tx(async |tx| {
+                        query("INSERT INTO probe (id) VALUES (2)")
+                            .execute(&mut **tx)
+                            .await?;
+                        Ok(())
+                    })
+                    .await
+                    .unwrap();
+
+                process_2.commit(permit).await.unwrap();
+            }
+        });
+
+        // Long enough for that writer to get in, if it can.
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+        // The first write must still go through.
+        process_1
+            .tx(async |tx| {
+                query("INSERT INTO probe (id) VALUES (1)")
+                    .execute(&mut **tx)
+                    .await?;
+                Ok(())
+            })
+            .await
+            .expect("the other connection does not refuse the app's write");
+        process_1.commit(process_1_permit).await.unwrap();
+
+        writer.await.unwrap();
+
+        let stored: i64 = process_1
+            .execute(async |pool| {
+                Ok(query_scalar("SELECT COUNT(*) FROM probe")
+                    .fetch_one(pool)
+                    .await?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(stored, 2, "both connections stored their row");
+
+        let _ = std::fs::remove_file(&path);
     }
 }
