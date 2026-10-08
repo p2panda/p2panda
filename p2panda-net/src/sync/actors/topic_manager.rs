@@ -458,16 +458,14 @@ where
                         };
 
                         // Send a retry message to the actor after a 5 second delay.
-                        let _ = myself
-                            .send_after(RETRY_RATE, move || {
-                                ToTopicManager::Retry {
-                                    node_id: remote_node_id,
-                                    // TODO: For now we default to live-mode is true but we should
-                                    // rather retrieve this state from the failed sync session.
-                                    live_mode: true,
-                                }
-                            })
-                            .await;
+                        myself.send_after(RETRY_RATE, move || {
+                            ToTopicManager::Retry {
+                                node_id: remote_node_id,
+                                // TODO: For now we default to live-mode is true but we should
+                                // rather retrieve this state from the failed sync session.
+                                live_mode: true,
+                            }
+                        });
                     }
                     None => {
                         let actor_id = actor_cell.get_id();
