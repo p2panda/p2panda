@@ -319,6 +319,24 @@ impl SqliteStore {
     {
         f(&self.pool).await
     }
+
+    /// Shut down the connection pool, immediately waking all tasks waiting for a connection.
+    ///
+    /// Checked-out connections are unaffected, but will be gracefully closed on-drop rather than
+    /// being returned to the pool.
+    ///
+    /// This also rolls back any current write transaction we have a hold on.
+    ///
+    /// **Important:** Any transaction permit usage after closing the store will result in an error.
+    pub async fn close(&self) {
+        self.semaphore.close();
+
+        if let Some(tx) = self.tx.lock().await.take() {
+            let _ = tx.rollback().await;
+        }
+
+        self.pool.close().await;
+    }
 }
 
 impl crate::traits::Transaction for SqliteStore {
@@ -347,7 +365,7 @@ impl crate::traits::Transaction for SqliteStore {
             .clone()
             .acquire_owned()
             .await
-            .expect("if semaphore is closed then the whole struct is gone as well");
+            .map_err(|_| SqliteError::Sqlite(sqlx::Error::PoolClosed))?;
 
         // Access the transaction object which we've placed behind a Mutex. This lock follows a
         // different logic and only makes sure that mutable access to it is exclusive _within_ a
@@ -395,7 +413,8 @@ impl crate::traits::Transaction for SqliteStore {
     /// begin new transactions.
     async fn rollback(&self, permit: TransactionPermit) -> Result<(), SqliteError> {
         let Some(tx) = self.tx.lock().await.take() else {
-            panic!("can't have no transaction without dropping permit first")
+            // Can't have no transaction without dropping permit first unless user called `close`.
+            return Err(SqliteError::Sqlite(sqlx::Error::PoolClosed));
         };
 
         let result = tx.rollback().await.map_err(SqliteError::Sqlite);
@@ -413,7 +432,8 @@ impl crate::traits::Transaction for SqliteStore {
     /// begin new transactions.
     async fn commit(&self, permit: TransactionPermit) -> Result<(), SqliteError> {
         let Some(tx) = self.tx.lock().await.take() else {
-            panic!("can't have no transaction without dropping permit first")
+            // Can't have no transaction without dropping permit first unless user called `close`.
+            return Err(SqliteError::Sqlite(sqlx::Error::PoolClosed));
         };
 
         let result = tx.commit().await.map_err(SqliteError::Sqlite);
@@ -427,6 +447,9 @@ impl crate::traits::Transaction for SqliteStore {
 }
 
 /// Locked context marking the lifetime of a single transaction.
+///
+/// The transaction gets automatically rolled back when dropped. If you need to drop the async
+/// runtime as well, make sure to call `SqliteStore::close` before for a controlled shutdown.
 pub struct TransactionPermit {
     permit: Arc<OwnedSemaphorePermit>,
     tx: Arc<Mutex<Option<Transaction<'static>>>>,
@@ -469,6 +492,8 @@ impl Drop for TransactionPermit {
         {
             let permit = self.permit.clone();
 
+            // Rollback can only be executed if still a runtime exists. For guaranteed cleanup, call
+            // `SqliteStore::close()` explicitly before dropping the runtime.
             tokio::spawn(async move {
                 let _ = tx.rollback().await;
 
@@ -837,5 +862,28 @@ mod tests {
                 .expect("the application can write to the database after the restart");
             store.commit(write).await.unwrap();
         });
+    }
+
+    #[tokio::test]
+    async fn use_permit_after_close() {
+        {
+            let store = SqliteStore::temporary().await;
+            let permit = store.begin().await.unwrap();
+            store.close().await;
+            assert!(store.commit(permit).await.is_err());
+        }
+
+        {
+            let store = SqliteStore::temporary().await;
+            let permit = store.begin().await.unwrap();
+            store.close().await;
+            drop(permit);
+        }
+
+        {
+            let store = SqliteStore::temporary().await;
+            store.close().await;
+            assert!(store.begin().await.is_err());
+        }
     }
 }
