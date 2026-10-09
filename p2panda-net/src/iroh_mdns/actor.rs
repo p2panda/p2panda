@@ -3,18 +3,19 @@
 use futures_util::StreamExt;
 use iroh::address_lookup::{AddressLookup, EndpointData, UserData};
 use iroh_mdns_address_lookup::{DiscoveryEvent, MdnsAddressLookup};
+use p2panda_core::Hash;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::task::JoinHandle;
 use tracing::{debug, trace, warn};
 
-use crate::NodeId;
 use crate::address_book::AddressBook;
 use crate::addrs::{AuthenticatedTransportInfo, NodeInfo, NodeTransportInfo, TransportInfo};
 use crate::iroh_endpoint::Endpoint;
 use crate::iroh_endpoint::user_data::UserDataTransportInfo;
 use crate::iroh_mdns::MdnsDiscoveryMode;
 use crate::utils::{from_verifying_key, to_verifying_key};
+use crate::{NetworkId, NodeId};
 
 const MDNS_SERVICE_NAME: &str = "p2pandav1";
 
@@ -38,6 +39,7 @@ pub enum ToMdns {
 }
 
 pub struct MdnsState {
+    network_id: NetworkId,
     my_node_id: NodeId,
     address_book: AddressBook,
     service: Option<MdnsAddressLookup>,
@@ -63,11 +65,13 @@ impl ThreadLocalActor for MdnsActor {
     ) -> Result<Self::State, ActorProcessingErr> {
         let (mode, address_book, endpoint) = args;
         let my_node_id = endpoint.node_id();
+        let network_id = endpoint.network_id();
 
         // Automatically initialise mDNS service after starting actor.
         myself.send_message(ToMdns::Initialise(from_verifying_key(my_node_id), mode))?;
 
         Ok(MdnsState {
+            network_id,
             my_node_id,
             address_book,
             service: None,
@@ -108,7 +112,19 @@ impl ThreadLocalActor for MdnsActor {
                 let mdns = MdnsAddressLookup::builder()
                     // Do not advertise our own endpoint address if in "passive" mode.
                     .advertise(mode.is_active())
-                    .service_name(MDNS_SERVICE_NAME)
+                    .service_name(format!(
+                        "{}{}",
+                        MDNS_SERVICE_NAME,
+                        // Include a digest of the network id in the service name to make sure nodes
+                        // don't discover each other when in separate networks.
+                        //
+                        // The network id is strictly not a secret, but we still only use a digest
+                        // to defend against future changes which might accidentially leak it.
+                        //
+                        // We can't take the full 64 hex characters since this would exceed the max.
+                        // DNS domain name length.
+                        &hex::encode(Hash::digest(state.network_id))[0..32]
+                    ))
                     .build(endpoint_id)?;
 
                 let handle = {
