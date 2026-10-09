@@ -1724,7 +1724,7 @@ mod database {
         let panda = spawn_node(&swarm).await;
 
         // Panda creates and subscribes to a space.
-        let (space, _panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let (space, panda_rx) = panda.create_space::<SecretData>().await.unwrap();
         let topic = space.id();
 
         // Panda publishes some messages to all members.
@@ -1741,6 +1741,7 @@ mod database {
         }
 
         space.close().await.unwrap();
+        drop(panda_rx);
 
         // Replay the space stream from the start which calls `log_ranges` up front and then
         // processes each operation in the pipeline. This would block if the above described

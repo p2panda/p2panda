@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::collections::{HashMap, HashSet};
+use std::pin::Pin;
 use std::sync::{Arc, RwLock};
+use std::task::{Context, Poll};
 
+use futures_util::{Stream, StreamExt};
 use p2panda_core::Topic;
 use thiserror::Error;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::egress::delivery::ToDelivery;
 use crate::egress::processing::ToProcessing;
@@ -191,6 +195,9 @@ impl Egress {
         }
     }
 
+    /// Registers an event processing layer for this topic.
+    ///
+    /// The topic stays registered until the returned receiver or its registration is dropped.
     pub fn register_processing(
         &self,
         topic: Topic,
@@ -199,12 +206,21 @@ impl Egress {
         let mut inner = self.inner.write().expect("lock poisoned by other thread");
         inner.validate_processing(topic, stream_type)?;
 
-        let (tx, rx) = ToProcessing::new(self.inner.clone(), topic);
+        let (tx, rx) = ToProcessing::new();
         inner.register_processing(topic, stream_type, tx)?;
 
-        Ok(rx)
+        let registration = EgressRegistration {
+            topic,
+            kind: RegistrationKind::Processing,
+            inner: self.inner.clone(),
+        };
+
+        Ok(FromEgress { rx, registration })
     }
 
+    /// Registers an event delivery layer for this topic.
+    ///
+    /// The topic stays registered until the returned receiver or its registration is dropped.
     pub fn register_delivery(
         &self,
         topic: Topic,
@@ -213,10 +229,16 @@ impl Egress {
         let mut inner = self.inner.write().expect("lock poisoned by other thread");
         inner.validate_delivery(topic, stream_type)?;
 
-        let (tx, rx) = ToDelivery::new(self.inner.clone(), topic);
+        let (tx, rx) = ToDelivery::new();
         inner.register_delivery(topic, stream_type, tx)?;
 
-        Ok(rx)
+        let registration = EgressRegistration {
+            topic,
+            kind: RegistrationKind::Delivery,
+            inner: self.inner.clone(),
+        };
+
+        Ok(FromEgress { rx, registration })
     }
 
     pub fn group_topics(&self) -> HashSet<Topic> {
@@ -250,6 +272,56 @@ impl Egress {
     }
 }
 
+/// Receiving end of a registered processing- or delivery layer.
+#[derive(Debug)]
+pub struct FromEgress<T> {
+    rx: ReceiverStream<T>,
+    registration: EgressRegistration,
+}
+
+impl<T> FromEgress<T> {
+    pub fn into_parts(self) -> (EgressRegistration, ReceiverStream<T>) {
+        (self.registration, self.rx)
+    }
+}
+
+impl<T> Stream for FromEgress<T> {
+    type Item = T;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.rx.poll_next_unpin(cx)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.rx.size_hint()
+    }
+}
+
+/// Removes the registered processing or delivery layer from the egress when dropped.
+#[derive(Debug)]
+pub struct EgressRegistration {
+    topic: Topic,
+    kind: RegistrationKind,
+    inner: Arc<RwLock<EgressInner>>,
+}
+
+#[derive(Debug)]
+enum RegistrationKind {
+    Processing,
+    Delivery,
+}
+
+impl Drop for EgressRegistration {
+    fn drop(&mut self) {
+        if let Ok(mut inner) = self.inner.write() {
+            match self.kind {
+                RegistrationKind::Processing => inner.remove_processing(&self.topic),
+                RegistrationKind::Delivery => inner.remove_delivery(&self.topic),
+            }
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum EgressError {
     #[error("processing layer is already registered for topic {0}")]
@@ -275,7 +347,7 @@ mod tests {
         let egress = Egress::new();
         let topic = Topic::random();
 
-        let rx_processing = egress
+        let processing = egress
             .register_processing(topic, StreamType::Topic)
             .unwrap();
 
@@ -291,7 +363,7 @@ mod tests {
             "should fail when trying to register with different stream type",
         );
 
-        let rx_delivery = egress.register_delivery(topic, StreamType::Topic).unwrap();
+        let delivery = egress.register_delivery(topic, StreamType::Topic).unwrap();
 
         assert_matches!(
             egress.register_delivery(topic, StreamType::Topic),
@@ -299,11 +371,27 @@ mod tests {
             "should fail when trying to register same delivery again",
         );
 
-        // Dropping both rx should also free the inner topic handle.
-        drop(rx_processing);
-        drop(rx_delivery);
+        // Dropping both receivers should also free the inner topic handle.
+        drop(processing);
+        drop(delivery);
 
         assert!(egress.register_delivery(topic, StreamType::Topic).is_ok());
+        assert!(egress.register_processing(topic, StreamType::Topic).is_ok());
+    }
+
+    #[tokio::test]
+    async fn unregister_while_rx_still_alive() {
+        let egress = Egress::new();
+        let topic = Topic::random();
+
+        let (registration, _rx) = egress
+            .register_processing(topic, StreamType::Topic)
+            .unwrap()
+            .into_parts();
+
+        // Receiver might still be held by a task which hasn't been cancelled yet.
+        drop(registration);
+
         assert!(egress.register_processing(topic, StreamType::Topic).is_ok());
     }
 }
