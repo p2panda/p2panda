@@ -236,3 +236,27 @@ enum StoreBuilderOptions {
     Url(String),
     Pool(SqlitePool),
 }
+
+#[cfg(test)]
+mod tests {
+    use std::assert_matches;
+
+    use p2panda_store::SqliteStoreBuilder;
+
+    use crate::node::SpawnError;
+
+    use super::NodeBuilder;
+
+    #[tokio::test]
+    async fn disallow_one_max_connections() {
+        // See PR for more details: <https://github.com/p2panda/p2panda/pull/1509>.
+        let store = SqliteStoreBuilder::new()
+            .max_connections(1)
+            .build()
+            .await
+            .unwrap();
+
+        let builder = NodeBuilder::new().database_pool(store.pool().clone());
+        assert_matches!(builder.spawn().await, Err(SpawnError::InvalidConfig(_)));
+    }
+}

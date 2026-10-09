@@ -94,6 +94,17 @@ impl Node {
         store: SqliteStore,
         credentials: Credentials,
     ) -> Result<Self, SpawnError> {
+        if store.pool().options().get_max_connections() == 1 {
+            // A max_connections = 1 would cause a deadlock on our memory-efficient streaming
+            // pipeline where we keep a connection to stream events (row by row) from the database
+            // while we need a second connection to process the operation in the pipeline (ingest).
+            //
+            // See PR #1509 for details here: <https://github.com/p2panda/p2panda/pull/1509>
+            return Err(SpawnError::InvalidConfig(
+                "max_connections on SQLite pool config needs to be greater than 1".into(),
+            ));
+        }
+
         let forge = OperationForge::new(credentials.clone(), store.clone());
 
         let sync_block_list = SyncBlockList::new();
@@ -816,6 +827,9 @@ pub(crate) struct Config {
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpawnError {
+    #[error("{0}")]
+    InvalidConfig(String),
+
     #[error(transparent)]
     Network(#[from] NetworkError),
 
