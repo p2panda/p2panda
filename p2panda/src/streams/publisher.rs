@@ -35,7 +35,7 @@ pub(crate) type ImportLocalTx = mpsc::Sender<(EgressDestination, oneshot::Sender
 /// Publish messages into a topic stream.
 ///
 /// Any message type `M` can be published as long as it can be encoded into bytes by implementing
-/// serde's [`Serialize`] and [`Deserialize`] traits.
+/// serde's [`serde::Serialize`] and [`serde::Deserialize`] traits.
 ///
 /// ## Example
 ///

@@ -19,7 +19,8 @@ use crate::streams::drop_guard::StreamDropGuard;
 ///
 /// A topic stream emits:
 ///
-/// - Locally created or remotely synced [`ProcessedOperation`] with application messages inside
+/// - Locally created or remotely synced [`crate::streams::ProcessedOperation`] with application
+///   messages inside
 /// - Topic-scoped system-events, for example if a sync session has begun and how much will be sent
 /// - Critical errors such as [`AckedError`] coming from the processing pipeline
 ///
@@ -78,8 +79,8 @@ impl<M> StreamSubscription<M> {
     ///
     /// Fails silently if operation is not known (it might have been pruned, etc.).
     ///
-    /// If the [`AckPolicy`] is set to "explicit", users want to call this method _after_
-    /// applicaton-level processing has successfully finished. See high-level description in
+    /// If the [`crate::node::AckPolicy`] is set to "explicit", users want to call this method
+    /// _after_ applicaton-level processing has successfully finished. See high-level description in
     /// [`Node::stream`](crate::node::Node::stream) for more details.
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
         if let Some(operation) = OperationStore::<_, _>::get_operation(&self.store, &id).await? {
