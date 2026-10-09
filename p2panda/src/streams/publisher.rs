@@ -222,7 +222,7 @@ where
     ///
     /// Call `close()` if you wish to drop a `StreamPublisher` and then immediately create a new
     /// stream for the same topic.
-    pub async fn close(&self) -> Result<(), CloseError> {
+    pub async fn close(self) -> Result<(), CloseError> {
         self.sync_handle
             .close()
             .await

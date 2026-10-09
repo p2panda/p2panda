@@ -23,7 +23,6 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::egress::{DeliverFromEgress, ProcessFromEgress};
@@ -162,22 +161,12 @@ where
     // stream"), this channel should be used.
     let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<ForwardEvent<M>>>(128);
 
-    // Create a cancellation token which is used to break out of the input and output event
-    // processing tasks once all instances of the `StreamPublisher` and `StreamSubscription` have
-    // been dropped.
-    //
-    // The spawn repair task doesn't require a cancellation token; it is aborted via the handle
-    // during the wind-down of the input event task.
-    let cancellation_token = CancellationToken::new();
-
     // Spawn first task which receives processed "output events" from the processing pipeline, the
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
     // forwarded to the application layer.
-    {
+    let out_task = {
         let pipeline = pipeline.clone();
         let acked = acked.clone();
-
-        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             loop {
@@ -210,13 +199,6 @@ where
                     Some(forward_events) = to_output_rx.recv() => {
                         forward_events
                     }
-
-                    // Break out of the loop, thereby ending the task, when both the
-                    // `StreamPublisher` and `StreamSubscription` have been dropped.
-                    _ = cancellation_token_child.cancelled() => {
-                        debug!(topic = %topic.to_hex(), "aborting output event processing task");
-                        break
-                    }
                 };
 
                 // Send processing result to application layer.
@@ -234,20 +216,18 @@ where
                     }
                 }
             }
-        });
-    }
+        })
+    };
 
     // Spawn second task which assembles different sources of incoming operations (replays, external
     // streams, sync session, locally published, etc.) and inputs them into the processing pipeline.
     //
     // Here we only forward "system events" to the output stream, such as "sync started" or
     // "external stream import finished", etc.
-    {
+    let in_task = {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
         let to_output_tx = to_output_tx.clone();
-
-        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             // =======================
@@ -430,21 +410,14 @@ where
                         let _ = signal_tx.send(());
                         continue;
                     },
-
-                    // Break out of the loop, thereby ending the task, when both the
-                    // `StreamPublisher` and `StreamSubscription` have been dropped.
-                    _ = cancellation_token_child.cancelled() => {
-                        debug!(topic = %topic.to_hex(), "aborting input event processing task");
-                        break
-                    }
                 };
 
                 let _ = to_output_tx.send(forward_events).await;
             }
-        });
-    }
+        })
+    };
 
-    let drop_guard = StreamDropGuard::new(topic, cancellation_token.clone());
+    let drop_guard = StreamDropGuard::new(vec![out_task, in_task]);
     let tx = StreamPublisher::new(
         topic,
         forge,
