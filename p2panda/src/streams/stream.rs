@@ -406,8 +406,8 @@ where
 
                     // Receive the next event from egress for processing.
                     Some((event, signal_tx)) = egress_processing_rx.next() => {
-                        pipeline.process(event).await;
-                        let _ = signal_tx.send(());
+                        let result = pipeline.process(event).await;
+                        let _ = signal_tx.send(result);
                         continue;
                     },
                 };

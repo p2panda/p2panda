@@ -31,7 +31,7 @@ async fn dispatch_via_egress() {
 
     let event = tokio::spawn(async move {
         let (event, result_tx) = rx.next().await.expect("event arrived at processing rx");
-        assert!(result_tx.send(()).is_ok());
+        assert!(result_tx.send(event.clone()).is_ok()); // Return "fake" result without processing.
         event
     });
 
