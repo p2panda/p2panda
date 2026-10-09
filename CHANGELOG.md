@@ -86,6 +86,7 @@ Highlights are marked with a pancake 🥞
 - node: Unblock task tracker by introducing "pass-through" events coming from orderer [#1267](https://github.com/p2panda/p2panda/pull/1267)
 - node: Manage separate orderer state per topic stream [#1461](https://github.com/p2panda/p2panda/pull/1461)
 - node: Orderer state needs to be reset before replay [#1467](https://github.com/p2panda/p2panda/pull/1467)
+- node: Deadlocks in log_ranges & pipeline when max_connection is too low [#1509](https://github.com/p2panda/p2panda/pull/1509)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
 - spaces: Fix bug instantiating space from existing groups state [#1457](https://github.com/p2panda/p2panda/pull/1457)
