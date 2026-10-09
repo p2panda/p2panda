@@ -408,7 +408,7 @@ mod tests {
         //
         // TODO: Use Duration::from_days() once stabilized:
         // https://github.com/rust-lang/rust/issues/120301
-        alice_identity_manager.config.pre_key_rotate_after = Duration::from_hours(24 * 1024);
+        alice_identity_manager.config.pre_key_lifetime = Duration::from_secs(60 * 60 * 24 * 2048);
 
         let alice_2 = alice_identity_manager.me().await.unwrap();
         let bundle_2 = alice_2.key_bundle().clone();
