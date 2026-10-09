@@ -257,7 +257,6 @@
 //! [p2panda]: https://p2panda.org
 mod builder;
 pub mod credentials;
-#[allow(unused)]
 pub(crate) mod debouncer;
 pub(crate) mod egress;
 mod forge;

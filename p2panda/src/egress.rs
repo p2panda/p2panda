@@ -92,6 +92,14 @@ impl EgressDestination {
     }
 }
 
+/// All different stream types.
+#[derive(Debug)]
+pub enum StreamType {
+    Topic,
+    Group,
+    Space,
+}
+
 #[derive(Clone, Debug)]
 pub struct Egress {
     inner: Arc<RwLock<EgressInner>>,
@@ -110,7 +118,6 @@ impl EgressInner {
         self.handles.get(&topic).map(|tx| (topic, tx.clone()))
     }
 
-    // TODO: Update API to allow adding group streams as well.
     fn spaces(&self) -> Vec<(Topic, ImportLocalTx)> {
         let mut result = Vec::new();
 
@@ -141,16 +148,26 @@ impl Egress {
         }
     }
 
-    // TODO: Update API to allow adding group streams as well.
-    pub async fn add_stream(&self, topic: Topic, is_space: bool, import_tx: ImportLocalTx) -> bool {
+    pub async fn add_stream(
+        &self,
+        topic: Topic,
+        stream_type: StreamType,
+        import_tx: ImportLocalTx,
+    ) -> bool {
         let mut inner = self.inner.write().await;
 
         if let Entry::Vacant(entry) = inner.handles.entry(topic) {
             entry.insert(import_tx);
 
-            if is_space {
-                inner.space_ids.insert(topic);
-            }
+            match stream_type {
+                StreamType::Topic => (),
+                StreamType::Group => {
+                    inner.group_ids.insert(topic);
+                }
+                StreamType::Space => {
+                    inner.space_ids.insert(topic);
+                }
+            };
 
             true
         } else {
@@ -158,13 +175,11 @@ impl Egress {
         }
     }
 
-    #[allow(unused)]
     pub async fn group_topics(&self) -> HashSet<Topic> {
         let inner = self.inner.read().await;
         inner.group_ids.clone()
     }
 
-    #[allow(unused)]
     pub async fn space_topics(&self) -> HashSet<Topic> {
         let inner = self.inner.read().await;
         inner.space_ids.clone()

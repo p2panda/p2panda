@@ -188,3 +188,98 @@ mod group_events {
     // TODO: test that group events are emitted on replays (they should be as they are not
     // carrying enriched data).
 }
+
+mod groups_api_validation {
+    use std::assert_matches;
+
+    use p2panda::spaces::{AddGroupMemberError, RemoveGroupMemberError};
+    use p2panda::streams::StreamEvent;
+    use p2panda::{SigningKey, Topic};
+    use p2panda_auth::AccessLevel;
+    use p2panda_auth::validation::{AddMemberError, RemoveMemberError};
+    use p2panda_core::test_utils::setup_logging;
+    use tokio_stream::StreamExt;
+
+    use super::spawn_node;
+
+    #[tokio::test]
+    async fn api_validation() {
+        setup_logging();
+
+        let network_id = Topic::random().into();
+
+        let panda = spawn_node(network_id).await;
+        let lion = spawn_node(network_id).await;
+        let tiger = spawn_node(network_id).await;
+
+        let (panda_group, _) = panda
+            .create_group(&[
+                (panda.id(), AccessLevel::Manage),
+                (lion.id(), AccessLevel::Read),
+            ])
+            .await
+            .unwrap();
+
+        // Panda can't re-add themselves.
+        let result = panda_group.add(panda.id(), AccessLevel::Write).await;
+        assert_matches!(
+            result.err().unwrap(),
+            AddGroupMemberError::Validation {
+                err: AddMemberError::AlreadyAdded,
+                ..
+            }
+        );
+
+        // Panda can't remove a non-member.
+        let result = panda_group
+            .remove(SigningKey::generate().verifying_key())
+            .await;
+        assert_matches!(
+            result.err().unwrap(),
+            RemoveGroupMemberError::Validation {
+                err: RemoveMemberError::NonMember,
+                ..
+            }
+        );
+
+        // Lion subscribes and receives the group event.
+        let (lion_group, mut lion_group_rx) = lion.group(panda_group.id()).await.unwrap();
+        loop {
+            if let Some(StreamEvent::Group { group_id, .. }) = lion_group_rx.next().await {
+                if group_id == panda_group.id() {
+                    break;
+                }
+            };
+        }
+
+        // TigerS subscribes and receives the group event.
+        let (tiger_group, mut tiger_group_rx) = tiger.group(panda_group.id()).await.unwrap();
+        loop {
+            if let Some(StreamEvent::Group { group_id, .. }) = tiger_group_rx.next().await {
+                if group_id == panda_group.id() {
+                    break;
+                }
+            };
+        }
+
+        // Tiger isn't a recognized group actor.
+        let result = tiger_group.add(tiger.id(), AccessLevel::Write).await;
+        assert_matches!(
+            result.err().unwrap(),
+            AddGroupMemberError::Validation {
+                err: AddMemberError::UnrecognisedActor,
+                ..
+            }
+        );
+
+        // Lion doesn't have required access level.
+        let result = lion_group.remove(panda.id()).await;
+        assert_matches!(
+            result.err().unwrap(),
+            RemoveGroupMemberError::Validation {
+                err: RemoveMemberError::InsufficientAccess,
+                ..
+            }
+        );
+    }
+}
