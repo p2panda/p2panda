@@ -581,8 +581,6 @@ mod event_replays {
 
         // Await graceful termination of the sync session.
         let _ = tx.close().await;
-
-        drop(tx);
         drop(rx);
 
         // Replay from the custom cursor name's frontier. Because this cursor has never acked
