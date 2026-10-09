@@ -50,24 +50,26 @@ pub(crate) async fn reset_orderer(
     namespace: &str,
     ranges: LogRanges<VerifyingKey, LogId>,
 ) -> Result<(), SqliteError> {
-    tx!(store, {
-        match from {
-            StreamFrom::Start => {
+    match from {
+        StreamFrom::Start => {
+            tx!(store, {
                 <SqliteStore as OrdererStore<Hash>>::clear_tx(store, namespace).await?;
-            }
-            StreamFrom::Frontier | StreamFrom::Cursor(_) => {
-                let mut operations = log_ranges(store, ranges);
-                let mut ids = Vec::new();
-
-                while let Some(result) = operations.next().await {
-                    let row = result?;
-                    ids.push(row.entry.header.hash());
-                }
-
-                store.clear_keys_tx(namespace, &ids).await?;
-            }
+            });
         }
-    });
+        StreamFrom::Frontier | StreamFrom::Cursor(_) => {
+            let mut operations = log_ranges(store, ranges);
+            let mut ids = Vec::new();
+
+            while let Some(result) = operations.next().await {
+                let row = result?;
+                ids.push(row.entry.header.hash());
+            }
+
+            tx!(store, {
+                store.clear_keys_tx(namespace, &ids).await?;
+            });
+        }
+    }
 
     Ok(())
 }
