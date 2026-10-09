@@ -79,7 +79,7 @@ impl EgressHandle {
                     delivery_futures.push(result_rx);
                 }
                 Err(_) => {
-                    // Receiver dropped and and cleaned up already.
+                    // Receiver dropped, the registration will clean up the entry.
                 }
             }
         }
@@ -108,7 +108,7 @@ impl EgressHandle {
                     processing_futures.push(result_rx);
                 }
                 Err(_) => {
-                    // Receiver dropped and and cleaned up already.
+                    // Receiver dropped, the registration will clean up the entry.
                 }
             }
         }

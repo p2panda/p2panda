@@ -13,7 +13,7 @@ mod tests;
 pub use config::{DispatchConfig, EventDeliveryPolicy, EventProcessingPolicy};
 pub(super) use delivery::DeliverFromEgress;
 pub(super) use egress::EgressInner;
-pub use egress::{Egress, EgressError};
+pub use egress::{Egress, EgressError, EgressRegistration, FromEgress};
 pub use handle::{DispatchError, DispatchFuture, EgressHandle};
 pub(super) use processing::ProcessFromEgress;
 pub use stream_type::StreamType;

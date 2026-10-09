@@ -219,8 +219,9 @@ where
     /// one.
     ///
     /// This method can be awaited to ensure that all sync-related state has been cleaned up
-    /// internally.
-    pub async fn close(&self) -> Result<(), CloseError> {
+    /// internally. Consumes the publisher, the topic becomes available again once the
+    /// subscription is dropped as well.
+    pub async fn close(self) -> Result<(), CloseError> {
         self.sync_handle
             .close()
             .await
