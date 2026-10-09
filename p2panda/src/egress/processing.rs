@@ -6,7 +6,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::egress::FromEgress;
 use crate::streams::Event;
 
-pub type ToProcessingItem = (Event, oneshot::Sender<()>);
+pub type ToProcessingItem = (Event, oneshot::Sender<Event>);
 
 /// Stream of events which can be consumed by an event processing system.
 pub type ProcessFromEgress = FromEgress<ToProcessingItem>;
@@ -25,7 +25,7 @@ impl ToProcessing {
     pub async fn publish(
         &self,
         event: Event,
-    ) -> Result<oneshot::Receiver<()>, mpsc::error::SendError<ToProcessingItem>> {
+    ) -> Result<oneshot::Receiver<Event>, mpsc::error::SendError<ToProcessingItem>> {
         let (result_tx, result_rx) = oneshot::channel();
         self.tx.send((event, result_tx)).await?;
         Ok(result_rx)
