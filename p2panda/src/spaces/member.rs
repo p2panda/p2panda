@@ -255,8 +255,7 @@ async fn renew_expired_key_bundles(
             "key bundle non-existent or expired, automatically generate new one"
         );
 
-        // TODO: Handle error?
-        let _ = egress_handle.dispatch_with_config(operation, &config).await;
+        egress_handle.dispatch_with_config(operation, &config).await;
 
         ready_signal.notify_one();
     }
@@ -371,7 +370,7 @@ mod tests {
     use p2panda_spaces::Config;
     use p2panda_store::SqliteStore;
     use p2panda_store::logs::LogStore;
-    use tokio::sync::mpsc;
+    use tokio_stream::StreamExt;
 
     use crate::Credentials;
     use crate::egress::{Egress, StreamType};
@@ -454,22 +453,19 @@ mod tests {
         .await;
 
         let space_id = Topic::random();
-        let (import_tx, mut import_rx) = mpsc::channel(16);
 
-        egress
-            .add_stream(space_id, StreamType::Space, import_tx)
-            .await;
+        let mut rx = egress
+            .register_delivery(space_id, StreamType::Space)
+            .unwrap();
 
-        assert!(import_rx.is_empty());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
 
         // 2. Background task is going into next cycle which will cause generation of new key
         //    bundle. We expect all currently active streams (in "live-mode") to be informed about
         //    this update.
-        let (item, _) = import_rx.recv().await.expect("import stream exists");
+        let (operation, _) = rx.next().await.expect("import stream exists");
 
-        let member_msg = match item
-            .operation()
+        let member_msg = match operation
             .header
             .extensions
             .spaces_args()

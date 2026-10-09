@@ -24,10 +24,10 @@ use tokio::time::sleep_until;
 use tracing::{debug, warn};
 
 use crate::debouncer::Debouncer;
-use crate::egress::{Egress, EgressError, EgressHandle, SubmitError};
+use crate::egress::{DispatchError, Egress, EgressHandle};
 use crate::operation::Operation;
 use crate::spaces::types::{AuthCapabilities, InnerSpaceError, SpacesManager, SpacesStore};
-use crate::spaces::{SpaceEgressError, SpacesManagerError, actor_to_topic, dispatch_spaces_events};
+use crate::spaces::{SpacesManagerError, actor_to_topic, dispatch_spaces_events};
 
 pub type RepairTaskSender = mpsc::UnboundedSender<RepairTaskCommand>;
 
@@ -339,21 +339,23 @@ async fn sync_and_repair(
     egress: &Egress,
 ) -> Result<(), RepairError> {
     let egress_handle = egress.handle();
-    for topic in egress.group_topics().await {
+
+    for topic in egress.group_topics() {
         let Ok(group_id) = GroupId::from_bytes(topic.as_bytes()) else {
             warn!("error deriving group from topic in repair task");
             continue;
         };
+
         if let Err(err) = sync_group(store, &egress_handle, group_id).await {
             warn!("error repairing group in repair task: {}", err);
-        };
+        }
     }
 
-    for topic in egress.space_topics().await {
+    for topic in egress.space_topics() {
         if let Err(err) = sync_and_repair_space(manager, store, &egress_handle, topic.into()).await
         {
             warn!("error repairing space in repair task: {}", err);
-        };
+        }
     }
 
     Ok(())
@@ -538,7 +540,7 @@ async fn send_missing_operations(
             continue;
         };
 
-        let processed = egress_handle.dispatch(operation, topic).await?;
+        let processed = egress_handle.dispatch(operation, topic).await;
         processed.await?;
     }
 
@@ -636,7 +638,7 @@ pub enum RepairError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
+    Dispatch(#[from] DispatchError),
 }
 
 #[derive(Debug, Error)]
@@ -654,10 +656,7 @@ pub enum SendOperationsError {
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
+    Dispatch(#[from] DispatchError),
 }
 
 #[cfg(test)]

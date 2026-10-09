@@ -26,7 +26,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::egress::EgressDestination;
+use crate::egress::{DeliverFromEgress, ProcessFromEgress};
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
@@ -110,6 +110,8 @@ pub(crate) async fn processed_stream<M>(
     pipeline: Pipeline,
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
+    mut egress_processing_rx: ProcessFromEgress,
+    mut egress_delivery_rx: DeliverFromEgress,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -147,13 +149,6 @@ where
 
     // Set of currently active external streams.
     let mut external_stream = ExternalStream::default();
-
-    // Channel for receiving messages from the egress.
-    //
-    // TODO: This should be two channels for different parts of the stack, one should go into the
-    // event delivery layer (sync handle), another into the ingress ("import local").
-    let (import_local_tx, mut import_local_rx) =
-        mpsc::channel::<(EgressDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
 
     // Determine from which point on we re-play locally stored operations.
     //
@@ -412,28 +407,28 @@ where
                         }
                     },
 
-                    // Receive the next ready event from any imported local source.
-                    Some((input, signal_tx)) = import_local_rx.recv() => {
-                        match input {
-                            EgressDestination::Delivery(operation) => {
-                                let operation_id = operation.hash();
-                                if sync_handle.publish(operation).is_err() {
-                                    warn!(
-                                        %operation_id,
-                                        "failed sending operation on sync handle"
-                                    )
-                                }
-
-                                let _ = signal_tx.send(());
-
-                                continue;
-                            }
-                            EgressDestination::Processing(event) => {
-                                pipeline.process(event).await;
-                                let _ = signal_tx.send(());
-                                continue;
-                            },
+                    // Receive the next event from egress for delivery.
+                    //
+                    // TODO: Move this out of this module.
+                    Some((operation, signal_tx)) = egress_delivery_rx.next() => {
+                        let operation_id = operation.hash();
+                        if sync_handle.publish(operation).is_err() {
+                            warn!(
+                                %operation_id,
+                                "failed sending operation on sync handle"
+                            )
                         }
+
+                        let _ = signal_tx.send(());
+
+                        continue;
+                    }
+
+                    // Receive the next event from egress for processing.
+                    Some((event, signal_tx)) = egress_processing_rx.next() => {
+                        pipeline.process(event).await;
+                        let _ = signal_tx.send(());
+                        continue;
                     },
 
                     // Break out of the loop, thereby ending the task, when both the
@@ -456,7 +451,6 @@ where
         sync_handle,
         publish_tx,
         import_external_tx,
-        import_local_tx,
         drop_guard.clone(),
     );
     let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx), drop_guard);
