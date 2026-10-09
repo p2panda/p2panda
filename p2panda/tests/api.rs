@@ -3,23 +3,43 @@
 use p2panda::{NetworkId, Node, streams::StreamEvent};
 use p2panda_core::Hash;
 
-fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32) {
+fn assert_replay_started<M>(event: &StreamEvent<M>, expected_total_operations: u32)
+where
+    M: std::fmt::Debug,
+{
     let StreamEvent::ReplayStarted { total_operations } = event else {
-        panic!("unexpected event");
+        panic!(
+            "unexpected event, received {:?} instead of 'replay started'",
+            event
+        );
     };
+
     assert_eq!(total_operations, &expected_total_operations);
 }
 
-fn assert_replay_ended<M>(event: &StreamEvent<M>) {
+fn assert_replay_ended<M>(event: &StreamEvent<M>)
+where
+    M: std::fmt::Debug,
+{
     let StreamEvent::ReplayEnded = event else {
-        panic!("unexpected event");
+        panic!(
+            "unexpected event, received {:?} instead of 'replay ended'",
+            event
+        );
     };
 }
 
-fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash) {
+fn assert_message_id<M>(event: &StreamEvent<M>, id: Hash)
+where
+    M: std::fmt::Debug,
+{
     let StreamEvent::Processed { operation, .. } = event else {
-        panic!("unexpected event");
+        panic!(
+            "unexpected event, received {:?}, instead of 'processed operation'",
+            event
+        );
     };
+
     assert_eq!(operation.id(), id);
 }
 
