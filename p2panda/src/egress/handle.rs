@@ -147,7 +147,7 @@ pub struct DispatchFuture {
     pub delivery_count: usize,
     delivery_fut: future::TryJoinAll<oneshot::Receiver<()>>,
     pub processing_count: usize,
-    processing_fut: future::TryJoinAll<oneshot::Receiver<()>>,
+    processing_fut: future::TryJoinAll<oneshot::Receiver<Event>>,
 }
 
 impl Future for DispatchFuture {
