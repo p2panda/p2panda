@@ -65,7 +65,6 @@ where
     /// Returns initial state for group.
     ///
     /// This needs to be called before creating or being added to a group.
-    #[allow(unused)]
     pub fn init(
         my_id: ID,
         my_keys: KMG::State,
