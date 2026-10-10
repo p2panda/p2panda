@@ -22,7 +22,6 @@ use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionMembershipState;
 use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
@@ -31,7 +30,9 @@ use crate::forge::Forge;
 use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
-use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
+use crate::message::{
+    ApplicationMessage, AuthMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage,
+};
 use crate::store::SpacesStoreState;
 use crate::types::{
     AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState, EncryptionDirectMessage,
