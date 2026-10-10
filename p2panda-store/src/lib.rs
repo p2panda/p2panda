@@ -62,8 +62,8 @@
 //! #
 //! // Acquire a lock on the store for the duration of the read to write cycle.
 //! //
-//! // This is to ensure that the data returned from the `get_latest_entry()` query does not
-//! // become stale before the call to `insert_operation()`.
+//! // This is to ensure that the data returned from the `get_latest_entry_tx` query does not
+//! // become stale before the call to `insert_operation_tx`.
 //! //
 //! // Here we acquire a store permit, query the latest log entry, associate the topic with
 //! // the log, insert the operation and commit the transaction before dropping the permit.
@@ -81,7 +81,7 @@
 //!         .body(&body)
 //!         .build(&signing_key, ());
 //!
-//!     <SqliteStore as TopicStore<Topic, VerifyingKey, u64>>::associate(
+//!     <SqliteStore as TopicStore<Topic, VerifyingKey, u64>>::associate_tx(
 //!         &store,
 //!         &topic,
 //!         &signing_key.verifying_key(),
@@ -92,7 +92,7 @@
 //!     let operation = Operation::from_parts(header, Some(body));
 //!
 //!     store
-//!         .insert_operation(&operation.hash, &operation, &log_id)
+//!         .insert_operation_tx(&operation.hash, &operation, &log_id)
 //!         .await?;
 //!
 //!     operation

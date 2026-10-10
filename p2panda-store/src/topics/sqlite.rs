@@ -20,7 +20,7 @@ where
     type Error = SqliteError;
 
     /// Associate a topic with an author + log id pair.
-    async fn associate(
+    async fn associate_tx(
         &self,
         topic: &T,
         author: &VerifyingKey,
@@ -59,7 +59,7 @@ where
     }
 
     /// Remove an association between a topic and author + log id pair.
-    async fn remove(
+    async fn remove_tx(
         &self,
         topic: &T,
         author: &VerifyingKey,

@@ -22,10 +22,10 @@ async fn update_and_resolve_topic_mapping() {
 
     let permit = store.begin().await.unwrap();
 
-    let result = store.associate(&topic, &alice, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic, &alice, &log_id).await.unwrap();
     assert!(result);
 
-    let result = store.associate(&topic, &bob, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic, &bob, &log_id).await.unwrap();
     assert!(result);
 
     store.commit(permit).await.unwrap();
@@ -33,7 +33,7 @@ async fn update_and_resolve_topic_mapping() {
     // Inserting bob again results in a false result.
     let permit = store.begin().await.unwrap();
 
-    let result = store.associate(&topic, &bob, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic, &bob, &log_id).await.unwrap();
     assert!(!result);
 
     store.commit(permit).await.unwrap();
@@ -55,7 +55,7 @@ async fn resolve_topics_from_association() {
     let bob = SigningKey::from_bytes(&[2u8; 32]).verifying_key();
 
     let permit = store.begin().await.unwrap();
-    let result = store.associate(&topic, &alice, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic, &alice, &log_id).await.unwrap();
     assert!(result);
     store.commit(permit).await.unwrap();
 
@@ -85,19 +85,19 @@ async fn path_based_log_ids() {
     let permit = store.begin().await.unwrap();
 
     let result = store
-        .associate(&topic, &alice, &log_id_kittens)
+        .associate_tx(&topic, &alice, &log_id_kittens)
         .await
         .unwrap();
     assert!(result);
 
     let result = store
-        .associate(&topic, &alice, &log_id_kittens_sleepy)
+        .associate_tx(&topic, &alice, &log_id_kittens_sleepy)
         .await
         .unwrap();
     assert!(result);
 
     let result = store
-        .associate(&topic, &bob, &log_id_puppies)
+        .associate_tx(&topic, &bob, &log_id_puppies)
         .await
         .unwrap();
     assert!(result);
@@ -128,13 +128,13 @@ async fn remove_association() {
     let permit = store.begin().await.unwrap();
 
     let result = store
-        .associate(&topic, &alice, &log_id_kittens)
+        .associate_tx(&topic, &alice, &log_id_kittens)
         .await
         .unwrap();
     assert!(result);
 
     let result = store
-        .associate(&topic, &alice, &log_id_kittens_sleepy)
+        .associate_tx(&topic, &alice, &log_id_kittens_sleepy)
         .await
         .unwrap();
     assert!(result);
@@ -152,7 +152,7 @@ async fn remove_association() {
     let permit = store.begin().await.unwrap();
 
     let result = store
-        .remove(&topic, &alice, &log_id_kittens_sleepy)
+        .remove_tx(&topic, &alice, &log_id_kittens_sleepy)
         .await
         .unwrap();
 
@@ -182,16 +182,16 @@ async fn query_associated_topics() {
 
     let permit = store.begin().await.unwrap();
 
-    let result = store.associate(&topic_1, &alice, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic_1, &alice, &log_id).await.unwrap();
     assert!(result);
 
-    let result = store.associate(&topic_2, &alice, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic_2, &alice, &log_id).await.unwrap();
     assert!(result);
 
-    let result = store.associate(&topic_2, &bob, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic_2, &bob, &log_id).await.unwrap();
     assert!(result);
 
-    let result = store.associate(&topic_3, &cat, &log_id).await.unwrap();
+    let result = store.associate_tx(&topic_3, &cat, &log_id).await.unwrap();
     assert!(result);
 
     let expected_topics = Vec::from([topic_1, topic_2, topic_3]);

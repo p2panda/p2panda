@@ -51,7 +51,7 @@ impl TestNode {
         subscription.topics.insert([7; 32].into());
 
         tx_unwrap!(store, {
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &store,
                 id,
                 HashSet::from_iter([[7; 32].into()]),
@@ -92,7 +92,7 @@ impl TestNode {
         // be simply ignored.
         if node_info.update_transports(transports) {
             tx_unwrap!(self.store, {
-                self.store.insert_node_info(node_info).await.unwrap();
+                self.store.insert_node_info_tx(node_info).await.unwrap();
             });
         }
     }
@@ -128,7 +128,7 @@ impl TestNode {
         }
 
         tx_unwrap!(self.store, {
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &self.store,
                 remote.id,
                 alice_result.topics,
@@ -145,7 +145,7 @@ impl TestNode {
         }
 
         tx_unwrap!(remote.store, {
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &remote.store,
                 self.id,
                 bob_result.topics.clone(),
@@ -199,14 +199,16 @@ async fn peer_discovery_in_network() {
             tx_unwrap!(my_node.store, {
                 my_node
                     .store
-                    .insert_node_info(TestNodeInfo::new(my_node.id).with_random_address(&mut rng))
+                    .insert_node_info_tx(
+                        TestNodeInfo::new(my_node.id).with_random_address(&mut rng),
+                    )
                     .await
                     .unwrap();
 
                 // Add another bootstrap peer to the address book.
                 my_node
                     .store
-                    .insert_node_info({
+                    .insert_node_info_tx({
                         TestNodeInfo::new_bootstrap(next_node.id).with_random_address(&mut rng)
                     })
                     .await

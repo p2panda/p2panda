@@ -24,43 +24,41 @@ async fn insert_get_delete_operations() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     // Re-inserting the same operation returns false.
     assert!(
         !store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash, &operation_3, &log.id())
+            .insert_operation_tx(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash, &operation_4, &log.id())
+            .insert_operation_tx(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );
-
-    store.commit(permit).await.unwrap();
 
     // Has
     // ~~~
 
     assert!(
-        OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_1.hash)
+        OperationStore::<Operation<()>, Hash>::has_operation_tx(&store, &operation_1.hash)
             .await
             .unwrap()
     );
     // Operation 2 was not inserted.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::has_operation(&store, &operation_2.hash)
+        !OperationStore::<Operation<()>, Hash>::has_operation_tx(&store, &operation_2.hash)
             .await
             .unwrap()
     );
@@ -69,13 +67,13 @@ async fn insert_get_delete_operations() {
     // ~~~
 
     assert_eq!(
-        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash>::get_operation_tx(&store, &operation_4.hash)
             .await
             .unwrap(),
         Some(operation_4.clone())
     );
     assert_eq!(
-        OperationStore::<Operation<()>, Hash>::get_operation(&store, &operation_2.hash)
+        OperationStore::<Operation<()>, Hash>::get_operation_tx(&store, &operation_2.hash)
             .await
             .unwrap(),
         None
@@ -84,16 +82,14 @@ async fn insert_get_delete_operations() {
     // Delete
     // ~~~~~~
 
-    let permit = store.begin().await.unwrap();
-
     assert!(
-        OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        OperationStore::<Operation<()>, Hash>::delete_operation_tx(&store, &operation_4.hash)
             .await
             .unwrap(),
     );
     // Deleting the same item again returns false.
     assert!(
-        !OperationStore::<Operation<()>, Hash>::delete_operation(&store, &operation_4.hash)
+        !OperationStore::<Operation<()>, Hash>::delete_operation_tx(&store, &operation_4.hash)
             .await
             .unwrap(),
     );

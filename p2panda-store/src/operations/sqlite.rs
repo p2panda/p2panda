@@ -8,33 +8,13 @@ use sqlx::{FromRow, query, query_as};
 use crate::operations::OperationStore;
 use crate::sqlite::{SqliteError, SqliteStore};
 
-const GET_OPERATION: &str = "
-    SELECT
-        hash,
-        header,
-        body
-    FROM
-        operations_v1
-    WHERE
-        hash = ?
-";
-
-const HAS_OPERATION: &str = "
-    SELECT
-        1
-    FROM
-        operations_v1
-    WHERE
-        hash = ?
-";
-
 impl<E> OperationStore<Operation<E>, Hash> for SqliteStore
 where
     E: Extensions,
 {
     type Error = SqliteError;
 
-    async fn insert_operation<L>(
+    async fn insert_operation_tx<L>(
         &self,
         id: &Hash,
         operation: &Operation<E>,
@@ -89,31 +69,21 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn get_operation(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query_as::<_, OperationRow>(GET_OPERATION)
-                    .bind(id.to_hex())
-                    .fetch_optional(pool)
-                    .await
-                    .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        match result {
-            Some(row) => Ok(Some(row.try_into()?)),
-            None => Ok(None),
-        }
-    }
-
-    // TODO: In the future we may be able to remove this `_tx` variant of the query by instead
-    // requiring that API users exlicitly handle transactions themselves.
-    //
-    // See: https://github.com/p2panda/p2panda/issues/1065
     async fn get_operation_tx(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
+        let sql: &str = "
+            SELECT
+                hash,
+                header,
+                body
+            FROM
+                operations_v1
+            WHERE
+                hash = ?
+        ";
+
         let result = self
             .tx(async |tx| {
-                query_as::<_, OperationRow>(GET_OPERATION)
+                query_as::<_, OperationRow>(sql)
                     .bind(id.to_hex())
                     .fetch_optional(&mut **tx)
                     .await
@@ -125,26 +95,21 @@ where
             Some(row) => Ok(Some(row.try_into()?)),
             None => Ok(None),
         }
-    }
-
-    async fn has_operation(&self, id: &Hash) -> Result<bool, Self::Error> {
-        let result = self
-            .execute(async |pool| {
-                query(HAS_OPERATION)
-                    .bind(id.to_hex())
-                    .fetch_optional(pool)
-                    .await
-                    .map_err(SqliteError::Sqlite)
-            })
-            .await?;
-
-        Ok(result.is_some())
     }
 
     async fn has_operation_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
+        let sql: &str = "
+            SELECT
+                1
+            FROM
+                operations_v1
+            WHERE
+                hash = ?
+        ";
+
         let result = self
             .tx(async |tx| {
-                query(HAS_OPERATION)
+                query(sql)
                     .bind(id.to_hex())
                     .fetch_optional(&mut **tx)
                     .await
@@ -155,7 +120,7 @@ where
         Ok(result.is_some())
     }
 
-    async fn delete_operation(&self, id: &Hash) -> Result<bool, Self::Error> {
+    async fn delete_operation_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
         let result = self
             .tx(async |tx| {
                 query(
@@ -176,7 +141,7 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn delete_operation_payload(&self, id: &Hash) -> Result<bool, Self::Error> {
+    async fn delete_operation_payload_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
         let result = query(
             "
             UPDATE

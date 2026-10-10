@@ -81,7 +81,7 @@ impl TestPeer {
     pub async fn persist_operation(&self, operation: &TestOperation) -> Result<bool, SqliteError> {
         tx_unwrap!(self.store, {
             self.store
-                .insert_operation(&operation.hash, operation, &DEFAULT_LOG_ID)
+                .insert_operation_tx(&operation.hash, operation, &DEFAULT_LOG_ID)
                 .await
         })
     }

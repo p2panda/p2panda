@@ -42,7 +42,7 @@ pub trait TopicStore<T, A, D> {
     type Error: Error;
 
     /// Associate an author and data id pair with a topic.
-    fn associate(
+    fn associate_tx(
         &self,
         topic: &T,
         author: &A,
@@ -50,7 +50,7 @@ pub trait TopicStore<T, A, D> {
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Remove an association with a topic.
-    fn remove(
+    fn remove_tx(
         &self,
         topic: &T,
         author: &A,
