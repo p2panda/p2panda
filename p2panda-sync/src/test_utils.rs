@@ -106,7 +106,7 @@ impl Peer {
 
         tx_unwrap!(&self.store, {
             self.store
-                .insert_operation(&id, &operation, &log_id)
+                .insert_operation_tx(&id, &operation, &log_id)
                 .await
                 .unwrap();
         });
@@ -120,16 +120,17 @@ impl Peer {
         body: &Body,
         log_id: TestLogId,
     ) -> (Header<TestExtensions>, Vec<u8>) {
-        let (seq_num, backlink) = self
-            .store
-            .get_latest_entry(&self.signing_key.verifying_key(), &log_id)
-            .await
-            .unwrap()
-            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-            .unwrap_or((0, None));
+        let (header, header_bytes) = tx_unwrap!(&self.store, {
+            let (seq_num, backlink) = self
+                .store
+                .get_latest_entry_tx(&self.signing_key.verifying_key(), &log_id)
+                .await
+                .unwrap()
+                .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+                .unwrap_or((0, None));
 
-        let (header, header_bytes) =
-            create_operation(&self.signing_key, body, seq_num, backlink, log_id);
+            create_operation(&self.signing_key, body, seq_num, backlink, log_id)
+        });
 
         (header, header_bytes)
     }
@@ -142,7 +143,10 @@ impl Peer {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {
-                self.store.associate(topic, author, log_id).await.unwrap();
+                self.store
+                    .associate_tx(topic, author, log_id)
+                    .await
+                    .unwrap();
             }
         }
         self.store.commit(permit).await.unwrap();

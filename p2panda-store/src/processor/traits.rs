@@ -9,7 +9,7 @@ use p2panda_core::Hash;
 pub trait ProcessorStore<T> {
     type Error: Error;
 
-    fn get_event(&self, id: &Hash) -> impl Future<Output = Result<Option<T>, Self::Error>>;
+    fn get_event_tx(&self, id: &Hash) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
-    fn set_event(&self, id: &Hash, event: &T) -> impl Future<Output = Result<(), Self::Error>>;
+    fn set_event_tx(&self, id: &Hash, event: &T) -> impl Future<Output = Result<(), Self::Error>>;
 }

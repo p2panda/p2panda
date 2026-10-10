@@ -71,7 +71,7 @@ impl Acked {
         }
 
         tx!(self.store, {
-            self.store.set_cursor(&new_cursor).await?;
+            self.store.set_cursor_tx(&new_cursor).await?;
         });
 
         Ok(new_cursor)
@@ -136,7 +136,7 @@ impl Acked {
         );
 
         tx!(self.store, {
-            self.store.set_cursor(&cursor).await?;
+            self.store.set_cursor_tx(&cursor).await?;
         });
 
         Ok(())

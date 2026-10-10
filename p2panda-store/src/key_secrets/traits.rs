@@ -9,11 +9,11 @@ use p2panda_encryption::key_manager::PreKeyBundlesState;
 pub trait KeySecretsStore {
     type Error: Error;
 
-    fn get_prekey_secrets(
+    fn get_prekey_secrets_tx(
         &self,
     ) -> impl Future<Output = Result<Option<PreKeyBundlesState>, Self::Error>>;
 
-    fn set_prekey_secrets(
+    fn set_prekey_secrets_tx(
         &self,
         state: &PreKeyBundlesState,
     ) -> impl Future<Output = Result<(), Self::Error>>;

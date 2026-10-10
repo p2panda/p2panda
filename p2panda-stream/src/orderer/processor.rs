@@ -148,16 +148,12 @@ where
                         }
                     }
 
-                    if let Err(err) = self.store.commit(permit).await {
-                        return Err((input, OrdererError::Transaction(err.to_string())));
-                    }
-
                     let mut to_queue = Vec::new();
 
                     for id in &dependent_operations {
                         let operation = match self
                             .store
-                            .get_operation(id)
+                            .get_operation_tx(id)
                             .await
                             .map_err(|err| OrdererError::OperationStore(err.to_string()))
                         {
@@ -168,7 +164,7 @@ where
                             Err(err) => return Err((input, err)),
                         };
 
-                        let metadata = match self.store.get_event(id).await {
+                        let metadata = match self.store.get_event_tx(id).await {
                             Ok(Some(metadata)) => metadata,
                             Ok(None) => {
                                 return Err((input, OrdererError::StoreInconsistency(*id)));
@@ -182,6 +178,10 @@ where
                             T::from_operation(operation, metadata),
                             OrdererResult::ReadyOutput,
                         ));
+                    }
+
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, OrdererError::Transaction(err.to_string())));
                     }
 
                     // Always forward the current input first.
@@ -200,7 +200,11 @@ where
 
                 // b) Item doesn't have dependencies met yet, mark it as "pending", it is buffered now.
                 Ok(false) => {
-                    if let Err(err) = self.store.set_event(&input.hash(), &input.metadata()).await {
+                    if let Err(err) = self
+                        .store
+                        .set_event_tx(&input.hash(), &input.metadata())
+                        .await
+                    {
                         return Err((input, OrdererError::ProcessorStore(err.to_string())));
                     };
 
@@ -368,11 +372,11 @@ mod tests {
                     let log_id = Topic::random();
 
                     store
-                        .insert_operation(&operation_panda.hash, &operation_panda, &log_id)
+                        .insert_operation_tx(&operation_panda.hash, &operation_panda, &log_id)
                         .await
                         .unwrap();
                     store
-                        .insert_operation(&operation_icebear.hash, &operation_icebear, &log_id)
+                        .insert_operation_tx(&operation_icebear.hash, &operation_icebear, &log_id)
                         .await
                         .unwrap();
                 });

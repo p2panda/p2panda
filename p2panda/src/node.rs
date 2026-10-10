@@ -621,7 +621,7 @@ impl Node {
         tx!(self.store, {
             // Associate the space topic with our own member / key bundle logs.
             self.store
-                .associate(&Topic::from(space_id), &self.id(), &member_log_id())
+                .associate_tx(&Topic::from(space_id), &self.id(), &member_log_id())
                 .await?;
         });
 
@@ -703,7 +703,7 @@ impl Node {
         // Associate the space topic with our own member / key bundle log.
         tx!(&self.store, {
             self.store
-                .associate(&Topic::from(space_id), &self.id(), &member_log_id())
+                .associate_tx(&Topic::from(space_id), &self.id(), &member_log_id())
                 .await
         })?;
 

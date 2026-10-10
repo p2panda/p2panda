@@ -62,7 +62,7 @@ async fn associate_group_log(
     group_id: GroupId,
 ) -> Result<(), SqliteError> {
     let log_id = group_log_id(group_id);
-    let result = tx!(store, store.associate(&topic, &author, &log_id).await);
+    let result = tx!(store, store.associate_tx(&topic, &author, &log_id).await);
 
     if let Err(err) = result {
         warn!("error making log association in groups hook: {err}");
