@@ -38,18 +38,21 @@ async fn set_get_key_registry() {
     let state = KeyRegistry::add_longterm_bundle(state, verifying_key, bundle_1.clone()).unwrap();
 
     // Store should be empty to start with.
-    assert!(
-        <SqliteStore as KeyRegistryStore>::get_key_registry(&store)
+    assert!(tx_unwrap!(store, {
+        <SqliteStore as KeyRegistryStore>::get_key_registry_tx(&store)
             .await
             .unwrap()
             .is_none()
-    );
+    }));
 
     // Store the key registry.
-    tx_unwrap!(store, store.set_key_registry(&state).await.unwrap());
+    tx_unwrap!(store, store.set_key_registry_tx(&state).await.unwrap());
 
     // Key registry state successfully retrieved from the store.
-    assert_eq!(store.get_key_registry().await.unwrap(), Some(state.clone()));
+    assert_eq!(
+        tx_unwrap!(store, store.get_key_registry_tx().await.unwrap()),
+        Some(state.clone())
+    );
 
     // Generate the second prekey bundle.
     let bundle_2 = {
@@ -72,11 +75,11 @@ async fn set_get_key_registry() {
     assert_ne!(state, new_state);
 
     // Store the updated key registry state.
-    tx_unwrap!(store, store.set_key_registry(&new_state).await.unwrap());
+    tx_unwrap!(store, store.set_key_registry_tx(&new_state).await.unwrap());
 
     // New key registry state has overwritten the previous state.
     assert_eq!(
-        store.get_key_registry().await.unwrap(),
+        tx_unwrap!(store, store.get_key_registry_tx().await.unwrap()),
         Some(new_state.clone())
     );
 }

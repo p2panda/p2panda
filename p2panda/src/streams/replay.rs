@@ -53,7 +53,7 @@ pub(crate) async fn reset_orderer(
     tx!(store, {
         match from {
             StreamFrom::Start => {
-                <SqliteStore as OrdererStore<Hash>>::clear(store, namespace).await?;
+                <SqliteStore as OrdererStore<Hash>>::clear_tx(store, namespace).await?;
             }
             StreamFrom::Frontier | StreamFrom::Cursor(_) => {
                 let mut operations = log_ranges(store, ranges);
@@ -64,7 +64,7 @@ pub(crate) async fn reset_orderer(
                     ids.push(row.entry.header.hash());
                 }
 
-                store.clear_keys(namespace, &ids).await?;
+                store.clear_keys_tx(namespace, &ids).await?;
             }
         }
     });

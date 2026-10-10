@@ -59,36 +59,6 @@ where
     type Error = SqliteError;
 
     /// Retrieve the latest entry in an author's log.
-    async fn get_latest_entry(
-        &self,
-        author: &VerifyingKey,
-        log_id: &L,
-    ) -> Result<Option<AnyOperation>, Self::Error> {
-        if let Some(latest) = query_as::<_, OperationRow>(GET_LATEST_ENTRY)
-            .bind(author.to_string())
-            .bind(
-                encode_cbor(&log_id)
-                    .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
-            )
-            .fetch_optional(&self.pool)
-            .await?
-        {
-            let operation = latest.try_into()?;
-
-            Ok(Some(operation))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Retrieve the latest entry in an author's log.
-    ///
-    /// This variant of the method is intended to be used in situations where atomicity of database
-    /// operations is needed. It requires a transaction context with an acquired permit.
-    // TODO: In the future we may be able to remove this `_tx` variant of the query by instead
-    // requiring that API users exlicitly handle transactions themselves.
-    //
-    // See: https://github.com/p2panda/p2panda/issues/1065
     async fn get_latest_entry_tx(
         &self,
         author: &VerifyingKey,
@@ -124,13 +94,15 @@ where
         logs: &[L],
     ) -> Result<Option<BTreeMap<L, SeqNum>>, Self::Error> {
         let mut query_builder = QueryBuilder::new(
-            r#"SELECT
-                log_id,
-                MAX(seq_num) as seq_num
-            FROM
-                operations_v1
-            WHERE
-                verifying_key = "#,
+            r#"
+                SELECT
+                    log_id,
+                    MAX(seq_num) as seq_num
+                FROM
+                    operations_v1
+                WHERE
+                    verifying_key =
+            "#,
         );
 
         query_builder.push_bind(author.to_string());
@@ -211,6 +183,10 @@ where
 
     /// Stream all entries in a log after an optional starting point. This is the memory efficient
     /// equivalent to `get_log_entries` and should only keep one entry in memory at a time.
+    //
+    // TODO: This keeps a connection lease until the stream terminated, causing processors with
+    // database writes to deadlock when combined with this method. See related issue:
+    // <https://github.com/p2panda/p2panda/issues/1512>.
     fn log_entries(
         &self,
         author: &VerifyingKey,
@@ -249,7 +225,7 @@ where
     /// Prune entries from an author's log.
     ///
     /// Pruning involves deletion of the entry bodies (ie. payloads) from the database.
-    async fn prune_entries(
+    async fn prune_entries_tx(
         &self,
         author: &VerifyingKey,
         log_id: &L,
@@ -257,8 +233,7 @@ where
     ) -> Result<u64, Self::Error> {
         let result = query(
             "
-            DELETE
-            FROM
+            DELETE FROM
                 operations_v1
             WHERE
                 verifying_key = ?
@@ -273,7 +248,6 @@ where
         .await?;
 
         let pruned_entries_num = result.rows_affected();
-
         Ok(pruned_entries_num)
     }
 }
