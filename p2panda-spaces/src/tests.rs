@@ -120,7 +120,7 @@ async fn create_space() {
     assert!(direct_messages.is_empty());
 
     // Orderer states have been updated.
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_01.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -311,7 +311,7 @@ async fn add_member_to_space() {
     let y = manager.get_space_state(&space_id).await.unwrap().unwrap();
     assert_eq!(vec![message_04.hash()], y.orderer.heads());
 
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_03.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -490,7 +490,7 @@ async fn add_pull_member_to_space() {
     assert!(direct_messages.is_empty());
 
     // Auth order has been updated.
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_03.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -550,7 +550,7 @@ async fn receive_control_messages() {
 
     // Global auth state has been updated.
     {
-        let groups_y = bob_manager.get_groups_state().await.unwrap();
+        let groups_y = bob_manager.get_global_groups_state().await.unwrap();
         let members = groups_y.members(group_id);
         assert_eq!(members, vec![(alice_id, Access::manage())]);
         assert_eq!(
@@ -620,7 +620,7 @@ async fn receive_control_messages() {
     );
 
     // Orderer states have been updated.
-    let groups_y = bob_manager.get_groups_state().await.unwrap();
+    let groups_y = bob_manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_04.hash()]),
         groups_y.inner.heads(&[group_id])
@@ -1027,7 +1027,7 @@ async fn create_group() {
     );
 
     // Orderer state has been updated.
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_01.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -1095,7 +1095,7 @@ async fn add_member_to_group() {
     );
 
     // Orderer state has been updated.
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_02.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -1149,7 +1149,7 @@ async fn remove_member_from_group() {
     );
 
     // Orderer state has been updated.
-    let groups_y = manager.get_groups_state().await.unwrap();
+    let groups_y = manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_02.hash()]),
         groups_y.inner.heads(&[*group_id])
@@ -1195,7 +1195,11 @@ async fn receive_auth_messages() {
     let _events = bob_manager.process_persisted(&message_01).await.unwrap();
     let _events = bob_manager.process_persisted(&message_02).await.unwrap();
 
-    let group = bob_manager.group(group_id).await.unwrap().unwrap();
+    let global_groups_y = bob_manager.get_global_groups_state().await.unwrap();
+    let group = bob_manager
+        .group(global_groups_y, group_id)
+        .unwrap()
+        .unwrap();
     let members = group.members().await.unwrap();
     assert_eq!(
         members,
@@ -1208,7 +1212,7 @@ async fn receive_auth_messages() {
     drop(group);
 
     // Orderer state has been updated.
-    let groups_y = bob_manager.get_groups_state().await.unwrap();
+    let groups_y = bob_manager.get_global_groups_state().await.unwrap();
     assert_eq!(
         HashSet::from([message_02.hash()]),
         groups_y.inner.heads(&[group_id])
@@ -1668,7 +1672,11 @@ async fn repair_space() {
 
     bob.persist_operation(&message_01).await.unwrap();
     bob_manager.process_persisted(&message_01).await.unwrap();
-    let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
+    let global_groups_y = bob_manager.get_global_groups_state().await.unwrap();
+    let group = bob_manager
+        .group(global_groups_y, member_group_id)
+        .unwrap()
+        .unwrap();
     let bob_message_01 = group
         .add_persisted(claire_id, Access::read())
         .await
@@ -1793,7 +1801,12 @@ async fn duplicate_auth_state_references() {
 
     bob.persist_operation(&message_01).await.unwrap();
     bob_manager.process_persisted(&message_01).await.unwrap();
-    let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
+
+    let global_groups_y = bob_manager.get_global_groups_state().await.unwrap();
+    let group = bob_manager
+        .group(global_groups_y, member_group_id)
+        .unwrap()
+        .unwrap();
     let bob_message_01 = group
         .add_persisted(claire_id, Access::read())
         .await
@@ -2004,12 +2017,23 @@ async fn publish_process_separation() {
     // Node API: create a space, forging required operations, but not persisting any other state.
     // ~~~~~~~~~~~~
 
+    let global_groups_y = manager.get_global_groups_state().await.unwrap();
+    let key_manager_y = manager.inner.identity.key_manager().await.unwrap();
+    let key_registry_y = manager.inner.identity.key_registry().await.unwrap();
+
     // We drop the returned states as we are only interested in the forged operations.
     let SpaceOutput {
         space_y, messages, ..
-    } = Space::create(manager.clone(), space_id, vec![])
-        .await
-        .unwrap();
+    } = Space::create(
+        manager.clone(),
+        global_groups_y,
+        key_manager_y,
+        key_registry_y,
+        space_id,
+        vec![],
+    )
+    .await
+    .unwrap();
     let (messages, _events) = split_messages(messages);
     let group_id = space_y.group_id;
 
@@ -2018,7 +2042,7 @@ async fn publish_process_separation() {
     let space_message = &messages[1];
 
     // Both global auth state and spaces state have NOT been mutated in the store.
-    let auth = manager.get_groups_state().await.unwrap();
+    let auth = manager.get_global_groups_state().await.unwrap();
     let members = auth.members(group_id);
     assert_eq!(members, vec![]);
 
@@ -2031,7 +2055,7 @@ async fn publish_process_separation() {
     let _ = manager.process_persisted(space_message).await.unwrap();
 
     // Both global auth state and spaces state have now been updated and persisted properly.
-    let auth = manager.get_groups_state().await.unwrap();
+    let auth = manager.get_global_groups_state().await.unwrap();
     let space = manager.space(space_id).await.unwrap().unwrap();
 
     let members = auth.members(space.group_id().await.unwrap());
@@ -2108,8 +2132,13 @@ async fn write_access_error() {
     // Bob publishes an application into a space where he doesn't have write access.
     let (_space_y, message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
 
+    let global_groups_y = bob.manager.get_global_groups_state().await.unwrap();
     assert_matches!(
-        alice_manager.process(&message).await.err().unwrap(),
+        alice_manager
+            .process(global_groups_y, &message)
+            .await
+            .err()
+            .unwrap(),
         ManagerError::Space(SpaceError::UnauthorizedWrite(_))
     )
 }

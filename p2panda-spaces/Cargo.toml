@@ -36,7 +36,6 @@ p2panda-store = { workspace = true, features = ["sqlite", "spaces"] }
 petgraph = "0.8.2"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 
 [dev-dependencies]

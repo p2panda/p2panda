@@ -254,7 +254,7 @@ where
             spaces_store
                 .set_groups_state_tx(
                     Hash::digest(GLOBAL_GROUPS_CONTEXT_ID),
-                    &space_output.groups_y,
+                    &space_output.global_groups_y,
                 )
                 .await?;
             spaces_store
