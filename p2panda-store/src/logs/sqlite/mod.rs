@@ -231,21 +231,29 @@ where
         log_id: &L,
         until: &SeqNum,
     ) -> Result<u64, Self::Error> {
-        let result = query(
-            "
-            DELETE FROM
-                operations_v1
-            WHERE
-                verifying_key = ?
-                AND log_id = ?
-                AND seq_num < ?
-            ",
-        )
-        .bind(author.to_string())
-        .bind(encode_cbor(&log_id).map_err(|err| SqliteError::Encode("log id".to_string(), err))?)
-        .bind(until.to_string())
-        .execute(&self.pool)
-        .await?;
+        let result = self
+            .tx(async |tx| {
+                query(
+                    "
+                    DELETE FROM
+                        operations_v1
+                    WHERE
+                        verifying_key = ?
+                        AND log_id = ?
+                        AND seq_num < ?
+                    ",
+                )
+                .bind(author.to_string())
+                .bind(
+                    encode_cbor(&log_id)
+                        .map_err(|err| SqliteError::Encode("log id".to_string(), err))?,
+                )
+                .bind(until.to_string())
+                .execute(&mut **tx)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
 
         let pruned_entries_num = result.rows_affected();
         Ok(pruned_entries_num)
