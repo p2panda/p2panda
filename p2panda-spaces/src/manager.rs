@@ -20,13 +20,12 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
-use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
+use crate::message::{AuthMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::RepairOutput;
 use crate::space::{Space, SpaceError, SpaceOutput, SpacesState};
 use crate::store::SpacesStoreState;

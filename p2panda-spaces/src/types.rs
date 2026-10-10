@@ -4,9 +4,9 @@
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::key_registry::KeyRegistry;
 
-use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
 use crate::encryption::orderer::EncryptionOrderer;
+use crate::message::AuthMessage;
 use crate::{ActorId, MemberId, OperationId};
 
 // ~~~ Auth ~~~

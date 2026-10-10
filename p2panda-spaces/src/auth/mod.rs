@@ -1,4 +1,0 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
-
-//! Message types and trait implementations required by p2panda-auth.
-pub(crate) mod message;

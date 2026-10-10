@@ -11,9 +11,8 @@ use p2panda_encryption::data_scheme::GroupSecretId;
 use p2panda_encryption::traits::{GroupMessage as EncryptionOperation, GroupMessageContent};
 use serde::{Deserialize, Serialize};
 
-use crate::auth::message::AuthMessage;
 use crate::encryption::dgm::EncryptionGroupMembership;
-use crate::message::{ApplicationMessage, SpaceMembershipMessage};
+use crate::message::{ApplicationMessage, AuthMessage, SpaceMembershipMessage};
 use crate::types::{AuthGroupAction, EncryptionControlMessage, EncryptionDirectMessage};
 use crate::utils::removed_secret_members;
 use crate::{MemberId, OperationId};

@@ -6,7 +6,6 @@
     reason = "https://github.com/p2panda/p2panda/issues/1458"
 )]
 
-mod auth;
 mod config;
 mod credentials;
 mod encryption;
@@ -28,12 +27,11 @@ mod utils;
 
 use p2panda_core::{Hash, VerifyingKey};
 
-pub use auth::message::AuthMessage;
 pub use config::Config;
 pub use credentials::Credentials;
 pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
-pub use message::{SpacesArgs, SpacesMessage};
+pub use message::{AuthMessage, SpacesArgs, SpacesMessage};
 pub use store::SpacesStoreState;
 pub use types::{AuthGroupState, StrongRemoveResolver};
 
