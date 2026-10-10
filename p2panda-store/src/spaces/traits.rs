@@ -7,8 +7,10 @@ use p2panda_core::Hash;
 pub trait SpacesMessageStore<T> {
     type Error: Error;
 
-    fn get_spaces_message(&self, id: &Hash)
-    -> impl Future<Output = Result<Option<T>, Self::Error>>;
+    fn get_spaces_message_tx(
+        &self,
+        id: &Hash,
+    ) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 }
 
 // TODO: Consider moving SpacesStoreState here. It makes sense that we have the object which gets
