@@ -7,16 +7,16 @@ use sqlx::{query, query_scalar};
 use crate::key_secrets::traits::KeySecretsStore;
 use crate::{SqliteError, SqliteStore};
 
-// Constant identifier used to provide a primary key for the database table.
-// This makes it possible to use INSERT OR REPLACE to update the prekey secrets state.
+// Constant identifier used to provide a primary key for the database table. This makes it possible
+// to only ever store one row into the table and use INSERT OR REPLACE to update the state.
 const DEFAULT_PRE_KEY_BUNDLES_STATE: &str = "default";
 
 impl KeySecretsStore for SqliteStore {
     type Error = SqliteError;
 
-    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, SqliteError> {
+    async fn get_prekey_secrets_tx(&self) -> Result<Option<PreKeyBundlesState>, SqliteError> {
         let state_bytes: Option<Vec<u8>> = self
-            .execute(async |pool| {
+            .tx(async |tx| {
                 query_scalar(
                     "
                     SELECT
@@ -28,7 +28,7 @@ impl KeySecretsStore for SqliteStore {
                     ",
                 )
                 .bind(DEFAULT_PRE_KEY_BUNDLES_STATE)
-                .fetch_optional(pool)
+                .fetch_optional(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
             })
@@ -44,7 +44,10 @@ impl KeySecretsStore for SqliteStore {
         }
     }
 
-    async fn set_prekey_secrets(&self, state: &PreKeyBundlesState) -> Result<(), SqliteError> {
+    async fn set_prekey_secrets_tx(&self, state: &PreKeyBundlesState) -> Result<(), SqliteError> {
+        let state_bytes =
+            encode_cbor(&state).map_err(|err| SqliteError::Encode("state".to_string(), err))?;
+
         self.tx(async |tx| {
             query(
                 "
@@ -56,7 +59,7 @@ impl KeySecretsStore for SqliteStore {
                 ",
             )
             .bind(DEFAULT_PRE_KEY_BUNDLES_STATE)
-            .bind(encode_cbor(&state).map_err(|err| SqliteError::Encode("state".to_string(), err))?)
+            .bind(state_bytes)
             .execute(&mut **tx)
             .await
             .map_err(SqliteError::Sqlite)

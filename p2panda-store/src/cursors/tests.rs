@@ -14,7 +14,7 @@ async fn get_and_set_cursor() {
 
     // First insert.
     tx_unwrap!(store, {
-        store.set_cursor(&cursor).await.unwrap();
+        store.set_cursor_tx(&cursor).await.unwrap();
     });
 
     assert_eq!(
@@ -30,7 +30,7 @@ async fn get_and_set_cursor() {
     cursor.advance(author, log_id, log_height);
 
     tx_unwrap!(store, {
-        store.set_cursor(&cursor).await.unwrap();
+        store.set_cursor_tx(&cursor).await.unwrap();
     });
 
     let cursor_2: Cursor<VerifyingKey, u64> = store
@@ -43,7 +43,7 @@ async fn get_and_set_cursor() {
 
     // Remove cursor.
     tx_unwrap!(store, {
-        <SqliteStore as CursorStore<VerifyingKey, u64>>::delete_cursor(&store, "test")
+        <SqliteStore as CursorStore<VerifyingKey, u64>>::delete_cursor_tx(&store, "test")
             .await
             .unwrap();
     });

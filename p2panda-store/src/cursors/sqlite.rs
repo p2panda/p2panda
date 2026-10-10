@@ -46,7 +46,7 @@ where
     }
 
     /// Inserts the given cursor into the database.
-    async fn set_cursor(&self, cursor: &Cursor<A, L>) -> Result<(), Self::Error> {
+    async fn set_cursor_tx(&self, cursor: &Cursor<A, L>) -> Result<(), Self::Error> {
         self.tx(async |tx| {
             query(
                 "
@@ -76,7 +76,7 @@ where
     }
 
     /// Deletes the cursor matching the given name from the database.
-    async fn delete_cursor(&self, name: impl AsRef<str>) -> Result<(), Self::Error> {
+    async fn delete_cursor_tx(&self, name: impl AsRef<str>) -> Result<(), Self::Error> {
         self.tx(async |tx| {
             query(
                 "

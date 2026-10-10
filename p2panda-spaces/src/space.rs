@@ -670,12 +670,25 @@ where
         let mut manager = manager_ref.inner.write().await;
         let mut space_dependencies = vec![];
         for id in groups_y.inner.toposort(include) {
+            // TODO: This transaction is just a workaround, a future PR will clean all transactions up.
+            let permit = manager
+                .store
+                .begin()
+                .await
+                .map_err(|err| StoreError::MessageStore(err.to_string()))?;
+
             let group_message = manager
                 .store
-                .get_spaces_message(&id)
+                .get_spaces_message_tx(&id)
                 .await
                 .map_err(|err| StoreError::MessageStore(err.to_string()))?
                 .expect("all auth operations exist");
+
+            manager
+                .store
+                .commit(permit)
+                .await
+                .map_err(|err| StoreError::MessageStore(err.to_string()))?;
 
             // Apply the group message from the global state onto the local space state.
             y.groups_y = AuthGroup::<C>::process(y.groups_y, &SpacesMessage::auth(&group_message))?;

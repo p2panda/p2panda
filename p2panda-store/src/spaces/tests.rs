@@ -42,7 +42,8 @@ async fn verify_generics() {
 
     // We can query the store now.
     let id = Hash::from_bytes([0; 32]);
-    let message: Option<SpacesMessage> = store.get_spaces_message(&id).await.unwrap();
+    let message: Option<SpacesMessage> =
+        tx_unwrap!(store, store.get_spaces_message_tx(&id).await.unwrap());
 
     // Although there are no operations inserted so we expect None.
     assert!(message.is_none());

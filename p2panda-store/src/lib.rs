@@ -62,8 +62,8 @@
 //! #
 //! // Acquire a lock on the store for the duration of the read to write cycle.
 //! //
-//! // This is to ensure that the data returned from the `get_latest_entry()` query does not
-//! // become stale before the call to `insert_operation()`.
+//! // This is to ensure that the data returned from the `get_latest_entry_tx` query does not
+//! // become stale before the call to `insert_operation_tx`.
 //! //
 //! // Here we acquire a store permit, query the latest log entry, associate the topic with
 //! // the log, insert the operation and commit the transaction before dropping the permit.

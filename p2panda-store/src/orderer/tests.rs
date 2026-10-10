@@ -18,36 +18,36 @@ async fn ready() {
     let permit = store.begin().await.unwrap();
 
     // 1. Mark three items as "ready".
-    assert!(store.mark_ready(namespace, hash_3).await.unwrap());
-    assert!(store.mark_ready(namespace, hash_2).await.unwrap());
+    assert!(store.mark_ready_tx(namespace, hash_3).await.unwrap());
+    assert!(store.mark_ready_tx(namespace, hash_2).await.unwrap());
 
     // Should return false when trying to insert the same item again.
-    assert!(!store.mark_ready(namespace, hash_2).await.unwrap());
+    assert!(!store.mark_ready_tx(namespace, hash_2).await.unwrap());
 
     // 2. Should correctly tell us if dependencies have been met.
-    assert!(store.ready(namespace, &[hash_2, hash_3]).await.unwrap());
-    assert!(!store.ready(namespace, &[hash_1, hash_3]).await.unwrap());
-    assert!(!store.ready(namespace, &[hash_1]).await.unwrap());
+    assert!(store.ready_tx(namespace, &[hash_2, hash_3]).await.unwrap());
+    assert!(!store.ready_tx(namespace, &[hash_1, hash_3]).await.unwrap());
+    assert!(!store.ready_tx(namespace, &[hash_1]).await.unwrap());
 
     // 3. Check if they come out in the queued-up order (FIFO) when calling "take_next_ready".
     assert_eq!(
-        store.take_next_ready(namespace).await.unwrap(),
+        store.take_next_ready_tx(namespace).await.unwrap(),
         Some(hash_3)
     );
 
     // .. another item got inserted "mid-way".
-    assert!(store.mark_ready(namespace, hash_1).await.unwrap());
+    assert!(store.mark_ready_tx(namespace, hash_1).await.unwrap());
 
     assert_eq!(
-        store.take_next_ready(namespace).await.unwrap(),
+        store.take_next_ready_tx(namespace).await.unwrap(),
         Some(hash_2)
     );
     assert_eq!(
-        store.take_next_ready(namespace).await.unwrap(),
+        store.take_next_ready_tx(namespace).await.unwrap(),
         Some(hash_1)
     );
     assert_eq!(
-        OrdererStore::<Hash>::take_next_ready(&store, namespace)
+        OrdererStore::<Hash>::take_next_ready_tx(&store, namespace)
             .await
             .unwrap(),
         None
@@ -72,32 +72,32 @@ async fn pending() {
     // 1. Should correctly return true or false when insertion occured.
     assert!(
         store
-            .mark_pending(namespace, hash_1, vec![hash_2, hash_3])
+            .mark_pending_tx(namespace, hash_1, vec![hash_2, hash_3])
             .await
             .unwrap()
     );
     assert!(
         store
-            .mark_pending(namespace, hash_1, vec![hash_3])
+            .mark_pending_tx(namespace, hash_1, vec![hash_3])
             .await
             .unwrap()
     );
     assert!(
         !store
-            .mark_pending(namespace, hash_1, vec![hash_3])
+            .mark_pending_tx(namespace, hash_1, vec![hash_3])
             .await
             .unwrap()
     );
     assert!(
         store
-            .mark_pending(namespace, hash_1, vec![hash_4, hash_3])
+            .mark_pending_tx(namespace, hash_1, vec![hash_4, hash_3])
             .await
             .unwrap()
     );
 
     // 2. Return correct list of pending items.
     let pending = store
-        .get_next_pending(namespace, hash_2)
+        .get_next_pending_tx(namespace, hash_2)
         .await
         .unwrap()
         .unwrap();
@@ -123,20 +123,20 @@ async fn namespaces() {
     let permit = store.begin().await.unwrap();
 
     // Populate first namespace.
-    assert!(store.mark_ready(namespace_1, hash_1).await.unwrap());
-    assert!(store.mark_ready(namespace_1, hash_2).await.unwrap());
+    assert!(store.mark_ready_tx(namespace_1, hash_1).await.unwrap());
+    assert!(store.mark_ready_tx(namespace_1, hash_2).await.unwrap());
 
     // Populate second namespace.
-    assert!(store.mark_ready(namespace_2, hash_1).await.unwrap());
-    assert!(store.mark_ready(namespace_2, hash_2).await.unwrap());
+    assert!(store.mark_ready_tx(namespace_2, hash_1).await.unwrap());
+    assert!(store.mark_ready_tx(namespace_2, hash_2).await.unwrap());
 
     // Take next ready item from each namespace.
     assert_eq!(
-        store.take_next_ready(namespace_1).await.unwrap(),
+        store.take_next_ready_tx(namespace_1).await.unwrap(),
         Some(hash_1)
     );
     assert_eq!(
-        store.take_next_ready(namespace_2).await.unwrap(),
+        store.take_next_ready_tx(namespace_2).await.unwrap(),
         Some(hash_1)
     );
 
@@ -157,28 +157,63 @@ async fn clear() {
 
     tx_unwrap!(store, {
         // Populate first namespace.
-        store.mark_ready(namespace_1, hash_1).await.unwrap();
-        store.mark_ready(namespace_1, hash_2).await.unwrap();
-        assert!(store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
-        assert!(store.ready(namespace_1, &[hash_1]).await.unwrap());
-        assert!(!store.ready(namespace_1, &[hash_3, hash_4]).await.unwrap());
+        store.mark_ready_tx(namespace_1, hash_1).await.unwrap();
+        store.mark_ready_tx(namespace_1, hash_2).await.unwrap();
+        assert!(
+            store
+                .ready_tx(namespace_1, &[hash_1, hash_2])
+                .await
+                .unwrap()
+        );
+        assert!(store.ready_tx(namespace_1, &[hash_1]).await.unwrap());
+        assert!(
+            !store
+                .ready_tx(namespace_1, &[hash_3, hash_4])
+                .await
+                .unwrap()
+        );
 
         // Populate second namespace.
-        store.mark_ready(namespace_2, hash_3).await.unwrap();
-        store.mark_ready(namespace_2, hash_4).await.unwrap();
-        assert!(!store.ready(namespace_2, &[hash_1, hash_2]).await.unwrap());
-        assert!(store.ready(namespace_2, &[hash_3, hash_4]).await.unwrap());
+        store.mark_ready_tx(namespace_2, hash_3).await.unwrap();
+        store.mark_ready_tx(namespace_2, hash_4).await.unwrap();
+        assert!(
+            !store
+                .ready_tx(namespace_2, &[hash_1, hash_2])
+                .await
+                .unwrap()
+        );
+        assert!(
+            store
+                .ready_tx(namespace_2, &[hash_3, hash_4])
+                .await
+                .unwrap()
+        );
 
         // Clear all state for second namespace.
-        <SqliteStore as OrdererStore<Hash>>::clear(&store, namespace_2)
+        <SqliteStore as OrdererStore<Hash>>::clear_tx(&store, namespace_2)
             .await
             .unwrap();
-        assert!(store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
-        assert!(!store.ready(namespace_2, &[hash_3, hash_4]).await.unwrap());
+        assert!(
+            store
+                .ready_tx(namespace_1, &[hash_1, hash_2])
+                .await
+                .unwrap()
+        );
+        assert!(
+            !store
+                .ready_tx(namespace_2, &[hash_3, hash_4])
+                .await
+                .unwrap()
+        );
 
         // Remove one item from first namespace.
-        store.clear_keys(namespace_1, &[hash_2]).await.unwrap();
-        assert!(!store.ready(namespace_1, &[hash_1, hash_2]).await.unwrap());
-        assert!(store.ready(namespace_1, &[hash_1]).await.unwrap());
+        store.clear_keys_tx(namespace_1, &[hash_2]).await.unwrap();
+        assert!(
+            !store
+                .ready_tx(namespace_1, &[hash_1, hash_2])
+                .await
+                .unwrap()
+        );
+        assert!(store.ready_tx(namespace_1, &[hash_1]).await.unwrap());
     });
 }

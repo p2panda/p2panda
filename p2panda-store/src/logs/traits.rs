@@ -21,20 +21,7 @@ pub struct LogEntry<T, L> {
 pub trait LogStore<T, A, L, S, ID> {
     type Error: Error + Send;
 
-    /// Get the latest entry in a log.
-    ///
-    /// Returns None when the author or a log with the requested id was not found.
-    fn get_latest_entry(
-        &self,
-        author: &A,
-        log_id: &L,
-    ) -> impl Future<Output = Result<Option<T>, Self::Error>>;
-
     /// Get the ID and sequence number of the latest entry in a log.
-    ///
-    /// This method must be called within the context of a transaction. Failure to do so will
-    /// result in an error. See the documentation for the `Transaction` trait and the
-    /// corresponding implementation for `SqliteStore` to learn more.
     ///
     /// Returns None when the author or a log with the requested id was not found.
     fn get_latest_entry_tx(
@@ -80,7 +67,7 @@ pub trait LogStore<T, A, L, S, ID> {
     /// Prune all entries in a log until the provided sequence number.
     ///
     /// Returns the number of entries which were pruned.
-    fn prune_entries(
+    fn prune_entries_tx(
         &self,
         author: &A,
         log_id: &L,

@@ -344,11 +344,26 @@ where
         id: OperationId,
     ) -> Result<Option<F::Message>, StoreError> {
         let manager = self.inner.read().await;
+
+        let permit = manager
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
+
+        let message = manager
+            .store
+            .get_spaces_message_tx(&id)
+            .await
+            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
+
         manager
             .store
-            .get_spaces_message(&id)
+            .commit(permit)
             .await
-            .map_err(|err| StoreError::MessageStore(err.to_string()))
+            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
+
+        Ok(message)
     }
 
     /// Get the global auth state.
@@ -497,9 +512,16 @@ where
         let auth_message = {
             let inner = self.inner.read().await;
             let auth_message_id = message.auth_message_id;
+
+            let permit = inner
+                .store
+                .begin()
+                .await
+                .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
+
             let Some(message) = inner
                 .store
-                .get_spaces_message(&auth_message_id)
+                .get_spaces_message_tx(&auth_message_id)
                 .await
                 .map_err(|err| StoreError::SpacesStore(err.to_string()))?
             else {
@@ -508,6 +530,12 @@ where
                     auth_message_id,
                 ));
             };
+
+            inner
+                .store
+                .commit(permit)
+                .await
+                .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
 
             match message.borrow() {
                 SpacesArgs::Group { .. } => SpacesMessage::auth(&message),

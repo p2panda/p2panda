@@ -8,18 +8,18 @@ use sqlx::{query, query_scalar};
 use crate::key_registry::traits::KeyRegistryStore;
 use crate::{SqliteError, SqliteStore};
 
-// Constant identifier used to provide a primary key for the database table.
-// This makes it possible to use INSERT OR REPLACE to update the key registry state.
+// Constant identifier used to provide a primary key for the database table. This makes it possible
+// to only ever store one row into the table and use INSERT OR REPLACE to update the state.
 const DEFAULT_KEY_REGISTRY: &str = "default";
 
 impl KeyRegistryStore for SqliteStore {
     type Error = SqliteError;
 
-    async fn get_key_registry(
+    async fn get_key_registry_tx(
         &self,
     ) -> Result<Option<KeyRegistryState<VerifyingKey>>, Self::Error> {
         let state_bytes: Option<Vec<u8>> = self
-            .execute(async |pool| {
+            .tx(async |tx| {
                 query_scalar(
                     "
                     SELECT
@@ -31,7 +31,7 @@ impl KeyRegistryStore for SqliteStore {
                     ",
                 )
                 .bind(DEFAULT_KEY_REGISTRY)
-                .fetch_optional(pool)
+                .fetch_optional(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
             })
@@ -46,10 +46,13 @@ impl KeyRegistryStore for SqliteStore {
         }
     }
 
-    async fn set_key_registry(
+    async fn set_key_registry_tx(
         &self,
         state: &KeyRegistryState<VerifyingKey>,
     ) -> Result<(), Self::Error> {
+        let state_bytes =
+            encode_cbor(&state).map_err(|err| SqliteError::Encode("state".to_string(), err))?;
+
         self.tx(async |tx| {
             query(
                 "
@@ -61,7 +64,7 @@ impl KeyRegistryStore for SqliteStore {
                 ",
             )
             .bind(DEFAULT_KEY_REGISTRY)
-            .bind(encode_cbor(&state).map_err(|err| SqliteError::Encode("state".to_string(), err))?)
+            .bind(state_bytes)
             .execute(&mut **tx)
             .await
             .map_err(SqliteError::Sqlite)

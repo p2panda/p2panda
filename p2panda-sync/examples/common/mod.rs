@@ -49,7 +49,7 @@ where
             .body(&body)
             .build(signer, extensions);
 
-        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
+        <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate_tx(
             &store,
             &topic,
             &verifying_key,
@@ -60,7 +60,7 @@ where
         let operation = Operation::from_parts(header, Some(body));
 
         store
-            .insert_operation(&operation.hash, &operation, &log_id)
+            .insert_operation_tx(&operation.hash, &operation, &log_id)
             .await?;
 
         operation
