@@ -604,8 +604,31 @@ where
             .orderer
             .add_dependency(encryption_message.id(), &message.space_dependencies);
 
-        // Persist new state.
-        let events = encryption_output_to_space_events(&y.space_id, encryption_output);
+        let mut events = encryption_output_to_space_events(&space_y.space_id, encryption_output);
+
+        // Filter out application events if the author has concurrently lost their write access.
+        //
+        // This case occurs if a member published messages before receiving the control message
+        // which removed them. Their claim to have write access is still historically valid,
+        // however we have already learned that they have actually been removed.
+        //
+        // NOTE: Application _and_ control messages are partially-ordered based on their causal
+        // relationships, application messages are always emitted together with the member's
+        // (create/add) welcome message. For that reason application messages from members which
+        // have been removed at a causally later point (not concurrently) will not be affected by
+        // this filter and are correctly forwarded to the application layer.
+        let has_write_access =
+            space_y
+                .groups_y
+                .members(space_y.group_id)
+                .iter()
+                .any(|(member, access)| {
+                    *member == message.author && (access.is_write() || access.is_manage())
+                });
+
+        if !has_write_access {
+            events.retain(|event| !matches!(event, Event::Application { .. }));
+        }
 
         Ok((space_y, events))
     }
