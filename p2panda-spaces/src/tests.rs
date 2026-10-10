@@ -2051,6 +2051,62 @@ async fn write_access_error() {
 }
 
 #[tokio::test]
+async fn filter_application_events_after_concurrent_removal() {
+    let alice = TestPeer::new(0).await;
+    let alice_manager = alice.manager.clone();
+
+    let bob = TestPeer::new(1).await;
+    let bob_manager = bob.manager.clone();
+    let bob_id = bob_manager.id();
+
+    alice_manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    bob_manager
+        .register_member(&alice.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Alice creates a space where Bob has write access.
+    // ~~~~~~~~~~~~
+
+    let space_id = SpaceId::digest(b"0");
+    let (alice_space, output) = alice_manager
+        .create_space(space_id, &[(bob_id, Access::write())])
+        .await
+        .unwrap();
+    let (messages, _events) = split_messages(output.messages);
+
+    for message in messages {
+        bob.persist_operation(&message).await.unwrap();
+        bob_manager.process(&message).await.unwrap();
+    }
+
+    // Bob publishes an application message, concurrently Alice removes Bob.
+    // ~~~~~~~~~~~~
+
+    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
+    let (message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
+
+    alice_space.remove(bob_id).await.unwrap();
+
+    // Alice processes Bob's message after she removed him.
+    // ~~~~~~~~~~~~
+
+    // Bob's claim to have write access is historically valid, so processing succeeds, but the
+    // decrypted application data is not forwarded as Bob has already lost write access.
+    alice.persist_operation(&message).await.unwrap();
+    let events = alice_manager.process(&message).await.unwrap();
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, Event::Application { .. }))
+    );
+}
+
+#[tokio::test]
 async fn promote_demote() {
     let alice = TestPeer::new(0).await;
     let bob = <TestPeer>::new(1).await;
