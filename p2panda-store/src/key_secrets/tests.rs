@@ -5,7 +5,7 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManager;
 
-use crate::key_secrets::traits::KeySecretsStore;
+use crate::key_secrets::traits::PreKeyBundlesStore;
 use crate::{SqliteStore, tx_unwrap};
 
 #[tokio::test]
@@ -25,7 +25,7 @@ async fn set_get_pre_key_secret() {
     // Store should be empty to start with.
     assert!(tx_unwrap!(
         store,
-        <SqliteStore as KeySecretsStore>::get_prekey_secrets_tx(&store)
+        <SqliteStore as PreKeyBundlesStore>::get_prekey_secrets_tx(&store)
             .await
             .unwrap()
             .is_none()

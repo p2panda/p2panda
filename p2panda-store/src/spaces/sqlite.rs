@@ -14,7 +14,7 @@ use sqlx::{query, query_as};
 
 use crate::groups::GroupsStore;
 use crate::key_registry::KeyRegistryStore;
-use crate::key_secrets::KeySecretsStore;
+use crate::key_secrets::PreKeyBundlesStore;
 use crate::operations::OperationStore;
 use crate::spaces::SpacesStore;
 use crate::spaces::traits::SpacesMessageStore;

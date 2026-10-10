@@ -12,7 +12,7 @@ use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
-use p2panda_store::key_secrets::KeySecretsStore;
+use p2panda_store::key_secrets::PreKeyBundlesStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,7 +52,7 @@ where
         + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
-        + KeySecretsStore
+        + PreKeyBundlesStore
         + Transaction,
     F: Forge<C>,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
