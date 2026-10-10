@@ -142,19 +142,24 @@ where
     }
 
     async fn delete_operation_payload_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
-        let result = query(
-            "
-            UPDATE
-                operations_v1
-            SET
-                body = NULL
-            WHERE
-                operations_v1.hash = ?
-            ",
-        )
-        .bind(id.to_hex())
-        .execute(&self.pool)
-        .await?;
+        let result = self
+            .tx(async |tx| {
+                query(
+                    "
+                UPDATE
+                    operations_v1
+                SET
+                    body = NULL
+                WHERE
+                    operations_v1.hash = ?
+                ",
+                )
+                .bind(id.to_hex())
+                .execute(&mut **tx)
+                .await
+                .map_err(SqliteError::Sqlite)
+            })
+            .await?;
 
         Ok(result.rows_affected() > 0)
     }

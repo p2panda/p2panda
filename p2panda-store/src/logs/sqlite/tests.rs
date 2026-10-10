@@ -246,11 +246,11 @@ async fn prune_entries() {
             .unwrap()
     );
 
-    store.commit(permit).await.unwrap();
-
     let prune_entries_num = SqliteStore::prune_entries_tx(&store, &log.author(), &log.id(), &3)
         .await
         .expect("no errors");
+
+    store.commit(permit).await.unwrap();
 
     assert_eq!(prune_entries_num, 3);
 
