@@ -18,6 +18,8 @@ pub trait SpacesMessageStore<T> {
 pub trait SpacesStore<S> {
     type Error: Error;
 
+    fn get_space_state(&self, id: &Hash) -> impl Future<Output = Result<Option<S>, Self::Error>>;
+
     fn get_space_state_tx(&self, id: &Hash)
     -> impl Future<Output = Result<Option<S>, Self::Error>>;
 
