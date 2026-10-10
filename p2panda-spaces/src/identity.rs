@@ -162,7 +162,7 @@ where
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&mut self) -> Result<F::Message, IdentityError<F, C>> {
+    pub async fn key_bundle_message(&self) -> Result<F::Message, IdentityError<F, C>> {
         let args = SpacesArgs::Member(self.me().await?);
         let message = self.forge.forge(args).await.map_err(IdentityError::Forge)?;
         Ok(message)
@@ -171,7 +171,7 @@ where
     /// Register a member with long-term key bundle material.
     ///
     /// Throws an error if provided key bundle has an invalid signature or expired.
-    pub async fn process(&mut self, member: &Member) -> Result<Event<C>, IdentityError<F, C>> {
+    pub async fn process(&self, member: &Member) -> Result<Event<C>, IdentityError<F, C>> {
         // 1. Claimed member id belongs to the associated key bundle and it's X3DH identity key.
         // 2. Key bundle's pre-key belongs to identity key.
         // 3. Key bundle has not expired.
@@ -203,29 +203,18 @@ where
         Ok(Event::Member(member.clone()))
     }
 
-    pub async fn forge(&mut self, args: SpacesArgs<C>) -> Result<F::Message, IdentityError<F, C>> {
+    pub async fn forge(&self, args: SpacesArgs<C>) -> Result<F::Message, IdentityError<F, C>> {
         self.forge.forge(args).await.map_err(IdentityError::Forge)
     }
 
     /// Assemble and return key manager state from persisted pre-key bundles and identity secret.
     pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<F, C>> {
-        let permit = self
-            .key_store
-            .begin()
-            .await
-            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
-
         let y = self
             .key_store
             .get_prekey_secrets_tx()
             .await
             .map_err(|err| StoreError::KeySecretStore(err.to_string()))?
             .unwrap_or_default();
-
-        self.key_store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
 
         Ok(KeyManager::init_from_prekey_bundles(
             &self.credentials.identity_secret(),
@@ -234,12 +223,6 @@ where
     }
 
     pub async fn key_registry(&self) -> Result<KeyRegistryState<MemberId>, IdentityError<F, C>> {
-        let permit = self
-            .key_store
-            .begin()
-            .await
-            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
-
         let y = match self
             .key_store
             .get_key_registry_tx()
@@ -249,11 +232,6 @@ where
             Some(y) => y,
             None => KeyRegistry::init(),
         };
-
-        self.key_store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
 
         Ok(y)
     }
@@ -340,7 +318,7 @@ mod tests {
         let store = SqliteStore::temporary().await;
         let forge = TestForge::new(store.clone(), credentials.signing_key());
 
-        let mut identity_manager =
+        let identity_manager =
             IdentityManager::new(store, forge, credentials.clone(), config, &rng).unwrap();
 
         let msg = identity_manager.key_bundle_message().await.unwrap();
@@ -364,7 +342,7 @@ mod tests {
         let alice_store = SqliteStore::temporary().await;
         let alice_forge = TestForge::new(alice_store.clone(), alice_credentials.signing_key());
 
-        let mut alice_identity_manager = IdentityManager::new(
+        let alice_identity_manager = IdentityManager::new(
             alice_store,
             alice_forge,
             alice_credentials,

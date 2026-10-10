@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use p2panda_auth::traits::Conditions;
 use p2panda_encryption::data_scheme::SecretBundleState;
 use p2panda_encryption::data_scheme::dcgka::DcgkaState;
 use p2panda_encryption::key_bundle::LongTermKeyBundle;
@@ -65,7 +66,10 @@ impl<C> SpacesStoreState<C> {
     }
 }
 
-impl<C> From<SpacesState<C>> for SpacesStoreState<C> {
+impl<C> From<SpacesState<C>> for SpacesStoreState<C>
+where
+    C: Conditions,
+{
     fn from(y: SpacesState<C>) -> Self {
         Self {
             my_id: y.encryption_y.my_id,

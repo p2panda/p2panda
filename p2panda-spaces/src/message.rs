@@ -4,17 +4,50 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 
 use p2panda_auth::group::GroupAction;
-use p2panda_auth::traits::Conditions;
+use p2panda_auth::traits::{Conditions, Operation as AuthOperation};
 use p2panda_core::traits::{Digest, Provenance};
 use p2panda_core::{Hash, VerifyingKey};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::message::AuthMessage;
 use crate::member::Member;
 use crate::types::EncryptionDirectMessage;
 use crate::{ActorId, GroupId, OperationId, SpaceId};
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AuthMessage<C> {
+    pub operation_id: OperationId,
+    pub author: ActorId,
+    pub dependencies: Vec<OperationId>,
+    pub group_id: GroupId,
+    pub action: GroupAction<ActorId, C>,
+}
+
+impl<C> AuthOperation<ActorId, OperationId, C> for AuthMessage<C>
+where
+    C: Conditions,
+{
+    fn id(&self) -> OperationId {
+        self.operation_id.to_owned()
+    }
+
+    fn author(&self) -> ActorId {
+        self.author.to_owned()
+    }
+
+    fn dependencies(&self) -> Vec<OperationId> {
+        self.dependencies.to_owned()
+    }
+
+    fn group_id(&self) -> GroupId {
+        self.group_id.to_owned()
+    }
+
+    fn action(&self) -> p2panda_auth::group::GroupAction<ActorId, C> {
+        self.action.to_owned()
+    }
+}
 
 /// Spaces message type.
 ///

@@ -3,13 +3,14 @@
 //! High-level API for managing spaces, groups and member keys.
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::traits::{Digest, Provenance, ShortFormat};
 use p2panda_core::{Hash, SigningKey, VerifyingKey};
+use p2panda_encryption::key_manager::KeyManagerState;
+use p2panda_encryption::key_registry::KeyRegistryState;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -17,21 +18,19 @@ use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::KeySecretsStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use thiserror::Error;
-use tokio::sync::RwLock;
 use tracing::debug;
 
-use crate::auth::message::AuthMessage;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::{IdentityError, IdentityManager};
 use crate::member::Member;
-use crate::message::{SpaceMembershipMessage, SpacesArgs, SpacesMessage};
+use crate::message::{AuthMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::RepairOutput;
 use crate::space::{Space, SpaceError, SpaceOutput, SpacesState};
 use crate::store::SpacesStoreState;
 use crate::types::AuthGroupState;
-use crate::{ActorId, Config, Credentials, GroupId, OperationId, SpaceId};
+use crate::{ActorId, Config, Credentials, GroupId, MemberId, OperationId, SpaceId};
 
 /// Identifier used to store groups state into database.
 pub const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
@@ -62,16 +61,14 @@ pub const GLOBAL_GROUPS_CONTEXT_ID: &[u8] = b"global-groups-context";
 #[derive(Debug)]
 pub struct Manager<S, F, C> {
     pub(crate) actor_id: ActorId,
-    #[allow(clippy::type_complexity)]
-    pub(crate) inner: Arc<RwLock<ManagerInner<S, F, C>>>,
+    pub(crate) inner: Arc<ManagerInner<S, F, C>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct ManagerInner<S, F, C> {
     pub store: S,
-    pub(crate) identity: IdentityManager<S, F, C>,
-    pub(crate) rng: Rng,
-    _marker: PhantomData<F>,
+    pub identity: IdentityManager<S, F, C>,
+    pub rng: Rng,
 }
 
 impl<S, F, C> Manager<S, F, C>
@@ -112,11 +109,10 @@ where
             store,
             identity,
             rng,
-            _marker: PhantomData,
         };
         Ok(Self {
             actor_id,
-            inner: Arc::new(RwLock::new(inner)),
+            inner: Arc::new(inner),
         })
     }
 
@@ -130,14 +126,12 @@ where
     ) -> Result<Option<Space<S, F, C>>, ManagerError<F, C>> {
         let id = id.into();
 
-        let has_space = {
-            let manager = self.inner.read().await;
-            manager
-                .store
-                .has_space(&id)
-                .await
-                .map_err(|err| StoreError::SpacesStore(err.to_string()))?
-        };
+        let has_space = self
+            .inner
+            .store
+            .has_space(&id)
+            .await
+            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
 
         if has_space {
             Ok(Some(Space::new(self.clone(), id)))
@@ -150,15 +144,15 @@ where
     ///
     /// A group instance provides an API for adding and removing members from a group and querying
     /// the current group members.
-    pub async fn group(
+    pub fn group(
         &self,
+        global_groups_y: AuthGroupState<C>,
         id: impl Into<GroupId>,
     ) -> Result<Option<Group<S, F, C>>, ManagerError<F, C>> {
         let id = id.into();
-        let groups_y = self.get_groups_state().await?;
 
         // Check if this group exists in the auth state.
-        if groups_y.has_group(id) {
+        if global_groups_y.has_group(id) {
             Ok(Some(Group::new(self.clone(), id)))
         } else {
             Ok(None)
@@ -173,14 +167,24 @@ where
     /// Returns resulting auth and space state and messages for processing.
     pub async fn create_space(
         &self,
+        global_groups_y: AuthGroupState<C>,
+        key_manager_y: KeyManagerState,
+        key_registry_y: KeyRegistryState<MemberId>,
         id: impl Into<SpaceId>,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<SpaceOutput<C, F::Message>, ManagerError<F, C>> {
         let id = id.into();
 
-        let result = Space::create(self.clone(), id, initial_members.to_owned())
-            .await
-            .map_err(ManagerError::Space)?;
+        let result = Space::create(
+            self.clone(),
+            global_groups_y,
+            key_manager_y,
+            key_registry_y,
+            id,
+            initial_members.to_owned(),
+        )
+        .await
+        .map_err(ManagerError::Space)?;
 
         Ok(result)
     }
@@ -194,20 +198,23 @@ where
     /// Returns resulting auth state, group id and message for processing.
     pub async fn create_group(
         &self,
+        global_groups_y: AuthGroupState<C>,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<GroupOutput<C, F::Message>, ManagerError<F, C>> {
-        let groups_y = self.get_groups_state().await?;
-
         // Generate random group id.
         let group_id: GroupId = {
-            let manager = self.inner.read().await;
-            let signing_key = SigningKey::from_bytes(&manager.rng.random_array()?);
+            let signing_key = SigningKey::from_bytes(&self.inner.rng.random_array()?);
             signing_key.verifying_key()
         };
 
-        let output = Group::create(self.clone(), groups_y, group_id, initial_members.to_owned())
-            .await
-            .map_err(ManagerError::Group)?;
+        let output = Group::create(
+            self.clone(),
+            global_groups_y,
+            group_id,
+            initial_members.to_owned(),
+        )
+        .await
+        .map_err(ManagerError::Group)?;
 
         Ok(output)
     }
@@ -217,7 +224,11 @@ where
     /// We expect messages to be signature-checked, dependency-checked & partially ordered.
     ///
     /// Returns events which inform users of any state changes which occurred.
-    pub async fn process<M>(&self, message: &M) -> Result<ProcessOutput<C>, ManagerError<F, C>>
+    pub async fn process<M>(
+        &self,
+        global_groups_y: AuthGroupState<C>,
+        message: &M,
+    ) -> Result<ProcessOutput<C>, ManagerError<F, C>>
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
@@ -238,8 +249,8 @@ where
         match args {
             // Received key bundle from a member.
             SpacesArgs::Member(member) => {
-                let mut manager = self.inner.write().await;
-                let event = manager
+                let event = self
+                    .inner
                     .identity
                     .process(member)
                     .await
@@ -248,11 +259,11 @@ where
                 output.events = vec![event];
             }
             SpacesArgs::Group { .. } => {
-                let (groups_y, event) = Group::process(self.clone(), &SpacesMessage::auth(message))
-                    .await
-                    .map_err(ManagerError::Group)?;
+                let (global_groups_y, event) =
+                    Group::process(self.clone(), global_groups_y, &SpacesMessage::auth(message))
+                        .map_err(ManagerError::Group)?;
 
-                output.groups_y = groups_y;
+                output.global_groups_y = global_groups_y;
                 output.events = vec![event];
             }
             // Received control message related to a space.
@@ -297,8 +308,7 @@ where
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn me(&self) -> Result<Member, ManagerError<F, C>> {
-        let manager = self.inner.write().await;
-        manager
+        self.inner
             .identity
             .me()
             .await
@@ -308,8 +318,8 @@ where
     /// Register a member with long-term key bundle material which was provided through another
     /// channel (QR code scan etc.).
     pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C>> {
-        let mut manager = self.inner.write().await;
-        let _event = manager
+        let _event = self
+            .inner
             .identity
             .process(member)
             .await
@@ -322,16 +332,14 @@ where
     /// If `true` then users should rotate their pre-key and generate a new bundle message (which
     /// should then be published) by calling `key_bundle_message`.
     pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<F, C>> {
-        let manager = self.inner.read().await;
-        Ok(manager.identity.key_bundle_expired().await?)
+        Ok(self.inner.identity.key_bundle_expired().await?)
     }
 
     /// Forge a key bundle message containing my latest key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
     pub async fn key_bundle_message(&self) -> Result<F::Message, ManagerError<F, C>> {
-        let mut manager = self.inner.write().await;
-        manager
+        self.inner
             .identity
             .key_bundle_message()
             .await
@@ -343,51 +351,21 @@ where
         &self,
         id: OperationId,
     ) -> Result<Option<F::Message>, StoreError> {
-        let manager = self.inner.read().await;
-
-        let permit = manager
-            .store
-            .begin()
-            .await
-            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
-
-        let message = manager
+        self.inner
             .store
             .get_spaces_message_tx(&id)
             .await
-            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
-
-        manager
-            .store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::MessageStore(err.to_string()))?;
-
-        Ok(message)
+            .map_err(|err| StoreError::MessageStore(err.to_string()))
     }
 
     /// Get the global auth state.
-    pub(crate) async fn get_groups_state(&self) -> Result<AuthGroupState<C>, StoreError> {
-        let manager = self.inner.read().await;
-
-        let permit = manager
-            .store
-            .begin()
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
-
-        let y = manager
+    pub(crate) async fn get_global_groups_state(&self) -> Result<AuthGroupState<C>, StoreError> {
+        let y = self
+            .inner
             .store
             .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
             .await
             .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
-
-        manager
-            .store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
-
         Ok(y.unwrap_or_default())
     }
 
@@ -396,25 +374,12 @@ where
         &self,
         id: &SpaceId,
     ) -> Result<Option<SpacesStoreState<C>>, StoreError> {
-        let manager = self.inner.write().await;
-
-        let permit = manager
-            .store
-            .begin()
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
-
-        let y = manager
+        let y = self
+            .inner
             .store
             .get_space_state_tx(id)
             .await
             .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
-
-        manager
-            .store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
         Ok(y)
     }
@@ -425,7 +390,7 @@ where
         space_id: SpaceId,
         groups: &[GroupId],
     ) -> Result<bool, ManagerError<F, C>> {
-        let groups_y = self.get_groups_state().await?;
+        let groups_y = self.get_global_groups_state().await?;
 
         let Some(space_y) = self.get_space_state(&space_id).await? else {
             return Err(ManagerError::SpaceNotFound(space_id));
@@ -510,16 +475,9 @@ where
     ) -> Result<(Option<SpacesState<C>>, Vec<Event<C>>), ManagerError<F, C>> {
         // Get auth message.
         let auth_message = {
-            let inner = self.inner.read().await;
             let auth_message_id = message.auth_message_id;
-
-            let permit = inner
-                .store
-                .begin()
-                .await
-                .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
-
-            let Some(message) = inner
+            let Some(message) = self
+                .inner
                 .store
                 .get_spaces_message_tx(&auth_message_id)
                 .await
@@ -530,12 +488,6 @@ where
                     auth_message_id,
                 ));
             };
-
-            inner
-                .store
-                .commit(permit)
-                .await
-                .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
 
             match message.borrow() {
                 SpacesArgs::Group { .. } => SpacesMessage::auth(&message),
@@ -572,7 +524,7 @@ where
 /// Output from Manager::process.
 #[derive(Debug)]
 pub struct ProcessOutput<C> {
-    pub groups_y: Option<AuthGroupState<C>>,
+    pub global_groups_y: Option<AuthGroupState<C>>,
     pub space_y: Option<SpacesState<C>>,
     pub events: Vec<Event<C>>,
 }
@@ -580,7 +532,7 @@ pub struct ProcessOutput<C> {
 impl<C> Default for ProcessOutput<C> {
     fn default() -> Self {
         Self {
-            groups_y: Default::default(),
+            global_groups_y: Default::default(),
             space_y: Default::default(),
             events: Default::default(),
         }
@@ -607,8 +559,28 @@ where
         &self,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Group<S, F, C>, GroupOutput<C, F::Message>), ManagerError<F, C>> {
-        let output = self.create_group(initial_members).await?;
-        self.set_groups_state(&output.groups_y).await?;
+        let permit = self
+            .inner
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        // Read.
+        let global_groups_y = self.get_global_groups_state().await?;
+
+        // Modify.
+        let output = self.create_group(global_groups_y, initial_members).await?;
+
+        // Write.
+        self.set_global_groups_state(&output.groups_y).await?;
+
+        self.inner
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
         let group = Group::new(self.clone(), output.group_id);
         Ok((group, output))
     }
@@ -624,39 +596,69 @@ where
         id: SpaceId,
         initial_members: &[(ActorId, Access<C>)],
     ) -> Result<(Space<S, F, C>, SpaceOutput<C, F::Message>), ManagerError<F, C>> {
-        let result = self.create_space(id, initial_members).await?;
-        let space_id = result.space_y.space_id;
-
-        self.set_groups_state(&result.groups_y).await?;
-        self.set_space_state(&space_id, &result.space_y.clone().into())
-            .await
-            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
-        let space = Space::new(self.clone(), space_id);
-
-        Ok((space, result))
-    }
-
-    /// Set the global auth state.
-    pub async fn set_groups_state(&self, y: &AuthGroupState<C>) -> Result<(), StoreError> {
-        let manager = self.inner.write().await;
-
-        let permit = manager
+        let permit = self
+            .inner
             .store
             .begin()
             .await
             .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
-        manager
-            .store
-            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), y)
-            .await
-            .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+        // Read.
 
-        manager
+        let global_groups_y = self.get_global_groups_state().await?;
+        let key_manager_y = self.inner.identity.key_manager().await?;
+        let key_registry_y = self.inner.identity.key_registry().await?;
+
+        // Modify.
+
+        let output = self
+            .create_space(
+                global_groups_y,
+                key_manager_y,
+                key_registry_y,
+                id,
+                initial_members,
+            )
+            .await?;
+
+        // Write.
+
+        self.set_global_groups_state(&output.global_groups_y)
+            .await?;
+
+        self.inner
+            .store
+            .set_prekey_secrets_tx(output.space_y.into_key_manager_store())
+            .await
+            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+
+        self.inner
+            .store
+            .set_key_registry_tx(output.space_y.into_key_registry_store())
+            .await
+            .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
+
+        self.set_space_state(&id, &output.space_y.clone().into())
+            .await?;
+
+        self.inner
             .store
             .commit(permit)
             .await
             .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        let space = Space::new(self.clone(), id);
+
+        Ok((space, output))
+    }
+
+    /// Set the global auth state.
+    pub async fn set_global_groups_state(&self, y: &AuthGroupState<C>) -> Result<(), StoreError> {
+        self.inner
+            .store
+            .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), y)
+            .await
+            .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
 
         Ok(())
     }
@@ -667,25 +669,11 @@ where
         space_id: &SpaceId,
         y: &SpacesStoreState<C>,
     ) -> Result<(), StoreError> {
-        let manager = self.inner.write().await;
-
-        let permit = manager
-            .store
-            .begin()
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
-
-        manager
+        self.inner
             .store
             .set_space_state_tx(space_id, y)
             .await
             .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
-
-        manager
-            .store
-            .commit(permit)
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
         Ok(())
     }
@@ -697,20 +685,54 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>> + Debug,
     {
+        let permit = self
+            .inner
+            .store
+            .begin()
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
+
+        // Read.
+
+        let global_groups_y = self.get_global_groups_state().await?;
+
+        // Modify.
+
         let ProcessOutput {
-            groups_y,
+            global_groups_y: groups_y,
             space_y,
             events,
-        } = self.process(message).await?;
+        } = self.process(global_groups_y, message).await?;
+
+        // Write.
 
         if let Some(groups_y) = groups_y {
-            self.set_groups_state(&groups_y).await?;
+            self.set_global_groups_state(&groups_y).await?;
         };
 
         if let Some(space_y) = space_y {
             let space_id = space_y.space_id;
+
+            self.inner
+                .store
+                .set_prekey_secrets_tx(space_y.into_key_manager_store())
+                .await
+                .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+
+            self.inner
+                .store
+                .set_key_registry_tx(space_y.into_key_registry_store())
+                .await
+                .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
+
             self.set_space_state(&space_id, &space_y.into()).await?;
         };
+
+        self.inner
+            .store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
         Ok(events)
     }
