@@ -131,8 +131,12 @@ impl AddressBookState {
 
     async fn set_topics(&self, node_id: NodeId, topics: HashSet<Topic>) -> Result<(), SqliteError> {
         tx!(self.store, {
-            AddressBookStore::<NodeId, NodeInfo>::set_topics(&self.store, node_id, topics.clone())
-                .await?;
+            AddressBookStore::<NodeId, NodeInfo>::set_topics_tx(
+                &self.store,
+                node_id,
+                topics.clone(),
+            )
+            .await?;
         });
 
         // Inform subscribers about potential change in set of interested nodes.
@@ -199,7 +203,7 @@ impl ThreadLocalActor for AddressBookActor {
                 // Overwrite any previously given information if it existed.
                 let result = tx!(
                     state.store,
-                    state.store.insert_node_info(node_info.clone()).await
+                    state.store.insert_node_info_tx(node_info.clone()).await
                 )?;
 
                 // Inform subscribers about this update. This will only get notified if it really
@@ -232,7 +236,7 @@ impl ThreadLocalActor for AddressBookActor {
                 match node_info.update_transports(transport_info) {
                     Ok(is_newer) => {
                         tx!(state.store, {
-                            state.store.insert_node_info(node_info.clone()).await?;
+                            state.store.insert_node_info_tx(node_info.clone()).await?;
                         });
 
                         let _ = reply.send(Ok(is_newer));
@@ -318,7 +322,7 @@ impl ThreadLocalActor for AddressBookActor {
                 }
 
                 tx!(state.store, {
-                    state.store.insert_node_info(node_info).await?;
+                    state.store.insert_node_info_tx(node_info).await?;
                 });
             }
             ToAddressBookActor::NodeInfo(node_id, reply) => {
@@ -350,15 +354,21 @@ impl ThreadLocalActor for AddressBookActor {
             }
             ToAddressBookActor::RemoveNodeInfo(node_id, reply) => {
                 let result = tx!(state.store, {
-                    AddressBookStore::<NodeId, NodeInfo>::remove_node_info(&state.store, &node_id)
-                        .await?
+                    AddressBookStore::<NodeId, NodeInfo>::remove_node_info_tx(
+                        &state.store,
+                        &node_id,
+                    )
+                    .await?
                 });
                 let _ = reply.send(result);
             }
             ToAddressBookActor::RemoveOlderThan(duration, reply) => {
                 let result = tx!(state.store, {
-                    AddressBookStore::<NodeId, NodeInfo>::remove_older_than(&state.store, duration)
-                        .await?
+                    AddressBookStore::<NodeId, NodeInfo>::remove_older_than_tx(
+                        &state.store,
+                        duration,
+                    )
+                    .await?
                 });
                 let _ = reply.send(result);
             }

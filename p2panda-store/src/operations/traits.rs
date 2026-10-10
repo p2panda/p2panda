@@ -15,15 +15,12 @@ pub trait OperationStore<T, ID> {
     ///
     /// Returns `true` when the insert occurred, or `false` when the operation already existed and
     /// no insertion occurred.
-    fn insert_operation<L: LogId>(
+    fn insert_operation_tx<L: LogId>(
         &self,
         id: &ID,
         operation: &T,
         collection_id: &L,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
-
-    /// Get an operation by id.
-    fn get_operation(&self, id: &ID) -> impl Future<Output = Result<Option<T>, Self::Error>>;
 
     /// Get an operation by id.
     ///
@@ -35,26 +32,20 @@ pub trait OperationStore<T, ID> {
     /// Query the existence of an operation.
     ///
     /// Returns `true` if the operation was found in the store and `false` if not.
-    fn has_operation(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
-
-    /// Query the existence of an operation.
-    ///
-    /// This method must be called within the context of a transaction. Failure to do so will
-    /// result in an error. See the documentation for the `Transaction` trait and the
-    /// corresponding implementation for `SqliteStore` to learn more.
-    ///
-    /// Returns `true` if the operation was found in the store and `false` if not.
     fn has_operation_tx(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Delete an operation.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation was not found in
     /// the store.
-    fn delete_operation(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
+    fn delete_operation_tx(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Delete an operation payload.
     ///
     /// Returns `true` when the removal occurred and `false` when the operation was not found in
     /// the store.
-    fn delete_operation_payload(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
+    fn delete_operation_payload_tx(
+        &self,
+        id: &ID,
+    ) -> impl Future<Output = Result<bool, Self::Error>>;
 }

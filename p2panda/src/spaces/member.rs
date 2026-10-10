@@ -328,7 +328,7 @@ async fn associate_members_inner(
 ) -> Result<(), SqliteError> {
     tx!(store, {
         for (id, _) in members {
-            store.associate(space_id, id, &member_log_id()).await?;
+            store.associate_tx(space_id, id, &member_log_id()).await?;
         }
     });
 

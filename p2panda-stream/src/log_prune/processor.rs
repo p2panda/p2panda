@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
+use p2panda_store::Transaction;
 use p2panda_store::logs::LogStore;
 use thiserror::Error;
 use tokio::sync::Notify;
@@ -37,7 +38,7 @@ where
 
 impl<S, T, L> Processor<T> for LogPrune<S, T, L>
 where
-    S: LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
+    S: Transaction + LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash>,
     T: Borrow<LogPruneArgs<VerifyingKey, L, SeqNum>>,
     L: LogId,
 {
@@ -54,8 +55,19 @@ where
             seq_num,
         } = args
         {
-            match self.store.prune_entries(author, log_id, seq_num).await {
-                Ok(num_entries) => (input, LogPruneResult::Pruned { num_entries }),
+            let permit = match self.store.begin().await {
+                Ok(permit) => permit,
+                Err(err) => return Err((input, LogPruneError::StoreError(err.to_string()))),
+            };
+
+            match self.store.prune_entries_tx(author, log_id, seq_num).await {
+                Ok(num_entries) => {
+                    if let Err(err) = self.store.commit(permit).await {
+                        return Err((input, LogPruneError::StoreError(err.to_string())));
+                    };
+
+                    (input, LogPruneResult::Pruned { num_entries })
+                }
                 Err(err) => {
                     // Return the input arguments next to the error to allow mapping it back to
                     // it's source.

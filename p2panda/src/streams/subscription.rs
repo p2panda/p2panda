@@ -6,8 +6,8 @@ use std::task::{Context, Poll};
 
 use futures_util::{Stream, StreamExt};
 use p2panda_core::{Hash, Topic};
-use p2panda_store::SqliteStore;
 use p2panda_store::operations::OperationStore;
+use p2panda_store::{SqliteStore, tx};
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -82,7 +82,11 @@ impl<M> StreamSubscription<M> {
     /// applicaton-level processing has successfully finished. See high-level description in
     /// [`Node::stream`](crate::node::Node::stream) for more details.
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
-        if let Some(operation) = OperationStore::<_, _>::get_operation(&self.store, &id).await? {
+        let operation = tx!(self.store, {
+            OperationStore::<_, _>::get_operation_tx(&self.store, &id).await?
+        });
+
+        if let Some(operation) = operation {
             self.acked.ack(&operation.header).await?;
         }
 

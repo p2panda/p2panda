@@ -90,7 +90,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             };
 
             if let Some(topic) = topic {
-                <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate(
+                <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate_tx(
                     &self.store,
                     &topic,
                     &self.credentials.verifying_key(),
@@ -102,7 +102,7 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
             let operation = Operation::from_parts(header, body);
 
             self.store
-                .insert_operation(&operation.hash, &operation, &log_id)
+                .insert_operation_tx(&operation.hash, &operation, &log_id)
                 .await?;
 
             trace!(

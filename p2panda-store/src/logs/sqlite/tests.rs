@@ -24,14 +24,14 @@ async fn get_latest_entry() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
 
     assert!(
         store
-            .insert_operation(&operation_2.hash, &operation_2, &log.id())
+            .insert_operation_tx(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
@@ -64,19 +64,19 @@ async fn get_log_heights() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log_1.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log_1.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash, &operation_2, &log_1.id())
+            .insert_operation_tx(&operation_2.hash, &operation_2, &log_1.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash, &operation_3, &log_2.id())
+            .insert_operation_tx(&operation_3.hash, &operation_3, &log_2.id())
             .await
             .unwrap()
     );
@@ -106,14 +106,14 @@ async fn get_log_size() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
 
     assert!(
         store
-            .insert_operation(&operation_2.hash, &operation_2, &log.id())
+            .insert_operation_tx(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
@@ -151,31 +151,31 @@ async fn get_log_entries() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash, &operation_2, &log.id())
+            .insert_operation_tx(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash, &operation_3, &log.id())
+            .insert_operation_tx(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash, &operation_4, &log.id())
+            .insert_operation_tx(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_5.hash, &operation_5, &log.id())
+            .insert_operation_tx(&operation_5.hash, &operation_5, &log.id())
             .await
             .unwrap()
     );
@@ -217,38 +217,38 @@ async fn prune_entries() {
 
     assert!(
         store
-            .insert_operation(&operation_1.hash, &operation_1, &log.id())
+            .insert_operation_tx(&operation_1.hash, &operation_1, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_2.hash, &operation_2, &log.id())
+            .insert_operation_tx(&operation_2.hash, &operation_2, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_3.hash, &operation_3, &log.id())
+            .insert_operation_tx(&operation_3.hash, &operation_3, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_4.hash, &operation_4, &log.id())
+            .insert_operation_tx(&operation_4.hash, &operation_4, &log.id())
             .await
             .unwrap()
     );
     assert!(
         store
-            .insert_operation(&operation_5.hash, &operation_5, &log.id())
+            .insert_operation_tx(&operation_5.hash, &operation_5, &log.id())
             .await
             .unwrap()
     );
 
     store.commit(permit).await.unwrap();
 
-    let prune_entries_num = SqliteStore::prune_entries(&store, &log.author(), &log.id(), &3)
+    let prune_entries_num = SqliteStore::prune_entries_tx(&store, &log.author(), &log.id(), &3)
         .await
         .expect("no errors");
 

@@ -107,9 +107,9 @@ where
                     // been removed.
                     //
                     // NOTE: Application _and_ control messages are partially-ordered based on their
-                    // causal relationships, application messages are always emitted together with the
-                    // member's (create/add) welcome message. For that reason application messages
-                    // from members which have been removed at a causally later point (not
+                    // causal relationships, application messages are always emitted together with
+                    // the member's (create/add) welcome message. For that reason application
+                    // messages from members which have been removed at a causally later point (not
                     // concurrently) will not be affected by this filter and are correctly forwarded
                     // to the application layer.
                     if msg.is_application_message() {

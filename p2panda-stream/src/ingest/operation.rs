@@ -184,11 +184,11 @@ where
     let verifying_key = operation.header.verifying_key;
 
     store
-        .insert_operation(&operation.hash, operation, log_id)
+        .insert_operation_tx(&operation.hash, operation, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
-    <S as TopicStore<TP, VerifyingKey, L>>::associate(store, topic, &verifying_key, log_id)
+    <S as TopicStore<TP, VerifyingKey, L>>::associate_tx(store, topic, &verifying_key, log_id)
         .await
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
@@ -351,7 +351,7 @@ mod tests {
         assert_eq!(*authors.get(&log_1.author()).unwrap(), [1]);
 
         let operation = store
-            .get_latest_entry(&log_0.author(), &0)
+            .get_latest_entry_tx(&log_0.author(), &0)
             .await
             .unwrap()
             .unwrap();
@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(*authors.get(&log_2.author()).unwrap(), [2]);
 
         let operation = store
-            .get_latest_entry(&log_2.author(), &2)
+            .get_latest_entry_tx(&log_2.author(), &2)
             .await
             .unwrap()
             .unwrap();

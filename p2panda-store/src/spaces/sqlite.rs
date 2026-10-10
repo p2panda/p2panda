@@ -24,14 +24,14 @@ use crate::{SqliteError, SqliteStore};
 #[derive(Clone, Debug)]
 pub struct SqliteSpacesStore<E> {
     store: SqliteStore,
-    _phantom: PhantomData<E>,
+    _marker: PhantomData<E>,
 }
 
 impl<E> SqliteSpacesStore<E> {
     pub fn new(store: SqliteStore) -> Self {
         Self {
             store,
-            _phantom: PhantomData,
+            _marker: PhantomData,
         }
     }
 
@@ -47,8 +47,8 @@ where
 {
     type Error = SqliteError;
 
-    async fn get_spaces_message(&self, id: &Hash) -> Result<Option<T>, Self::Error> {
-        match <SqliteStore as OperationStore<Operation<E>, Hash>>::get_operation(&self.store, id)
+    async fn get_spaces_message_tx(&self, id: &Hash) -> Result<Option<T>, Self::Error> {
+        match <SqliteStore as OperationStore<Operation<E>, Hash>>::get_operation_tx(&self.store, id)
             .await?
         {
             Some(operation) => Ok(Some(T::from(operation))),
@@ -99,15 +99,15 @@ where
             .tx(async |tx| {
                 query(
                     "
-                INSERT OR REPLACE
-                INTO
-                    spaces_v1 (
-                        id,
-                        state
-                    )
-                VALUES
-                    (?, ?)
-                ",
+                    INSERT OR REPLACE
+                    INTO
+                        spaces_v1 (
+                            id,
+                            state
+                        )
+                    VALUES
+                        (?, ?)
+                    ",
                 )
                 .bind(id.to_hex())
                 .bind(
@@ -177,29 +177,29 @@ where
 impl<E> KeyRegistryStore for SqliteSpacesStore<E> {
     type Error = SqliteError;
 
-    async fn get_key_registry(
+    async fn get_key_registry_tx(
         &self,
     ) -> Result<Option<KeyRegistryState<VerifyingKey>>, Self::Error> {
-        self.store.get_key_registry().await
+        self.store.get_key_registry_tx().await
     }
 
-    async fn set_key_registry(
+    async fn set_key_registry_tx(
         &self,
         state: &KeyRegistryState<VerifyingKey>,
     ) -> Result<(), Self::Error> {
-        self.store.set_key_registry(state).await
+        self.store.set_key_registry_tx(state).await
     }
 }
 
 impl<E> KeySecretsStore for SqliteSpacesStore<E> {
     type Error = SqliteError;
 
-    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
-        self.store.get_prekey_secrets().await
+    async fn get_prekey_secrets_tx(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
+        self.store.get_prekey_secrets_tx().await
     }
 
-    async fn set_prekey_secrets(&self, state: &PreKeyBundlesState) -> Result<(), Self::Error> {
-        self.store.set_prekey_secrets(state).await
+    async fn set_prekey_secrets_tx(&self, state: &PreKeyBundlesState) -> Result<(), Self::Error> {
+        self.store.set_prekey_secrets_tx(state).await
     }
 }
 

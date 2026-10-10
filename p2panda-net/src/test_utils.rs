@@ -278,7 +278,7 @@ impl TestClient {
 
         tx_unwrap!(&self.store, {
             self.store
-                .insert_operation(&operation.hash, &operation, &log_id)
+                .insert_operation_tx(&operation.hash, &operation, &log_id)
                 .await
                 .unwrap();
         });
@@ -311,7 +311,10 @@ impl TestClient {
         let permit = self.store.begin().await.unwrap();
         for (author, logs) in logs {
             for log_id in logs {
-                self.store.associate(topic, author, log_id).await.unwrap();
+                self.store
+                    .associate_tx(topic, author, log_id)
+                    .await
+                    .unwrap();
             }
         }
         self.store.commit(permit).await.unwrap();

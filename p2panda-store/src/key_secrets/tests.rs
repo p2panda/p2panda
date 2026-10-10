@@ -23,19 +23,20 @@ async fn set_get_pre_key_secret() {
     let state = key_manager.prekey_bundles();
 
     // Store should be empty to start with.
-    assert!(
-        <SqliteStore as KeySecretsStore>::get_prekey_secrets(&store)
+    assert!(tx_unwrap!(
+        store,
+        <SqliteStore as KeySecretsStore>::get_prekey_secrets_tx(&store)
             .await
             .unwrap()
             .is_none()
-    );
+    ));
 
     // Store the prekey bundles.
-    tx_unwrap!(store, store.set_prekey_secrets(state).await.unwrap());
+    tx_unwrap!(store, store.set_prekey_secrets_tx(state).await.unwrap());
 
     // Prekey bundles are successfully retrieved from the store.
     assert_eq!(
-        store.get_prekey_secrets().await.unwrap(),
+        tx_unwrap!(store, store.get_prekey_secrets_tx().await.unwrap()),
         Some(state.clone())
     );
 
@@ -48,11 +49,11 @@ async fn set_get_pre_key_secret() {
     assert_ne!(state, new_state);
 
     // Store the new prekey bundles.
-    tx_unwrap!(store, store.set_prekey_secrets(new_state).await.unwrap());
+    tx_unwrap!(store, store.set_prekey_secrets_tx(new_state).await.unwrap());
 
     // New prekey bundles have overwritten the previous state.
     assert_eq!(
-        store.get_prekey_secrets().await.unwrap(),
+        tx_unwrap!(store, store.get_prekey_secrets_tx().await.unwrap()),
         Some(new_state.clone())
     );
 }

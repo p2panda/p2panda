@@ -918,7 +918,7 @@ mod tests {
                 &peer_a.store,
                 peer_a
                     .store
-                    .insert_operation(&id, &operation, &0)
+                    .insert_operation_tx(&id, &operation, &0)
                     .await
                     .unwrap()
             );
@@ -960,7 +960,7 @@ mod tests {
 
             if let LogSyncEvent::OperationReceived { .. } = event {
                 tx_unwrap!(&peer_a.store, {
-                    <SqliteStore as OperationStore<Operation<()>, Hash>>::delete_operation(
+                    <SqliteStore as OperationStore<Operation<()>, Hash>>::delete_operation_tx(
                         &peer_a.store,
                         &to_be_pruned_log[0],
                     )

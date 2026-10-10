@@ -18,7 +18,7 @@ where
 {
     type Error = SqliteError;
 
-    async fn insert_node_info(&self, info: N) -> Result<bool, Self::Error> {
+    async fn insert_node_info_tx(&self, info: N) -> Result<bool, Self::Error> {
         let is_upsert = {
             let row = self
                 .tx(async |tx| {
@@ -67,7 +67,7 @@ where
         Ok(!is_upsert)
     }
 
-    async fn remove_node_info(&self, id: &VerifyingKey) -> Result<bool, Self::Error> {
+    async fn remove_node_info_tx(&self, id: &VerifyingKey) -> Result<bool, Self::Error> {
         // Remove node's info.
         let result = self
             .tx(async |tx| {
@@ -106,7 +106,7 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn remove_older_than(&self, duration: Duration) -> Result<usize, Self::Error> {
+    async fn remove_older_than_tx(&self, duration: Duration) -> Result<usize, Self::Error> {
         let result = self
             .tx(async |tx| {
                 query_as::<_, (String,)>(
@@ -205,13 +205,13 @@ where
     async fn all_node_infos(&self) -> Result<Vec<N>, Self::Error> {
         query_as::<_, (NodeInfoDecode<N>,)>(
             "
-                SELECT
-                    node_info
-                FROM
-                    node_infos_v1
-                WHERE
-                    stale = FALSE
-                ",
+            SELECT
+                node_info
+            FROM
+                node_infos_v1
+            WHERE
+                stale = FALSE
+            ",
         )
         .fetch_all(&self.pool)
         .await
@@ -292,7 +292,7 @@ where
             .map(|v| v.into_iter().map(|(NodeInfoDecode(n),)| n).collect())
     }
 
-    async fn set_topics(
+    async fn set_topics_tx(
         &self,
         id: VerifyingKey,
         topics: HashSet<Topic>,
@@ -382,15 +382,16 @@ where
     async fn random_node(&self) -> Result<Option<N>, Self::Error> {
         query_as::<_, (NodeInfoDecode<N>,)>(
             "
-                SELECT
-                    node_info
-                FROM
-                    node_infos_v1
-                WHERE
-                    stale = FALSE
-                ORDER BY RANDOM()
-                LIMIT 1
-                ",
+            SELECT
+                node_info
+            FROM
+                node_infos_v1
+            WHERE
+                stale = FALSE
+            ORDER BY
+                RANDOM()
+            LIMIT 1
+            ",
         )
         .fetch_optional(&self.pool)
         .await
@@ -401,15 +402,16 @@ where
     async fn random_bootstrap_node(&self) -> Result<Option<N>, Self::Error> {
         query_as::<_, (NodeInfoDecode<N>,)>(
             "
-                SELECT
-                    node_info
-                FROM
-                    node_infos_v1
-                WHERE
-                    bootstrap = TRUE
-                    AND stale = FALSE
-                ORDER BY RANDOM()
-                LIMIT 1
+            SELECT
+                node_info
+            FROM
+                node_infos_v1
+            WHERE
+                bootstrap = TRUE
+                AND stale = FALSE
+            ORDER BY
+                RANDOM()
+            LIMIT 1
             ",
         )
         .fetch_optional(&self.pool)
@@ -422,7 +424,7 @@ where
 #[cfg(any(test, feature = "test_utils"))]
 #[doc(hidden)]
 impl SqliteStore {
-    pub async fn set_last_changed(
+    pub async fn set_last_changed_tx(
         &self,
         id: &VerifyingKey,
         timestamp: u64,
@@ -450,6 +452,8 @@ impl SqliteStore {
     }
 }
 
+// TODO: Decoding inside sqlx's traits also hides the error messages which makes it harder to debug,
+// see related issue here: <https://github.com/p2panda/p2panda/issues/1418>
 struct NodeInfoDecode<N>(N);
 
 impl<N> sqlx::Type<sqlx::Sqlite> for NodeInfoDecode<N>

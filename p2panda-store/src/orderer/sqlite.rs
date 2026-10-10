@@ -19,7 +19,7 @@ where
 {
     type Error = SqliteError;
 
-    async fn mark_ready(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
+    async fn mark_ready_tx(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
         self.tx(async |tx| {
             let queue_index = {
                 let last_index: (i64,) = query_as(
@@ -123,7 +123,7 @@ where
         .await
     }
 
-    async fn mark_pending(
+    async fn mark_pending_tx(
         &self,
         namespace: &str,
         child_id: ID,
@@ -211,7 +211,7 @@ where
         .await
     }
 
-    async fn get_next_pending(
+    async fn get_next_pending_tx(
         &self,
         namespace: &str,
         id: ID,
@@ -282,7 +282,7 @@ where
         .await
     }
 
-    async fn take_next_ready(&self, namespace: &str) -> Result<Option<ID>, Self::Error> {
+    async fn take_next_ready_tx(&self, namespace: &str) -> Result<Option<ID>, Self::Error> {
         self.tx(async |tx| {
             let row: Option<(String,)> = query_as(
                 "
@@ -331,7 +331,7 @@ where
         .await
     }
 
-    async fn remove_pending(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
+    async fn remove_pending_tx(&self, namespace: &str, id: ID) -> Result<bool, Self::Error> {
         self.tx(async |tx| {
             let result = query(
                 "
@@ -352,7 +352,7 @@ where
         .await
     }
 
-    async fn ready(&self, namespace: &str, dependencies: &[ID]) -> Result<bool, Self::Error> {
+    async fn ready_tx(&self, namespace: &str, dependencies: &[ID]) -> Result<bool, Self::Error> {
         let mut query_builder = QueryBuilder::new(
             "
             SELECT
@@ -377,7 +377,7 @@ where
         .await
     }
 
-    async fn clear(&self, namespace: &str) -> Result<(usize, usize), Self::Error> {
+    async fn clear_tx(&self, namespace: &str) -> Result<(usize, usize), Self::Error> {
         self.tx(async |tx| {
             let ready = query(
                 "
@@ -411,7 +411,7 @@ where
         .await
     }
 
-    async fn clear_keys(
+    async fn clear_keys_tx(
         &self,
         namespace: &str,
         keys: &[ID],
@@ -462,7 +462,7 @@ where
 
 #[cfg(any(test, feature = "test_utils"))]
 impl OrdererTestExt for SqliteStore {
-    async fn ready_len(&self, namespace: &str) -> usize {
+    async fn ready_len_tx(&self, namespace: &str) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(
                 "
@@ -483,7 +483,7 @@ impl OrdererTestExt for SqliteStore {
         .unwrap()
     }
 
-    async fn ready_queue_len(&self, namespace: &str) -> usize {
+    async fn ready_queue_len_tx(&self, namespace: &str) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(
                 "
@@ -505,7 +505,7 @@ impl OrdererTestExt for SqliteStore {
         .unwrap()
     }
 
-    async fn pending_len(&self, namespace: &str) -> usize {
+    async fn pending_len_tx(&self, namespace: &str) -> usize {
         self.tx(async |tx| {
             let row: (i64,) = query_as(
                 "
