@@ -10,7 +10,7 @@ use p2panda_core::{Extensions, Hash, Operation, VerifyingKey};
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as};
+use sqlx::{Executor, Sqlite, query, query_as, query_scalar};
 
 use crate::groups::GroupsStore;
 use crate::key_registry::KeyRegistryStore;
@@ -63,35 +63,20 @@ where
 {
     type Error = SqliteError;
 
-    async fn get_space_state_tx(&self, id: &Hash) -> Result<Option<S>, Self::Error> {
-        let row = self
+    async fn get_space_state(&self, id: &Hash) -> Result<Option<S>, Self::Error> {
+        let bytes = self
             .store
-            .tx(async |tx| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        state
-                    FROM
-                        spaces_v1
-                    WHERE
-                        id = ?
-                    ",
-                )
-                .bind(id.to_hex())
-                .fetch_optional(&mut **tx)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
+            .execute(async |pool| get_space_state(pool, id).await)
             .await?;
+        decode_space_state(bytes)
+    }
 
-        let Some((state_bytes,)) = row else {
-            return Ok(None);
-        };
-
-        let state = decode_cbor(&state_bytes[..])
-            .map_err(|err| SqliteError::Decode("state".into(), err.into()))?;
-
-        Ok(Some(state))
+    async fn get_space_state_tx(&self, id: &Hash) -> Result<Option<S>, Self::Error> {
+        let bytes = self
+            .store
+            .tx(async |tx| get_space_state(&mut **tx, id).await)
+            .await?;
+        decode_space_state(bytes)
     }
 
     async fn set_space_state_tx(&self, id: &Hash, state: &S) -> Result<(), Self::Error> {
@@ -174,6 +159,40 @@ where
     }
 }
 
+async fn get_space_state<'e, E>(executor: E, id: &Hash) -> Result<Option<Vec<u8>>, SqliteError>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    query_scalar(
+        "
+        SELECT
+            state
+        FROM
+            spaces_v1
+        WHERE
+            id = ?
+        ",
+    )
+    .bind(id.to_hex())
+    .fetch_optional(executor)
+    .await
+    .map_err(SqliteError::Sqlite)
+}
+
+fn decode_space_state<S>(row: Option<Vec<u8>>) -> Result<Option<S>, SqliteError>
+where
+    S: for<'a> Deserialize<'a>,
+{
+    let Some(state_bytes) = row else {
+        return Ok(None);
+    };
+
+    let state = decode_cbor(&state_bytes[..])
+        .map_err(|err| SqliteError::Decode("state".into(), err.into()))?;
+
+    Ok(Some(state))
+}
+
 impl<E> KeyRegistryStore for SqliteSpacesStore<E> {
     type Error = SqliteError;
 
@@ -181,6 +200,12 @@ impl<E> KeyRegistryStore for SqliteSpacesStore<E> {
         &self,
     ) -> Result<Option<KeyRegistryState<VerifyingKey>>, Self::Error> {
         self.store.get_key_registry_tx().await
+    }
+
+    async fn get_key_registry(
+        &self,
+    ) -> Result<Option<KeyRegistryState<VerifyingKey>>, Self::Error> {
+        self.store.get_key_registry().await
     }
 
     async fn set_key_registry_tx(
@@ -191,11 +216,15 @@ impl<E> KeyRegistryStore for SqliteSpacesStore<E> {
     }
 }
 
-impl<E> KeySecretsStore for SqliteSpacesStore<E> {
+impl<E> PreKeyBundlesStore for SqliteSpacesStore<E> {
     type Error = SqliteError;
 
     async fn get_prekey_secrets_tx(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
         self.store.get_prekey_secrets_tx().await
+    }
+
+    async fn get_prekey_secrets(&self) -> Result<Option<PreKeyBundlesState>, Self::Error> {
+        self.store.get_prekey_secrets().await
     }
 
     async fn set_prekey_secrets_tx(&self, state: &PreKeyBundlesState) -> Result<(), Self::Error> {
@@ -223,6 +252,13 @@ where
         id: Hash,
     ) -> Result<Option<GroupCrdtState<VerifyingKey, Hash, M, C>>, SqliteError> {
         self.store.get_groups_state_tx(id).await
+    }
+
+    async fn get_groups_state(
+        &self,
+        id: Hash,
+    ) -> Result<Option<GroupCrdtState<VerifyingKey, Hash, M, C>>, SqliteError> {
+        self.store.get_groups_state(id).await
     }
 }
 

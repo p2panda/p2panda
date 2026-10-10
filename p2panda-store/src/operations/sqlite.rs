@@ -8,6 +8,17 @@ use sqlx::{FromRow, query, query_as};
 use crate::operations::OperationStore;
 use crate::sqlite::{SqliteError, SqliteStore};
 
+const GET_OPERATION: &str = "
+    SELECT
+        hash,
+        header,
+        body
+    FROM
+        operations_v1
+    WHERE
+        hash = ?
+";
+
 impl<E> OperationStore<Operation<E>, Hash> for SqliteStore
 where
     E: Extensions,
@@ -69,21 +80,27 @@ where
         Ok(result.rows_affected() > 0)
     }
 
-    async fn get_operation_tx(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
-        let sql: &str = "
-            SELECT
-                hash,
-                header,
-                body
-            FROM
-                operations_v1
-            WHERE
-                hash = ?
-        ";
+    async fn get_operation(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
+        let result = self
+            .execute(async |pool| {
+                query_as::<_, OperationRow>(GET_OPERATION)
+                    .bind(id.to_hex())
+                    .fetch_optional(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
+            .await?;
 
+        match result {
+            Some(row) => Ok(Some(row.try_into()?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn get_operation_tx(&self, id: &Hash) -> Result<Option<Operation<E>>, Self::Error> {
         let result = self
             .tx(async |tx| {
-                query_as::<_, OperationRow>(sql)
+                query_as::<_, OperationRow>(GET_OPERATION)
                     .bind(id.to_hex())
                     .fetch_optional(&mut **tx)
                     .await
