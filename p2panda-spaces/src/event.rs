@@ -7,9 +7,8 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::VerifyingKey;
 
-use crate::auth::message::AuthMessage;
 use crate::member::Member;
-use crate::message::SpaceMembershipMessage;
+use crate::message::{AuthMessage, SpaceMembershipMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
     added_members, demoted_members, promoted_members, removed_members, sort_members,

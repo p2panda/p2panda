@@ -18,12 +18,11 @@ use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use thiserror::Error;
 use tracing::debug;
 
-use crate::auth::message::AuthMessage;
 use crate::event::{Event, to_groups_event};
 use crate::forge::Forge;
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
-use crate::message::{SpacesArgs, SpacesMessage};
+use crate::message::{AuthMessage, SpacesArgs, SpacesMessage};
 use crate::store::SpacesStoreState;
 use crate::types::{AuthGroup, AuthGroupAction, AuthGroupError, AuthGroupState};
 use crate::utils::{sort_members, typed_member, typed_members};
