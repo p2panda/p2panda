@@ -16,16 +16,19 @@ where
 {
     type Error: Error;
 
-    /// Set state for a specified groups instance.
+    fn get_groups_state(
+        &self,
+        id: Hash,
+    ) -> impl Future<Output = Result<Option<GroupsStoreState<M, C>>, Self::Error>>;
+
+    fn get_groups_state_tx(
+        &self,
+        id: Hash,
+    ) -> impl Future<Output = Result<Option<GroupsStoreState<M, C>>, Self::Error>>;
+
     fn set_groups_state_tx(
         &self,
         id: Hash,
         state: &GroupsStoreState<M, C>,
     ) -> impl Future<Output = Result<(), Self::Error>>;
-
-    /// Get state for a specified groups instance.
-    fn get_groups_state_tx(
-        &self,
-        id: Hash,
-    ) -> impl Future<Output = Result<Option<GroupsStoreState<M, C>>, Self::Error>>;
 }
