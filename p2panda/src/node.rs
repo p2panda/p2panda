@@ -724,7 +724,7 @@ impl Node {
         tx!(self.store, {
             let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
             spaces_store
-                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &output.groups_y)
+                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &output.global_groups_y)
                 .await?;
             spaces_store
                 .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
