@@ -4,14 +4,14 @@ use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use sqlx::{query, query_scalar};
 
-use crate::key_secrets::traits::KeySecretsStore;
+use crate::key_secrets::traits::PreKeyBundlesStore;
 use crate::{SqliteError, SqliteStore};
 
 // Constant identifier used to provide a primary key for the database table. This makes it possible
 // to only ever store one row into the table and use INSERT OR REPLACE to update the state.
 const DEFAULT_PRE_KEY_BUNDLES_STATE: &str = "default";
 
-impl KeySecretsStore for SqliteStore {
+impl PreKeyBundlesStore for SqliteStore {
     type Error = SqliteError;
 
     async fn get_prekey_secrets_tx(&self) -> Result<Option<PreKeyBundlesState>, SqliteError> {
