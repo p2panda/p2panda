@@ -97,6 +97,7 @@ Highlights are marked with a pancake 🥞
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
 - spaces: Fix bug instantiating space from existing groups state [#1457](https://github.com/p2panda/p2panda/pull/1457)
+- spaces: Atomic read -> modify -> write state handling for groups and spaces [#1513](https://github.com/p2panda/p2panda/pull/1513)
 - store: Use `BEGIN IMMEDIATE` in database transaction to allow awaiting busy write locks across processes [#1502](https://github.com/p2panda/p2panda/pull/1502)
 - net: Do not block sync actor awaiting `send_after` on retry [#1506](https://github.com/p2panda/p2panda/pull/1506)
 - store: Fix "write" methods not using transactions, consistent naming with _tx suffix [#1515](https://github.com/p2panda/p2panda/pull/1515)
