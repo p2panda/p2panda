@@ -20,7 +20,7 @@ async fn insert_node_info() {
     let node_id = SigningKey::generate().verifying_key();
     let node_info = TestNodeInfo::new(node_id);
 
-    let result = store.insert_node_info(node_info.clone()).await.unwrap();
+    let result = store.insert_node_info_tx(node_info.clone()).await.unwrap();
     assert!(result);
 
     store.commit(permit).await.unwrap();
@@ -40,7 +40,7 @@ async fn ignore_stale_entries() {
     let node_id = SigningKey::generate().verifying_key();
     let node_info = TestNodeInfo::new(node_id).stale();
 
-    let result = store.insert_node_info(node_info.clone()).await.unwrap();
+    let result = store.insert_node_info_tx(node_info.clone()).await.unwrap();
     assert!(result);
 
     store.commit(permit).await.unwrap();
@@ -70,11 +70,11 @@ async fn set_and_query_topics() {
     let permit = store.begin().await.unwrap();
 
     store
-        .insert_node_info(TestNodeInfo::new(billie))
+        .insert_node_info_tx(TestNodeInfo::new(billie))
         .await
         .unwrap();
 
-    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
         &store,
         billie,
         HashSet::from_iter([cats, dogs, rain]),
@@ -83,11 +83,11 @@ async fn set_and_query_topics() {
     .unwrap();
 
     store
-        .insert_node_info(TestNodeInfo::new(daphne))
+        .insert_node_info_tx(TestNodeInfo::new(daphne))
         .await
         .unwrap();
 
-    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
         &store,
         daphne,
         HashSet::from_iter([rain]),
@@ -96,11 +96,11 @@ async fn set_and_query_topics() {
     .unwrap();
 
     store
-        .insert_node_info(TestNodeInfo::new(carlos))
+        .insert_node_info_tx(TestNodeInfo::new(carlos))
         .await
         .unwrap();
 
-    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+    <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
         &store,
         carlos,
         HashSet::from_iter([dogs, frogs]),
@@ -154,17 +154,17 @@ async fn remove_outdated_node_infos() {
     let permit = store.begin().await.unwrap();
 
     store
-        .insert_node_info(TestNodeInfo::new(billie))
+        .insert_node_info_tx(TestNodeInfo::new(billie))
         .await
         .unwrap();
     store
-        .set_last_changed(&billie, current_timestamp() - (60 * 2))
+        .set_last_changed_tx(&billie, current_timestamp() - (60 * 2))
         .await
         .unwrap(); // 2 minutes "old"
 
     // Timestamp of this entry will be set to "now" automatically.
     store
-        .insert_node_info(TestNodeInfo::new(daphne))
+        .insert_node_info_tx(TestNodeInfo::new(daphne))
         .await
         .unwrap();
 
@@ -173,7 +173,7 @@ async fn remove_outdated_node_infos() {
     let permit = store.begin().await.unwrap();
 
     // Expect removing one item from database.
-    let result = <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::remove_older_than(
+    let result = <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::remove_older_than_tx(
         &store,
         Duration::from_secs(60),
     )
@@ -208,7 +208,7 @@ async fn sample_random_nodes() {
     for _ in 0..100 {
         let id = SigningKey::generate().verifying_key();
         store
-            .insert_node_info(TestNodeInfo::new(id).with_random_address(&mut rng))
+            .insert_node_info_tx(TestNodeInfo::new(id).with_random_address(&mut rng))
             .await
             .unwrap();
     }
@@ -216,7 +216,7 @@ async fn sample_random_nodes() {
     for _ in 200..300 {
         let id = SigningKey::generate().verifying_key();
         store
-            .insert_node_info(TestNodeInfo::new_bootstrap(id).with_random_address(&mut rng))
+            .insert_node_info_tx(TestNodeInfo::new_bootstrap(id).with_random_address(&mut rng))
             .await
             .unwrap();
     }

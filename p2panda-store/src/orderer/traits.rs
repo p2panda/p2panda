@@ -18,14 +18,14 @@ pub trait OrdererStore<ID> {
 
     /// Add an item to the store which has all it's dependencies met already. If this is the first
     /// time the item has been added it should also be pushed to the end of a "ready" queue.
-    fn mark_ready(
+    fn mark_ready_tx(
         &self,
         namespace: &str,
         id: ID,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Add an item which does not have all it's dependencies met yet.
-    fn mark_pending(
+    fn mark_pending_tx(
         &self,
         namespace: &str,
         id: ID,
@@ -34,27 +34,27 @@ pub trait OrdererStore<ID> {
 
     /// Get all pending items which directly depend on the given id.
     #[allow(clippy::type_complexity)]
-    fn get_next_pending(
+    fn get_next_pending_tx(
         &self,
         namespace: &str,
         id: ID,
     ) -> impl Future<Output = Result<Option<HashSet<(ID, Vec<ID>)>>, Self::Error>>;
 
     /// Take the next ready item from the ready queue.
-    fn take_next_ready(
+    fn take_next_ready_tx(
         &self,
         namespace: &str,
     ) -> impl Future<Output = Result<Option<ID>, Self::Error>>;
 
     /// Remove all items from the pending queue which depend on the passed id.
-    fn remove_pending(
+    fn remove_pending_tx(
         &self,
         namespace: &str,
         id: ID,
     ) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Returns `true` if all the passed keys are present in the ready list.
-    fn ready(
+    fn ready_tx(
         &self,
         namespace: &str,
         keys: &[ID],
@@ -63,12 +63,15 @@ pub trait OrdererStore<ID> {
     /// Clears _all_ state (ready and pending).
     ///
     /// Returns the number of deleted "ready" and "pending" table rows.
-    fn clear(&self, namespace: &str) -> impl Future<Output = Result<(usize, usize), Self::Error>>;
+    fn clear_tx(
+        &self,
+        namespace: &str,
+    ) -> impl Future<Output = Result<(usize, usize), Self::Error>>;
 
     /// Clears ready and pending state for items with given keys.
     ///
     /// Returns the number of deleted "ready" and "pending" table rows.
-    fn clear_keys(
+    fn clear_keys_tx(
         &self,
         namespace: &str,
         keys: &[ID],
@@ -79,9 +82,9 @@ pub trait OrdererStore<ID> {
 // implementation details of the storage layer in this crate.
 #[cfg(any(test, feature = "test_utils"))]
 pub trait OrdererTestExt {
-    fn ready_len(&self, namespace: &str) -> impl Future<Output = usize>;
+    fn ready_len_tx(&self, namespace: &str) -> impl Future<Output = usize>;
 
-    fn ready_queue_len(&self, namespace: &str) -> impl Future<Output = usize>;
+    fn ready_queue_len_tx(&self, namespace: &str) -> impl Future<Output = usize>;
 
-    fn pending_len(&self, namespace: &str) -> impl Future<Output = usize>;
+    fn pending_len_tx(&self, namespace: &str) -> impl Future<Output = usize>;
 }

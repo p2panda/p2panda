@@ -49,7 +49,7 @@ impl Forge<TestConditions> for TestForge {
             let operation = TestOperation::from_parts(header, None);
 
             self.store
-                .insert_operation(&operation.hash, &operation, &DEFAULT_LOG_ID)
+                .insert_operation_tx(&operation.hash, &operation, &DEFAULT_LOG_ID)
                 .await?;
 
             operation

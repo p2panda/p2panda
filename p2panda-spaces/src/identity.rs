@@ -129,11 +129,11 @@ where
                 .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
             self.key_store
-                .set_prekey_secrets(key_manager_y_ii.prekey_bundles())
+                .set_prekey_secrets_tx(key_manager_y_ii.prekey_bundles())
                 .await
                 .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
             self.key_store
-                .set_key_registry(&key_registry_y_ii)
+                .set_key_registry_tx(&key_registry_y_ii)
                 .await
                 .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
 
@@ -190,7 +190,7 @@ where
                 .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
             self.key_store
-                .set_key_registry(&pki)
+                .set_key_registry_tx(&pki)
                 .await
                 .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
 
@@ -209,12 +209,23 @@ where
 
     /// Assemble and return key manager state from persisted pre-key bundles and identity secret.
     pub async fn key_manager(&self) -> Result<KeyManagerState, IdentityError<F, C>> {
+        let permit = self
+            .key_store
+            .begin()
+            .await
+            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+
         let y = self
             .key_store
-            .get_prekey_secrets()
+            .get_prekey_secrets_tx()
             .await
             .map_err(|err| StoreError::KeySecretStore(err.to_string()))?
             .unwrap_or_default();
+
+        self.key_store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
 
         Ok(KeyManager::init_from_prekey_bundles(
             &self.credentials.identity_secret(),
@@ -223,15 +234,26 @@ where
     }
 
     pub async fn key_registry(&self) -> Result<KeyRegistryState<MemberId>, IdentityError<F, C>> {
+        let permit = self
+            .key_store
+            .begin()
+            .await
+            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+
         let y = match self
             .key_store
-            .get_key_registry()
+            .get_key_registry_tx()
             .await
             .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?
         {
             Some(y) => y,
             None => KeyRegistry::init(),
         };
+
+        self.key_store
+            .commit(permit)
+            .await
+            .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
 
         Ok(y)
     }

@@ -568,11 +568,11 @@ mod tests {
 
         tx_unwrap!(alice_store, {
             alice_store
-                .insert_node_info(TestNodeInfo::new(alice).with_random_address(&mut rng))
+                .insert_node_info_tx(TestNodeInfo::new(alice).with_random_address(&mut rng))
                 .await
                 .unwrap();
 
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &alice_store,
                 alice,
                 HashSet::from_iter([[1; 32].into()]),
@@ -590,11 +590,11 @@ mod tests {
 
         tx_unwrap!(bob_store, {
             bob_store
-                .insert_node_info(TestNodeInfo::new(bob).with_random_address(&mut rng))
+                .insert_node_info_tx(TestNodeInfo::new(bob).with_random_address(&mut rng))
                 .await
                 .unwrap();
 
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &bob_store,
                 bob,
                 HashSet::from_iter([[1; 32].into(), [2; 32].into()]),
@@ -606,11 +606,11 @@ mod tests {
         // "Charlie"
         tx_unwrap!(bob_store, {
             bob_store
-                .insert_node_info(TestNodeInfo::new(charlie).with_random_address(&mut rng))
+                .insert_node_info_tx(TestNodeInfo::new(charlie).with_random_address(&mut rng))
                 .await
                 .unwrap();
 
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &bob_store,
                 charlie,
                 HashSet::from_iter([[1; 32].into()]),
@@ -622,11 +622,11 @@ mod tests {
         // "Daphne"
         tx_unwrap!(bob_store, {
             bob_store
-                .insert_node_info(TestNodeInfo::new(daphne).with_random_address(&mut rng))
+                .insert_node_info_tx(TestNodeInfo::new(daphne).with_random_address(&mut rng))
                 .await
                 .unwrap();
 
-            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics(
+            <SqliteStore as AddressBookStore<TestNodeId, TestNodeInfo>>::set_topics_tx(
                 &bob_store,
                 daphne,
                 HashSet::from_iter([[2; 32].into()]),

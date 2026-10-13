@@ -52,12 +52,12 @@ where
     /// **Important:** Node information can be received from different (potentially untrusted)
     /// sources and can thus be outdated or invalid, this is why users of this store should check
     /// the timestamp and authenticity to only insert latest and valid data.
-    fn insert_node_info(&self, info: N) -> impl Future<Output = Result<bool, Self::Error>>;
+    fn insert_node_info_tx(&self, info: N) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Removes information for a node.
     ///
     /// Returns `true` if entry was removed and `false` if it does not exist.
-    fn remove_node_info(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
+    fn remove_node_info_tx(&self, id: &ID) -> impl Future<Output = Result<bool, Self::Error>>;
 
     /// Remove all node informations which are older than the given duration (from now). Returns
     /// number of removed entries.
@@ -70,7 +70,7 @@ where
     /// Please note that a _local_ timestamp is used to determine the age of the information.
     /// Entries will be removed if they haven't been updated in our _local_ database since the
     /// given duration, _not_ when they have been created by the original author.
-    fn remove_older_than(
+    fn remove_older_than_tx(
         &self,
         duration: Duration,
     ) -> impl Future<Output = Result<usize, Self::Error>>;
@@ -99,7 +99,7 @@ where
     ///
     /// Topics are usually shared privately and directly with nodes, this is why implementers
     /// usually want to simply overwrite the previous topic set (_not_ extend it).
-    fn set_topics(
+    fn set_topics_tx(
         &self,
         id: ID,
         topics: HashSet<Topic>,

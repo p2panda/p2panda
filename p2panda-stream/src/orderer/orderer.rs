@@ -92,19 +92,21 @@ where
 
     /// Pop the next item from the ready queue.
     pub async fn next(&self) -> Result<Option<ID>, S::Error> {
-        self.store.take_next_ready(&self.namespace).await
+        self.store.take_next_ready_tx(&self.namespace).await
     }
 
     /// Process a new item which may be in a "ready" or "pending" state.
     pub async fn process(&self, key: ID, dependencies: &[ID]) -> Result<bool, S::Error> {
-        if !self.store.ready(&self.namespace, dependencies).await? {
+        if !self.store.ready_tx(&self.namespace, dependencies).await? {
             self.store
-                .mark_pending(&self.namespace, key.clone(), dependencies.to_vec())
+                .mark_pending_tx(&self.namespace, key.clone(), dependencies.to_vec())
                 .await?;
             return Ok(false);
         }
 
-        self.store.mark_ready(&self.namespace, key.clone()).await?;
+        self.store
+            .mark_ready_tx(&self.namespace, key.clone())
+            .await?;
 
         // We added a new ready item to the store so now we want to process any pending items which
         // depend on it as they may now have transitioned into a ready state.
@@ -118,7 +120,7 @@ where
         // Get all items which depend on the passed key.
         let Some(dependents) = self
             .store
-            .get_next_pending(&self.namespace, key.clone())
+            .get_next_pending_tx(&self.namespace, key.clone())
             .await?
         else {
             return Ok(());
@@ -127,12 +129,12 @@ where
         // For each dependent check if it has all it's dependencies met, if not then we do nothing
         // as it is still in a pending state.
         for (next_key, next_deps) in dependents {
-            if !self.store.ready(&self.namespace, &next_deps).await? {
+            if !self.store.ready_tx(&self.namespace, &next_deps).await? {
                 continue;
             }
 
             self.store
-                .mark_ready(&self.namespace, next_key.clone())
+                .mark_ready_tx(&self.namespace, next_key.clone())
                 .await?;
 
             // Recurse down the dependency graph by now checking any pending items which depend on
@@ -141,7 +143,7 @@ where
         }
 
         // Finally remove this item from the pending items queue.
-        self.store.remove_pending(&self.namespace, key).await?;
+        self.store.remove_pending_tx(&self.namespace, key).await?;
 
         Ok(())
     }

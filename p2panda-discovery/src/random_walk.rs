@@ -301,11 +301,11 @@ mod tests {
 
         tx_unwrap!(store, {
             store
-                .insert_node_info(TestNodeInfo::new(node_ids[0]))
+                .insert_node_info_tx(TestNodeInfo::new(node_ids[0]))
                 .await
                 .unwrap();
             store
-                .insert_node_info(TestNodeInfo::new_bootstrap(node_ids[1]))
+                .insert_node_info_tx(TestNodeInfo::new_bootstrap(node_ids[1]))
                 .await
                 .unwrap();
         });
@@ -350,7 +350,7 @@ mod tests {
             for idx in 0..NUM_NODES {
                 let node_id = node_ids[idx];
                 store
-                    .insert_node_info(TestNodeInfo::new(node_id))
+                    .insert_node_info_tx(TestNodeInfo::new(node_id))
                     .await
                     .unwrap();
             }
@@ -402,7 +402,7 @@ mod tests {
 
         tx_unwrap!(store, {
             store
-                .insert_node_info(TestNodeInfo::new_bootstrap(node_id))
+                .insert_node_info_tx(TestNodeInfo::new_bootstrap(node_id))
                 .await
                 .unwrap();
         });

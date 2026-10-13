@@ -110,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Associate our local log with the chat topic and commit it to the database.
     let permit = store.begin().await?;
-    store.associate(&topic, &verifying_key, &LOG_ID).await?;
+    store.associate_tx(&topic, &verifying_key, &LOG_ID).await?;
     store.commit(permit).await?;
 
     // Prepare address book.
@@ -240,7 +240,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     SyncEvent::OperationReceived { operation, .. } => {
-                        if <SqliteStore as OperationStore<Operation, Hash>>::has_operation(
+                        let permit = store.begin().await.unwrap();
+
+                        if <SqliteStore as OperationStore<Operation, Hash>>::has_operation_tx(
                             &store,
                             &operation.hash,
                         )
@@ -284,14 +286,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             )
                         }
 
-                        let permit = store.begin().await.unwrap();
                         let id = operation.hash;
                         let author = operation.header.verifying_key;
                         store
-                            .insert_operation(&id, &operation, &LOG_ID)
+                            .insert_operation_tx(&id, &operation, &LOG_ID)
                             .await
                             .unwrap();
-                        store.associate(&topic, &author, &LOG_ID).await.unwrap();
+                        store.associate_tx(&topic, &author, &LOG_ID).await.unwrap();
                         store.commit(permit).await.unwrap();
                     }
                     _ => (),
@@ -323,7 +324,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let permit = store.begin().await.unwrap();
             store
-                .insert_operation(&hash, &operation, &LOG_ID)
+                .insert_operation_tx(&hash, &operation, &LOG_ID)
                 .await
                 .unwrap();
             store.commit(permit).await.unwrap();
