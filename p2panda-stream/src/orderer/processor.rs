@@ -168,7 +168,7 @@ where
                             Err(err) => return Err((input, err)),
                         };
 
-                        let metadata = match self.store.get_event(id).await {
+                        let metadata = match self.store.get_event(&inner.namespace(), id).await {
                             Ok(Some(metadata)) => metadata,
                             Ok(None) => {
                                 return Err((input, OrdererError::StoreInconsistency(*id)));
@@ -200,7 +200,11 @@ where
 
                 // b) Item doesn't have dependencies met yet, mark it as "pending", it is buffered now.
                 Ok(false) => {
-                    if let Err(err) = self.store.set_event(&input.hash(), &input.metadata()).await {
+                    if let Err(err) = self
+                        .store
+                        .set_event(&inner.namespace(), &input.hash(), &input.metadata())
+                        .await
+                    {
                         return Err((input, OrdererError::ProcessorStore(err.to_string())));
                     };
 

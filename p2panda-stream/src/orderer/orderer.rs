@@ -90,6 +90,10 @@ where
         self
     }
 
+    pub fn namespace(&self) -> String {
+        self.namespace.to_owned()
+    }
+
     /// Pop the next item from the ready queue.
     pub async fn next(&self) -> Result<Option<ID>, S::Error> {
         self.store.take_next_ready(&self.namespace).await

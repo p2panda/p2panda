@@ -79,6 +79,7 @@ Highlights are marked with a pancake 🥞
 - auth: Don't error when processing operation again [#1483](https://github.com/p2panda/p2panda/pull/1483)
 - stream: Namespace group state by stream id in group processor [#1485](https://github.com/p2panda/p2panda/pull/1485)
 - node: Introduce `GroupSubscription` and `StreamEvent::Group` [#1489](https://github.com/p2panda/p2panda/pull/1489)
+- store: Namespace event metadata entries [#1521](https://github.com/p2panda/p2panda/pull/1521)
 
 ### Fixed
 
