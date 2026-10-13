@@ -23,7 +23,7 @@ use tokio::runtime::Builder;
 use tokio::sync::{Mutex, Notify, mpsc};
 use tokio::task::LocalSet;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::processor::tasks::TaskTracker;
 use crate::processor::{Event, ProcessorStatus};
@@ -147,9 +147,6 @@ const TO_PIPELINE_BUFFER_SIZE: usize = 128;
 ///
 /// This ensures that any process awaiting the result of processing B will be marked ready in the
 /// original input order.
-//
-// FIXME: The pipeline thread keeps currently running even when the struct was dropped.
-// See related issue: https://github.com/p2panda/p2panda/issues/1275
 #[derive(Clone, Debug)]
 pub struct Pipeline<L, E, TP> {
     id: Hash,
@@ -157,6 +154,7 @@ pub struct Pipeline<L, E, TP> {
     from_pipeline_queue: Arc<Mutex<VecDeque<Event<L, E, TP>>>>,
     from_pipeline_notify: Arc<Notify>,
     tasks: TaskTracker<Event<L, E, TP>, PipelineTaskId>,
+    _guard: Arc<NotifyOnDrop>,
 }
 
 impl<L, E, TP> Pipeline<L, E, TP>
@@ -186,6 +184,11 @@ where
         let from_pipeline_queue = Arc::new(Mutex::new(VecDeque::new()));
         let from_pipeline_notify = Arc::new(Notify::new());
 
+        // The pipeline thread shuts down as soon as the last clone of Pipeline was dropped. Events
+        // which are still being processed at this point are discarded.
+        let shutdown = Arc::new(Notify::new());
+        let _guard = Arc::new(NotifyOnDrop(shutdown.clone()));
+
         {
             let tasks = tasks.clone();
 
@@ -199,175 +202,202 @@ where
 
             let post_pipeline_hook = Hooks::<Event<L, E, TP>>::from_list(post_hooks);
 
-            thread::spawn(move || {
-                let local = LocalSet::new();
+            thread::Builder::new()
+                .name(format!("pipeline-{}", pipeline_id.fmt_short()))
+                .spawn(move || {
+                    let local = LocalSet::new();
 
-                local.spawn_local(async move {
-                    let me = spaces_manager.id();
+                    local.spawn_local(async move {
+                        let me = spaces_manager.id();
 
-                    // Prepare event processing pipeline.
-                    let ingest =
-                        Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                    let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::from_namespace(
-                        store.clone(),
-                        pipeline_id.to_string(),
-                    );
-                    let log_prune = LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
-                    let groups = Groups::<SqliteStore, Event<L, E, TP>, AuthCapabilities>::new(
-                        store.clone(),
-                        pipeline_id,
-                    );
-                    let spaces = {
-                        let spaces_store = SqliteSpacesStore::new(store);
-                        SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
-                    };
+                        // Prepare event processing pipeline.
+                        let ingest =
+                            Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
+                        let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::from_namespace(
+                            store.clone(),
+                            pipeline_id.to_string(),
+                        );
+                        let log_prune =
+                            LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
+                        let groups = Groups::<SqliteStore, Event<L, E, TP>, AuthCapabilities>::new(
+                            store.clone(),
+                            pipeline_id,
+                        );
+                        let spaces = {
+                            let spaces_store = SqliteSpacesStore::new(store);
+                            SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
+                        };
 
-                    // Receive incoming events through mpsc channel.
-                    let pipeline = ReceiverStream::new(to_pipeline_rx)
-                        .layer(ingest)
-                        .map(|result| match result {
-                            Ok((mut event, result)) => {
-                                event.ingest = ProcessorStatus::Completed(result);
-                                event
-                            }
-                            Err((mut event, err)) => {
-                                event.ingest = ProcessorStatus::Failed(err);
-                                event.noop()
-                            }
-                        })
-                        .layer(orderer)
-                        .map(|result| match result {
-                            Ok((mut event, result)) => {
-                                event.orderer = ProcessorStatus::Completed(result);
-
-                                // If the orderer returns a "pending" result we don't want to affect
-                                // any next processors anymore.
-                                if event.is_pending() {
-                                    event.noop()
-                                } else {
+                        // Receive incoming events through mpsc channel.
+                        let pipeline = ReceiverStream::new(to_pipeline_rx)
+                            .layer(ingest)
+                            .map(|result| match result {
+                                Ok((mut event, result)) => {
+                                    event.ingest = ProcessorStatus::Completed(result);
                                     event
                                 }
-                            }
-                            Err((mut event, err)) => {
-                                event.orderer = ProcessorStatus::Failed(err);
-                                event.noop()
-                            }
-                        })
-                        .layer(log_prune)
-                        .map(|result| match result {
-                            Ok((mut event, result)) => {
-                                event.log_prune = ProcessorStatus::Completed(result);
-                                event
-                            }
-                            Err((mut event, err)) => {
-                                event.log_prune = ProcessorStatus::Failed(err);
-                                event.noop()
-                            }
-                        })
-                        .layer(groups)
-                        .map(|result| match result {
-                            Ok((mut event, result)) => {
-                                event.groups = ProcessorStatus::Completed(result);
-                                event
-                            }
-                            Err((mut event, err)) => {
-                                event.groups = ProcessorStatus::Failed(err);
-                                event.noop()
-                            }
-                        })
-                        .layer(spaces)
-                        .map(|result| match result {
-                            Ok((mut event, result)) => {
-                                event.spaces = ProcessorStatus::Completed(result);
-                                event
-                            }
-                            Err((mut event, err)) => {
-                                event.spaces = ProcessorStatus::Failed(err);
-                                event.noop()
-                            }
-                        })
-                        .layer(post_pipeline_hook)
-                        .map(|result| result.expect("hook processor is infallible"));
+                                Err((mut event, err)) => {
+                                    event.ingest = ProcessorStatus::Failed(err);
+                                    event.noop()
+                                }
+                            })
+                            .layer(orderer)
+                            .map(|result| match result {
+                                Ok((mut event, result)) => {
+                                    event.orderer = ProcessorStatus::Completed(result);
 
-                    pin!(pipeline);
+                                    // If the orderer returns a "pending" result we don't want to affect
+                                    // any next processors anymore.
+                                    if event.is_pending() {
+                                        event.noop()
+                                    } else {
+                                        event
+                                    }
+                                }
+                                Err((mut event, err)) => {
+                                    event.orderer = ProcessorStatus::Failed(err);
+                                    event.noop()
+                                }
+                            })
+                            .layer(log_prune)
+                            .map(|result| match result {
+                                Ok((mut event, result)) => {
+                                    event.log_prune = ProcessorStatus::Completed(result);
+                                    event
+                                }
+                                Err((mut event, err)) => {
+                                    event.log_prune = ProcessorStatus::Failed(err);
+                                    event.noop()
+                                }
+                            })
+                            .layer(groups)
+                            .map(|result| match result {
+                                Ok((mut event, result)) => {
+                                    event.groups = ProcessorStatus::Completed(result);
+                                    event
+                                }
+                                Err((mut event, err)) => {
+                                    event.groups = ProcessorStatus::Failed(err);
+                                    event.noop()
+                                }
+                            })
+                            .layer(spaces)
+                            .map(|result| match result {
+                                Ok((mut event, result)) => {
+                                    event.spaces = ProcessorStatus::Completed(result);
+                                    event
+                                }
+                                Err((mut event, err)) => {
+                                    event.spaces = ProcessorStatus::Failed(err);
+                                    event.noop()
+                                }
+                            })
+                            .layer(post_pipeline_hook)
+                            .map(|result| result.expect("hook processor is infallible"));
 
-                    let mut pending_dependencies = HashSet::<Hash>::new();
-                    let mut pending: Option<Event<L, E, TP>> = None;
+                        pin!(pipeline);
 
-                    while let Some(output_event) = pipeline.next().await {
-                        // TODO: We need to handle "invalidating" the pending buffers when something
-                        // went wrong _after_ the orderer processor. Otherwise these items might be
-                        // stuck here forever.
-                        if let Some(err) = output_event.failure_reason() {
-                            warn!(
-                                me = me.fmt_short(),
-                                id = %output_event.hash().fmt_short(),
-                                "failed processing event: {}",
-                                err
-                            );
+                        let mut pending_dependencies = HashSet::<Hash>::new();
+                        let mut pending: Option<Event<L, E, TP>> = None;
+
+                        loop {
+                            tokio::select! {
+                                // Prefer shutting down over processing events.
+                                biased;
+
+                                _ = shutdown.notified() => {
+                                    debug!(
+                                        me = me.fmt_short(),
+                                        pipeline_id = %pipeline_id.fmt_short(),
+                                        "pipeline dropped, shutting down thread",
+                                    );
+                                    break;
+                                }
+
+                                Some(output_event) = pipeline.next() => {
+                                    // TODO: We need to handle "invalidating" the pending buffers when
+                                    // something went wrong _after_ the orderer processor. Otherwise
+                                    // these items might be stuck here forever.
+                                    //
+                                    // Related issue: <https://github.com/p2panda/p2panda/issues/1523>
+                                    if let Some(err) = output_event.failure_reason() {
+                                        warn!(
+                                            me = me.fmt_short(),
+                                            id = %output_event.hash().fmt_short(),
+                                            "failed processing event: {}",
+                                            err
+                                        );
+                                    }
+
+                                    // An event arrived which "freed" some dependent operations. This "parent"
+                                    // event needs to be forwarded _first_ on the output, but we want it to be
+                                    // processed _last_ on the input side. See documentation above for more
+                                    // context.
+                                    //
+                                    // For this we are "reversing" the dependency tree and delay marking the
+                                    // "parent" event as done when all dependencies have been visited.
+                                    //
+                                    // TODO: This brittle logic can be all removed for good when we
+                                    // improve the Processor design. See related issue:
+                                    // <https://github.com/p2panda/p2panda/issues/1522>
+                                    if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
+                                        ref dependent_operations,
+                                    }) = output_event.orderer
+                                    {
+                                        pending_dependencies =
+                                            HashSet::from_iter(dependent_operations.clone());
+                                        pending = Some(output_event.clone());
+                                    }
+
+                                    // We've visited a dependency.
+                                    if let ProcessorStatus::Completed(OrdererResult::ReadyOutput) =
+                                        output_event.orderer
+                                    {
+                                        pending_dependencies.remove(&output_event.hash());
+                                    }
+
+                                    // If the output event is "ready" (that is, _not_ pending / not being
+                                    // buffered somewhere), then we can finally forward it on the output stream
+                                    // towards the application layer.
+                                    //
+                                    // We want this to happen _before_ we mark the task as done to allow all
+                                    // consumers to yield the items in correct order.
+                                    if !output_event.is_pending() {
+                                        from_pipeline_queue
+                                            .lock()
+                                            .await
+                                            .push_back(output_event.clone());
+                                        from_pipeline_notify.notify_one(); // Wake up any pending next call
+                                    }
+
+                                    // This informs any process waiting for the input event to be finished.
+                                    if pending.is_some() && pending_dependencies.is_empty() {
+                                        // All dependencies have been visited, we can finally mark the "parent"
+                                        // input event  as done.
+                                        if let Some(pending) = pending.take() {
+                                            let task_id = PipelineTaskId {
+                                                event_id: pending.hash(),
+                                                pipeline_id,
+                                            };
+
+                                            tasks.mark_as_done(task_id, pending).await;
+                                        }
+                                    } else {
+                                        let task_id = PipelineTaskId {
+                                            event_id: output_event.hash(),
+                                            pipeline_id,
+                                        };
+
+                                        tasks.mark_as_done(task_id, output_event).await;
+                                    }
+                                }
+                            }
                         }
+                    });
 
-                        // An event arrived which "freed" some dependent operations. This "parent"
-                        // event needs to be forwarded _first_ on the output, but we want it to be
-                        // processed _last_ on the input side. See documentation above for more
-                        // context.
-                        //
-                        // For this we are "reversing" the dependency tree and delay marking the
-                        // "parent" event as done when all dependencies have been visited.
-                        if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
-                            ref dependent_operations,
-                        }) = output_event.orderer
-                        {
-                            pending_dependencies = HashSet::from_iter(dependent_operations.clone());
-                            pending = Some(output_event.clone());
-                        }
-
-                        // We've visited a dependency.
-                        if let ProcessorStatus::Completed(OrdererResult::ReadyOutput) =
-                            output_event.orderer
-                        {
-                            pending_dependencies.remove(&output_event.hash());
-                        }
-
-                        // If the output event is "ready" (that is, _not_ pending / not being
-                        // buffered somewhere), then we can finally forward it on the output stream
-                        // towards the application layer.
-                        //
-                        // We want this to happen _before_ we mark the task as done to allow all
-                        // consumers to yield the items in correct order.
-                        if !output_event.is_pending() {
-                            from_pipeline_queue
-                                .lock()
-                                .await
-                                .push_back(output_event.clone());
-                            from_pipeline_notify.notify_one(); // Wake up any pending next call
-                        }
-
-                        // This informs any process waiting for the input event to be finished.
-                        if pending.is_some() && pending_dependencies.is_empty() {
-                            // All dependencies have been visited, we can finally mark the "parent"
-                            // input event  as done.
-                            if let Some(pending) = pending.take() {
-                                let task_id = PipelineTaskId {
-                                    event_id: pending.hash(),
-                                    pipeline_id,
-                                };
-
-                                tasks.mark_as_done(task_id, pending).await;
-                            }
-                        } else {
-                            let task_id = PipelineTaskId {
-                                event_id: output_event.hash(),
-                                pipeline_id,
-                            };
-
-                            tasks.mark_as_done(task_id, output_event).await;
-                        }
-                    }
-                });
-
-                rt.block_on(local);
-            });
+                    rt.block_on(local);
+                })
+                .expect("spawn pipeline thread");
         }
 
         Self {
@@ -376,6 +406,7 @@ where
             from_pipeline_queue,
             from_pipeline_notify,
             tasks,
+            _guard,
         }
     }
 
@@ -437,17 +468,29 @@ pub struct PipelineTaskId {
     event_id: Hash,
 }
 
+#[derive(Debug)]
+struct NotifyOnDrop(Arc<Notify>);
+
+impl Drop for NotifyOnDrop {
+    fn drop(&mut self) {
+        self.0.notify_one()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
     use std::collections::HashSet;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
 
     use p2panda_core::test_utils::{TestLog, setup_logging};
     use p2panda_core::traits::Digest;
     use p2panda_core::{Hash, PruneFlag, SigningKey, Topic};
     use p2panda_spaces::Config;
     use p2panda_store::SqliteStore;
-    use p2panda_stream::hooks::ProcessorHooksList;
+    use p2panda_stream::hooks::{ProcessorHook, ProcessorHooksList};
     use p2panda_stream::orderer::{OrdererArgs, OrdererResult};
 
     use crate::credentials::Credentials;
@@ -532,7 +575,7 @@ mod tests {
         let spaces_manager =
             spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
 
-        let pipeline_id = Hash::from([0; 32]);
+        let pipeline_id = Topic::random();
         let pipeline = Pipeline::<LogId, (), Topic>::new(
             pipeline_id,
             store,
@@ -594,7 +637,7 @@ mod tests {
         let spaces_manager =
             spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
 
-        let pipeline_id = Hash::from([0; 32]);
+        let pipeline_id = Topic::random();
         let pipeline = Pipeline::<LogId, (), Topic>::new(
             pipeline_id,
             store,
@@ -718,5 +761,75 @@ mod tests {
         );
 
         assert_eq!(expected_hashes.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn shutdown_on_drop() {
+        setup_logging();
+
+        let store = SqliteStore::temporary().await;
+        let tasks = TaskTracker::new();
+        let credentials = Credentials::generate();
+        let forge = OperationForge::new(credentials.clone(), store.clone());
+        let spaces_manager =
+            spaces_manager(forge, credentials, store.clone(), Config::default()).unwrap();
+
+        // We use the processor hooks to add a "probe" which checks if the whole pipeline got
+        // dropped (by closing the thread).
+        #[derive(Clone)]
+        struct Probe(Arc<AtomicBool>);
+
+        impl ProcessorHook<Event<LogId, (), Topic>> for Probe {
+            async fn on_input(&self, _input: &Event<LogId, (), Topic>) {
+                // noop
+            }
+        }
+
+        impl Drop for Probe {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let exited = Arc::new(AtomicBool::new(false));
+
+        let mut hooks = ProcessorHooksList::new();
+        hooks.push(Probe(exited.clone()));
+
+        // Create pipeline, this will spawn a thread.
+        let pipeline_id = Topic::random();
+        let pipeline =
+            Pipeline::<LogId, (), Topic>::new(pipeline_id, store, tasks, spaces_manager, hooks);
+        let pipeline_clone = pipeline.clone();
+
+        // Process one item to make sure the thread is up and running.
+        let log = TestLog::new();
+        let topic = Topic::random();
+        let event = Event::new(
+            log.operation(b"test", ()),
+            Source::Egress,
+            LogId::from_topic(topic),
+            topic,
+            PruneFlag::default(),
+            None,
+            None,
+        );
+        let result = pipeline.process(event).await;
+        assert!(result.is_completed());
+
+        // First reference doesn't cause a drop yet.
+        drop(pipeline);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(!exited.load(Ordering::SeqCst));
+
+        // Second dropped reference finally closed everything.
+        drop(pipeline_clone);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !exited.load(Ordering::SeqCst) {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("pipeline thread should exit after all clones were dropped");
     }
 }
