@@ -331,26 +331,30 @@ where
     ///
     /// These members are all the individuals in the space after nested groups have been
     /// flattened.
-    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerSpaceError> {
-        self.inner.members().await.map(|members| {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceMembersError> {
+        let result = self.inner.members().await.map(|members| {
             members
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
     /// Returns all space actors (groups and individuals) and their access levels.
-    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerSpaceError> {
-        self.inner.actors().await.map(|actors| {
+    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceActorsError> {
+        let result = self.inner.actors().await.map(|actors| {
             actors
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
-    pub async fn group_id(&self) -> Result<ActorId, InnerSpaceError> {
+    pub async fn group_id(&self) -> Result<ActorId, SpaceGroupIdError> {
         let group_id = self.inner.group_id().await?;
         Ok(group_id)
     }
@@ -430,6 +434,22 @@ impl Future for SpaceFuture {
     }
 }
 
+/// Error occurred when querying the actors of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceActorsError(#[from] InnerSpaceError);
+
+/// Error occurred when querying the members of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceMembersError(#[from] InnerSpaceError);
+
+/// Error occurred when querying the identifier of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceGroupIdError(#[from] InnerSpaceError);
+
+/// Error occurred when dispatching spaces events for delivery and processing.
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpaceEgressError {
@@ -461,6 +481,12 @@ pub enum AddSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
 #[derive(Debug, Error)]
@@ -484,6 +510,12 @@ pub enum RemoveSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
 #[derive(Debug, Error)]
@@ -508,6 +540,12 @@ pub enum PromoteSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
 #[derive(Debug, Error)]
@@ -532,6 +570,12 @@ pub enum DemoteSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
 #[derive(Debug, Error)]
@@ -556,6 +600,12 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Space(#[from] Box<InnerSpaceError>),
+
+    #[error(transparent)]
+    SpaceActors(#[from] Box<SpaceActorsError>),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] Box<SpaceMembersError>),
 
     #[error(transparent)]
     Encode(#[from] EncodeError),
