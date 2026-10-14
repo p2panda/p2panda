@@ -46,6 +46,7 @@ ordering, storage, and more in one easy-to-use API.
   sync, event streaming, causal ordering, pruning, and persistence
 - Topic-based [Publish & Subscribe] model with partial replication - sync only the data relevant to
   a topic
+- End-to-end encrypted spaces for securing data in group-based contexts
 - Transport-agnostic "event delivery" architecture supporting Internet p2p today (QUIC/iroh) and
   future mesh/radio transports such as BLE and LoRa
 - Built on single-writer append-only, fork-resistant CRDT operation logs with pruning, multi-writer
@@ -77,11 +78,9 @@ and flavours:
 - Filterable topic streams
 - Integration of Capabilities, like [Meadowcap] or [UCAN]
 - [Multi-device group management] with revocation
-- [Encryption for groups] with Forward Secrecy
 - [Support Nodes] to assure higher availability
 - Event delivery via [delay tolerant, replicated mesh-routing] for BLE and LoRa
 
-[Encryption for groups]: https://p2panda.org/2025/02/24/group-encryption.html
 [Meadowcap]: https://willowprotocol.org/specs/meadowcap/index.html
 [Multi-device group management]: https://p2panda.org/2025/07/28/access-control.html
 [Publish & Subscribe]: https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern

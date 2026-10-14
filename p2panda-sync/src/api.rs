@@ -171,7 +171,7 @@
 //!
 //! In p2panda we usually sync over [`Topic`](p2panda_core::Topic) which describes some sort of
 //! application data of interest to that node. Internally topics are collections of logs. We
-//! actively need to [associate](p2panda_store::topics::TopicStore::associate) new logs to topics
+//! actively need to [associate](p2panda_store::topics::TopicStore::associate_tx) new logs to topics
 //! when creating or receiving them to keep the topic -> log mapping up-to-date.
 //!
 //! **Query and announce local log heights**
@@ -224,7 +224,8 @@
 //! Sync protocols might want to validate the operation format, log-integrity or even application
 //! data already during sync before it even reaches any higher layer. The [`ingest_operation`]
 //! method handles this part and can be enabled with the `ingest` feature flag. If no insertion into
-//! the database is necessary one can also use the [`validate_operation`] method.
+//! the database is necessary one can also use the
+//! [`validate_operation`](p2panda_core::operation::validate_operation) method.
 //!
 //! In p2panda's sync protocol implementations we chose to move validation into the event processing
 //! layer which happens outside of the sync- or _event delivery_ layer. Sync protocols only
@@ -551,6 +552,9 @@
 //! Transports might require some sort of message framing in case the limits have been reached with
 //! one single message, however this is out of scope for a sync protocol and rather a transport
 //! concern.
+//!
+//! [`ingest_operation`]: <https://docs.rs/p2panda-stream/latest/p2panda_stream/ingest/fn.ingest_operation.html>
+//! [`OooBuffer`]: <https://docs.rs/p2panda-stream/latest/p2panda_stream/ingest/struct.OooBuffer.html>
 use futures_util::stream;
 use futures_util::{StreamExt, future};
 pub use p2panda_core::logs::{LogHeights, LogRanges, Logs, compare_logs};

@@ -393,6 +393,7 @@ impl ExtensionsVariantV1 {
     }
 }
 
+/// Header extensions builder.
 pub struct Builder {
     pub log_id: LogId,
     pub timestamp: Timestamp,
@@ -400,6 +401,9 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Instantiates a new extensions builder from the given log identifier.
+    ///
+    /// A timestamp is generated using the current system time and the prune flag is set to false.
     pub fn new(log_id: LogId) -> Self {
         Self {
             log_id,
@@ -408,11 +412,13 @@ impl Builder {
         }
     }
 
+    /// Sets the prune flag for the extensions.
     pub fn prune_flag(mut self, prune_flag: impl Into<PruneFlag>) -> Self {
         self.prune_flag = prune_flag.into();
         self
     }
 
+    /// Sets the timestamp for the extensions.
     pub fn timestamp(mut self, timestamp: impl Into<Timestamp>) -> Self {
         self.timestamp = timestamp.into();
         self
@@ -443,6 +449,7 @@ impl Builder {
     }
 }
 
+/// Basic header extensions including a log identifier, timestamp and prune flag.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasicExtensions {
     pub log_id: LogId,
@@ -455,6 +462,7 @@ impl BasicExtensions {
     const FIELDS_COUNT: usize = 3;
 }
 
+/// Spaces header extensions including a log identifier, timestamp and spaces arguments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpaceExtensions {
     pub log_id: LogId,
