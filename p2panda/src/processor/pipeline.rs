@@ -10,7 +10,6 @@ use futures_util::StreamExt;
 use p2panda_core::traits::{Digest, ShortFormat};
 use p2panda_core::{Extensions, Hash, LogId};
 use p2panda_store::SqliteStore;
-use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_stream::StreamLayerExt;
 use p2panda_stream::groups::Groups;
 use p2panda_stream::hooks::{Hooks, ProcessorHooksList};
@@ -223,10 +222,7 @@ where
                             store.clone(),
                             pipeline_id,
                         );
-                        let spaces = {
-                            let spaces_store = SqliteSpacesStore::new(store);
-                            SpacesProcessor::<Event<L, E, TP>>::new(spaces_store, spaces_manager)
-                        };
+                        let spaces = SpacesProcessor::<Event<L, E, TP>>::new(spaces_manager);
 
                         // Receive incoming events through mpsc channel.
                         let pipeline = ReceiverStream::new(to_pipeline_rx)
