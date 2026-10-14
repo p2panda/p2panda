@@ -8,12 +8,10 @@ use p2panda_auth::validation::{
     self, AddMemberError, RemoveMemberError, can_add_member, can_remove_member,
 };
 use p2panda_auth::{Access, AccessLevel};
-use p2panda_core::Hash;
 use p2panda_core::traits::ShortFormat;
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{ActorId, AuthGroupState, GroupId, MemberId};
+use p2panda_spaces::{ActorId, AuthGroupState, GroupId, MemberId, global_groups_id};
 use p2panda_store::groups::GroupsStore;
-use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_store::{SqliteError, SqliteStore};
 use thiserror::Error;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError};
@@ -161,14 +159,10 @@ impl Group {
 }
 
 pub(crate) async fn is_group(store: &SqliteStore, actor: ActorId) -> Result<bool, SqliteError> {
-    let groups_y: AuthGroupState<AuthCapabilities> = tx!(
-        store,
-        store
-            .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
-            .await?
-    )
-    .unwrap_or_default();
-
+    let groups_y: AuthGroupState<AuthCapabilities> = store
+        .get_groups_state(global_groups_id())
+        .await?
+        .unwrap_or_default();
     Ok(validation::is_group(&groups_y, actor))
 }
 

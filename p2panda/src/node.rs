@@ -4,15 +4,12 @@ use std::fmt::Debug;
 use std::sync::Mutex;
 
 use futures_util::Stream;
-use p2panda_core::{Hash, Topic};
+use p2panda_core::Topic;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::sync::authoriser::SyncBlockList;
 use p2panda_net::{NetworkId, NodeId};
 use p2panda_spaces::group::Group as InnerGroup;
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{Config as SpacesConfig, GroupId, SpaceId, SpacesStoreState};
-use p2panda_store::groups::GroupsStore;
-use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
+use p2panda_spaces::{Config as SpacesConfig, GroupId, SpaceId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use p2panda_store::topics::TopicStore;
 use p2panda_store::tx;
@@ -28,7 +25,6 @@ use crate::egress::{Egress, EgressError, StreamType, SubmitError};
 use crate::forge::{Forge, OperationForge};
 use crate::hooks::{GroupsHook, RepairHook};
 use crate::network::{Network, NetworkConfig, NetworkError};
-use crate::operation::Extensions;
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
@@ -550,7 +546,7 @@ impl Node {
     ) -> Result<(Group, GroupSubscription), CreateGroupError> {
         let initial_members = to_initial_members(initial_members);
 
-        let output = self.spaces_manager.create_group(&initial_members).await?;
+        let (inner, output) = self.spaces_manager.create_group(&initial_members).await?;
         let group_id = output.group_id;
 
         let topic = actor_to_topic(group_id);
@@ -577,12 +573,6 @@ impl Node {
             .dispatch(output.message.into_operation(), topic)
             .await?;
         processed.await?;
-
-        let inner = self
-            .spaces_manager
-            .group(group_id)
-            .await?
-            .expect("newly created group exists");
 
         Ok(group_stream(
             inner,
@@ -707,28 +697,11 @@ impl Node {
         //
         // NOTE: As we know the space is created with no members which are groups we don't need to
         // manually push any groups into the space here.
-        let output = self.spaces_manager.create_space(space_id, &[]).await?;
-
-        // Persist the computed groups- and spaces-state to the stores.
-        tx!(self.store, {
-            let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-            spaces_store
-                .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &output.global_groups_y)
-                .await?;
-            spaces_store
-                .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
-                .await?;
-        });
+        let (inner, output) = self.spaces_manager.create_space(space_id, &[]).await?;
 
         let egress_handle = self.egress.handle();
 
         dispatch_spaces_events(&egress_handle, space_id, output.messages).await?;
-
-        let inner = self
-            .spaces_manager
-            .space(space_id)
-            .await?
-            .expect("materialised space after processing operations");
 
         let (space, rx) = spaces_stream::<M>(
             inner,

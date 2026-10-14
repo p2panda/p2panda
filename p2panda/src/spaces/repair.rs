@@ -6,8 +6,7 @@ use std::time::Instant;
 
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, IdentityError, Topic};
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState, global_groups_id};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
@@ -380,8 +379,6 @@ async fn repair_space(
     space_id: SpaceId,
     include: Option<GroupId>,
 ) -> Result<(), RepairError> {
-    let spaces_store = SpacesStore::new(store.clone());
-
     let Some(space) = manager.space(space_id).await? else {
         return Ok(());
     };
@@ -403,13 +400,6 @@ async fn repair_space(
     // Incorporate the missing operations into the space, this forges new "space membership"
     // operations.
     let output = space.repair(&group_ids).await?;
-
-    // Persist spaces state.
-    tx!(spaces_store, {
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
-            .await?;
-    });
 
     dispatch_spaces_events(egress_handle, space_id, output.messages).await?;
 
@@ -439,7 +429,7 @@ async fn sync_group(
     let permit = store.begin().await?;
 
     let global_groups_y: AuthGroupState<AuthCapabilities> = store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .get_groups_state_tx(global_groups_id())
         .await?
         .unwrap_or_default();
 
@@ -489,10 +479,11 @@ async fn sync_space(
     include: &[GroupId],
 ) -> Result<bool, SyncError> {
     let spaces_store = SpacesStore::new(store.clone());
+
     let permit = spaces_store.begin().await?;
 
     let global_groups_y: AuthGroupState<AuthCapabilities> = spaces_store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .get_groups_state_tx(global_groups_id())
         .await?
         .unwrap_or_default();
 
