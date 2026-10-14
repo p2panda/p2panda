@@ -203,7 +203,7 @@ impl Group {
     ///
     /// These members are all the individuals in the group after nested groups have been
     /// flattened.
-    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerGroupError> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupMembersError> {
         let result = self.inner.members().await.map(|members| {
             members
                 .iter()
@@ -215,13 +215,15 @@ impl Group {
     }
 
     /// Returns all group actors (groups and individuals) and their access levels.
-    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerGroupError> {
-        self.inner.actors().await.map(|actors| {
+    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupActorsError> {
+        let result = self.inner.actors().await.map(|actors| {
             actors
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
     /// Gracefully close the group and any associated sync sessions.
@@ -275,6 +277,16 @@ impl Stream for GroupSubscription {
     }
 }
 
+/// Error occurred when querying the actors of a group.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GroupActorsError(#[from] InnerGroupError);
+
+/// Error occurred when querying the members of a group.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GroupMembersError(#[from] InnerGroupError);
+
 #[derive(Debug, Error)]
 pub enum AddGroupMemberError {
     #[error(
@@ -293,6 +305,9 @@ pub enum AddGroupMemberError {
 
     #[error(transparent)]
     Group(#[from] InnerGroupError),
+
+    #[error(transparent)]
+    Membership(#[from] GroupActorsError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
@@ -322,6 +337,9 @@ pub enum RemoveGroupMemberError {
 
     #[error(transparent)]
     Group(#[from] InnerGroupError),
+
+    #[error(transparent)]
+    Membership(#[from] GroupActorsError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
