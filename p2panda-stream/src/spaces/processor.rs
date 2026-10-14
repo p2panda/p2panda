@@ -5,9 +5,8 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_core::Hash;
 use p2panda_spaces::Forge;
-use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError, ProcessOutput};
+use p2panda_spaces::manager::Manager;
 use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -23,20 +22,20 @@ use crate::spaces::SpacesProcessorArgs;
 
 pub type SpacesManager<S, F, C> = Manager<S, F, C>;
 
-pub type SpacesManagerError<F, C> = ManagerError<F, C>;
+#[derive(Clone, Debug, Error)]
+#[error("{0}")]
+pub struct SpacesError(String);
 
 /// Processor for spaces operations.
 pub struct Spaces<T, S, F, C> {
-    store: S,
     manager: SpacesManager<S, F, C>,
     notify: Notify,
     queue: RefCell<VecDeque<(T, SpacesResult<C>)>>,
 }
 
 impl<T, S, F, C> Spaces<T, S, F, C> {
-    pub fn new(store: S, manager: SpacesManager<S, F, C>) -> Self {
+    pub fn new(manager: SpacesManager<S, F, C>) -> Self {
         Self {
-            store,
             manager,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
@@ -65,57 +64,13 @@ where
         let input_args: &SpacesProcessorArgs<C> = input.borrow();
 
         let result = match input_args {
-            SpacesProcessorArgs::Process { msg } => {
-                // Process incoming event.
-                let ProcessOutput {
-                    groups_y,
-                    space_y,
-                    mut events,
-                } = match self.manager.process(msg).await {
-                    Ok(result) => result,
-                    Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
-                };
-
-                // Persist resulting new states into database in one atomic transaction.
-                let permit = match self.store.begin().await {
-                    Ok(permit) => permit,
-                    Err(err) => return Err((input, SpacesError::Store(err.to_string()))),
-                };
-
-                if let Some(y) = groups_y {
-                    // TODO: Hashing every time when processing feels a bit redundant. We either
-                    // want to hard-code the hash itself or change the id type in p2panda-store to a
-                    // string OR have the constant in p2panda-store.
-                    if let Err(err) = self
-                        .store
-                        .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &y)
-                        .await
-                    {
-                        return Err((input, SpacesError::Store(err.to_string())));
-                    }
-                }
-
-                if let Some(y) = space_y {
-                    let space_id = y.space_id;
-
-                    if let Err(err) = self
-                        .store
-                        .set_space_state_tx(&space_id, &SpacesStoreState::from(y))
-                        .await
-                    {
-                        return Err((input, SpacesError::Store(err.to_string())));
-                    }
-                }
-
-                if let Err(err) = self.store.commit(permit).await {
-                    return Err((input, SpacesError::Store(err.to_string())));
-                }
-
-                (input, SpacesResult::Processed { events })
-            }
+            SpacesProcessorArgs::Process { msg } => match self.manager.process(msg).await {
+                Ok(events) => (input, SpacesResult::Processed { events }),
+                Err(err) => return Err((input, SpacesError(err.to_string()))),
+            },
             // For locally created operations the spaces args have already been processed and
-            // resulting events are included in the processor args here. All that's needed from
-            // the processor is to forward them onto any consumers.
+            // resulting events are included in the processor args here. All that's needed from the
+            // processor is to forward them onto any consumers.
             SpacesProcessorArgs::AlreadyProcessed { events, .. } => {
                 let events = events.clone();
                 (input, SpacesResult::Processed { events })
@@ -153,15 +108,4 @@ impl<C> SpacesResult<C> {
             Self::Ignored => false,
         }
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum SpacesError {
-    /// Error occurred when processing -spaces event in manager.
-    #[error("spaces processing error: {0}")]
-    SpacesManager(String),
-
-    /// Critical storage failure occurred. This is usually a reason to panic.
-    #[error("critical storage failure: {0}")]
-    Store(String),
 }
