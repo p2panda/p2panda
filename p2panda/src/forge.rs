@@ -39,6 +39,66 @@ impl OperationForge {
     pub fn new(credentials: Credentials, store: SqliteStore) -> Self {
         Self { credentials, store }
     }
+
+    /// Create a signed operation and insert it into the store.
+    ///
+    /// This method performs several actions: it first queries the store to determine the latest
+    /// entry for the given author and log id. It then composes an operation and signs it. Finally,
+    /// the relevant log is associated with the topic and the signed operation is inserted into the
+    /// store. Both the log-topic association and operation insertion are executed as part of a
+    /// single transaction, thereby ensuring atomicity.
+    pub async fn create_operation_tx(
+        &self,
+        topic: Option<Topic>,
+        log_id: LogId,
+        body: Option<Vec<u8>>,
+        extensions: Extensions,
+    ) -> Result<Operation, ForgeError> {
+        let body: Option<Body> = body.map(|bytes| bytes.into());
+
+        let (seq_num, backlink) = self
+            .store
+            .get_latest_entry_tx(&self.credentials.verifying_key(), &log_id)
+            .await?
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+            .unwrap_or((0, None));
+
+        let header = {
+            let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
+
+            if let Some(ref body) = body {
+                builder = builder.body(body);
+            }
+
+            builder.build(&self.credentials, extensions)
+        };
+
+        if let Some(topic) = topic {
+            <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate_tx(
+                &self.store,
+                &topic,
+                &self.credentials.verifying_key(),
+                &log_id,
+            )
+            .await?;
+        }
+
+        let operation = Operation::from_parts(header, body);
+
+        self.store
+            .insert_operation_tx(&operation.hash, &operation, &log_id)
+            .await?;
+
+        trace!(
+            id = operation.hash.fmt_short(),
+            author = self.credentials.verifying_key().fmt_short(),
+            log_id = Hash::from(log_id.as_bytes()).fmt_short(),
+            seq = operation.header.seq_num,
+            "operation created"
+        );
+
+        Ok(operation)
+    }
 }
 
 impl Forge<Topic, LogId, Extensions> for OperationForge {
@@ -48,13 +108,6 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         self.credentials.verifying_key()
     }
 
-    /// Create a signed operation and insert it into the store.
-    ///
-    /// This method performs several actions: it first queries the store to determine the latest
-    /// entry for the given author and log id. It then composes an operation and signs it. Finally,
-    /// the relevant log is associated with the topic and the signed operation is inserted into the
-    /// store. Both the log-topic association and operation insertion are executed as part of a
-    /// single transaction, thereby ensuring atomicity.
     async fn create_operation(
         &self,
         topic: Option<Topic>,
@@ -62,59 +115,18 @@ impl Forge<Topic, LogId, Extensions> for OperationForge {
         body: Option<Vec<u8>>,
         extensions: Extensions,
     ) -> Result<Operation, Self::Error> {
-        let body: Option<Body> = body.map(|bytes| bytes.into());
-
         // Acquire a lock on the store for the duration of the read to write cycle.
         //
         // This is to ensure that the data returned from the `get_latest_entry()` query does not
         // become stale before the call to `insert_operation()`.
         //
-        // Here we acquire a store permit, query the latest log entry, associate the topic with
-        // the log, insert the operation and commit the transaction before dropping the permit.
-        let operation = tx!(self.store, {
-            let (seq_num, backlink) = self
-                .store
-                .get_latest_entry_tx(&self.credentials.verifying_key(), &log_id)
+        // Here we acquire a store permit, query the latest log entry, associate the topic with the
+        // log, insert the operation and commit the transaction before dropping the permit.
+        let operation = tx!(
+            self.store,
+            self.create_operation_tx(topic, log_id, body, extensions)
                 .await?
-                .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-                .unwrap_or((0, None));
-
-            let header = {
-                let mut builder = Header::builder().seq_num(seq_num).backlink(backlink);
-
-                if let Some(ref body) = body {
-                    builder = builder.body(body);
-                }
-
-                builder.build(&self.credentials, extensions)
-            };
-
-            if let Some(topic) = topic {
-                <SqliteStore as TopicStore<Topic, VerifyingKey, LogId>>::associate_tx(
-                    &self.store,
-                    &topic,
-                    &self.credentials.verifying_key(),
-                    &log_id,
-                )
-                .await?;
-            }
-
-            let operation = Operation::from_parts(header, body);
-
-            self.store
-                .insert_operation_tx(&operation.hash, &operation, &log_id)
-                .await?;
-
-            trace!(
-                id = operation.hash.fmt_short(),
-                author = self.credentials.verifying_key().fmt_short(),
-                log_id = Hash::from(log_id.as_bytes()).fmt_short(),
-                seq = operation.header.seq_num,
-                "operation created"
-            );
-
-            operation
-        });
+        );
 
         Ok(operation)
     }
