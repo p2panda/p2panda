@@ -7,7 +7,7 @@ use p2panda_spaces::SpaceId;
 use p2panda_store::SqliteError;
 use thiserror::Error;
 
-use crate::forge::{Forge, ForgeError, OperationForge};
+use crate::forge::{ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId};
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::types::AuthCapabilities;
@@ -137,7 +137,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // after a while (without breaking the whole key bundle log.
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                self.create_operation(None, log_id, Some(bytes), extensions)
+                self.create_operation_tx(None, log_id, Some(bytes), extensions)
                     .await?
             }
 
@@ -148,7 +148,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
 
                 let extensions = Extensions::builder(log_id).build_space(args);
 
-                self.create_operation(None, log_id, None, extensions)
+                self.create_operation_tx(None, log_id, None, extensions)
                     .await?
             }
 
@@ -163,7 +163,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
 
                 let topic = Topic::from(space_id);
 
-                self.create_operation(Some(topic), log_id, None, extensions)
+                self.create_operation_tx(Some(topic), log_id, None, extensions)
                     .await?
             }
 
@@ -194,7 +194,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // Associate this log with the space id / topic.
                 let topic = Topic::from(space_id);
 
-                self.create_operation(Some(topic), log_id, None, extensions)
+                self.create_operation_tx(Some(topic), log_id, None, extensions)
                     .await?
             }
         };

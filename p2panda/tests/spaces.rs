@@ -441,7 +441,7 @@ mod spaces_api {
         //
         // Causal order: The second operation points at the first to declare it as a dependency.
         let topic = Topic::random();
-        let out = panda
+        let (_space, out) = panda
             .spaces_manager()
             .create_space(
                 topic,

@@ -9,20 +9,15 @@ use p2panda_auth::validation::{
     can_add_member, can_demote_member, can_promote_member, can_remove_member, can_write,
 };
 use p2panda_auth::{Access, AccessLevel};
-use p2panda_core::Hash;
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::space::SpaceOutput;
-use p2panda_spaces::{ActorId, MemberId, SpaceId, SpacesStoreState};
-use p2panda_store::groups::GroupsStore;
-use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
-use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_spaces::{ActorId, MemberId, SpaceId};
+use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
-use crate::operation::Extensions;
 use crate::spaces::is_group;
 use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
@@ -94,7 +89,7 @@ where
         //
         // We could also handle this outside of p2panda-spaces, simply by coming up with an argument
         // in the extensions for the spaces processor in p2panda-stream.
-        let (_, message, _) = self.inner.publish(&body_bytes).await.map_err(Box::new)?;
+        let (message, _) = self.inner.publish(&body_bytes).await.map_err(Box::new)?;
 
         // We don't need to persist state or pass enriched events through the pipeline as the spaces
         // processor can re-process this event.
@@ -246,21 +241,6 @@ where
         // which is registered on the event processing pipeline. Since locally issued events are not
         // going through the pipeline, we have to repeat it here as well.
         associate_members(self.inner.me(), &self.store, space_output.events()).await;
-
-        let spaces_store = SqliteSpacesStore::<Extensions>::new(self.store.clone());
-
-        tx!(spaces_store, {
-            // Persist the computed groups and spaces state to the stores.
-            spaces_store
-                .set_groups_state_tx(
-                    Hash::digest(GLOBAL_GROUPS_CONTEXT_ID),
-                    &space_output.global_groups_y,
-                )
-                .await?;
-            spaces_store
-                .set_space_state_tx(&self.id(), &SpacesStoreState::from(space_output.space_y))
-                .await?;
-        });
 
         dispatch_spaces_events(&self.egress_handle, self.id(), space_output.messages).await?;
 

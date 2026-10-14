@@ -6,12 +6,11 @@ use std::time::Instant;
 
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Hash, Topic};
-use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
-use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
+use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState, global_groups_id};
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SpacesStore as SpacesStoreTrait;
-use p2panda_store::{SqliteError, SqliteStore, Transaction, tx};
+use p2panda_store::{SqliteError, SqliteStore};
 use thiserror::Error;
 #[cfg(test)]
 use tokio::sync::RwLock;
@@ -265,14 +264,25 @@ impl RepairTask {
                                 }
                                 let _ = reply.send(result);
                             }
-                            Some(RepairTaskCommand::SyncSpaceWithGroup{ space_id, group_id, reply }) => {
+                            Some(RepairTaskCommand::SyncSpaceWithGroup { space_id, group_id, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = sync_and_repair_space_with_group(&manager, &store, &egress_handle, space_id, Some(group_id)).await;
+                                let result = sync_and_repair_space_with_group(
+                                    &manager,
+                                    &store,
+                                    &egress_handle,
+                                    space_id,
+                                    Some(group_id),
+                                ).await;
                                 let _ = reply.send(result);
                             }
-                            Some(RepairTaskCommand::SyncGroups{ group_id, other_group_ids, reply }) => {
+                            Some(RepairTaskCommand::SyncGroups { group_id, other_group_ids, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = sync_groups(&store, &egress_handle, group_id, &other_group_ids).await;
+                                let result = sync_groups(
+                                    &store,
+                                    &egress_handle,
+                                    group_id,
+                                    &other_group_ids,
+                                ).await;
                                 let _ = reply.send(result);
                             }
                             None => closed = true,
@@ -383,8 +393,6 @@ async fn sync_and_repair_space_with_group(
     space_id: SpaceId,
     other_group: Option<GroupId>,
 ) -> Result<(), RepairError> {
-    let spaces_store = SpacesStore::new(store.clone());
-
     let Some(space) = manager.space(space_id).await? else {
         return Ok(());
     };
@@ -401,13 +409,6 @@ async fn sync_and_repair_space_with_group(
     // Incorporate the missing operations into the space, this forges new "space membership"
     // operations.
     let output = space.repair(&group_ids).await?;
-
-    // Persist spaces state.
-    tx!(spaces_store, {
-        spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
-            .await?;
-    });
 
     dispatch_spaces_events(egress_handle, space_id, output.messages).await?;
 
@@ -443,19 +444,15 @@ async fn sync_groups(
     let mut sync_with_groups = sync_with_groups.to_vec();
     sync_with_groups.push(group_id);
 
-    let permit = store.begin().await?;
-
     let global_groups_y: AuthGroupState<AuthCapabilities> = store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .get_groups_state(global_groups_id())
         .await?
         .unwrap_or_default();
 
     let local_groups_y: AuthGroupState<AuthCapabilities> = store
-        .get_groups_state_tx(actor_to_topic(group_id).into())
+        .get_groups_state(actor_to_topic(group_id).into())
         .await?
         .unwrap_or_default();
-
-    store.commit(permit).await?;
 
     let ids = global_groups_y.inner.toposort(&sync_with_groups);
     if ids.is_empty() {
@@ -488,20 +485,17 @@ async fn sync_space(
     sync_with_groups: &[GroupId],
 ) -> Result<bool, SyncError> {
     let spaces_store = SpacesStore::new(store.clone());
-    let permit = spaces_store.begin().await?;
 
     let global_groups_y: AuthGroupState<AuthCapabilities> = spaces_store
-        .get_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID))
+        .get_groups_state(global_groups_id())
         .await?
         .unwrap_or_default();
 
     let space_groups_y = spaces_store
-        .get_space_state_tx(&space_id)
+        .get_space_state(&space_id)
         .await?
         .map(|y: SpacesStoreState<AuthCapabilities>| y.groups_y)
         .unwrap_or_default();
-
-    spaces_store.commit(permit).await?;
 
     let ids = global_groups_y.inner.toposort(sync_with_groups);
     if ids.is_empty() {
@@ -532,8 +526,7 @@ async fn send_missing_operations(
             continue;
         }
 
-        let Some(operation): Option<Operation> = tx!(store, store.get_operation_tx(id).await?)
-        else {
+        let Some(operation): Option<Operation> = store.get_operation(id).await? else {
             warn!("missing expected auth groups operation");
             continue;
         };
