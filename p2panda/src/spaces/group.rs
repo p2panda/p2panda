@@ -116,6 +116,10 @@ impl PendingGroup {
     }
 }
 
+/// Group API with methods to query and update membership.
+///
+/// Operations created as a result of adding or removing members are automatically forwarded to the
+/// pipeline for processing. Resulting events are then received on the `GroupSubscription` stream.
 #[derive(Debug)]
 pub struct Group {
     inner: InnerGroup,
@@ -129,11 +133,12 @@ pub struct Group {
 static_assertions::assert_impl_all!(Group: Send, Sync);
 
 impl Group {
+    /// Returns the verifying key (Ed25519) of the group.
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
 
-    /// Add a new member to the group.
+    /// Adds a new member to the group.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
@@ -172,7 +177,7 @@ impl Group {
         Ok(())
     }
 
-    /// Remove an existing member from the group.
+    /// Removes an existing member from the group.
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveGroupMemberError> {
         let me = self.inner.my_id();
         let actor = actor.into();
@@ -265,6 +270,7 @@ impl From<Group> for ActorId {
     }
 }
 
+/// Subscription to events arriving from a group.
 pub struct GroupSubscription {
     rx: StreamSubscription<NoBody>,
 }
@@ -287,6 +293,7 @@ pub struct GroupActorsError(#[from] InnerGroupError);
 #[error(transparent)]
 pub struct GroupMembersError(#[from] InnerGroupError);
 
+/// Error occurred when adding a member to a group.
 #[derive(Debug, Error)]
 pub enum AddGroupMemberError {
     #[error(
@@ -319,6 +326,7 @@ pub enum AddGroupMemberError {
     Sqlite(#[from] SqliteError),
 }
 
+/// Error occurred when removing a member from a group.
 #[derive(Debug, Error)]
 pub enum RemoveGroupMemberError {
     #[error(

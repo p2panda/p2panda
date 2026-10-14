@@ -64,24 +64,34 @@ use crate::spaces::types::{
 };
 use crate::streams::Event;
 
+/// Member of an encrypted space.
+///
+/// A member is an author who can publish application messages into a space (when they have "write"
+/// access) and / or decrypt incoming ones (when they have "read" access).
+///
+/// Every member is identified by it's verification key (Ed25519).
 #[derive(Debug)]
 pub struct Member {
     pub(crate) inner: InnerMember,
 }
 
 impl Member {
+    /// Returns the verifying key (Ed25519) of the member.
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
 
+    /// Returns the member's key-bundle.
     pub fn key_bundle(&self) -> &LongTermKeyBundle {
         self.inner.key_bundle()
     }
 
+    /// Returns the lifetime of the signed prekey for the member's key-bundle.
     pub fn lifetime(&self) -> &Lifetime {
         self.inner.key_bundle().lifetime()
     }
 
+    /// Verifies the member's key bundle and associated member id.
     pub fn verify(&self) -> Result<(), p2panda_spaces::member::MemberError> {
         self.inner.verify()?;
         Ok(())
@@ -100,6 +110,9 @@ impl From<Member> for p2panda_spaces::member::AuthenticatedMember {
     }
 }
 
+/// Member of a group.
+///
+/// The member may be an individual or a group. Both are represented by a verifying key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupActor {
     pub(crate) id: ActorId,
@@ -107,10 +120,12 @@ pub struct GroupActor {
 }
 
 impl GroupActor {
+    /// Returns the verifying key of the group.
     pub fn id(&self) -> ActorId {
         self.id
     }
 
+    /// Queries whether the member is itself a group.
     pub fn is_group(&self) -> bool {
         self.group
     }
@@ -181,6 +196,10 @@ impl PendingMember {
     }
 }
 
+// TODO(glyph): Something seems a bit off about this error; maybe it's just the naming...it's a
+// spaces manager error but we refer to it as `MemberError`. Would be good to track down where and
+// how this is used.
+/// Error occurred when interacting with a space.
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct MemberError(#[from] SpacesManagerError);
@@ -191,7 +210,7 @@ pub struct MemberError(#[from] SpacesManagerError);
 pub struct KeyBundleTask;
 
 impl KeyBundleTask {
-    /// Spawn key bundle background task.
+    /// Spawns key bundle background task.
     ///
     /// This method awaits until we can be sure at least one valid key bundle was published into the
     /// member's log. This assures that all logic to subscribe to a space causes sync session to be
@@ -287,7 +306,7 @@ async fn renew_expired_key_bundles(
     }
 }
 
-/// Associate member log's by observing spaces events.
+/// Associates member logs by observing spaces events.
 ///
 /// This helps with the following problem:
 ///
@@ -301,9 +320,8 @@ async fn renew_expired_key_bundles(
 /// --> Peer B needs to inform A & D about the new secret but doesn't have the member log of D yet.
 /// ```
 ///
-/// If Peer B would already associate D's member log when they've observed the CREATE event they
-/// would have had a chance to receive it from A. This hook makes sure that the association takes
-/// place.
+/// Peer B could have received D's member log from A if they'd performed the association when
+/// observing the CREATE event. This hook makes sure that the association takes place.
 pub async fn associate_members(
     my_node_id: VerifyingKey,
     store: &SqliteStore,
@@ -361,7 +379,7 @@ async fn associate_members_inner(
 }
 
 /// Pipeline hook to observe spaces events and automatically associate member logs to the space when
-/// someone new was added.
+/// someone new is added.
 pub struct MemberAssociationHook {
     my_node_id: NodeId,
     store: SqliteStore,
