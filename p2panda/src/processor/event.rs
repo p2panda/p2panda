@@ -142,7 +142,6 @@ where
                         },
                         events,
                     },
-
                     (Some(args), None) => SpacesProcessorArgs::Process {
                         msg: p2panda_spaces::SpacesMessage {
                             id: operation.hash,
