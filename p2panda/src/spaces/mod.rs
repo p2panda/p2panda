@@ -21,9 +21,7 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 
 pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::{group_log_id, member_log_id};
-pub use group::{
-    AddGroupMemberError, Group, GroupError, GroupSubscription, RemoveGroupMemberError,
-};
+pub use group::{AddGroupMemberError, Group, GroupSubscription, RemoveGroupMemberError};
 pub(crate) use group::{group_stream, is_group};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
@@ -32,12 +30,14 @@ pub use space::{
     SpaceFuture, SpaceSubscription,
 };
 pub(crate) use space::{dispatch_spaces_events, spaces_stream};
+// TODO: Should `InnerGroupEvent` and `InnerSpaceError` be exported to the public API?
 pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
 
+// TODO: Should this be exported to the public API?
 #[allow(clippy::result_large_err)]
 pub fn spaces_manager(
     forge: OperationForge,
