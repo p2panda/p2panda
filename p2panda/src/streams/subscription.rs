@@ -27,6 +27,7 @@ use crate::streams::drop_guard::StreamDropGuard;
 /// ## Example
 ///
 /// ```no_run
+/// use p2panda::streams::StreamEvent;
 /// use futures_util::StreamExt;
 /// use p2panda_core::Topic;
 /// # #[tokio::main]
@@ -37,7 +38,13 @@ use crate::streams::drop_guard::StreamDropGuard;
 /// let (_tx, mut rx) = node.stream::<String>(topic).await?;
 ///
 /// while let Some(stream_event) = rx.next().await {
-///     // .. react to topic stream events
+///     match stream_event {
+///         StreamEvent::Processed { operation, .. } => {
+///             // Do something with the operation.
+///         }
+///         // See the `p2panda::streams::StreamEvent` type for a complete list of variants.
+///         _ => (),
+///     }
 /// }
 /// #
 /// # Ok(())

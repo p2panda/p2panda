@@ -6,8 +6,8 @@
     reason = "https://github.com/p2panda/p2panda/issues/1458"
 )]
 
-//! p2panda's high-level API is an opinionated, out-of-the-box peer-to-peer stack which orchestrates
-//! all individual [p2panda] modules.
+//! p2panda's high-level API is an opinionated, out-of-the-box peer-to-peer stack which
+//! orchestrates all individual [p2panda] modules.
 //!
 //! ```rust
 //! # #[tokio::main]
@@ -29,36 +29,37 @@
 //!   minimal setup
 //! - Unified orchestration of p2p networking, node discovery, mDNS, bootstrap, [eventually
 //!   consistent] sync, event streaming, causal ordering, pruning and persistence
-//! - Topic-based [Publish & Subscribe] model with partial replication - sync only the data relevant
-//!   to a topic
+//! - Topic-based [Publish & Subscribe] model with partial replication - sync only the data
+//!   relevant to a topic
+//! - End-to-end encrypted spaces for securing data in group-based contexts
 //! - Transport-agnostic event delivery architecture supporting Internet p2p today (QUIC/iroh) and
 //!   future mesh/radio transports such as BLE and LoRa
 //! - Built on single-writer append-only, fork-tolerant CRDT operation logs with pruning,
 //!   multi-writer causal ordering, and efficient sync
-//! - Persistent local SQLite storage for operations, sync state, address books, stream cursors, and
-//!   soon encryption/access-control state
+//! - Persistent local SQLite storage for operations, sync state, address books, stream cursors,
+//!   and soon encryption/access-control state
 //! - Event-stream-inspired consumer model with acknowledgements, replay support, at-least-once
 //!   delivery semantics and crash recovery
-//! - Atomic transactional processing pipeline for resilience against crashes and corrupted database
-//!   state
+//! - Atomic transactional processing pipeline for resilience against crashes and corrupted
+//!   database state
 //! - Observable system state, events, and metrics
 //!
 //! ## Walkaway Stack
 //!
 //! The high-level API is designed around a separation between the event delivery and event
-//! processing layers. Applications built with p2panda should not need to care abot _where_ messages
-//! originate from, but rather _how_ they are processed.
+//! processing layers. Applications built with p2panda should not need to care abot _where_
+//! messages originate from, but rather _how_ they are processed.
 //!
 //! The stack confidentially discovers nodes interested in the same topic, synchronises missed
 //! messages and delivers them to the processing layer.
 //!
-//! Today this is implemented over the Internet using [iroh] for direct peer-to-peer connections but
-//! the abstraction is designed to support additional transports such as LoRa or BLE, including
-//! delay-tolerant and store-and-forward mesh network topologies in the future.
+//! Today this is implemented over the Internet using [iroh] for direct peer-to-peer connections
+//! but the abstraction is designed to support additional transports such as LoRa or BLE,
+//! including delay-tolerant and store-and-forward mesh network topologies in the future.
 //!
-//! Application developers primarily interact with the API to monitor networking and sync activity,
-//! configure transports and manage access control, while the stack handles message delivery,
-//! synchronisation and persistence.
+//! Application developers primarily interact with the API to monitor networking and sync
+//! activity, configure transports and manage access control, while the stack handles message
+//! delivery, synchronisation and persistence.
 //!
 //! This allows applications to remain portable across different network infrastructures - what we
 //! refer to as a ["Walkaway Stack"].
@@ -107,17 +108,17 @@
 //! ### Event streaming and state materialisation
 //!
 //! Once data is available locally, the stack processes and delivers it to the application layer
-//! using concepts inspired by event-streaming systems such as NATS JetStream or Kafka - adapted for
-//! decentralised and autonomous p2p networks.
+//! using concepts inspired by event-streaming systems such as NATS JetStream or Kafka - adapted
+//! for decentralised and autonomous p2p networks.
 //!
 //! Subscribing to a topic creates a stateful stream consumer.
 //!
-//! Each operation first passes through an internal _system-level_ processing layer where the system
-//! validates log integrity, applies pruning rules, performs causal ordering and, in the future,
-//! handles decryption.
+//! Each operation first passes through an internal _system-level_ processing layer where the
+//! system validates log integrity, applies pruning rules, performs causal ordering and, in the
+//! future, handles decryption.
 //!
-//! The processed operation is then forwarded to the _application-level_ together with metadata and
-//! debugging information.
+//! The processed operation is then forwarded to the _application-level_ together with metadata
+//! and debugging information.
 //!
 //! Applications can then apply their own domain-specific processing logic, such as updating a
 //! document title, processing a chat message, applying a text CRDT operation or handling a chess
@@ -136,9 +137,9 @@
 //! processing - for example on mobile devices. Unacknowledged operations are replayed on the next
 //! startup, allowing applications to maintain at-least-once processing guarantees.
 //!
-//! Internally, processing and state updates are performed atomically using transactions to minimise
-//! the risk of corruption during unexpected shutdowns. Combined with acknowledgements and replay
-//! support, this provides a resilient foundation for long-running p2p applications.
+//! Internally, processing and state updates are performed atomically using transactions to
+//! minimise the risk of corruption during unexpected shutdowns. Combined with acknowledgements
+//! and replay support, this provides a resilient foundation for long-running p2p applications.
 //!
 //! Replay functionality can also be used to rebuild application state after schema changes, logic
 //! updates or recovery scenarios.
@@ -148,8 +149,29 @@
 //! Publishing a message appends a new operation to the right log for the given topic, signs it,
 //! persists it locally and forwards it to the networking layer.
 //!
-//! If nodes are currently connected, operations may be propagated eagerly in real time. Otherwise,
-//! missed operations are synchronised automatically the next time nodes are online again.
+//! If nodes are currently connected, operations may be propagated eagerly in real time.
+//! Otherwise, missed operations are synchronised automatically the next time nodes are online
+//! again.
+//!
+//! ### Encrypted spaces
+//!
+//! A space represents an encrypted group context where all published messages are encrypted
+//! towards current group members. Members with manager access levels can modify the membership of
+//! the space by adding, removing, promoting and demoting other members. Spaces automatically
+//! perform key rotation when members are removed to ensure that only current members can read new
+//! messages.
+//!
+//! Spaces make it possible to support end-to-end encryption of data published using p2panda, even
+//! when it has to traverse intermediate nodes (some of which may be untrusted) or when it is
+//! broadcast to unknowable receivers. These properties become vital in a number of contexts, such
+//! as when performing multi-hop routing in broadcast-based mesh networks or pushing data to support
+//! nodes to enhance data availability in the network.
+//!
+//! Application developers do not need to use spaces if their application is purely reliant on
+//! direct peer-to-peer connections (such as those supported by our topic streams), without any
+//! need for intermediate nodes to pass along data they are not supposed to read. Direct
+//! connections in p2panda rely on iroh's TLS-encrypted QUIC streams, meaning that data exchanged
+//! between two p2panda nodes via topic streams is always end-to-end encrypted.
 //!
 //! ## Examples
 //!
@@ -192,6 +214,45 @@
 //!         );
 //!     }
 //! }
+//! #
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Spaces
+//!
+//! ```rust
+//! # use p2panda_core::SigningKey;
+//! # use p2panda::Topic;
+//! # use p2panda::spaces::AccessLevel;
+//! # use serde::{Deserialize, Serialize};
+//! #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+//! struct SecretData {
+//!     title: String,
+//!     content: String,
+//! }
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! // Spawn a p2panda node.
+//! let panda = p2panda::spawn().await?;
+//!
+//! // Create a space with only us inside. Spaces behave like topic-streams, just
+//! // that they're encrypted towards members.
+//! let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await?;
+//!
+//! let message = SecretData {
+//!     title: "Welcome".to_string(),
+//!     content: "Hello there, I'm Panda!".to_string(),
+//! };
+//!
+//! // Publish a message into the space.
+//! //
+//! // Only space members will be able to decrypt it.
+//! let processing = panda_space.publish(message).await?;
+//!
+//! // Wait for the message to be processed by the local pipeline.
+//! processing.await;
 //! #
 //! # Ok(())
 //! # }

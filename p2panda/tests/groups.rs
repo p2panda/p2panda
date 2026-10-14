@@ -314,6 +314,7 @@ mod nested_groups {
     use p2panda::spaces::InnerGroupEvent;
     use p2panda::streams::StreamEvent;
     use p2panda::{AccessLevel, Topic};
+    use p2panda_core::SigningKey;
     use p2panda_core::test_utils::setup_logging;
 
     use crate::spawn_node;
@@ -467,6 +468,60 @@ mod nested_groups {
                 }
             };
         }
+    }
+
+    #[tokio::test]
+    async fn wait_joined_nested_group() -> Result<(), Box<dyn std::error::Error>> {
+        // Spawn a p2panda node on panda's laptop.
+        let panda = p2panda::spawn().await?;
+
+        // Spawn a p2panda node on penguin's device.
+        //
+        // In a proper application scenario this node would be running on an entirely separate device;
+        // we have two nodes here to illustrate the groups API.
+        let penguin = p2panda::spawn().await?;
+
+        // Panda has two devices which run p2panda: a laptop and a mobile phone.
+        let panda_laptop = panda.id();
+        let panda_mobile = SigningKey::generate().verifying_key();
+
+        // Create a group which includes both of panda's devices.
+        //
+        // We now have the `Group` and a `GroupSubscription`.
+        let (panda_device_group, _panda_device_group_rx) = panda
+            .create_group(&[
+                (panda_laptop, AccessLevel::Manage),
+                (panda_mobile, AccessLevel::Write),
+            ])
+            .await?;
+
+        let panda_devices = panda_device_group.id();
+        let penguin_laptop = penguin.id();
+
+        // Panda creates a new group to share photos from Panda and Penguin's recent safari.
+        //
+        // Both Panda's device group and Penguin's laptop are added as members; this illustrates
+        // that p2panda groups support nested groups (groups can be added as members to other groups).
+        let (safari_photos_group, _safari_photos_group_rx) = panda
+            .create_group(&[
+                (panda_devices, AccessLevel::Write),
+                (penguin_laptop, AccessLevel::Manage),
+            ])
+            .await?;
+
+        // Penguin subscribes to the safari group on from their node.
+        let (safari_photos_group_pending, _safari_photos_group_rx) =
+            penguin.group(safari_photos_group.id()).await?;
+
+        // Penguin waits until they've processed the operations which add them to the group.
+        let safari_group = safari_photos_group_pending.joined().await?;
+
+        // Penguin has a friend named Koala; they also run p2panda.
+        let koala_mobile = SigningKey::generate().verifying_key();
+
+        // Now that Penguin is part of the safari group, they can add Koala.
+        safari_group.add(koala_mobile, AccessLevel::Read).await?;
+        Ok(())
     }
 }
 
