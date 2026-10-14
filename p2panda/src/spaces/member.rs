@@ -55,6 +55,12 @@ use crate::egress::{DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProc
 use crate::spaces::Group;
 use crate::spaces::types::{InnerMember, InnerPendingMember, SpacesManager, SpacesManagerError};
 
+/// Member of an encrypted space.
+///
+/// A member is an author who can publish application messages into a space (when they have "write"
+/// access) and / or decrypt incoming ones (when they have "read" access).
+///
+/// Every member is identified by it's verification key (Ed25519).
 #[derive(Clone, Debug)]
 pub struct Member {
     pub(crate) inner: InnerMember,
@@ -73,18 +79,22 @@ impl Member {
         self.inner.to_bytes()
     }
 
+    /// Returns the verifying key (Ed25519) of the member.
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
 
+    /// Returns the member's key-bundle.
     pub fn key_bundle(&self) -> &LongTermKeyBundle {
         self.inner.key_bundle()
     }
 
+    /// Returns the lifetime of the signed prekey for the member's key-bundle.
     pub fn lifetime(&self) -> &Lifetime {
         self.inner.key_bundle().lifetime()
     }
 
+    /// Verifies the member's key bundle and associated member id.
     pub fn verify(&self) -> Result<(), p2panda_spaces::member::MemberError> {
         self.inner.verify()?;
         Ok(())
@@ -103,6 +113,9 @@ impl From<Member> for p2panda_spaces::member::AuthenticatedMember {
     }
 }
 
+/// Member of a group.
+///
+/// The member may be an individual or a group. Both are represented by a verifying key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GroupActor {
     pub(crate) id: ActorId,
@@ -110,10 +123,12 @@ pub struct GroupActor {
 }
 
 impl GroupActor {
+    /// Returns the verifying key of the actor.
     pub fn id(&self) -> ActorId {
         self.id
     }
 
+    /// Queries whether the member is itself a group.
     pub fn is_group(&self) -> bool {
         self.group
     }
@@ -184,6 +199,10 @@ impl PendingMember {
     }
 }
 
+// TODO(glyph): Something seems a bit off about this error; maybe it's just the naming...it's a
+// spaces manager error but we refer to it as `MemberError`. Would be good to track down where and
+// how this is used.
+/// Error occurred when interacting with a space.
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum MemberError {
@@ -202,7 +221,7 @@ pub enum MemberError {
 pub struct KeyBundleTask;
 
 impl KeyBundleTask {
-    /// Spawn key bundle background task.
+    /// Spawns key bundle background task.
     ///
     /// This method awaits until we can be sure at least one valid key bundle was published into the
     /// member's log. This assures that all logic to subscribe to a space causes sync session to be

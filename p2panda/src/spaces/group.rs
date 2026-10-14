@@ -116,6 +116,89 @@ impl PendingGroup {
     }
 }
 
+/// Group API with methods to query and update membership.
+///
+/// Operations created as a result of adding or removing members are automatically forwarded to the
+/// pipeline for processing. Resulting events are then received on the [`GroupSubscription`] stream.
+///
+/// [`GroupSubscription`]: crate::spaces::GroupSubscription
+///
+/// ## Example
+///
+/// ```no_run
+/// use p2panda_core::SigningKey;
+/// use p2panda::Topic;
+/// use p2panda::spaces::AccessLevel;
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// struct SecretData {
+///     title: String,
+///     content: String,
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///
+/// // Spawn a p2panda node on panda's laptop.
+/// let panda = p2panda::spawn().await?;
+///
+/// // Spawn a p2panda node on penguin's device.
+/// //
+/// // In a proper application scenario this node would be running on an entirely separate device;
+/// // we have two nodes here to illustrate the groups API.
+/// let penguin = p2panda::spawn().await?;
+///
+/// // Panda has two devices which run p2panda: a laptop and a mobile phone.
+/// let panda_laptop = panda.id();
+/// let panda_mobile = SigningKey::generate().verifying_key();
+///
+/// // Create a group which includes both of panda's devices.
+/// //
+/// // We now have the `Group` and a `GroupSubscription`.
+/// let (panda_device_group, _panda_device_group_rx) = panda
+///     .create_group(&[
+///         (panda_laptop, AccessLevel::Manage),
+///         (panda_mobile, AccessLevel::Write),
+///     ])
+///     .await?;
+///
+/// let panda_devices = panda_device_group.id();
+/// let penguin_laptop = penguin.id();
+///
+/// // Panda creates a new group to share photos from Panda and Penguin's recent safari.
+/// //
+/// // Both Panda's device group and Penguin's laptop are added as members; this illustrates
+/// // that p2panda groups support nested groups (groups can be added as members to other groups).
+/// let (safari_photos_group, _safari_photos_group_rx) = panda
+///     .create_group(&[
+///         (panda_devices, AccessLevel::Manage),
+///         (penguin_laptop, AccessLevel::Manage),
+///     ])
+///     .await?;
+///
+/// // Penguin subscribes to the safari group on from their node.
+/// let (safari_photos_group_pending, _safari_photos_group_rx) = penguin
+///     .group(panda_device_group.id())
+///     .await?;
+///
+/// // Penguin waits until they've processed the operations which add them to the group.
+/// let safari_group = safari_photos_group_pending.joined().await?;
+///
+/// // Penguin has a friend named Koala; they also run p2panda.
+/// let koala_mobile = SigningKey::generate().verifying_key();
+///
+/// // Now that Penguin is part of the safari group, they can add Koala.
+/// safari_group
+///     .add(koala_mobile, AccessLevel::Read)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// [`Node::create_space()`]: crate::Node::create_space()
+/// [`Node::space()`]: crate::Node::space()
+/// [`Node::space_from()`]: crate::Node::space_from()
 #[derive(Debug)]
 pub struct Group {
     inner: InnerGroup,
@@ -129,11 +212,12 @@ pub struct Group {
 static_assertions::assert_impl_all!(Group: Send, Sync);
 
 impl Group {
+    /// Returns the group identifier.
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
 
-    /// Add a new member to the group.
+    /// Adds a new member to the group.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
@@ -172,7 +256,7 @@ impl Group {
         Ok(())
     }
 
-    /// Remove an existing member from the group.
+    /// Removes an existing member from the group.
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveGroupMemberError> {
         let me = self.inner.my_id();
         let actor = actor.into();
@@ -265,6 +349,7 @@ impl From<Group> for ActorId {
     }
 }
 
+/// Subscription to events arriving from a group.
 pub struct GroupSubscription {
     rx: StreamSubscription<NoBody>,
 }
@@ -287,6 +372,7 @@ pub struct GroupActorsError(#[from] InnerGroupError);
 #[error(transparent)]
 pub struct GroupMembersError(#[from] InnerGroupError);
 
+/// Error occurred when adding a member to a group.
 #[derive(Debug, Error)]
 pub enum AddGroupMemberError {
     #[error(
@@ -319,6 +405,7 @@ pub enum AddGroupMemberError {
     Sqlite(#[from] SqliteError),
 }
 
+/// Error occurred when removing a member from a group.
 #[derive(Debug, Error)]
 pub enum RemoveGroupMemberError {
     #[error(
