@@ -32,12 +32,14 @@ pub use space::{
     SpaceEgressError, SpaceFuture, SpaceSubscription,
 };
 pub(crate) use space::{dispatch_spaces_events, pending_spaces_stream, spaces_stream};
+// TODO: Should `InnerGroupEvent` and `InnerSpaceError` be exported to the public API?
 pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
 use crate::spaces::types::{AuthCapabilities, SpacesManager, SpacesStore};
 
+// TODO: Should this be exported to the public API?
 #[allow(clippy::result_large_err)]
 pub fn spaces_manager(
     forge: OperationForge,
