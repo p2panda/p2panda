@@ -20,24 +20,24 @@ use p2panda_store::spaces::{SpacesStore, SqliteSpacesStore};
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::oneshot::error::RecvError;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
 use crate::operation::Extensions;
+use crate::spaces::is_group;
 use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
+use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{
     AuthCapabilities, InnerSpace, InnerSpaceError, SpacesEvent, SpacesManagerError,
 };
-use crate::spaces::{RepairError, RepairTask};
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
 /// Wraps topic stream and returns the pub/sub pair of a more specialised spaces stream.
 pub(crate) fn spaces_stream<M>(
     inner: InnerSpace,
     store: SqliteStore,
-    repair_task: RepairTask,
     egress_handle: EgressHandle,
+    repair_task: RepairTask,
     tx: StreamPublisher<M>,
     rx: StreamSubscription<M>,
 ) -> (Space<M>, SpaceSubscription<M>)
@@ -48,8 +48,8 @@ where
         Space {
             inner,
             store,
-            repair_task,
             egress_handle,
+            repair_task,
             tx,
         },
         SpaceSubscription { rx },
@@ -63,8 +63,8 @@ where
 {
     inner: InnerSpace,
     store: SqliteStore,
-    repair_task: RepairTask,
     egress_handle: EgressHandle,
+    repair_task: RepairTask,
     tx: StreamPublisher<M>,
 }
 
@@ -78,16 +78,12 @@ where
 
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
-        let members = self.actors().await?;
+        let members = self.actors().await.map_err(Box::new)?;
 
         can_write(self.inner.me(), &members).map_err(|err| PublishSpaceError::Validation {
             space_id: self.id(),
             err,
         })?;
-
-        // Before publishing messages we trigger and await return from a space repair which will
-        // ensure we have incorporated the latest groups changes into the space.
-        self.repair().await?;
 
         // TODO: We'll remove custom `M` types in the future, users will only provide bytes on this
         // level.
@@ -98,7 +94,7 @@ where
         //
         // We could also handle this outside of p2panda-spaces, simply by coming up with an argument
         // in the extensions for the spaces processor in p2panda-stream.
-        let (_, message, _) = self.inner.publish(&body_bytes).await?;
+        let (_, message, _) = self.inner.publish(&body_bytes).await.map_err(Box::new)?;
 
         // We don't need to persist state or pass enriched events through the pipeline as the spaces
         // processor can re-process this event.
@@ -119,18 +115,23 @@ where
         access: AccessLevel,
     ) -> Result<(), AddSpaceMemberError> {
         let me = self.inner.me();
+        let space_id = self.id();
         let actor = actor.into();
         let members = self.actors().await?;
 
         can_add_member(me, actor, &members).map_err(|err| AddSpaceMemberError::Validation {
             actor,
-            space_id: self.id(),
+            space_id,
             err,
         })?;
 
-        // Before performing any action we trigger and await return from a space repair which will
-        // ensure we have incorporated the latest groups changes into the space.
-        self.repair().await?;
+        // If the new actor is a group then push any required group operations into the space and
+        // make log associations.
+        if is_group(&self.store, actor).await? {
+            self.repair_task
+                .sync_and_repair_space_with_group(space_id, actor)
+                .await?;
+        }
 
         let output = self
             .inner
@@ -161,10 +162,6 @@ where
             }
         })?;
 
-        // Before performing any action we trigger and await return from a space repair which will
-        // ensure we have incorporated the latest groups changes into the space.
-        self.repair().await?;
-
         let output = self.inner.remove(actor).await?;
         self.process_change(output).await?;
 
@@ -189,10 +186,6 @@ where
                 err,
             }
         })?;
-
-        // Before performing any action we trigger and await return from a space repair which will
-        // ensure we have incorporated the latest groups changes into the space.
-        self.repair().await?;
 
         let output = self
             .inner
@@ -228,10 +221,6 @@ where
                 err,
             }
         })?;
-
-        // Before performing any action we trigger and await return from a space repair which will
-        // ensure we have incorporated the latest groups changes into the space.
-        self.repair().await?;
 
         let output = self
             .inner
@@ -301,16 +290,14 @@ where
         })
     }
 
+    pub async fn group_id(&self) -> Result<ActorId, InnerSpaceError> {
+        let group_id = self.inner.group_id().await?;
+        Ok(group_id)
+    }
+
     /// Gracefully close the space and any associated sync sessions.
     pub async fn close(self) -> Result<(), CloseError> {
         self.tx.close().await
-    }
-
-    /// Incorporate missing groups messages into the space, any resulting operations are published
-    /// live into the space topic.
-    pub(crate) async fn repair(&self) -> Result<bool, RepairError> {
-        let repaired = self.repair_task.repair().await?;
-        Ok(repaired)
     }
 }
 
@@ -407,7 +394,10 @@ pub enum AddSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairError),
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Repair(#[from] RepairCommandError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -428,9 +418,6 @@ pub enum RemoveSpaceMemberError {
         space_id: SpaceId,
         err: RemoveMemberError,
     },
-
-    #[error(transparent)]
-    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -454,9 +441,6 @@ pub enum PromoteSpaceMemberError {
     },
 
     #[error(transparent)]
-    RepairSpace(#[from] RepairError),
-
-    #[error(transparent)]
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
@@ -476,9 +460,6 @@ pub enum DemoteSpaceMemberError {
         space_id: SpaceId,
         err: DemoteMemberError,
     },
-
-    #[error(transparent)]
-    RepairSpace(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -501,12 +482,6 @@ pub enum ProcessError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
-
-    #[error("couldn't process spaces change due to broken channel")]
-    Recv(#[from] RecvError),
-
-    #[error("couldn't send event due to broken app channel")]
-    AppSend,
 }
 
 #[derive(Debug, Error)]
@@ -518,7 +493,7 @@ pub enum PublishSpaceError {
     Validation { space_id: SpaceId, err: WriteError },
 
     #[error(transparent)]
-    Space(#[from] InnerSpaceError),
+    Space(#[from] Box<InnerSpaceError>),
 
     #[error(transparent)]
     Encode(#[from] EncodeError),
@@ -528,7 +503,4 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Store(#[from] SqliteError),
-
-    #[error(transparent)]
-    RepairSpace(#[from] RepairError),
 }
