@@ -47,6 +47,9 @@ impl OperationForge {
     /// the relevant log is associated with the topic and the signed operation is inserted into the
     /// store. Both the log-topic association and operation insertion are executed as part of a
     /// single transaction, thereby ensuring atomicity.
+    //
+    // TODO: If we start exposing the `Forge` trait in our API, we probably want to have this method
+    // on the trait itself. See related issue: <https://github.com/p2panda/p2panda/issues/1543>.
     pub async fn create_operation_tx(
         &self,
         topic: Option<Topic>,

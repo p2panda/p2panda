@@ -153,23 +153,25 @@ where
 
 /// Modified state which will be written to the store on commit.
 ///
-/// Fields which are `None` were not changed and will not be written.
-pub struct StateChanges<C> {
-    pub global_groups_y: Option<AuthGroupState<C>>,
-    pub key_manager_y: Option<KeyManagerState>,
-    pub key_registry_y: Option<KeyRegistryState<MemberId>>,
-    pub space_y: Option<SpaceState<C>>,
-}
-
-impl<C> Default for StateChanges<C> {
-    fn default() -> Self {
-        Self {
-            global_groups_y: None,
-            key_manager_y: None,
-            key_registry_y: None,
-            space_y: None,
-        }
-    }
+/// Prekey-bundle states are always treated globally but might arrive here via two different paths,
+/// either nested within space state (`StateChanges::Space`) or set directly
+/// (`StateChanges::PrekeyBundles`).
+#[derive(Debug, Default)]
+#[allow(clippy::large_enum_variant)]
+pub enum StateChanges<C> {
+    #[default]
+    Nothing,
+    GlobalGroups {
+        global_groups_y: AuthGroupState<C>,
+    },
+    PrekeyBundles {
+        key_manager_y: Option<KeyManagerState>,
+        key_registry_y: Option<KeyRegistryState<MemberId>>,
+    },
+    Space {
+        global_groups_y: Option<AuthGroupState<C>>,
+        space_y: SpaceState<C>,
+    },
 }
 
 /// Open store transaction for the read -> modify -> write cycle, making sure all spaces changes are
@@ -278,65 +280,80 @@ where
 
     /// Write changed state to the store and commit the transaction.
     pub async fn commit(self, changes: StateChanges<C>) -> Result<(), StoreError> {
-        let StateChanges {
-            global_groups_y,
-            key_manager_y,
-            key_registry_y,
-            space_y,
-        } = changes;
-
-        // Prekey states are always treated globally but might arrive here via two different paths,
-        // either nested within space state or set directly.
-        //
-        // The key manager- & registry state is nested within space state if the change was made for
-        // a space, for processing member messages for example space state will be `None` and the
-        // key state was changed directly.
-        debug_assert!(
-            space_y.is_none() || (key_manager_y.is_none() && key_registry_y.is_none()),
-            "keys are written either as part of the space state or independently if no space exists"
-        );
-
         let store = self.ctx.store;
+        let mut no_changes_made = false;
 
-        if let Some(y) = global_groups_y {
-            store
-                .set_groups_state_tx(global_groups_id(), &y)
-                .await
-                .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+        match changes {
+            StateChanges::Nothing => {
+                no_changes_made = true;
+            }
+            StateChanges::GlobalGroups { global_groups_y } => {
+                store
+                    .set_groups_state_tx(global_groups_id(), &global_groups_y)
+                    .await
+                    .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+            }
+            StateChanges::PrekeyBundles {
+                key_manager_y,
+                key_registry_y,
+            } => {
+                if let Some(y) = key_manager_y {
+                    store
+                        .set_prekey_secrets_tx(y.prekey_bundles())
+                        .await
+                        .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+                }
+
+                if let Some(y) = key_registry_y {
+                    store
+                        .set_key_registry_tx(&y)
+                        .await
+                        .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
+                }
+            }
+            StateChanges::Space {
+                global_groups_y,
+                space_y,
+            } => {
+                if let Some(global_groups_y) = global_groups_y {
+                    store
+                        .set_groups_state_tx(global_groups_id(), &global_groups_y)
+                        .await
+                        .map_err(|err| StoreError::GroupsStore(err.to_string()))?;
+                }
+
+                let key_manager_y = space_y.key_manager_state();
+                let key_registry_y = space_y.key_registry_state();
+
+                store
+                    .set_prekey_secrets_tx(key_manager_y.prekey_bundles())
+                    .await
+                    .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
+
+                store
+                    .set_key_registry_tx(key_registry_y)
+                    .await
+                    .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
+
+                let space_id = space_y.space_id;
+                store
+                    .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+                    .await
+                    .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
+            }
         }
 
-        // Key manager and -registry are either written independently or as part of the space state.
-        let (key_manager_y, key_registry_y) = match &space_y {
-            Some(y) => (Some(y.key_manager_state()), Some(y.key_registry_state())),
-            None => (key_manager_y.as_ref(), key_registry_y.as_ref()),
-        };
-
-        if let Some(y) = key_manager_y {
+        if no_changes_made {
             store
-                .set_prekey_secrets_tx(y.prekey_bundles())
+                .rollback(self.permit)
                 .await
-                .map_err(|err| StoreError::KeySecretStore(err.to_string()))?;
-        }
-
-        if let Some(y) = key_registry_y {
+                .map_err(|err| StoreError::Transaction(err.to_string()))?;
+        } else {
             store
-                .set_key_registry_tx(y)
+                .commit(self.permit)
                 .await
-                .map_err(|err| StoreError::KeyRegistryStore(err.to_string()))?;
+                .map_err(|err| StoreError::Transaction(err.to_string()))?;
         }
-
-        if let Some(y) = space_y {
-            let space_id = y.space_id;
-            store
-                .set_space_state_tx(&space_id, &SpacesStoreState::from(y))
-                .await
-                .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
-        }
-
-        store
-            .commit(self.permit)
-            .await
-            .map_err(|err| StoreError::Transaction(err.to_string()))?;
 
         Ok(())
     }
