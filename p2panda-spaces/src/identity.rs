@@ -19,14 +19,14 @@ use crate::member::{Member, MemberError};
 use crate::message::SpacesArgs;
 use crate::{Config, Credentials, MemberId};
 
-/// Manager for functionality relating to a peers identity, holds all cryptographic secrets for key
+/// Manager for functionality relating to a peer's identity, holds all cryptographic secrets for key
 /// agreement and signatures.
 ///
 /// Exposes an API for publishing and storing/retrieving key bundles, including rotating our own
-/// when they expire, as well as methods for "forging" (constructing and signing messages) which
-/// are signed with the peers private key.
+/// when they expire, as well as methods for "forging" (constructing and signing messages) which are
+/// signed with the peer's private key.
 ///
-/// **Warning:** Neither of a peers keys should be rotated individually, this would result in
+/// **Warning:** Neither of a peer's keys should be rotated individually, this would result in
 /// undefined behavior. Rotating both keys is possible but will result in the loss of access to
 /// existing spaces.
 #[derive(Debug)]

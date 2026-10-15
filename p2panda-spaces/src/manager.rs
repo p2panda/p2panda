@@ -236,10 +236,9 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
+        tx.commit(StateChanges::Space {
             global_groups_y: Some(global_groups_y),
-            space_y: Some(space_y),
-            ..Default::default()
+            space_y,
         })
         .await?;
 
@@ -282,11 +281,8 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
-            global_groups_y: Some(global_groups_y),
-            ..Default::default()
-        })
-        .await?;
+        tx.commit(StateChanges::GlobalGroups { global_groups_y })
+            .await?;
 
         Ok((Group::new(self.clone(), group_id), output))
     }
@@ -313,28 +309,42 @@ where
         );
 
         let tx = self.begin_write().await?;
-        let mut changes = StateChanges::default();
 
         // Route message to the regarding member-, group- or space processor. Read and modify.
-        let events = match args {
+        let (changes, events) = match args {
             // Received key bundle from a member.
             SpacesArgs::Member(member) => {
                 let key_registry_y = tx.key_registry_state().await?;
+
                 let (key_registry_y, event) = self
                     .identity()
                     .process(key_registry_y, member)
                     .map_err(ManagerError::IdentityManager)?;
-                changes.key_registry_y = Some(key_registry_y);
-                vec![event]
+
+                (
+                    StateChanges::PrekeyBundles {
+                        key_manager_y: None,
+                        key_registry_y: Some(key_registry_y),
+                    },
+                    vec![event],
+                )
             }
+
             SpacesArgs::Group { .. } => {
                 let global_groups_y = tx.global_groups_state().await?;
+
                 let (global_groups_y, event) =
                     Group::<S, F, C>::process(global_groups_y, &SpacesMessage::auth(message))
                         .map_err(ManagerError::Group)?;
-                changes.global_groups_y = global_groups_y;
-                vec![event]
+
+                let changes = match global_groups_y {
+                    Some(global_groups_y) => StateChanges::GlobalGroups { global_groups_y },
+                    None => StateChanges::Nothing,
+                };
+
+                (changes, vec![event])
             }
+
             // Received control message related to a space.
             SpacesArgs::SpaceMembership { space_id, .. } => {
                 let (space_y, events) = self
@@ -344,10 +354,20 @@ where
                         &SpacesMessage::space_membership(message),
                     )
                     .await?;
-                changes.space_y = space_y;
-                events
+
+                let changes = match space_y {
+                    Some(space_y) => StateChanges::Space {
+                        global_groups_y: None,
+                        space_y,
+                    },
+                    None => StateChanges::Nothing,
+                };
+
+                (changes, events)
             }
+
             SpacesArgs::SpaceUpdate { .. } => unimplemented!(),
+
             // Received encrypted application data for a space.
             SpacesArgs::Application { space_id, .. } => {
                 let Some(space_y) = tx.space_state(space_id).await? else {
@@ -359,8 +379,14 @@ where
                     &SpacesMessage::application(message),
                 )
                 .map_err(ManagerError::Space)?;
-                changes.space_y = Some(space_y);
-                events
+
+                (
+                    StateChanges::Space {
+                        global_groups_y: None,
+                        space_y,
+                    },
+                    events,
+                )
             }
         };
 
@@ -414,10 +440,9 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
+        tx.commit(StateChanges::PrekeyBundles {
             key_manager_y: Some(key_manager_y),
             key_registry_y: Some(key_registry_y),
-            ..Default::default()
         })
         .await?;
 
@@ -442,9 +467,9 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
+        tx.commit(StateChanges::PrekeyBundles {
+            key_manager_y: None,
             key_registry_y: Some(key_registry_y),
-            ..Default::default()
         })
         .await?;
 
@@ -491,10 +516,9 @@ where
         // Write.
 
         let changes = if rotated {
-            StateChanges {
+            StateChanges::PrekeyBundles {
                 key_manager_y: Some(key_manager_y),
                 key_registry_y: Some(key_registry_y),
-                ..Default::default()
             }
         } else {
             StateChanges::default()
@@ -602,11 +626,15 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
-            space_y,
-            ..Default::default()
-        })
-        .await?;
+        if let Some(space_y) = space_y {
+            tx.commit(StateChanges::Space {
+                global_groups_y: None,
+                space_y,
+            })
+            .await?;
+        } else {
+            tx.rollback().await?;
+        }
 
         Ok(output)
     }

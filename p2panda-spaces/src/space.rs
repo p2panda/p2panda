@@ -268,10 +268,9 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
+        tx.commit(StateChanges::Space {
             global_groups_y: Some(global_groups_y),
-            space_y: Some(space_y),
-            ..Default::default()
+            space_y,
         })
         .await?;
 
@@ -701,11 +700,15 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
-            space_y,
-            ..Default::default()
-        })
-        .await?;
+        if let Some(space_y) = space_y {
+            tx.commit(StateChanges::Space {
+                global_groups_y: None,
+                space_y,
+            })
+            .await?;
+        } else {
+            tx.rollback().await?;
+        }
 
         Ok(output)
     }
@@ -830,13 +833,23 @@ where
         plaintext: &[u8],
     ) -> Result<(F::Message, Event<C>), SpaceError<F, C>> {
         let tx = self.manager.begin_write().await?;
+
+        // Read.
+
         let space_y = self.state_tx(&tx).await?;
+
+        // Modify.
+
         let (space_y, message, event) = Self::apply_publish(&tx.ctx, space_y, plaintext).await?;
-        tx.commit(StateChanges {
-            space_y: Some(space_y),
-            ..Default::default()
+
+        // Write.
+
+        tx.commit(StateChanges::Space {
+            global_groups_y: None,
+            space_y,
         })
         .await?;
+
         Ok((message, event))
     }
 
