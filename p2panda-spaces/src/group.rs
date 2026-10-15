@@ -195,11 +195,8 @@ where
 
         // Write.
 
-        tx.commit(StateChanges {
-            global_groups_y: Some(global_groups_y),
-            ..Default::default()
-        })
-        .await?;
+        tx.commit(StateChanges::GlobalGroups { global_groups_y })
+            .await?;
 
         Ok(output)
     }
