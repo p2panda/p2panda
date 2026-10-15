@@ -28,5 +28,7 @@ pub trait SpacesStore<S> {
 
     fn has_space(&self, id: &Hash) -> impl Future<Output = Result<bool, Self::Error>>;
 
+    fn has_space_tx(&self, id: &Hash) -> impl Future<Output = Result<bool, Self::Error>>;
+
     fn space_ids(&self) -> impl Future<Output = Result<Vec<Hash>, Self::Error>>;
 }

@@ -10,6 +10,7 @@ use p2panda_core::{Extensions, Hash, Operation, VerifyingKey};
 use p2panda_encryption::key_manager::PreKeyBundlesState;
 use p2panda_encryption::key_registry::KeyRegistryState;
 use serde::{Deserialize, Serialize};
+use sqlx::sqlite::SqliteRow;
 use sqlx::{Executor, Sqlite, query, query_as, query_scalar};
 
 use crate::groups::GroupsStore;
@@ -109,27 +110,15 @@ where
     }
 
     async fn has_space(&self, id: &Hash) -> Result<bool, Self::Error> {
-        let result = self
-            .store
-            .execute(async |pool| {
-                query_as::<_, (Vec<u8>,)>(
-                    "
-                    SELECT
-                        id
-                    FROM
-                        spaces_v1
-                    WHERE
-                        id = ?
-                    ",
-                )
-                .bind(id.to_hex())
-                .fetch_optional(pool)
-                .await
-                .map_err(SqliteError::Sqlite)
-            })
-            .await?;
+        self.store
+            .execute(async |pool| has_space(pool, id).await)
+            .await
+    }
 
-        Ok(result.is_some())
+    async fn has_space_tx(&self, id: &Hash) -> Result<bool, Self::Error> {
+        self.store
+            .tx(async |tx| has_space(&mut **tx, id).await)
+            .await
     }
 
     async fn space_ids(&self) -> Result<Vec<Hash>, Self::Error> {
@@ -157,6 +146,28 @@ where
 
         result.map_err(|err| SqliteError::Decode("state".into(), err.into()))
     }
+}
+
+async fn has_space<'e, E>(executor: E, id: &Hash) -> Result<bool, SqliteError>
+where
+    E: Executor<'e, Database = Sqlite>,
+{
+    let result: Option<SqliteRow> = query(
+        "
+        SELECT
+            1
+        FROM
+            spaces_v1
+        WHERE
+            id = ?
+        ",
+    )
+    .bind(id.to_hex())
+    .fetch_optional(executor)
+    .await
+    .map_err(SqliteError::Sqlite)?;
+
+    Ok(result.is_some())
 }
 
 async fn get_space_state<'e, E>(executor: E, id: &Hash) -> Result<Option<Vec<u8>>, SqliteError>
