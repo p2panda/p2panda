@@ -19,11 +19,7 @@ where
         return false;
     };
 
-    if actor.1 != AccessLevel::Manage {
-        return false;
-    }
-
-    true
+    actor.1 == AccessLevel::Manage
 }
 
 pub(crate) fn is_writer<ID>(actor: ID, members: &[(ID, AccessLevel)]) -> bool
@@ -34,11 +30,7 @@ where
         return false;
     };
 
-    if actor.1 < AccessLevel::Write {
-        return false;
-    }
-
-    true
+    actor.1 >= AccessLevel::Write
 }
 
 pub(crate) fn members_at<ID, OP, M, C, RS>(

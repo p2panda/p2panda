@@ -232,11 +232,7 @@ impl<C> GroupEvent<C> {
     pub fn effected_group(&self, group_id: GroupId) -> bool {
         let mut effected_group = self.context().effected_group_actors.keys();
 
-        if effected_group.any(|id| *id == group_id) {
-            return true;
-        }
-
-        false
+        effected_group.any(|id| *id == group_id)
     }
 }
 
