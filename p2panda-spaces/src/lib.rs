@@ -6,7 +6,6 @@
     reason = "https://github.com/p2panda/p2panda/issues/1458"
 )]
 
-mod auth;
 mod config;
 mod credentials;
 mod encryption;
@@ -26,14 +25,15 @@ mod tests;
 mod types;
 mod utils;
 
+use std::sync::OnceLock;
+
 use p2panda_core::{Hash, VerifyingKey};
 
-pub use auth::message::AuthMessage;
 pub use config::Config;
 pub use credentials::Credentials;
 pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
-pub use message::{SpacesArgs, SpacesMessage};
+pub use message::{AuthMessage, SpacesArgs, SpacesMessage};
 pub use store::SpacesStoreState;
 pub use types::{AuthGroupState, StrongRemoveResolver};
 
@@ -46,3 +46,10 @@ pub type MemberId = ActorId;
 pub type ActorId = VerifyingKey;
 
 pub type OperationId = Hash;
+
+pub fn global_groups_id() -> Hash {
+    static DEFAULT_GLOBAL_GROUPS_ID: OnceLock<Hash> = OnceLock::new();
+    DEFAULT_GLOBAL_GROUPS_ID
+        .get_or_init(|| Hash::digest(b"global-groups-context"))
+        .to_owned()
+}

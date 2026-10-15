@@ -3,7 +3,7 @@
 use p2panda_core::{Header, SigningKey, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
-use p2panda_store::{SqliteError, SqliteStore, tx};
+use p2panda_store::{SqliteError, SqliteStore};
 
 use crate::forge::Forge;
 use crate::message::SpacesArgs;
@@ -33,27 +33,27 @@ impl Forge<TestConditions> for TestForge {
     }
 
     async fn forge(&self, args: SpacesArgs<TestConditions>) -> Result<Self::Message, Self::Error> {
-        let operation = tx!(self.store, {
-            let (seq_num, backlink) = self
-                .store
-                .get_latest_entry_tx(&self.signing_key.verifying_key(), &DEFAULT_LOG_ID)
-                .await?
-                .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
-                .unwrap_or((0, None));
+        // Yield, so concurrent callers can interleave for `concurrent_adds` test.
+        tokio::task::yield_now().await;
 
-            let header = Header::builder()
-                .seq_num(seq_num)
-                .backlink(backlink)
-                .build(&self.signing_key, args);
+        // Runs inside the transaction of the caller.
+        let (seq_num, backlink) = self
+            .store
+            .get_latest_entry_tx(&self.signing_key.verifying_key(), &DEFAULT_LOG_ID)
+            .await?
+            .map(|operation| (operation.header.seq_num + 1, Some(operation.hash)))
+            .unwrap_or((0, None));
 
-            let operation = TestOperation::from_parts(header, None);
+        let header = Header::builder()
+            .seq_num(seq_num)
+            .backlink(backlink)
+            .build(&self.signing_key, args);
 
-            self.store
-                .insert_operation_tx(&operation.hash, &operation, &DEFAULT_LOG_ID)
-                .await?;
+        let operation = TestOperation::from_parts(header, None);
 
-            operation
-        });
+        self.store
+            .insert_operation_tx(&operation.hash, &operation, &DEFAULT_LOG_ID)
+            .await?;
 
         Ok(operation)
     }

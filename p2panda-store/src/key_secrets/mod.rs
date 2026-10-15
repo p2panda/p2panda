@@ -11,4 +11,4 @@ mod sqlite;
 mod tests;
 mod traits;
 
-pub use traits::KeySecretsStore;
+pub use traits::PreKeyBundlesStore;

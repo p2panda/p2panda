@@ -5,14 +5,13 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use p2panda_auth::traits::Conditions;
-use p2panda_core::Hash;
 use p2panda_spaces::Forge;
-use p2panda_spaces::manager::{GLOBAL_GROUPS_CONTEXT_ID, Manager, ManagerError, ProcessOutput};
+use p2panda_spaces::manager::Manager;
 use p2panda_spaces::{AuthMessage, Event, SpacesStoreState};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
-use p2panda_store::key_secrets::KeySecretsStore;
+use p2panda_store::key_secrets::PreKeyBundlesStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -23,20 +22,20 @@ use crate::spaces::SpacesProcessorArgs;
 
 pub type SpacesManager<S, F, C> = Manager<S, F, C>;
 
-pub type SpacesManagerError<F, C> = ManagerError<F, C>;
+#[derive(Clone, Debug, Error)]
+#[error("{0}")]
+pub struct SpacesError(String);
 
 /// Processor for spaces operations.
 pub struct Spaces<T, S, F, C> {
-    store: S,
     manager: SpacesManager<S, F, C>,
     notify: Notify,
     queue: RefCell<VecDeque<(T, SpacesResult<C>)>>,
 }
 
 impl<T, S, F, C> Spaces<T, S, F, C> {
-    pub fn new(store: S, manager: SpacesManager<S, F, C>) -> Self {
+    pub fn new(manager: SpacesManager<S, F, C>) -> Self {
         Self {
-            store,
             manager,
             notify: Notify::new(),
             queue: RefCell::new(VecDeque::new()),
@@ -52,7 +51,7 @@ where
         + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
-        + KeySecretsStore
+        + PreKeyBundlesStore
         + Transaction,
     F: Forge<C>,
     C: Conditions + Serialize + for<'a> Deserialize<'a>,
@@ -65,87 +64,13 @@ where
         let input_args: &SpacesProcessorArgs<C> = input.borrow();
 
         let result = match input_args {
-            SpacesProcessorArgs::Process { msg } => {
-                // Process incoming event.
-                let ProcessOutput {
-                    groups_y,
-                    space_y,
-                    mut events,
-                } = match self.manager.process(msg).await {
-                    Ok(result) => result,
-                    Err(err) => return Err((input, SpacesError::SpacesManager(err.to_string()))),
-                };
-
-                // Persist resulting new states into database in one atomic transaction.
-                let permit = match self.store.begin().await {
-                    Ok(permit) => permit,
-                    Err(err) => return Err((input, SpacesError::Store(err.to_string()))),
-                };
-
-                if let Some(y) = groups_y {
-                    // TODO: Hashing every time when processing feels a bit redundant. We either want to
-                    // hard-code the hash itself or change the id type in p2panda-store to a string OR
-                    // have the constant in p2panda-store.
-                    if let Err(err) = self
-                        .store
-                        .set_groups_state_tx(Hash::digest(GLOBAL_GROUPS_CONTEXT_ID), &y)
-                        .await
-                    {
-                        return Err((input, SpacesError::Store(err.to_string())));
-                    }
-                }
-
-                if let Some(y) = space_y {
-                    let space_id = y.space_id;
-
-                    // Filter out application events if the author has concurrently lost their write
-                    // access.
-                    //
-                    // This case occurs if a member published messages before receiving the control
-                    // message which removed them. Their claim to have access write is still
-                    // historically valid, however we have already learned that they have actually
-                    // been removed.
-                    //
-                    // NOTE: Application _and_ control messages are partially-ordered based on their
-                    // causal relationships, application messages are always emitted together with
-                    // the member's (create/add) welcome message. For that reason application
-                    // messages from members which have been removed at a causally later point (not
-                    // concurrently) will not be affected by this filter and are correctly forwarded
-                    // to the application layer.
-                    if msg.is_application_message() {
-                        let mut is_member = false;
-
-                        // Check if the message author is still a member of the group from our local
-                        // perspective.
-                        for (member, access) in y.groups_y.members(y.group_id) {
-                            if member == msg.author && (access.is_write() || access.is_manage()) {
-                                is_member = true;
-                            }
-                        }
-
-                        if !is_member {
-                            events.retain(|event| !matches!(event, Event::Application { .. }));
-                        };
-                    }
-
-                    if let Err(err) = self
-                        .store
-                        .set_space_state_tx(&space_id, &SpacesStoreState::from(y))
-                        .await
-                    {
-                        return Err((input, SpacesError::Store(err.to_string())));
-                    }
-                }
-
-                if let Err(err) = self.store.commit(permit).await {
-                    return Err((input, SpacesError::Store(err.to_string())));
-                }
-
-                (input, SpacesResult::Processed { events })
-            }
+            SpacesProcessorArgs::Process { msg } => match self.manager.process(msg).await {
+                Ok(events) => (input, SpacesResult::Processed { events }),
+                Err(err) => return Err((input, SpacesError(err.to_string()))),
+            },
             // For locally created operations the spaces args have already been processed and
-            // resulting events are included in the processor args here. All that's needed from
-            // the processor is to forward them onto any consumers.
+            // resulting events are included in the processor args here. All that's needed from the
+            // processor is to forward them onto any consumers.
             SpacesProcessorArgs::AlreadyProcessed { events, .. } => {
                 let events = events.clone();
                 (input, SpacesResult::Processed { events })
@@ -183,15 +108,4 @@ impl<C> SpacesResult<C> {
             Self::Ignored => false,
         }
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum SpacesError {
-    /// Error occurred when processing -spaces event in manager.
-    #[error("spaces processing error: {0}")]
-    SpacesManager(String),
-
-    /// Critical storage failure occurred. This is usually a reason to panic.
-    #[error("critical storage failure: {0}")]
-    Store(String),
 }
