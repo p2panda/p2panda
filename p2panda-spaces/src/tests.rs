@@ -2391,3 +2391,45 @@ async fn add_group_from_shared_groups_state_regression() {
     expected_operations += 1;
     assert_eq!(y.groups_y.inner.operations.len(), expected_operations);
 }
+
+#[tokio::test]
+async fn concurrent_adds() {
+    // Related issue: <https://github.com/p2panda/p2panda/issues/1365>
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::new(1).await;
+    let claire = TestPeer::new(2).await;
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+    alice
+        .manager
+        .register_member(&claire.manager.me().await.unwrap())
+        .await
+        .unwrap();
+    let bob_id = bob.manager.id();
+    let claire_id = claire.manager.id();
+
+    let space_id = SpaceId::digest(b"concurrent-add");
+    let (space, _) = alice.manager.create_space(space_id, &[]).await.unwrap();
+
+    // Both calls start before either commits, the second must wait for the first.
+    let (r1, r2) = tokio::join!(
+        space.add(bob_id, Access::read()),
+        space.add(claire_id, Access::read()),
+    );
+    r1.unwrap();
+    r2.unwrap();
+
+    let members: Vec<_> = space
+        .members()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(id, _)| id)
+        .collect();
+    assert!(members.contains(&bob_id), "bob's add was lost");
+    assert!(members.contains(&claire_id), "claire's add was lost");
+}

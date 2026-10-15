@@ -33,6 +33,9 @@ impl Forge<TestConditions> for TestForge {
     }
 
     async fn forge(&self, args: SpacesArgs<TestConditions>) -> Result<Self::Message, Self::Error> {
+        // Yield, so concurrent callers can interleave for `concurrent_adds` test.
+        tokio::task::yield_now().await;
+
         // Runs inside the transaction of the caller.
         let (seq_num, backlink) = self
             .store
