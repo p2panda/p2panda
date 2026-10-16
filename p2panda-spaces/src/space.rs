@@ -274,10 +274,10 @@ where
         })
         .await?;
 
-        Ok(SpaceOutput::from(
-            group_output,
-            vec![(space_message, space_events)],
-        ))
+        let output = SpaceOutput::from(group_output, vec![(space_message, space_events)]);
+        self.manager.waiters().notify_events(output.events());
+
+        Ok(output)
     }
 
     /// Forge a "pointer" space message from an already existing auth message and apply any
@@ -710,6 +710,8 @@ where
             tx.rollback().await?;
         }
 
+        self.manager.waiters().notify_events(output.events());
+
         Ok(output)
     }
 
@@ -849,6 +851,8 @@ where
             space_y,
         })
         .await?;
+
+        self.manager.waiters().notify_events([&event]);
 
         Ok((message, event))
     }
