@@ -24,6 +24,7 @@ pub mod test_utils;
 mod tests;
 mod types;
 mod utils;
+mod waiters;
 
 use std::sync::OnceLock;
 
