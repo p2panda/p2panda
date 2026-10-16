@@ -658,7 +658,7 @@ pub enum SendOperationsError {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread::sleep, time::Duration};
+    use std::time::Duration;
 
     use p2panda_spaces::Config;
     use p2panda_store::SqliteStoreBuilder;
@@ -666,7 +666,7 @@ mod tests {
     use crate::Credentials;
     use crate::debouncer::Debouncer;
     use crate::egress::Egress;
-    use crate::forge::{Forge, OperationForge};
+    use crate::forge::OperationForge;
     use crate::spaces::spaces_manager;
 
     use super::RepairTask;
