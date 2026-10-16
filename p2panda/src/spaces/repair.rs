@@ -393,9 +393,12 @@ async fn sync_and_repair_space_with_group(
     space_id: SpaceId,
     other_group: Option<GroupId>,
 ) -> Result<(), RepairError> {
-    let Some(space) = manager.space(space_id).await? else {
+    // Only members with read access or higher can repair spaces.
+    if !manager.has_joined_space(space_id).await? {
         return Ok(());
-    };
+    }
+
+    let space = manager.space(space_id).created().await?;
 
     // We sync both the space group itself and the optional "other" group.
     let mut group_ids = vec![space.group_id().await?];
@@ -655,7 +658,7 @@ pub enum SendOperationsError {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread::sleep, time::Duration};
+    use std::time::Duration;
 
     use p2panda_spaces::Config;
     use p2panda_store::SqliteStoreBuilder;
@@ -663,7 +666,7 @@ mod tests {
     use crate::Credentials;
     use crate::debouncer::Debouncer;
     use crate::egress::Egress;
-    use crate::forge::{Forge, OperationForge};
+    use crate::forge::OperationForge;
     use crate::spaces::spaces_manager;
 
     use super::RepairTask;

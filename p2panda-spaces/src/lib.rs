@@ -16,6 +16,7 @@ pub mod identity;
 pub mod manager;
 pub mod member;
 mod message;
+mod pending;
 pub mod space;
 mod store;
 #[cfg(any(test, feature = "test_utils"))]
@@ -24,6 +25,7 @@ pub mod test_utils;
 mod tests;
 mod types;
 mod utils;
+mod waiters;
 
 use std::sync::OnceLock;
 
@@ -34,6 +36,7 @@ pub use credentials::Credentials;
 pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
 pub use message::{AuthMessage, SpacesArgs, SpacesMessage};
+pub use pending::PendingSpace;
 pub use store::SpacesStoreState;
 pub use types::{AuthGroupState, StrongRemoveResolver};
 

@@ -183,6 +183,9 @@ mod spaces_api {
             };
         }
 
+        let penguin_laptop_space = penguin_laptop_space.joined().await?;
+        let penguin_mobile_space = penguin_mobile_space.joined().await?;
+
         // All nodes arrive at the same state for the space.
         let members = panda_space.members().await?;
         assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
@@ -471,17 +474,7 @@ mod spaces_api {
 
         // We expect Penguin to be fine with processing out-of-order operations and normally joining
         // the space.
-        while let Some(stream_event) = penguin_rx.next().await {
-            if let StreamEvent::Space {
-                inner: SpaceEvent::Created { space_id, .. },
-                ..
-            } = stream_event
-            {
-                if space_id == topic.into() {
-                    break;
-                }
-            }
-        }
+        let penguin_space = penguin_space.joined().await.unwrap();
 
         let members: Vec<MemberId> = penguin_space
             .members()
@@ -791,7 +784,6 @@ mod spaces_api_validation {
     use p2panda_auth::AccessLevel;
     use p2panda_auth::validation::{AddMemberError, RemoveMemberError, WriteError};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_spaces::SpaceEvent;
     use tokio_stream::StreamExt;
 
     use crate::Swarm;
@@ -831,7 +823,7 @@ mod spaces_api_validation {
 
         // Tiger subscribes to the space.
         let tiger = swarm.spawn_node().await;
-        let (tiger_space, mut tiger_rx) = tiger.space::<String>(topic).await.unwrap();
+        let (tiger_space, _tiger_rx) = tiger.space::<String>(topic).await.unwrap();
 
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Member(verifying_key) = event {
@@ -847,15 +839,7 @@ mod spaces_api_validation {
             .await
             .unwrap();
 
-        while let Some(event) = tiger_rx.next().await {
-            if let StreamEvent::Space {
-                inner: SpaceEvent::Added { .. },
-                ..
-            } = event
-            {
-                break;
-            };
-        }
+        let tiger_space = tiger_space.joined().await.unwrap();
 
         // Tiger can't publish into the space.
         let result = tiger_space.publish("I'm a bit naughty.".to_string()).await;
@@ -979,7 +963,7 @@ mod filtered_messages {
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         // Penguin subscribes to the space.
-        let (penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Member(member) = event {
@@ -995,15 +979,7 @@ mod filtered_messages {
             .await
             .unwrap();
 
-        while let Some(event) = penguin_rx.next().await {
-            let StreamEvent::Space { members, .. } = event else {
-                continue;
-            };
-
-            if members.iter().any(|(member, _)| *member == penguin.id()) {
-                break;
-            }
-        }
+        let penguin_space = penguin_space.joined().await.unwrap();
 
         // Penguin publishes a message to all members.
         let message = SecretData {
@@ -1043,6 +1019,7 @@ mod filtered_messages {
         // Penguin subscribes to the space again and immediately publishes a new message, before
         // they received panda's remove message.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let penguin_space = penguin_space.joined().await.unwrap();
 
         let message = SecretData {
             title: "Hurtful words".to_string(),
@@ -1101,7 +1078,7 @@ mod filtered_messages {
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         // Penguin subscribes to the space.
-        let (penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Member(member) = event {
@@ -1117,15 +1094,7 @@ mod filtered_messages {
             .await
             .unwrap();
 
-        while let Some(event) = penguin_rx.next().await {
-            let StreamEvent::Space { members, .. } = event else {
-                continue;
-            };
-
-            if members.iter().any(|(member, _)| *member == penguin.id()) {
-                break;
-            }
-        }
+        let penguin_space = penguin_space.joined().await.unwrap();
 
         // Penguin publishes a message to all members.
         let message = SecretData {
@@ -1284,6 +1253,8 @@ mod members {
                 break;
             }
         }
+
+        let node_b_space = node_b_space.joined().await.unwrap();
 
         // B wants to remove C and needs the key bundles of D to do this since they've never sent a
         // direct message to D. Note that B doesn't need a key bundle for A because A already

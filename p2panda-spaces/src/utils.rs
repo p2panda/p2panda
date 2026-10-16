@@ -4,6 +4,7 @@ use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::Conditions;
 
+use crate::store::SpaceState;
 use crate::types::AuthGroupState;
 use crate::{ActorId, MemberId};
 
@@ -36,6 +37,14 @@ pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
 }
 
+/// Returns `true` if the given member has more than pull access, meaning they can read and decrypt
+/// messages.
+pub(crate) fn is_secret_member<C>(members: &[(ActorId, Access<C>)], member: ActorId) -> bool {
+    members
+        .iter()
+        .any(|(id, access)| *id == member && !access.is_pull())
+}
+
 pub(crate) fn secret_members<C>(members: &[(ActorId, Access<C>)]) -> Vec<ActorId> {
     let mut members: Vec<ActorId> = members
         .iter()
@@ -45,7 +54,7 @@ pub(crate) fn secret_members<C>(members: &[(ActorId, Access<C>)]) -> Vec<ActorId
     members
 }
 
-pub(crate) fn added_secret_members(
+pub(crate) fn added_secret_members_diff(
     current_members: &[MemberId],
     next_members: &[MemberId],
 ) -> Vec<MemberId> {
@@ -58,7 +67,7 @@ pub(crate) fn added_secret_members(
     members
 }
 
-pub(crate) fn removed_secret_members(
+pub(crate) fn removed_secret_members_diff(
     current_members: &[MemberId],
     next_members: &[MemberId],
 ) -> Vec<MemberId> {
@@ -71,7 +80,7 @@ pub(crate) fn removed_secret_members(
     members
 }
 
-pub(crate) fn added_members<C: Clone>(
+pub(crate) fn added_members_diff<C: Clone>(
     current_members: &[(MemberId, Access<C>)],
     next_members: &[(MemberId, Access<C>)],
 ) -> Vec<(MemberId, Access<C>)> {
@@ -88,7 +97,7 @@ pub(crate) fn added_members<C: Clone>(
     members
 }
 
-pub(crate) fn promoted_members<C: Clone + PartialOrd>(
+pub(crate) fn promoted_members_diff<C: Clone + PartialOrd>(
     current_members: &[(MemberId, Access<C>)],
     next_members: &[(MemberId, Access<C>)],
 ) -> Vec<(MemberId, Access<C>)> {
@@ -107,7 +116,7 @@ pub(crate) fn promoted_members<C: Clone + PartialOrd>(
     members
 }
 
-pub(crate) fn demoted_members<C: Clone + PartialOrd>(
+pub(crate) fn demoted_members_diff<C: Clone + PartialOrd>(
     current_members: &[(MemberId, Access<C>)],
     next_members: &[(MemberId, Access<C>)],
 ) -> Vec<(MemberId, Access<C>)> {
@@ -126,7 +135,7 @@ pub(crate) fn demoted_members<C: Clone + PartialOrd>(
     members
 }
 
-pub(crate) fn removed_members<C: Clone>(
+pub(crate) fn removed_members_diff<C: Clone>(
     current_members: &[(MemberId, Access<C>)],
     next_members: &[(MemberId, Access<C>)],
 ) -> Vec<(MemberId, Access<C>)> {
@@ -141,4 +150,19 @@ pub(crate) fn removed_members<C: Clone>(
         .collect::<Vec<_>>();
     sort_members(&mut members);
     members
+}
+
+/// Returns all members who were removed from, and not re-admitted to, the space.
+pub(crate) fn removed_space_members<C>(y: &SpaceState<C>) -> Vec<MemberId>
+where
+    C: Conditions,
+{
+    let members = y.groups_y.members(y.group_id);
+    y.removed
+        .iter()
+        // Filter out historically removed members which are now current members (they were
+        // re-added).
+        .filter(|removed| !members.iter().any(|(member, _)| member == *removed))
+        .cloned()
+        .collect()
 }

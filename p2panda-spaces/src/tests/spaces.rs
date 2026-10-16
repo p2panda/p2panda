@@ -169,7 +169,7 @@ async fn send_and_receive() {
 
     // Bob sends a message to Alice.
 
-    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
+    let bob_space = bob.manager.space(space_id).joined().await.unwrap();
     let (message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
 
     // Bob's orderer state is updated.
@@ -248,7 +248,7 @@ async fn add_member_to_space() {
     // Add new member to Space
     // ~~~~~~~~~~~~
 
-    let space = manager.space(space_id).await.unwrap().unwrap();
+    let space = manager.space(space_id).joined().await.unwrap();
     let (message_03, message_04, events) =
         split_space_output(space.add(bob.manager.id(), Access::read()).await.unwrap());
 
@@ -345,7 +345,7 @@ async fn register_key_bundles_after_space_creation() {
 
     // Add new member to Space
     // ~~~~~~~~~~~~
-    let space = manager.space(space_id).await.unwrap().unwrap();
+    let space = manager.space(space_id).joined().await.unwrap();
     let result = space.add(bob.manager.id(), Access::read()).await;
 
     assert!(result.is_ok());
@@ -429,7 +429,7 @@ async fn add_pull_member_to_space() {
     // Add new pull-only member to Space
     // ~~~~~~~~~~~~
 
-    let space = manager.space(space_id).await.unwrap().unwrap();
+    let space = manager.space(space_id).joined().await.unwrap();
     let (message_03, message_04, _) =
         split_space_output(space.add(bob.manager.id(), Access::pull()).await.unwrap());
     let members = space.members().await.unwrap();
@@ -548,7 +548,7 @@ async fn receive_control_messages() {
 
     bob.persist_operation(&message_02).await.unwrap();
     bob_manager.process(&message_02).await.unwrap();
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).created().await.unwrap();
 
     // Alice is the only group member.
     let members = space.members().await.unwrap();
@@ -569,7 +569,7 @@ async fn receive_control_messages() {
     // Alice: Publishes a message into the space
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let (message_03, _) = space.publish(&[0, 1, 2]).await.unwrap();
 
     // Alice: Add new member to Space
@@ -594,7 +594,7 @@ async fn receive_control_messages() {
     assert_eq!(events.len(), 2);
     assert!(matches!(events[1], Event::Application { .. }));
 
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).joined().await.unwrap();
     // Alice and bob are both members.
     let members = space.members().await.unwrap();
     assert_eq!(
@@ -671,7 +671,7 @@ async fn remove_member() {
     // Alice: Removes bob
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let (message_03, message_04, _) = split_space_output(space.remove(bob_id).await.unwrap());
 
     let SpacesArgs::Group { group_action, .. } = message_03.borrow() else {
@@ -770,14 +770,14 @@ async fn concurrent_removal_conflict() {
     // Alice: Removes bob (concurrently)
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let _ = space.remove(bob_id).await.unwrap();
     drop(space);
 
     // Bob: Adds claire (concurrently)
     // ~~~~~~~~~~~~
 
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).joined().await.unwrap();
     let (message_03, message_04, _) =
         split_space_output(space.add(claire_id, Access::read()).await.unwrap());
     drop(space);
@@ -793,7 +793,7 @@ async fn concurrent_removal_conflict() {
     // Alice: Adds dave
     // ~~~~~~~~~~~~
 
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let (message_05, message_06, _) =
         split_space_output(space.add(dave_id, Access::read()).await.unwrap());
 
@@ -1509,7 +1509,7 @@ async fn idempotent_api() {
     assert!(!events.is_empty());
     let events = alice_manager.process(&message_02).await.unwrap();
     assert!(!events.is_empty());
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).created().await.unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
 
@@ -1527,7 +1527,7 @@ async fn idempotent_api() {
     assert!(!events.is_empty());
     let events = bob_manager.process(&message_02).await.unwrap();
     assert!(!events.is_empty());
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).created().await.unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, vec![(alice_id, Access::manage()),]);
 }
@@ -1624,7 +1624,7 @@ async fn repair_space() {
     let message_05 = messages[1].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
     let expected_members = vec![
@@ -1645,7 +1645,7 @@ async fn repair_space() {
     }
 
     // Bob now knows about the space and has correct members.
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).joined().await.unwrap();
     let mut members = space.members().await.unwrap();
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
     assert_eq!(members, expected_members);
@@ -1743,7 +1743,7 @@ async fn duplicate_auth_state_references() {
     let message_06 = messages[1].clone();
 
     // Alice's space members now contain Claire (the space was repaired).
-    let space = alice_manager.space(space_id).await.unwrap().unwrap();
+    let space = alice_manager.space(space_id).joined().await.unwrap();
     let members = space.members().await.unwrap();
     let expected_members = vec![
         (alice_id, Access::manage()),
@@ -1781,7 +1781,7 @@ async fn duplicate_auth_state_references() {
     bob_manager.process(&message_06).await.unwrap();
 
     // Bob arrived at the expected state without error.
-    let space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let space = bob_manager.space(space_id).joined().await.unwrap();
     let members = space.members().await.unwrap();
     assert_eq!(members, expected_members);
 }
@@ -1955,7 +1955,7 @@ async fn publish_process_separation() {
     let members = auth.members(group_id);
     assert_eq!(members, vec![]);
 
-    assert!(manager.space(space_id).await.unwrap().is_none());
+    assert!(!manager.has_space(space_id).await.unwrap());
 
     // Spaces Processor: persist and process the create group and create space operations.
     // ~~~~~~~~~~~~
@@ -1968,7 +1968,7 @@ async fn publish_process_separation() {
 
     // Both global auth state and spaces state have now been updated and persisted properly.
     let auth = manager.get_global_groups_state().await.unwrap();
-    let space = manager.space(space_id).await.unwrap().unwrap();
+    let space = manager.space(space_id).joined().await.unwrap();
 
     let members = auth.members(space.group_id().await.unwrap());
     assert_eq!(members, vec![(alice_id, Access::manage())]);
@@ -2039,7 +2039,7 @@ async fn write_access_error() {
         bob_manager.process(&message).await.unwrap();
     }
 
-    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
+    let bob_space = bob_manager.space(space_id).joined().await.unwrap();
 
     // Bob publishes an application into a space where he doesn't have write access.
     let (message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
@@ -2087,7 +2087,7 @@ async fn filter_application_events_after_concurrent_removal() {
     // Bob publishes an application message, concurrently Alice removes Bob.
     // ~~~~~~~~~~~~
 
-    let bob_space = bob.manager.space(space_id).await.unwrap().unwrap();
+    let bob_space = bob_manager.space(space_id).joined().await.unwrap();
     let (message, _) = bob_space.publish(b"Hello, Alice!").await.unwrap();
 
     alice_space.remove(bob_id).await.unwrap();
@@ -2266,7 +2266,7 @@ async fn removed_members() {
     let removed: HashSet<_> = alice_space.removed().await.unwrap().into_iter().collect();
     assert_eq!(removed, expected);
 
-    let bob_space = bob_manager.space(space_id).await.unwrap().unwrap();
+    let bob_space = bob_manager.space(space_id).joined().await.unwrap();
     let removed: HashSet<_> = bob_space.removed().await.unwrap().into_iter().collect();
     assert_eq!(removed, expected);
 
@@ -2432,4 +2432,41 @@ async fn concurrent_adds() {
         .collect();
     assert!(members.contains(&bob_id), "bob's add was lost");
     assert!(members.contains(&claire_id), "claire's add was lost");
+}
+
+#[tokio::test]
+async fn removed_space_members() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::new(1).await;
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Unknown space has no removed members.
+    let space_id = SpaceId::digest(b"test space");
+    assert!(
+        alice
+            .manager
+            .removed_space_members(space_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Alice creates a space with Bob and removes them again.
+    let (space, _) = alice
+        .manager
+        .create_space(space_id, &[(bob.manager.id(), Access::read())])
+        .await
+        .unwrap();
+    space.remove(bob.manager.id()).await.unwrap();
+
+    assert_eq!(
+        alice.manager.removed_space_members(space_id).await.unwrap(),
+        vec![bob.manager.id()]
+    );
+    assert_eq!(space.removed().await.unwrap(), vec![bob.manager.id()]);
 }

@@ -3,7 +3,6 @@
 //! High-level API for managing spaces, groups and member keys.
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use p2panda_auth::Access;
@@ -30,7 +29,9 @@ use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::store::{
     SpaceState, SpacesStoreState, StateChanges, StateError, StateReader, StateTransaction,
 };
-use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
+use crate::utils::{is_secret_member, removed_space_members};
+use crate::waiters::EventWaiters;
+use crate::{ActorId, Config, Credentials, GroupId, MemberId, PendingSpace, SpaceId};
 
 /// API for creating and managing groups and spaces.
 ///
@@ -58,8 +59,7 @@ use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
 #[derive(Debug)]
 pub struct Manager<S, F, C> {
     actor_id: ActorId,
-    inner: Arc<ManagerInner<S, F>>,
-    _marker: PhantomData<C>,
+    inner: Arc<ManagerInner<S, F, C>>,
 }
 
 impl<S, F, C> Clone for Manager<S, F, C> {
@@ -69,18 +69,18 @@ impl<S, F, C> Clone for Manager<S, F, C> {
         Self {
             actor_id: self.actor_id,
             inner: self.inner.clone(),
-            _marker: PhantomData,
         }
     }
 }
 
 #[derive(Debug)]
-struct ManagerInner<S, F> {
+struct ManagerInner<S, F, C> {
     pub config: Config,
     pub forge: F,
     pub store: S,
     pub credentials: Credentials,
     pub rng: Rng,
+    pub waiters: EventWaiters<C>,
 }
 
 impl<S, F, C> Manager<S, F, C>
@@ -122,11 +122,11 @@ where
             forge,
             credentials,
             rng,
+            waiters: EventWaiters::new(),
         };
         Ok(Self {
             actor_id,
             inner: Arc::new(inner),
-            _marker: PhantomData,
         })
     }
 
@@ -156,28 +156,52 @@ where
         IdentityManager::new(self.inner.config.clone())
     }
 
-    /// Get a space by id.
+    pub(crate) fn waiters(&self) -> &EventWaiters<C> {
+        &self.inner.waiters
+    }
+
+    /// Create a new group containing initial members with associated access levels.
     ///
-    /// A space instance provides an API for adding and removing members from the space and querying
-    /// the current space members.
-    pub async fn space(
+    /// It is possible to create a group where the creator is not an initial member or is a member
+    /// without manager rights. If this is done then after creation no further change of the group
+    /// membership would be possible.
+    ///
+    /// Persists resulting state, returns group instance and forged message.
+    pub async fn create_group(
         &self,
-        id: impl Into<Hash>,
-    ) -> Result<Option<Space<S, F, C>>, ManagerError<F, C>> {
-        let id = id.into();
+        initial_members: &[(ActorId, Access<C>)],
+    ) -> Result<(Group<S, F, C>, GroupOutput<C, F::Message>), ManagerError<F, C>> {
+        let tx = self.begin_write().await?;
 
-        let has_space = self
-            .inner
-            .store
-            .has_space(&id)
-            .await
-            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
+        // Read.
 
-        if has_space {
-            Ok(Some(Space::new(self.clone(), id)))
-        } else {
-            Ok(None)
-        }
+        let global_groups_y = tx.global_groups_state().await?;
+
+        // Generate random group id.
+        let group_id: GroupId = {
+            let signing_key = SigningKey::from_bytes(&tx.ctx.rng.random_array()?);
+            signing_key.verifying_key()
+        };
+
+        // Modify.
+
+        let (global_groups_y, output) = Group::create(
+            &tx.ctx,
+            global_groups_y,
+            group_id,
+            initial_members.to_owned(),
+        )
+        .await
+        .map_err(ManagerError::Group)?;
+
+        // Write.
+
+        tx.commit(StateChanges::GlobalGroups { global_groups_y })
+            .await?;
+
+        self.waiters().notify_events([&output.event]);
+
+        Ok((Group::new(self.clone(), group_id), output))
     }
 
     /// Get a group by id.
@@ -242,49 +266,64 @@ where
         })
         .await?;
 
+        self.waiters().notify_events(output.events());
+
         Ok((Space::new(self.clone(), id), output))
     }
 
-    /// Create a new group containing initial members with associated access levels.
+    /// Get a space by id.
     ///
-    /// It is possible to create a group where the creator is not an initial member or is a member
-    /// without manager rights. If this is done then after creation no further change of the group
-    /// membership would be possible.
+    /// A space instance provides an API for adding and removing members from the space and querying
+    /// the current space members.
     ///
-    /// Persists resulting state, returns group instance and forged message.
-    pub async fn create_group(
+    /// Returns a `PendingSpace` handle which accounts for situations where we want to join a space
+    /// but need to still wait for the regarding messages bringing us in. Use `has_space` and
+    /// `has_joined_space` to check these conditions without waiting.
+    pub fn space(&self, id: impl Into<SpaceId>) -> PendingSpace<S, F, C> {
+        PendingSpace::new(self.clone(), id.into())
+    }
+
+    /// Returns all members who were removed from, and not re-admitted to, this space.
+    ///
+    /// Returns an empty list if the space is not known yet.
+    pub async fn removed_space_members(
         &self,
-        initial_members: &[(ActorId, Access<C>)],
-    ) -> Result<(Group<S, F, C>, GroupOutput<C, F::Message>), ManagerError<F, C>> {
-        let tx = self.begin_write().await?;
-
-        // Read.
-
-        let global_groups_y = tx.global_groups_state().await?;
-
-        // Generate random group id.
-        let group_id: GroupId = {
-            let signing_key = SigningKey::from_bytes(&tx.ctx.rng.random_array()?);
-            signing_key.verifying_key()
+        id: impl Into<SpaceId>,
+    ) -> Result<Vec<MemberId>, ManagerError<F, C>> {
+        let Some(space_y) = self.read().space_state(&id.into()).await? else {
+            return Ok(vec![]);
         };
 
-        // Modify.
+        Ok(removed_space_members(&space_y))
+    }
 
-        let (global_groups_y, output) = Group::create(
-            &tx.ctx,
-            global_groups_y,
-            group_id,
-            initial_members.to_owned(),
-        )
-        .await
-        .map_err(ManagerError::Group)?;
+    /// Returns `true` if we are currently a member of the space with more than pull access.
+    pub async fn has_joined_space(
+        &self,
+        id: impl Into<SpaceId>,
+    ) -> Result<bool, ManagerError<F, C>> {
+        let id = id.into();
 
-        // Write.
+        let Some(space_y) = self.read().space_state(&id).await? else {
+            return Ok(false);
+        };
 
-        tx.commit(StateChanges::GlobalGroups { global_groups_y })
-            .await?;
+        let members = space_y.groups_y.members(space_y.group_id);
+        Ok(is_secret_member(&members, self.id()))
+    }
 
-        Ok((Group::new(self.clone(), group_id), output))
+    /// Returns `true` if the space is known.
+    pub async fn has_space(&self, id: impl Into<SpaceId>) -> Result<bool, ManagerError<F, C>> {
+        let id = id.into();
+
+        let has_space = self
+            .inner
+            .store
+            .has_space(&id)
+            .await
+            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
+
+        Ok(has_space)
     }
 
     /// Process a spaces message.
@@ -394,6 +433,8 @@ where
 
         tx.commit(changes).await?;
 
+        self.waiters().notify_events(&events);
+
         Ok(events)
     }
 
@@ -446,6 +487,9 @@ where
         })
         .await?;
 
+        // Our own (rotated) key bundle was registered.
+        self.waiters().members.notify(&member);
+
         Ok(member)
     }
 
@@ -460,7 +504,7 @@ where
 
         // Modify.
 
-        let (key_registry_y, _event) = self
+        let (key_registry_y, event) = self
             .identity()
             .process(key_registry_y, member)
             .map_err(ManagerError::IdentityManager)?;
@@ -472,6 +516,8 @@ where
             key_registry_y: Some(key_registry_y),
         })
         .await?;
+
+        self.waiters().notify_events([&event]);
 
         Ok(())
     }
@@ -525,6 +571,11 @@ where
         };
 
         tx.commit(changes).await?;
+
+        // Our own key bundle was registered if it got rotated.
+        if rotated && let SpacesArgs::Member(member) = message.borrow() {
+            self.waiters().members.notify(member);
+        }
 
         Ok(message)
     }
@@ -635,6 +686,8 @@ where
         } else {
             tx.rollback().await?;
         }
+
+        self.waiters().notify_events(output.events());
 
         Ok(output)
     }

@@ -198,6 +198,8 @@ where
         tx.commit(StateChanges::GlobalGroups { global_groups_y })
             .await?;
 
+        self.manager.waiters().notify_events([&output.event]);
+
         Ok(output)
     }
 

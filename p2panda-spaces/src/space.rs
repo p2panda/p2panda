@@ -40,8 +40,8 @@ use crate::types::{
     EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
 use crate::utils::{
-    added_secret_members, removed_members, removed_secret_members, secret_members, sort_members,
-    typed_member, typed_members,
+    added_secret_members_diff, removed_members_diff, removed_secret_members_diff,
+    removed_space_members, secret_members, sort_members, typed_member, typed_members,
 };
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId, StrongRemoveResolver};
 
@@ -84,7 +84,7 @@ where
     F: Forge<C>,
     C: Conditions,
 {
-    pub fn new(manager_ref: Manager<S, F, C>, id: SpaceId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: SpaceId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -274,16 +274,16 @@ where
         })
         .await?;
 
-        Ok(SpaceOutput::from(
-            group_output,
-            vec![(space_message, space_events)],
-        ))
+        let output = SpaceOutput::from(group_output, vec![(space_message, space_events)]);
+        self.manager.waiters().notify_events(output.events());
+
+        Ok(output)
     }
 
     /// Forge a "pointer" space message from an already existing auth message and apply any
     /// resulting group membership changes. Any resulting encryption direct messages are included
     /// in the space message alongside a reference to the auth message.
-    pub(crate) async fn process_auth_message(
+    async fn process_auth_message(
         ctx: &Context<'_, S, F>,
         mut space_y: SpaceState<C>,
         auth_message: &AuthMessage<C>,
@@ -541,7 +541,7 @@ where
                     encryption_y
                 }
                 AuthGroupAction::Add { .. } | AuthGroupAction::Promote { .. } => {
-                    let all_added = added_secret_members(current_members, next_members);
+                    let all_added = added_secret_members_diff(current_members, next_members);
 
                     if all_added.is_empty() {
                         return Ok((encryption_y, vec![]));
@@ -556,7 +556,7 @@ where
                     encryption_y
                 }
                 AuthGroupAction::Remove { .. } | AuthGroupAction::Demote { .. } => {
-                    let all_removed = removed_secret_members(current_members, next_members);
+                    let all_removed = removed_secret_members_diff(current_members, next_members);
 
                     if all_removed.is_empty() {
                         return Ok((encryption_y, vec![]));
@@ -710,6 +710,8 @@ where
             tx.rollback().await?;
         }
 
+        self.manager.waiters().notify_events(output.events());
+
         Ok(output)
     }
 
@@ -800,16 +802,7 @@ where
 
     /// Returns all members who were removed from, and not re-admitted to, this space.
     pub async fn removed(&self) -> Result<Vec<MemberId>, SpaceError<F, C>> {
-        let y = self.state().await?;
-        let members = y.groups_y.members(y.group_id);
-        let removed = y
-            .removed
-            .iter()
-            // Filter out historically removed members which are now current members (they were
-            // re-added).
-            .filter(|removed| !members.iter().any(|(member, _)| member == *removed))
-            .cloned();
-        Ok(removed.collect())
+        Ok(removed_space_members(&self.state().await?))
     }
 
     /// All actors (both groups and individuals) in the space.
@@ -849,6 +842,8 @@ where
             space_y,
         })
         .await?;
+
+        self.manager.waiters().notify_events([&event]);
 
         Ok((message, event))
     }
@@ -976,7 +971,7 @@ fn update_removed<C: Conditions>(
             // account for re-adds the current membership of the group can be compared against
             // the remove list.
             removed.extend(
-                removed_members(current_members, &context.members)
+                removed_members_diff(current_members, &context.members)
                     .into_iter()
                     .map(|(member, _)| member),
             );
