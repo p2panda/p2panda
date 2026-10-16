@@ -29,9 +29,9 @@ use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::store::{
     SpaceState, SpacesStoreState, StateChanges, StateError, StateReader, StateTransaction,
 };
-use crate::utils::{is_secret_member, removed_space_members};
+use crate::utils::{is_member, is_secret_member, removed_space_members};
 use crate::waiters::EventWaiters;
-use crate::{ActorId, Config, Credentials, GroupId, MemberId, PendingSpace, SpaceId};
+use crate::{ActorId, Config, Credentials, GroupId, MemberId, PendingGroup, PendingSpace, SpaceId};
 
 /// API for creating and managing groups and spaces.
 ///
@@ -208,20 +208,28 @@ where
     ///
     /// A group instance provides an API for adding and removing members from a group and querying
     /// the current group members.
-    pub async fn group(
+    ///
+    /// Returns a `PendingGroup` handle which accounts for situations where we want to join a group
+    /// but need to still wait for the regarding messages bringing us in. Use `has_group` and
+    /// `has_joined_group` to check these conditions without waiting.
+    pub fn group(&self, id: impl Into<GroupId>) -> PendingGroup<S, F, C> {
+        PendingGroup::new(self.clone(), id.into())
+    }
+
+    /// Returns `true` if the group is known.
+    pub async fn has_group(&self, id: impl Into<GroupId>) -> Result<bool, ManagerError<F, C>> {
+        let global_groups_y = self.read().global_groups_state().await?;
+        Ok(global_groups_y.has_group(id.into()))
+    }
+
+    /// Returns `true` if we are currently a member of the group.
+    pub async fn has_joined_group(
         &self,
         id: impl Into<GroupId>,
-    ) -> Result<Option<Group<S, F, C>>, ManagerError<F, C>> {
-        let id = id.into();
-
-        // Check if this group exists in the auth state.
+    ) -> Result<bool, ManagerError<F, C>> {
         let global_groups_y = self.read().global_groups_state().await?;
-
-        if global_groups_y.has_group(id) {
-            Ok(Some(Group::new(self.clone(), id)))
-        } else {
-            Ok(None)
-        }
+        let members = global_groups_y.members(id.into());
+        Ok(is_member(&members, self.id()))
     }
 
     /// Create a new space containing initial members and access levels.
@@ -297,7 +305,7 @@ where
         Ok(removed_space_members(&space_y))
     }
 
-    /// Returns `true` if we are currently a member of the space with more than pull access.
+    /// Returns `true` if we are currently a member of the space with more than "pull" access.
     pub async fn has_joined_space(
         &self,
         id: impl Into<SpaceId>,

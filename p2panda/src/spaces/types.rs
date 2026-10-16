@@ -42,6 +42,9 @@ pub type InnerMember = p2panda_spaces::member::Member;
 pub type InnerGroup =
     p2panda_spaces::group::Group<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;
 
+pub type InnerPendingGroup =
+    p2panda_spaces::PendingGroup<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;
+
 pub type InnerSpace =
     p2panda_spaces::space::Space<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;
 
