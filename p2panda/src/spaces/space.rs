@@ -23,7 +23,8 @@ use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{
-    AuthCapabilities, InnerSpace, InnerSpaceError, SpacesEvent, SpacesManagerError,
+    AuthCapabilities, InnerPendingSpace, InnerSpace, InnerSpaceError, SpacesEvent,
+    SpacesManagerError,
 };
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
@@ -49,6 +50,82 @@ where
         },
         SpaceSubscription { rx },
     )
+}
+
+/// Wraps topic stream and returns the pub/sub pair of a space which might not be joined yet.
+pub(crate) fn pending_spaces_stream<M>(
+    inner: InnerPendingSpace,
+    store: SqliteStore,
+    egress_handle: EgressHandle,
+    repair_task: RepairTask,
+    tx: StreamPublisher<M>,
+    rx: StreamSubscription<M>,
+) -> (PendingSpace<M>, SpaceSubscription<M>)
+where
+    M: Serialize,
+{
+    (
+        PendingSpace {
+            inner,
+            store,
+            egress_handle,
+            repair_task,
+            tx,
+        },
+        SpaceSubscription { rx },
+    )
+}
+
+/// Handle to a subscribed space which might not be joined yet.
+///
+/// Use `joined` to wait until we've been added to the space and can read and publish messages.
+#[derive(Debug)]
+pub struct PendingSpace<M>
+where
+    M: Serialize,
+{
+    inner: InnerPendingSpace,
+    store: SqliteStore,
+    egress_handle: EgressHandle,
+    repair_task: RepairTask,
+    tx: StreamPublisher<M>,
+}
+
+impl<M> PendingSpace<M>
+where
+    M: Serialize,
+{
+    pub fn id(&self) -> SpaceId {
+        self.inner.id()
+    }
+
+    /// Wait until we've joined the space with read access or higher.
+    pub async fn joined(self) -> Result<Space<M>, SpacesManagerError> {
+        let inner = self.inner.joined().await?;
+        Ok(Space {
+            inner,
+            store: self.store,
+            egress_handle: self.egress_handle,
+            repair_task: self.repair_task,
+            tx: self.tx,
+        })
+    }
+
+    /// Gracefully close the space and any associated sync sessions.
+    pub async fn close(self) -> Result<(), CloseError> {
+        self.tx.close().await
+    }
+}
+
+#[cfg(any(test, feature = "test_utils"))]
+impl<M> PendingSpace<M>
+where
+    M: Serialize,
+{
+    /// Inner topic stream publishing handle (tx).
+    pub fn inner_tx(&self) -> &StreamPublisher<M> {
+        &self.tx
+    }
 }
 
 #[derive(Debug)]

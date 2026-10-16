@@ -28,10 +28,10 @@ pub(crate) use group::{group_stream, is_group};
 pub use member::{GroupActor, Member, MemberError};
 pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
 pub use space::{
-    AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError, Space, SpaceEgressError,
-    SpaceFuture, SpaceSubscription,
+    AddSpaceMemberError, PendingSpace, PublishSpaceError, RemoveSpaceMemberError, Space,
+    SpaceEgressError, SpaceFuture, SpaceSubscription,
 };
-pub(crate) use space::{dispatch_spaces_events, spaces_stream};
+pub(crate) use space::{dispatch_spaces_events, pending_spaces_stream, spaces_stream};
 pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
 
 use crate::Credentials;
