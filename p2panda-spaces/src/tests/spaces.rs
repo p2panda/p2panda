@@ -1798,7 +1798,7 @@ async fn add_expired_member_to_group() {
     let alice = TestPeer::new(0).await;
     let bob = TestPeer::new(1).await;
 
-    // Create key bundle which expires in 1 second.
+    // Create key bundle which expires in 2 seconds.
     let expired_bob = {
         let rng = Rng::from_seed([2; 32]);
 
@@ -1811,7 +1811,7 @@ async fn add_expired_member_to_group() {
         let prekey_secret = SecretKey::from_rng(&rng).unwrap();
         let prekey = PreKey::new(
             prekey_secret.verifying_key().unwrap(),
-            Lifetime::from_range(now - 60, now + 1),
+            Lifetime::from_range(now - 60, now + 2),
         );
         let signature = prekey
             .sign(&bob.credentials.identity_secret(), &rng)
@@ -1831,7 +1831,7 @@ async fn add_expired_member_to_group() {
     alice.manager.register_member(&expired_bob).await.unwrap();
 
     // Sleep to make bundle expire.
-    thread::sleep(Duration::from_secs(1));
+    thread::sleep(Duration::from_secs(2));
 
     // Alice creates a space with Bob but it should fail since the key bundle has expired.
     assert!(
@@ -1851,7 +1851,7 @@ async fn process_operation_from_expired_member() {
     let alice = TestPeer::new(0).await;
     let bob = TestPeer::new(1).await;
 
-    // Create key bundle which expires in 1 second.
+    // Create key bundle which expires in 2 seconds.
     let expired_bob = {
         let rng = Rng::from_seed([2; 32]);
 
@@ -1864,7 +1864,7 @@ async fn process_operation_from_expired_member() {
         let prekey_secret = SecretKey::from_rng(&rng).unwrap();
         let prekey = PreKey::new(
             prekey_secret.verifying_key().unwrap(),
-            Lifetime::from_range(now - 60, now + 1),
+            Lifetime::from_range(now - 60, now + 2),
         );
         let signature = prekey
             .sign(&bob.credentials.identity_secret(), &rng)
