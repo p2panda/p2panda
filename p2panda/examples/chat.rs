@@ -31,6 +31,7 @@ use std::collections::VecDeque;
 use std::str::FromStr;
 use std::thread;
 
+use p2panda::spaces::SpaceSubscription;
 use p2panda::streams::StreamEvent;
 use p2panda::{AccessLevel, Hash, RelayUrl, SpaceEvent, Topic, VerifyingKey};
 use p2panda_core::IdentityError;
@@ -87,53 +88,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("MEMBER ID: {}", node.id().to_hex());
 
-    // If a space id was provided subscribe to the existing space, otherwise create a new one.
-    // Share the id <CHAT ID> with other instances to allow them to join.
-    let (space, mut space_rx) = match space_id {
-        Some(space_id) => node.space::<Message>(space_id).await?,
+    // If a space id was provided subscribe to the existing space and wait until we've been added,
+    // otherwise create a new one. Share the id <CHAT ID> with other instances to allow them to join.
+    let space = match space_id {
+        Some(space_id) => {
+            let (pending_space, space_rx) = node.space::<Message>(space_id).await?;
+
+            println!("CHAT ID: {}", pending_space.id().to_hex());
+            spawn_event_handler(space_rx);
+
+            println!("WAITING TO BE ADDED ...");
+            let space = pending_space.joined().await?;
+
+            println!("JOINED SPACE!");
+            space
+        }
         None => {
             let space_id = Topic::random();
-            node.create_space::<Message>(space_id).await?
+            let (space, space_rx) = node.create_space::<Message>(space_id).await?;
+            println!("CHAT ID: {}", space.id().to_hex());
+            spawn_event_handler(space_rx);
+
+            space
         }
     };
-
-    println!("CHAT ID: {}", space.id().to_hex());
-
-    // Spawn process for handling events arriving on the space stream. Both events resulting from
-    // our own actions as well as those from other members are emitted here.
-    {
-        tokio::task::spawn(async move {
-            while let Some(event) = space_rx.next().await {
-                match event {
-                    // Chat message.
-                    StreamEvent::Processed { operation, .. } => {
-                        let message = operation.message();
-                        println!("{}: {}", operation.author().fmt_short(), message);
-                    }
-                    // Space membership change.
-                    StreamEvent::Space { members, inner, .. } => {
-                        if let SpaceEvent::Ejected { .. } = inner {
-                            println!("YOU WERE REMOVED");
-                            continue;
-                        };
-
-                        let members = members
-                            .iter()
-                            .map(|(member, _)| member.fmt_short())
-                            .collect::<Vec<_>>()
-                            .join(", ");
-
-                        println!("MEMBERS: [{}]", members)
-                    }
-                    // Key bundle.
-                    StreamEvent::Member(actor) => {
-                        println!("KEY BUNDLE RECEIVED: {}", actor)
-                    }
-                    _ => (),
-                }
-            }
-        });
-    }
 
     // Listen for text input via the terminal.
     let (line_tx, mut line_rx) = mpsc::channel(1);
@@ -183,6 +161,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Spawn process for handling events arriving on the space stream. Both events resulting from our
+/// own actions as well as those from other members are emitted here.
+fn spawn_event_handler(mut space_rx: SpaceSubscription<Message>) {
+    tokio::task::spawn(async move {
+        while let Some(event) = space_rx.next().await {
+            match event {
+                // Chat message.
+                StreamEvent::Processed { operation, .. } => {
+                    let message = operation.message();
+                    println!("{}: {}", operation.author().fmt_short(), message);
+                }
+                // Space membership change.
+                StreamEvent::Space { members, inner, .. } => {
+                    if let SpaceEvent::Ejected { .. } = inner {
+                        println!("YOU WERE REMOVED");
+                        continue;
+                    };
+
+                    let members = members
+                        .iter()
+                        .map(|(member, _)| member.fmt_short())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    println!("MEMBERS: [{}]", members)
+                }
+                // Key bundle.
+                StreamEvent::Member(actor) => {
+                    println!("KEY BUNDLE RECEIVED: {}", actor)
+                }
+                _ => (),
+            }
+        }
+    });
 }
 
 fn input_loop(line_tx: mpsc::Sender<String>) -> Result<(), std::io::Error> {
