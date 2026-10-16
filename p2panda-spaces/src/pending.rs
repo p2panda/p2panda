@@ -2,6 +2,7 @@
 
 //! Handles to await spaces, groups and members which might not be created or joined yet.
 use p2panda_auth::traits::Conditions;
+use p2panda_encryption::key_bundle::LongTermKeyBundle;
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
 use p2panda_store::key_registry::KeyRegistryStore;
@@ -13,7 +14,7 @@ use crate::group::Group;
 use crate::manager::{Manager, ManagerError};
 use crate::space::Space;
 use crate::utils::{is_member, is_secret_member};
-use crate::{AuthMessage, Forge, GroupId, SpaceId, SpacesStoreState};
+use crate::{AuthMessage, Forge, GroupId, MemberId, SpaceId, SpacesStoreState};
 
 #[derive(Debug)]
 pub struct PendingSpace<S, F, C> {
@@ -168,6 +169,57 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct PendingMember<S, F, C> {
+    id: MemberId,
+    manager_ref: Manager<S, F, C>,
+}
+
+impl<S, F, C> PendingMember<S, F, C> {
+    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: MemberId) -> Self {
+        Self { id, manager_ref }
+    }
+
+    pub fn id(&self) -> MemberId {
+        self.id
+    }
+}
+
+impl<S, F, C> PendingMember<S, F, C>
+where
+    S: Clone
+        + SpacesStore<SpacesStoreState<C>>
+        + SpacesMessageStore<F::Message>
+        + GroupsStore<AuthMessage<C>, C>
+        + KeyRegistryStore
+        + PreKeyBundlesStore
+        + Transaction,
+    F: Forge<C>,
+    C: Conditions,
+{
+    /// Wait until a valid key bundle of the member was registered and return it.
+    ///
+    /// This never resolves if no key bundle arrives, consider wrapping it in a timeout.
+    pub async fn registered(self) -> Result<LongTermKeyBundle, ManagerError<F, C>> {
+        let id = self.id;
+
+        loop {
+            // Subscribe _before_ checking the store, otherwise we might miss a notification.
+            let waiter = self
+                .manager_ref
+                .waiters()
+                .members
+                .wait_for(move |member| member.id() == id);
+
+            if let Some(key_bundle) = self.manager_ref.member_key_bundle(id).await? {
+                return Ok(key_bundle);
+            }
+
+            waiter.await;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -180,7 +232,7 @@ mod tests {
     use super::PendingSpace;
 
     #[tokio::test]
-    async fn created_resolves_immediately() {
+    async fn space_created_resolves_immediately() {
         let alice = TestPeer::new(0).await;
 
         let space_id = SpaceId::digest(b"my space");
@@ -194,7 +246,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn created_resolves_when_space_arrives() {
+    async fn space_created_resolves_on_message() {
         let alice = TestPeer::new(0).await;
         let bob = TestPeer::new(1).await;
 
@@ -347,5 +399,42 @@ mod tests {
             .unwrap();
         assert_eq!(bob_group.id(), parent.id());
         assert!(bob.manager.has_joined_group(parent.id()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn member_resolves_immediately() {
+        let alice = TestPeer::new(0).await;
+        let bob = TestPeer::new(1).await;
+
+        let bob_member = bob.manager.me().await.unwrap();
+        alice.manager.register_member(&bob_member).await.unwrap();
+
+        let key_bundle = alice
+            .manager
+            .member(bob.manager.id())
+            .registered()
+            .await
+            .unwrap();
+        assert_eq!(&key_bundle, bob_member.key_bundle());
+    }
+
+    #[tokio::test]
+    async fn member_resolves_on_message() {
+        let alice = TestPeer::new(0).await;
+        let bob = TestPeer::new(1).await;
+
+        // Alice waits for Bob's key bundle.
+        let registered = alice.manager.member(bob.manager.id()).registered();
+
+        // Bob publishes their key bundle and Alice processes it.
+        let message = bob.manager.key_bundle_message().await.unwrap();
+        alice.persist_operation(&message).await.unwrap();
+        alice.manager.process(&message).await.unwrap();
+
+        let key_bundle = tokio::time::timeout(Duration::from_secs(1), registered)
+            .await
+            .expect("pending member resolved")
+            .unwrap();
+        assert_eq!(&key_bundle, bob.manager.me().await.unwrap().key_bundle());
     }
 }
