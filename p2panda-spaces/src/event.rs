@@ -7,7 +7,7 @@ use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::VerifyingKey;
 
-use crate::member::Member;
+use crate::member::AuthenticatedMember;
 use crate::message::{AuthMessage, SpaceMembershipMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
@@ -55,7 +55,7 @@ impl GroupActor {
 #[allow(clippy::large_enum_variant)]
 pub enum Event<C> {
     /// A member's info with associated key-bundle has been received.
-    Member(Member),
+    Member(AuthenticatedMember),
 
     /// A group membership change occurred in the shared groups state.
     ///

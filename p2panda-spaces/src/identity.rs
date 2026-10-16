@@ -15,7 +15,7 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::forge::Forge;
-use crate::member::{Member, MemberError};
+use crate::member::{AuthenticatedMember, MemberError};
 use crate::message::SpacesArgs;
 use crate::{Config, Credentials, MemberId};
 
@@ -58,13 +58,20 @@ where
         key_registry_y: KeyRegistryState<MemberId>,
         credentials: &Credentials,
         rng: &Rng,
-    ) -> Result<(KeyManagerState, KeyRegistryState<MemberId>, Member), IdentityError<F, C>> {
+    ) -> Result<
+        (
+            KeyManagerState,
+            KeyRegistryState<MemberId>,
+            AuthenticatedMember,
+        ),
+        IdentityError<F, C>,
+    > {
         let (key_manager_y_i, key_registry_y_i, key_bundle) =
             self.key_bundle(key_manager_y, key_registry_y, credentials, rng)?;
         Ok((
             key_manager_y_i,
             key_registry_y_i,
-            Member::new(rng, credentials, key_bundle)?,
+            AuthenticatedMember::new(rng, credentials, key_bundle)?,
         ))
     }
 
@@ -160,7 +167,7 @@ where
     pub fn process(
         &self,
         key_registry_y: KeyRegistryState<MemberId>,
-        member: &Member,
+        member: &AuthenticatedMember,
     ) -> Result<(KeyRegistryState<MemberId>, Event<C>), IdentityError<F, C>> {
         // 1. Claimed member id belongs to the associated key bundle and it's X3DH identity key.
         // 2. Key bundle's pre-key belongs to identity key.

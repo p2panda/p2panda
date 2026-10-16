@@ -11,7 +11,7 @@ use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
 use serde::{Deserialize, Serialize};
 
-use crate::member::Member;
+use crate::member::AuthenticatedMember;
 use crate::types::EncryptionDirectMessage;
 use crate::{ActorId, GroupId, OperationId, SpaceId};
 
@@ -193,7 +193,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SpacesArgs<C> {
     /// System message, contains key bundle of the given member.
-    Member(Member),
+    Member(AuthenticatedMember),
 
     /// System message containing group control message.
     Group {
