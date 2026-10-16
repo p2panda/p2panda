@@ -55,9 +55,8 @@ async fn create_space() {
 
     // Methods return the correct identity handle.
     assert_eq!(manager.id(), alice_id);
-
-    assert_eq!(manager.me().await.unwrap().id(), alice_id);
-    assert!(manager.me().await.unwrap().verify().is_ok());
+    assert_eq!(alice.me().await.unwrap().id(), alice_id);
+    assert!(alice.me().await.unwrap().verify().is_ok());
 
     // Create Space
     // ~~~~~~~~~~~~
@@ -141,12 +140,12 @@ async fn send_and_receive() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -222,7 +221,7 @@ async fn add_member_to_space() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
@@ -339,7 +338,7 @@ async fn register_key_bundles_after_space_creation() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
@@ -362,12 +361,12 @@ async fn send_and_receive_after_add() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -406,7 +405,7 @@ async fn add_pull_member_to_space() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
@@ -500,14 +499,14 @@ async fn receive_control_messages() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     // Manually register alice's key bundle.
 
     bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -626,14 +625,14 @@ async fn remove_member() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     // Manually register key bundles on bob.
 
     bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -727,10 +726,10 @@ async fn concurrent_removal_conflict() {
     let claire_manager = claire.manager.clone();
     let dave_manager = dave.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
-    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
-    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
+    let alice_bundle = alice_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let bob_bundle = bob_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let claire_bundle = claire_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let dave_bundle = dave_manager.rotate_key_bundle().await.unwrap().unwrap();
 
     for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
         alice_manager.process(&bundle).await.unwrap();
@@ -840,18 +839,16 @@ async fn space_from_existing_auth_state() {
     let claire_id = claire.manager.id();
 
     let alice_manager = alice.manager.clone();
-    let bob_manager = bob.manager.clone();
-    let claire_manager = claire.manager.clone();
 
     // Manually register all key bundles on alice.
 
     alice_manager
-        .register_member(&bob_manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     alice_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
@@ -1196,13 +1193,13 @@ async fn shared_auth_state() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     alice
         .manager
-        .register_member(&claire.manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
@@ -1312,10 +1309,10 @@ async fn events() {
     let claire_manager = claire.manager.clone();
     let dave_manager = dave.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
-    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
-    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
+    let alice_bundle = alice_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let bob_bundle = bob_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let claire_bundle = claire_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let dave_bundle = dave_manager.rotate_key_bundle().await.unwrap().unwrap();
 
     for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
         alice_manager.process(&bundle).await.unwrap();
@@ -1477,14 +1474,14 @@ async fn idempotent_api() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     // Manually register alice's key bundle.
 
     bob.manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -1544,29 +1541,28 @@ async fn repair_space() {
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
-    let claire_manager = claire.manager.clone();
 
     // Manually register all key bundles on alice.
 
     alice_manager
-        .register_member(&bob_manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     alice_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
     // Manually register all key bundles on bob.
 
     bob_manager
-        .register_member(&alice_manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
     bob_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
@@ -1663,29 +1659,28 @@ async fn duplicate_auth_state_references() {
 
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
-    let claire_manager = claire.manager.clone();
 
     // Manually register all key bundles on alice.
 
     alice_manager
-        .register_member(&bob_manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     alice_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
     // Manually register all key bundles on bob.
 
     bob_manager
-        .register_member(&alice_manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
     bob_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
@@ -1791,11 +1786,11 @@ async fn key_store_expired() {
     let peer = TestPeer::new(0).await;
 
     // Any just created instance will need a pre-key in the beginning.
-    assert!(peer.manager.key_bundle_expired().await.unwrap());
+    assert!(peer.manager.is_key_bundle_rotation_due().await.unwrap());
 
     // Publish a new key bundle with newly generated pre-keys and we should be fine.
-    let _message = peer.manager.key_bundle_message().await.unwrap();
-    assert!(!peer.manager.key_bundle_expired().await.unwrap());
+    let _message = peer.manager.rotate_key_bundle().await.unwrap();
+    assert!(!peer.manager.is_key_bundle_rotation_due().await.unwrap());
 }
 
 #[tokio::test]
@@ -1829,7 +1824,7 @@ async fn add_expired_member_to_group() {
             signature,
         );
 
-        AuthenticatedMember::new(&rng, &bob.credentials, bundle).unwrap()
+        AuthenticatedMember::sign(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
@@ -1882,7 +1877,7 @@ async fn process_operation_from_expired_member() {
             signature,
         );
 
-        AuthenticatedMember::new(&rng, &bob.credentials, bundle).unwrap()
+        AuthenticatedMember::sign(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
@@ -2015,12 +2010,12 @@ async fn write_access_error() {
     let bob_id = bob_manager.id();
 
     alice_manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     bob_manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -2060,12 +2055,12 @@ async fn filter_application_events_after_concurrent_removal() {
     let bob_id = bob_manager.id();
 
     alice_manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     bob_manager
-        .register_member(&alice.manager.me().await.unwrap())
+        .register_member(&alice.me().await.unwrap())
         .await
         .unwrap();
 
@@ -2116,8 +2111,8 @@ async fn promote_demote() {
     let alice_manager = alice.manager.clone();
     let bob_manager = bob.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
+    let alice_bundle = alice_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let bob_bundle = bob_manager.rotate_key_bundle().await.unwrap().unwrap();
 
     for bundle in [alice_bundle, bob_bundle] {
         alice_manager.process(&bundle).await.unwrap();
@@ -2211,10 +2206,10 @@ async fn removed_members() {
     let claire_manager = claire.manager.clone();
     let dave_manager = dave.manager.clone();
 
-    let alice_bundle = alice_manager.key_bundle_message().await.unwrap();
-    let bob_bundle = bob_manager.key_bundle_message().await.unwrap();
-    let claire_bundle = claire_manager.key_bundle_message().await.unwrap();
-    let dave_bundle = dave_manager.key_bundle_message().await.unwrap();
+    let alice_bundle = alice_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let bob_bundle = bob_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let claire_bundle = claire_manager.rotate_key_bundle().await.unwrap().unwrap();
+    let dave_bundle = dave_manager.rotate_key_bundle().await.unwrap().unwrap();
 
     for bundle in [alice_bundle, bob_bundle, claire_bundle, dave_bundle] {
         alice_manager.process(&bundle).await.unwrap();
@@ -2300,18 +2295,16 @@ async fn add_group_from_shared_groups_state_regression() {
     let claire_id = claire.manager.id();
 
     let alice_manager = alice.manager.clone();
-    let bob_manager = bob.manager.clone();
-    let claire_manager = claire.manager.clone();
 
     // Manually register all key bundles on alice.
 
     alice_manager
-        .register_member(&bob_manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 
     alice_manager
-        .register_member(&claire_manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
 
@@ -2401,14 +2394,15 @@ async fn concurrent_adds() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
     alice
         .manager
-        .register_member(&claire.manager.me().await.unwrap())
+        .register_member(&claire.me().await.unwrap())
         .await
         .unwrap();
+
     let bob_id = bob.manager.id();
     let claire_id = claire.manager.id();
 
@@ -2441,7 +2435,7 @@ async fn removed_space_members() {
 
     alice
         .manager
-        .register_member(&bob.manager.me().await.unwrap())
+        .register_member(&bob.me().await.unwrap())
         .await
         .unwrap();
 

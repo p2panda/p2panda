@@ -35,6 +35,7 @@ pub use config::Config;
 pub use credentials::Credentials;
 pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
+pub use identity::MemberStatus;
 pub use message::{AuthMessage, SpacesArgs, SpacesMessage};
 pub use pending::{PendingGroup, PendingMember, PendingSpace};
 pub use store::SpacesStoreState;
