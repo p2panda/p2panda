@@ -36,6 +36,14 @@ pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
 }
 
+/// Returns `true` if the given member has more than pull access, meaning they can read and decrypt
+/// messages.
+pub(crate) fn is_secret_member<C>(members: &[(ActorId, Access<C>)], member: ActorId) -> bool {
+    members
+        .iter()
+        .any(|(id, access)| *id == member && !access.is_pull())
+}
+
 pub(crate) fn secret_members<C>(members: &[(ActorId, Access<C>)]) -> Vec<ActorId> {
     let mut members: Vec<ActorId> = members
         .iter()

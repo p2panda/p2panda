@@ -283,7 +283,7 @@ where
     /// Forge a "pointer" space message from an already existing auth message and apply any
     /// resulting group membership changes. Any resulting encryption direct messages are included
     /// in the space message alongside a reference to the auth message.
-    pub(crate) async fn process_auth_message(
+    async fn process_auth_message(
         ctx: &Context<'_, S, F>,
         mut space_y: SpaceState<C>,
         auth_message: &AuthMessage<C>,

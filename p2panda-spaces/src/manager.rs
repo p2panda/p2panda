@@ -29,8 +29,9 @@ use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::store::{
     SpaceState, SpacesStoreState, StateChanges, StateError, StateReader, StateTransaction,
 };
+use crate::utils::is_secret_member;
 use crate::waiters::EventWaiters;
-use crate::{ActorId, Config, Credentials, GroupId, SpaceId};
+use crate::{ActorId, Config, Credentials, GroupId, PendingSpace, SpaceId};
 
 /// API for creating and managing groups and spaces.
 ///
@@ -274,27 +275,30 @@ where
     ///
     /// A space instance provides an API for adding and removing members from the space and querying
     /// the current space members.
-    pub async fn space(
-        &self,
-        id: impl Into<Hash>,
-    ) -> Result<Option<Space<S, F, C>>, ManagerError<F, C>> {
-        let id = id.into();
-
-        let has_space = self
-            .inner
-            .store
-            .has_space(&id)
-            .await
-            .map_err(|err| StoreError::SpacesStore(err.to_string()))?;
-
-        if has_space {
-            Ok(Some(Space::new(self.clone(), id)))
-        } else {
-            Ok(None)
-        }
+    ///
+    /// Returns a `PendingSpace` handle which accounts for situations where we want to join a space
+    /// but need to still wait for the regarding messages bringing us in. Use `has_space` and
+    /// `has_joined_space` to check these conditions without waiting.
+    pub fn space(&self, id: impl Into<SpaceId>) -> PendingSpace<S, F, C> {
+        PendingSpace::new(self.clone(), id.into())
     }
 
-    /// Returns `true` if the space is known to the manager.
+    /// Returns `true` if we are currently a member of the space with more than pull access.
+    pub async fn has_joined_space(
+        &self,
+        id: impl Into<SpaceId>,
+    ) -> Result<bool, ManagerError<F, C>> {
+        let id = id.into();
+
+        let Some(space_y) = self.read().space_state(&id).await? else {
+            return Ok(false);
+        };
+
+        let members = space_y.groups_y.members(space_y.group_id);
+        Ok(is_secret_member(&members, self.id()))
+    }
+
+    /// Returns `true` if the space is known.
     pub async fn has_space(&self, id: impl Into<SpaceId>) -> Result<bool, ManagerError<F, C>> {
         let id = id.into();
 
