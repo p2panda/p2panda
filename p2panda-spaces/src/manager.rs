@@ -29,9 +29,9 @@ use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::store::{
     SpaceState, SpacesStoreState, StateChanges, StateError, StateReader, StateTransaction,
 };
-use crate::utils::is_secret_member;
+use crate::utils::{is_secret_member, removed_space_members};
 use crate::waiters::EventWaiters;
-use crate::{ActorId, Config, Credentials, GroupId, PendingSpace, SpaceId};
+use crate::{ActorId, Config, Credentials, GroupId, MemberId, PendingSpace, SpaceId};
 
 /// API for creating and managing groups and spaces.
 ///
@@ -281,6 +281,20 @@ where
     /// `has_joined_space` to check these conditions without waiting.
     pub fn space(&self, id: impl Into<SpaceId>) -> PendingSpace<S, F, C> {
         PendingSpace::new(self.clone(), id.into())
+    }
+
+    /// Returns all members who were removed from, and not re-admitted to, this space.
+    ///
+    /// Returns an empty list if the space is not known yet.
+    pub async fn removed_space_members(
+        &self,
+        id: impl Into<SpaceId>,
+    ) -> Result<Vec<MemberId>, ManagerError<F, C>> {
+        let Some(space_y) = self.read().space_state(&id.into()).await? else {
+            return Ok(vec![]);
+        };
+
+        Ok(removed_space_members(&space_y))
     }
 
     /// Returns `true` if we are currently a member of the space with more than pull access.
