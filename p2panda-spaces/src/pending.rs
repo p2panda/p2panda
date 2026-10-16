@@ -14,7 +14,7 @@ use crate::group::Group;
 use crate::manager::{Manager, ManagerError};
 use crate::space::Space;
 use crate::utils::{is_member, is_secret_member};
-use crate::{AuthMessage, Forge, GroupId, MemberId, SpaceId, SpacesStoreState};
+use crate::{AuthMessage, Forge, GroupId, MemberId, MemberStatus, SpaceId, SpacesStoreState};
 
 #[derive(Debug)]
 pub struct PendingSpace<S, F, C> {
@@ -211,7 +211,7 @@ where
                 .members
                 .wait_for(move |member| member.id() == id);
 
-            if let Some(key_bundle) = self.manager_ref.member_key_bundle(id).await? {
+            if let MemberStatus::Valid(key_bundle) = self.manager_ref.member_key_bundle(id).await? {
                 return Ok(key_bundle);
             }
 
@@ -252,7 +252,7 @@ mod tests {
 
         alice
             .manager
-            .register_member(&bob.manager.me().await.unwrap())
+            .register_member(&bob.me().await.unwrap())
             .await
             .unwrap();
 
@@ -287,7 +287,7 @@ mod tests {
 
         alice
             .manager
-            .register_member(&bob.manager.me().await.unwrap())
+            .register_member(&bob.me().await.unwrap())
             .await
             .unwrap();
 
@@ -406,7 +406,7 @@ mod tests {
         let alice = TestPeer::new(0).await;
         let bob = TestPeer::new(1).await;
 
-        let bob_member = bob.manager.me().await.unwrap();
+        let bob_member = bob.me().await.unwrap();
         alice.manager.register_member(&bob_member).await.unwrap();
 
         let key_bundle = alice
@@ -427,7 +427,7 @@ mod tests {
         let registered = alice.manager.member(bob.manager.id()).registered();
 
         // Bob publishes their key bundle and Alice processes it.
-        let message = bob.manager.key_bundle_message().await.unwrap();
+        let message = bob.manager.key_bundle_message().await.unwrap().unwrap();
         alice.persist_operation(&message).await.unwrap();
         alice.manager.process(&message).await.unwrap();
 
@@ -435,6 +435,6 @@ mod tests {
             .await
             .expect("pending member resolved")
             .unwrap();
-        assert_eq!(&key_bundle, bob.manager.me().await.unwrap().key_bundle());
+        assert_eq!(&key_bundle, bob.me().await.unwrap().key_bundle());
     }
 }

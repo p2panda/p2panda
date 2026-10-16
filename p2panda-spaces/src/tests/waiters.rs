@@ -16,7 +16,7 @@ async fn own_key_bundle_notifies_member_waiters() {
         .wait_for(move |member| member.id() == alice_id);
 
     // First call generates and registers our own key bundle.
-    alice.manager.me().await.unwrap();
+    alice.manager.key_bundle_message().await.unwrap();
 
     tokio::time::timeout(Duration::from_secs(1), waiter)
         .await

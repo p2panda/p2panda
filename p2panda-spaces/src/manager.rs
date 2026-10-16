@@ -24,7 +24,7 @@ use tracing::debug;
 use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError, GroupOutput};
-use crate::identity::{IdentityError, IdentityManager};
+use crate::identity::{IdentityError, IdentityManager, MemberStatus};
 use crate::member::AuthenticatedMember;
 use crate::message::{AuthMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::RepairOutput;
@@ -457,56 +457,6 @@ where
         self.actor_id
     }
 
-    /// The local actor id and their long-term key bundle.
-    ///
-    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn me(&self) -> Result<AuthenticatedMember, ManagerError<F, C>> {
-        let identity = self.identity();
-
-        // Most of the time no rotation is required, we can avoid acquiring a transaction then.
-        let reader = self.read();
-        let key_manager_y = reader.key_manager_state().await?;
-        if !identity.key_bundle_expired(&key_manager_y)? {
-            let key_registry_y = reader.key_registry_state().await?;
-            let (_, _, member) = identity.me(
-                key_manager_y,
-                key_registry_y,
-                &self.inner.credentials,
-                &self.inner.rng,
-            )?;
-            return Ok(member);
-        }
-
-        let tx = self.begin_write().await?;
-
-        // Read.
-
-        let key_manager_y = tx.key_manager_state().await?;
-        let key_registry_y = tx.key_registry_state().await?;
-
-        // Modify.
-
-        let (key_manager_y, key_registry_y, member) = identity.me(
-            key_manager_y,
-            key_registry_y,
-            tx.ctx.credentials,
-            tx.ctx.rng,
-        )?;
-
-        // Write.
-
-        tx.commit(StateChanges::PrekeyBundles {
-            key_manager_y: Some(key_manager_y),
-            key_registry_y: Some(key_registry_y),
-        })
-        .await?;
-
-        // Our own (rotated) key bundle was registered.
-        self.waiters().members.notify(&member);
-
-        Ok(member)
-    }
-
     /// Get a member by id.
     ///
     /// Returns a `PendingMember` handle which can be awaited until a valid key bundle of the member
@@ -515,23 +465,41 @@ where
         PendingMember::new(self.clone(), id.into())
     }
 
-    /// Returns the latest valid key bundle of a member.
-    ///
-    /// Returns `None` if no key bundle of the member is known or all of them expired.
+    /// Returns the status of a key bundle of a member. It can be expired, valid or not available.
     pub async fn member_key_bundle(
         &self,
         id: impl Into<MemberId>,
-    ) -> Result<Option<LongTermKeyBundle>, ManagerError<F, C>> {
+    ) -> Result<MemberStatus<LongTermKeyBundle>, ManagerError<F, C>> {
         let key_registry_y = self.read().key_registry_state().await?;
 
         match <KeyRegistry<MemberId> as PreKeyRegistry<MemberId, LongTermKeyBundle>>::key_bundle(
             key_registry_y,
             &id.into(),
         ) {
-            Ok((_, key_bundle)) => Ok(key_bundle),
-            Err(KeyRegistryError::KeyBundlesExpired) => Ok(None),
+            Ok((_, Some(key_bundle))) => Ok(MemberStatus::Valid(key_bundle)),
+            Ok((_, None)) => Ok(MemberStatus::NotAvailable),
+            Err(KeyRegistryError::KeyBundlesExpired) => Ok(MemberStatus::Expired),
             Err(err) => Err(ManagerError::IdentityManager(err.into())),
         }
+    }
+
+    pub async fn me(&self) -> Result<MemberStatus<AuthenticatedMember>, ManagerError<F, C>> {
+        let identity = self.identity();
+        let reader = self.read();
+
+        let key_manager_y = reader.key_manager_state().await?;
+        let status = match identity.key_bundle_status(&key_manager_y)? {
+            MemberStatus::Valid(key_bundle) => {
+                let member =
+                    AuthenticatedMember::new(&self.inner.rng, &self.inner.credentials, key_bundle)
+                        .map_err(|err| ManagerError::IdentityManager(err.into()))?;
+                MemberStatus::Valid(member)
+            }
+            MemberStatus::NotAvailable => MemberStatus::NotAvailable,
+            MemberStatus::Expired => MemberStatus::Expired,
+        };
+
+        Ok(status)
     }
 
     /// Register a member with long-term key bundle material which was provided through another
@@ -572,13 +540,15 @@ where
     /// should then be published) by calling `key_bundle_message`.
     pub async fn key_bundle_expired(&self) -> Result<bool, ManagerError<F, C>> {
         let key_manager_y = self.read().key_manager_state().await?;
-        Ok(self.identity().key_bundle_expired(&key_manager_y)?)
+        let status = self.identity().key_bundle_status(&key_manager_y)?;
+        Ok(!status.is_valid())
     }
 
     /// Forge a key bundle message containing my latest key bundle.
     ///
-    /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn key_bundle_message(&self) -> Result<F::Message, ManagerError<F, C>> {
+    /// The key bundle will be rotated if the latest is reaching it's configured expiry date.
+    /// Returns `None` if key bundles are still valid and no new is message required.
+    pub async fn key_bundle_message(&self) -> Result<Option<F::Message>, ManagerError<F, C>> {
         let identity = self.identity();
 
         let tx = self.begin_write().await?;
@@ -588,8 +558,12 @@ where
         let key_manager_y = tx.key_manager_state().await?;
         let key_registry_y = tx.key_registry_state().await?;
 
-        // Keys only change when the key bundle needs to be rotated.
-        let rotated = identity.key_bundle_expired(&key_manager_y)?;
+        // Don't forge a new message if no key rotation is required.
+        let is_valid = identity.key_bundle_status(&key_manager_y)?.is_valid();
+        if is_valid {
+            tx.rollback().await?;
+            return Ok(None);
+        }
 
         // Modify.
 
@@ -605,23 +579,19 @@ where
 
         // Write.
 
-        let changes = if rotated {
-            StateChanges::PrekeyBundles {
-                key_manager_y: Some(key_manager_y),
-                key_registry_y: Some(key_registry_y),
-            }
-        } else {
-            StateChanges::default()
+        // Always commit changes, don't cause a rollback since key_bundle_message might have forged
+        // an operation we need to keep in the store.
+        let changes = StateChanges::PrekeyBundles {
+            key_manager_y: Some(key_manager_y),
+            key_registry_y: Some(key_registry_y),
         };
-
         tx.commit(changes).await?;
 
-        // Our own key bundle was registered if it got rotated.
-        if rotated && let SpacesArgs::Member(member) = message.borrow() {
+        if let SpacesArgs::Member(member) = message.borrow() {
             self.waiters().members.notify(member);
         }
 
-        Ok(message)
+        Ok(Some(message))
     }
 
     /// Return `true` if the space is missing operations from the passed groups.

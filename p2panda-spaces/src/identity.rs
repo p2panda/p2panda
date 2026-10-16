@@ -128,16 +128,24 @@ where
     }
 
     /// Returns `true` if my latest key bundle has expired or is about to expire.
-    pub fn key_bundle_expired(
+    pub fn key_bundle_status(
         &self,
         key_manager_y: &KeyManagerState,
-    ) -> Result<bool, IdentityError<F, C>> {
+    ) -> Result<MemberStatus<LongTermKeyBundle>, IdentityError<F, C>> {
         match KeyManager::prekey_bundle(key_manager_y) {
-            Ok(bundle) => Ok(bundle
-                .lifetime()
-                .verify_with_window(self.config.pre_key_rotate_after)
-                .is_err()),
-            Err(KeyManagerError::NoPreKeysAvailable) => Ok(true),
+            Ok(bundle) => {
+                let has_expired = bundle
+                    .lifetime()
+                    .verify_with_window(self.config.pre_key_rotate_after)
+                    .is_err();
+
+                if has_expired {
+                    Ok(MemberStatus::Expired)
+                } else {
+                    Ok(MemberStatus::Valid(bundle))
+                }
+            }
+            Err(KeyManagerError::NoPreKeysAvailable) => Ok(MemberStatus::NotAvailable),
             Err(err) => Err(err.into()),
         }
     }
@@ -181,6 +189,34 @@ where
         )?;
 
         Ok((key_registry_y_i, Event::Member(member.clone())))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MemberStatus<T> {
+    /// Requested key bundle is not available. Use `register_member` to manually add it or wait
+    /// until it was synced.
+    NotAvailable,
+
+    /// Requested key bundle has expired and is not valid anymore.
+    ///
+    /// If this is our own key bundle, use `key_bundle_message` to generate a new key bundle and
+    /// message to deliver it.
+    ///
+    /// If this is someone elses key bundle, use `register_member` to update it or wait until it was
+    /// synced.
+    Expired,
+
+    /// Valid key bundle.
+    Valid(T),
+}
+
+impl<T> MemberStatus<T> {
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Self::NotAvailable | Self::Expired => false,
+            Self::Valid(_) => true,
+        }
     }
 }
 
