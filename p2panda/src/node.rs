@@ -730,8 +730,16 @@ impl Node {
         self.network.network_id()
     }
 
+    /// Returns our own member handle including our latest valid key bundle.
+    ///
+    /// The key bundle is automatically published and renewed by a background task.
     pub async fn me(&self) -> Result<Member, MemberError> {
-        let inner = self.spaces_manager.me().await?;
+        let inner = self
+            .spaces_manager
+            .me()
+            .await?
+            .into_valid()
+            .ok_or(MemberError::KeyBundleUnavailable)?;
         Ok(Member { inner })
     }
 
