@@ -182,8 +182,16 @@ impl PendingMember {
 }
 
 #[derive(Debug, Error)]
-#[error(transparent)]
-pub struct MemberError(#[from] SpacesManagerError);
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
+pub enum MemberError {
+    #[error(transparent)]
+    SpacesManager(#[from] SpacesManagerError),
+
+    /// Our own key bundle is missing or expired. This should only occur if the key bundle
+    /// background task failed or did not renew our key bundle in time.
+    #[error("no valid key bundle available for this node")]
+    KeyBundleUnavailable,
+}
 
 /// Background task to automatically publish a new member message into all currently active space
 /// streams if the associated key bundle is about to expire.
@@ -268,20 +276,25 @@ async fn renew_expired_key_bundles(
     loop {
         interval.tick().await;
 
-        if !manager.key_bundle_expired().await? {
+        // Avoid acquiring a write transaction when no rotation is required.
+        if !manager.is_key_bundle_rotation_due().await? {
             ready_signal.notify_one();
             continue;
         }
 
-        let operation = manager.key_bundle_message().await?.into_operation();
+        // Rotation is checked again inside the transaction, `None` means the key bundle was
+        // already rotated in the meantime.
+        if let Some(message) = manager.rotate_key_bundle().await? {
+            let operation = message.into_operation();
 
-        debug!(
-            seq_num = operation.header.seq_num,
-            "key bundle non-existent or expired, automatically generate new one"
-        );
+            debug!(
+                seq_num = operation.header.seq_num,
+                "key bundle non-existent or about to expire, automatically generate new one"
+            );
 
-        // TODO: Handle error?
-        let _ = egress_handle.dispatch_with_config(operation, &config).await;
+            // TODO: Handle error?
+            let _ = egress_handle.dispatch_with_config(operation, &config).await;
+        }
 
         ready_signal.notify_one();
     }
@@ -441,7 +454,7 @@ mod tests {
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
 
         // 3. The key bundle exists and is valid. Calling "me" doesn't generate a new one.
-        let key_bundle = spaces_manager.me().await.unwrap();
+        let key_bundle = spaces_manager.me().await.unwrap().into_valid().unwrap();
         assert!(key_bundle.verify().is_ok());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
     }
@@ -505,7 +518,7 @@ mod tests {
         };
         assert!(member_msg.verify().is_ok());
 
-        let expected_member_msg = spaces_manager.me().await.unwrap();
+        let expected_member_msg = spaces_manager.me().await.unwrap().into_valid().unwrap();
         // Compare key-bundles since every member instance will be generated with a new signature
         // and is therefore not equal.
         assert_eq!(expected_member_msg.key_bundle(), member_msg.key_bundle());
