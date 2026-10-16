@@ -40,8 +40,8 @@ use crate::types::{
     EncryptionGroup, EncryptionGroupError, EncryptionGroupState,
 };
 use crate::utils::{
-    added_secret_members, removed_members, removed_secret_members, secret_members, sort_members,
-    typed_member, typed_members,
+    added_secret_members_diff, removed_members_diff, removed_secret_members_diff,
+    removed_space_members, secret_members, sort_members, typed_member, typed_members,
 };
 use crate::{ActorId, GroupId, MemberId, OperationId, SpaceEvent, SpaceId, StrongRemoveResolver};
 
@@ -84,7 +84,7 @@ where
     F: Forge<C>,
     C: Conditions,
 {
-    pub fn new(manager_ref: Manager<S, F, C>, id: SpaceId) -> Self {
+    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: SpaceId) -> Self {
         Self {
             manager: manager_ref,
             id,
@@ -541,7 +541,7 @@ where
                     encryption_y
                 }
                 AuthGroupAction::Add { .. } | AuthGroupAction::Promote { .. } => {
-                    let all_added = added_secret_members(current_members, next_members);
+                    let all_added = added_secret_members_diff(current_members, next_members);
 
                     if all_added.is_empty() {
                         return Ok((encryption_y, vec![]));
@@ -556,7 +556,7 @@ where
                     encryption_y
                 }
                 AuthGroupAction::Remove { .. } | AuthGroupAction::Demote { .. } => {
-                    let all_removed = removed_secret_members(current_members, next_members);
+                    let all_removed = removed_secret_members_diff(current_members, next_members);
 
                     if all_removed.is_empty() {
                         return Ok((encryption_y, vec![]));
@@ -802,16 +802,7 @@ where
 
     /// Returns all members who were removed from, and not re-admitted to, this space.
     pub async fn removed(&self) -> Result<Vec<MemberId>, SpaceError<F, C>> {
-        let y = self.state().await?;
-        let members = y.groups_y.members(y.group_id);
-        let removed = y
-            .removed
-            .iter()
-            // Filter out historically removed members which are now current members (they were
-            // re-added).
-            .filter(|removed| !members.iter().any(|(member, _)| member == *removed))
-            .cloned();
-        Ok(removed.collect())
+        Ok(removed_space_members(&self.state().await?))
     }
 
     /// All actors (both groups and individuals) in the space.
@@ -980,7 +971,7 @@ fn update_removed<C: Conditions>(
             // account for re-adds the current membership of the group can be compared against
             // the remove list.
             removed.extend(
-                removed_members(current_members, &context.members)
+                removed_members_diff(current_members, &context.members)
                     .into_iter()
                     .map(|(member, _)| member),
             );

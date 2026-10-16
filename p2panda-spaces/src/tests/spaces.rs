@@ -2433,3 +2433,40 @@ async fn concurrent_adds() {
     assert!(members.contains(&bob_id), "bob's add was lost");
     assert!(members.contains(&claire_id), "claire's add was lost");
 }
+
+#[tokio::test]
+async fn removed_space_members() {
+    let alice = TestPeer::new(0).await;
+    let bob = TestPeer::new(1).await;
+
+    alice
+        .manager
+        .register_member(&bob.manager.me().await.unwrap())
+        .await
+        .unwrap();
+
+    // Unknown space has no removed members.
+    let space_id = SpaceId::digest(b"test space");
+    assert!(
+        alice
+            .manager
+            .removed_space_members(space_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // Alice creates a space with Bob and removes them again.
+    let (space, _) = alice
+        .manager
+        .create_space(space_id, &[(bob.manager.id(), Access::read())])
+        .await
+        .unwrap();
+    space.remove(bob.manager.id()).await.unwrap();
+
+    assert_eq!(
+        alice.manager.removed_space_members(space_id).await.unwrap(),
+        vec![bob.manager.id()]
+    );
+    assert_eq!(space.removed().await.unwrap(), vec![bob.manager.id()]);
+}
