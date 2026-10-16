@@ -58,6 +58,7 @@ Highlights are marked with a pancake 🥞
 - node: Groups hook for associating group logs with topic [#1487](https://github.com/p2panda/p2panda/pull/1487)
 - node: Debouncer w/ throttle for repair task [#1499](https://github.com/p2panda/p2panda/pull/1499)
 - node: Return `PendingSpace` to account for situations where it doesn't exist yet [#1529](https://github.com/p2panda/p2panda/pull/1529)
+- node: Await created, joined group events with `PendingGroup` [#1530](https://github.com/p2panda/p2panda/pull/1530)
 
 ### Changed
 
