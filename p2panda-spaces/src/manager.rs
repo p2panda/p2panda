@@ -9,6 +9,9 @@ use p2panda_auth::Access;
 use p2panda_auth::traits::{Conditions, Operation};
 use p2panda_core::traits::{Digest, Provenance, ShortFormat};
 use p2panda_core::{Hash, SigningKey, VerifyingKey};
+use p2panda_encryption::key_bundle::LongTermKeyBundle;
+use p2panda_encryption::key_registry::{KeyRegistry, KeyRegistryError};
+use p2panda_encryption::traits::PreKeyRegistry;
 use p2panda_encryption::{Rng, RngError};
 use p2panda_store::Transaction;
 use p2panda_store::groups::GroupsStore;
@@ -22,7 +25,7 @@ use crate::event::Event;
 use crate::forge::Forge;
 use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::{IdentityError, IdentityManager};
-use crate::member::Member;
+use crate::member::AuthenticatedMember;
 use crate::message::{AuthMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
 use crate::space::RepairOutput;
 use crate::space::{Space, SpaceError, SpaceOutput};
@@ -31,7 +34,10 @@ use crate::store::{
 };
 use crate::utils::{is_member, is_secret_member, removed_space_members};
 use crate::waiters::EventWaiters;
-use crate::{ActorId, Config, Credentials, GroupId, MemberId, PendingGroup, PendingSpace, SpaceId};
+use crate::{
+    ActorId, Config, Credentials, GroupId, MemberId, PendingGroup, PendingMember, PendingSpace,
+    SpaceId,
+};
 
 /// API for creating and managing groups and spaces.
 ///
@@ -454,7 +460,7 @@ where
     /// The local actor id and their long-term key bundle.
     ///
     /// Note: Key bundle will be rotated if the latest is reaching it's configured expiry date.
-    pub async fn me(&self) -> Result<Member, ManagerError<F, C>> {
+    pub async fn me(&self) -> Result<AuthenticatedMember, ManagerError<F, C>> {
         let identity = self.identity();
 
         // Most of the time no rotation is required, we can avoid acquiring a transaction then.
@@ -501,9 +507,39 @@ where
         Ok(member)
     }
 
+    /// Get a member by id.
+    ///
+    /// Returns a `PendingMember` handle which can be awaited until a valid key bundle of the member
+    /// was registered. Use `member_key_bundle` to check this without waiting.
+    pub fn member(&self, id: impl Into<MemberId>) -> PendingMember<S, F, C> {
+        PendingMember::new(self.clone(), id.into())
+    }
+
+    /// Returns the latest valid key bundle of a member.
+    ///
+    /// Returns `None` if no key bundle of the member is known or all of them expired.
+    pub async fn member_key_bundle(
+        &self,
+        id: impl Into<MemberId>,
+    ) -> Result<Option<LongTermKeyBundle>, ManagerError<F, C>> {
+        let key_registry_y = self.read().key_registry_state().await?;
+
+        match <KeyRegistry<MemberId> as PreKeyRegistry<MemberId, LongTermKeyBundle>>::key_bundle(
+            key_registry_y,
+            &id.into(),
+        ) {
+            Ok((_, key_bundle)) => Ok(key_bundle),
+            Err(KeyRegistryError::KeyBundlesExpired) => Ok(None),
+            Err(err) => Err(ManagerError::IdentityManager(err.into())),
+        }
+    }
+
     /// Register a member with long-term key bundle material which was provided through another
     /// channel (QR code scan etc.).
-    pub async fn register_member(&self, member: &Member) -> Result<(), ManagerError<F, C>> {
+    pub async fn register_member(
+        &self,
+        member: &AuthenticatedMember,
+    ) -> Result<(), ManagerError<F, C>> {
         let tx = self.begin_write().await?;
 
         // Read.

@@ -59,6 +59,7 @@ Highlights are marked with a pancake 🥞
 - node: Debouncer w/ throttle for repair task [#1499](https://github.com/p2panda/p2panda/pull/1499)
 - node: Return `PendingSpace` to account for situations where it doesn't exist yet [#1529](https://github.com/p2panda/p2panda/pull/1529)
 - node: Await created, joined group events with `PendingGroup` [#1530](https://github.com/p2panda/p2panda/pull/1530)
+- node: Await registration of member key bundles with `PendingMember` [#1531](https://github.com/p2panda/p2panda/pull/1531)
 
 ### Changed
 

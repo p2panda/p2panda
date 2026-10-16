@@ -17,7 +17,7 @@ use crate::{Credentials, MemberId};
 /// Through this we assure that the associated key bundle belongs to the verifying key as well.
 /// Additional checks are performed against the key bundle's pre-key and it's lifetime.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Member {
+pub struct AuthenticatedMember {
     /// Verifying key of this space member, used as an identifier.
     id: MemberId,
 
@@ -48,7 +48,7 @@ pub struct Member {
     cross_signature_2: Signature,
 }
 
-impl Member {
+impl AuthenticatedMember {
     pub(crate) fn new(
         rng: &Rng,
         credentials: &Credentials,
@@ -139,7 +139,7 @@ mod tests {
 
     use crate::Credentials;
 
-    use super::Member;
+    use super::AuthenticatedMember;
 
     #[test]
     fn verify_integrity() {
@@ -160,7 +160,7 @@ mod tests {
             )
         };
 
-        let member = Member::new(&rng, &credentials, key_bundle).unwrap();
+        let member = AuthenticatedMember::new(&rng, &credentials, key_bundle).unwrap();
         assert!(member.verify().is_ok());
 
         // Member id / verifying key is not matching signatures.
@@ -191,12 +191,12 @@ mod tests {
             )
         };
 
-        let member_1 = Member::new(&rng, &credentials, key_bundle_1.clone()).unwrap();
+        let member_1 = AuthenticatedMember::new(&rng, &credentials, key_bundle_1.clone()).unwrap();
         assert!(member_1.verify().is_ok());
 
         // Re-signing of the same key bundle using same credentials is okay, but will lead to
         // different signature (XEdDSA uses a random entropy source).
-        let member_2 = Member::new(&rng, &credentials, key_bundle_1).unwrap();
+        let member_2 = AuthenticatedMember::new(&rng, &credentials, key_bundle_1).unwrap();
         assert!(member_2.verify().is_ok());
         assert_ne!(member_1, member_2);
 
@@ -215,7 +215,7 @@ mod tests {
             )
         };
 
-        let member_3 = Member {
+        let member_3 = AuthenticatedMember {
             id: member_1.id,
             key_bundle: key_bundle_2.clone(), // <--
             cross_signature_1: member_1.cross_signature_1,
