@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::egress::{EgressError, EgressHandle, SubmitError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{
-    AuthCapabilities, InnerGroup, InnerGroupError, NoBody, SpacesManagerError,
+    AuthCapabilities, InnerGroup, InnerGroupError, InnerPendingGroup, NoBody, SpacesManagerError,
 };
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
@@ -40,6 +40,80 @@ pub(crate) fn group_stream(
         },
         GroupSubscription { rx },
     )
+}
+
+/// Wraps topic stream and returns the pub/sub pair of a group which might not be created or
+/// joined yet.
+pub(crate) fn pending_group_stream(
+    inner: InnerPendingGroup,
+    store: SqliteStore,
+    egress_handle: EgressHandle,
+    repair_task: RepairTask,
+    tx: StreamPublisher<NoBody>,
+    rx: StreamSubscription<NoBody>,
+) -> (PendingGroup, GroupSubscription) {
+    (
+        PendingGroup {
+            inner,
+            store,
+            egress_handle,
+            repair_task,
+            tx,
+        },
+        GroupSubscription { rx },
+    )
+}
+
+/// Handle to a subscribed group which might not be created or joined yet.
+///
+/// Use `created` to wait until the group is known, for example to add it to a space, or `joined` to
+/// wait until we've been added to the group.
+#[derive(Debug)]
+pub struct PendingGroup {
+    inner: InnerPendingGroup,
+    store: SqliteStore,
+    egress_handle: EgressHandle,
+    repair_task: RepairTask,
+    tx: StreamPublisher<NoBody>,
+}
+
+static_assertions::assert_impl_all!(PendingGroup: Send, Sync);
+
+impl PendingGroup {
+    pub fn id(&self) -> ActorId {
+        self.inner.id()
+    }
+
+    /// Wait until the group is known to us.
+    ///
+    /// Resolves even if we are not a member of the group.
+    pub async fn created(self) -> Result<Group, SpacesManagerError> {
+        let inner = self.inner.created().await?;
+        Ok(Group {
+            inner,
+            store: self.store,
+            egress_handle: self.egress_handle,
+            repair_task: self.repair_task,
+            tx: self.tx,
+        })
+    }
+
+    /// Wait until we have joined the group with any access level.
+    pub async fn joined(self) -> Result<Group, SpacesManagerError> {
+        let inner = self.inner.joined().await?;
+        Ok(Group {
+            inner,
+            store: self.store,
+            egress_handle: self.egress_handle,
+            repair_task: self.repair_task,
+            tx: self.tx,
+        })
+    }
+
+    /// Gracefully close the group and any associated sync sessions.
+    pub async fn close(self) -> Result<(), CloseError> {
+        self.tx.close().await
+    }
 }
 
 #[derive(Debug)]

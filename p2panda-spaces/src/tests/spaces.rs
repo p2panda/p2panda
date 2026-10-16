@@ -1165,7 +1165,7 @@ async fn receive_auth_messages() {
     let _events = bob_manager.process(&message_01).await.unwrap();
     let _events = bob_manager.process(&message_02).await.unwrap();
 
-    let group = bob_manager.group(group_id).await.unwrap().unwrap();
+    let group = bob_manager.group(group_id).created().await.unwrap();
     let members = group.members().await.unwrap();
     assert_eq!(
         members,
@@ -1602,7 +1602,7 @@ async fn repair_space() {
 
     bob.persist_operation(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
-    let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
+    let group = bob_manager.group(member_group_id).created().await.unwrap();
     let bob_message_01 = group.add(claire_id, Access::read()).await.unwrap().message;
     drop(group);
 
@@ -1721,7 +1721,7 @@ async fn duplicate_auth_state_references() {
     bob.persist_operation(&message_01).await.unwrap();
     bob_manager.process(&message_01).await.unwrap();
 
-    let group = bob_manager.group(member_group_id).await.unwrap().unwrap();
+    let group = bob_manager.group(member_group_id).created().await.unwrap();
     let bob_message_01 = group.add(claire_id, Access::read()).await.unwrap().message;
     drop(group);
 

@@ -37,6 +37,11 @@ pub(crate) fn sort_members<ID: Ord, C>(members: &mut [(ID, Access<C>)]) {
     members.sort_by(|(actor_a, _), (actor_b, _)| actor_a.cmp(actor_b));
 }
 
+/// Returns `true` if the given member is part of the members, with any access level.
+pub(crate) fn is_member<C>(members: &[(ActorId, Access<C>)], member: ActorId) -> bool {
+    members.iter().any(|(id, _)| *id == member)
+}
+
 /// Returns `true` if the given member has more than pull access, meaning they can read and decrypt
 /// messages.
 pub(crate) fn is_secret_member<C>(members: &[(ActorId, Access<C>)], member: ActorId) -> bool {

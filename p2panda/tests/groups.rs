@@ -320,12 +320,10 @@ mod groups_api_validation {
     use std::assert_matches;
 
     use p2panda::spaces::{AddGroupMemberError, RemoveGroupMemberError};
-    use p2panda::streams::StreamEvent;
     use p2panda::{SigningKey, Topic};
     use p2panda_auth::AccessLevel;
     use p2panda_auth::validation::{AddMemberError, RemoveMemberError};
     use p2panda_core::test_utils::setup_logging;
-    use tokio_stream::StreamExt;
 
     use super::spawn_node;
 
@@ -369,25 +367,13 @@ mod groups_api_validation {
             }
         );
 
-        // Lion subscribes and receives the group event.
-        let (lion_group, mut lion_group_rx) = lion.group(panda_group.id()).await.unwrap();
-        loop {
-            if let Some(StreamEvent::Group { group_id, .. }) = lion_group_rx.next().await {
-                if group_id == panda_group.id() {
-                    break;
-                }
-            };
-        }
+        // Lion subscribes and receives the group.
+        let (lion_group, _lion_group_rx) = lion.group(panda_group.id()).await.unwrap();
+        let lion_group = lion_group.created().await.unwrap();
 
-        // TigerS subscribes and receives the group event.
-        let (tiger_group, mut tiger_group_rx) = tiger.group(panda_group.id()).await.unwrap();
-        loop {
-            if let Some(StreamEvent::Group { group_id, .. }) = tiger_group_rx.next().await {
-                if group_id == panda_group.id() {
-                    break;
-                }
-            };
-        }
+        // Tiger subscribes and receives the group.
+        let (tiger_group, _tiger_group_rx) = tiger.group(panda_group.id()).await.unwrap();
+        let tiger_group = tiger_group.created().await.unwrap();
 
         // Tiger isn't a recognized group actor.
         let result = tiger_group.add(tiger.id(), AccessLevel::Write).await;
