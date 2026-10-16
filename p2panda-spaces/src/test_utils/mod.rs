@@ -9,10 +9,11 @@ use p2panda_store::operations::OperationStore;
 use p2panda_store::spaces::SqliteSpacesStore;
 use p2panda_store::{SqliteError, SqliteStore, tx_unwrap};
 
-use crate::manager::Manager;
+use crate::manager::{Manager, ManagerError};
+use crate::member::AuthenticatedMember;
 use crate::space::SpaceError;
 use crate::test_utils::forge::DEFAULT_LOG_ID;
-use crate::{Config, Credentials, SpacesArgs};
+use crate::{Config, Credentials, MemberStatus, SpacesArgs};
 
 pub use forge::TestForge;
 
@@ -75,6 +76,20 @@ impl TestPeer {
             manager,
             credentials,
             store,
+        }
+    }
+
+    pub async fn me(&self) -> Result<AuthenticatedMember, ManagerError<TestForge, TestConditions>> {
+        // If our key bundle has expired or is not available yet, generate (new) one.
+        if self.manager.is_key_bundle_rotation_due().await? {
+            self.manager.rotate_key_bundle().await?;
+        }
+
+        match self.manager.me().await? {
+            MemberStatus::NotAvailable | MemberStatus::Expired => {
+                unreachable!("at this point we know there's a valid key bundle");
+            }
+            MemberStatus::Healthy(member) | MemberStatus::RotationDue(member) => Ok(member),
         }
     }
 
