@@ -569,8 +569,8 @@ mod spaces_repair_task {
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         // Penguin and Penguin (mobile) subscribe to the space and send their key-bundles.
-        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
-        let (penguin_mobile_space, _penguin_mobile_rx) =
+        let (penguin_space, penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let (penguin_mobile_space, penguin_mobile_rx) =
             penguin_mobile.space::<SecretData>(topic).await.unwrap();
 
         // Panda receives both penguins key bundles.
@@ -586,7 +586,9 @@ mod spaces_repair_task {
 
         // Penguin and Penguin (laptop) now unsubscribe from the space for the rest of the test.
         penguin_space.close().await.unwrap();
+        drop(penguin_rx);
         penguin_mobile_space.close().await.unwrap();
+        drop(penguin_mobile_rx);
 
         // Penguin creates a group but does not subscribing to the space yet.
         let (penguin_group, _) = penguin
@@ -616,6 +618,7 @@ mod spaces_repair_task {
 
         // Panda unsubscribes from the group, they won't receive any further group operations.
         penguin_group_on_panda.close().await.unwrap();
+        drop(penguin_group_on_panda_rx);
 
         // Panda adds penguin group to the space.
         panda_space
@@ -686,8 +689,8 @@ mod spaces_repair_task {
         let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         // Penguin and Penguin (mobile) subscribe to the space and send their key-bundles.
-        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
-        let (penguin_mobile_space, _penguin_mobile_rx) =
+        let (penguin_space, penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let (penguin_mobile_space, penguin_mobile_rx) =
             penguin_mobile.space::<SecretData>(topic).await.unwrap();
 
         // Panda receives both penguins key bundles.
@@ -703,7 +706,9 @@ mod spaces_repair_task {
 
         // Penguin and Penguin (laptop) now unsubscribe from the space for the rest of the test.
         penguin_space.close().await.unwrap();
+        drop(penguin_rx);
         penguin_mobile_space.close().await.unwrap();
+        drop(penguin_mobile_rx);
 
         // Penguin creates a group but does not subscribing to the space yet.
         let (penguin_group, _) = penguin
@@ -1030,6 +1035,7 @@ mod filtered_messages {
 
         // Penguin unsubscribes from the space.
         penguin_space.close().await.unwrap();
+        drop(penguin_rx);
 
         // Panda removes Penguin.
         panda_space
@@ -1039,6 +1045,7 @@ mod filtered_messages {
 
         // Panda unsubscribes.
         panda_space.close().await.unwrap();
+        drop(panda_rx);
 
         // Penguin subscribes to the space again and immediately publishes a new message, before
         // they received panda's remove message.
@@ -1346,6 +1353,7 @@ mod sync_authorisation {
 
         // Penguin unsubscribes from the space.
         penguin_space.close().await.unwrap();
+        drop(penguin_rx);
 
         // Panda removes Penguin.
         panda_space
@@ -1353,7 +1361,7 @@ mod sync_authorisation {
             .await
             .expect("panda removes penguin");
 
-        let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
+        let (penguin_space, penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         while let Some(event) = panda_system_rx.next().await {
             let SystemEvent::SyncAuthoriser(SyncBlockListEvent::Blocked {
@@ -1370,6 +1378,7 @@ mod sync_authorisation {
         }
 
         penguin_space.close().await.unwrap();
+        drop(penguin_rx);
 
         // Panda adds Penguin again.
         panda_space
@@ -1591,6 +1600,7 @@ mod spaces_groups_membership {
         }
 
         bob_space.close().await.unwrap();
+        drop(bob_rx);
 
         // Claire subscribes to the space.
         let (_claire_space, mut claire_rx) = claire.space::<SecretData>(topic).await.unwrap();

@@ -23,10 +23,9 @@ use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::egress::EgressDestination;
+use crate::egress::{DeliverFromEgress, ProcessFromEgress};
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
@@ -110,6 +109,8 @@ pub(crate) async fn processed_stream<M>(
     pipeline: Pipeline,
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
+    mut egress_processing_rx: ProcessFromEgress,
+    mut egress_delivery_rx: DeliverFromEgress,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
@@ -148,13 +149,6 @@ where
     // Set of currently active external streams.
     let mut external_stream = ExternalStream::default();
 
-    // Channel for receiving messages from the egress.
-    //
-    // TODO: This should be two channels for different parts of the stack, one should go into the
-    // event delivery layer (sync handle), another into the ingress ("import local").
-    let (import_local_tx, mut import_local_rx) =
-        mpsc::channel::<(EgressDestination, oneshot::Sender<()>)>(IMPORT_BUFFER_SIZE);
-
     // Determine from which point on we re-play locally stored operations.
     //
     // TODO: Move replay logic into own place and make it part of ingress.
@@ -167,22 +161,12 @@ where
     // stream"), this channel should be used.
     let (to_output_tx, mut to_output_rx) = mpsc::channel::<Vec<ForwardEvent<M>>>(128);
 
-    // Create a cancellation token which is used to break out of the input and output event
-    // processing tasks once all instances of the `StreamPublisher` and `StreamSubscription` have
-    // been dropped.
-    //
-    // The spawn repair task doesn't require a cancellation token; it is aborted via the handle
-    // during the wind-down of the input event task.
-    let cancellation_token = CancellationToken::new();
-
     // Spawn first task which receives processed "output events" from the processing pipeline, the
     // result is handled (acking, decoding, conversion to `StreamEvent`, etc.) and then finally
     // forwarded to the application layer.
-    {
+    let out_task = {
         let pipeline = pipeline.clone();
         let acked = acked.clone();
-
-        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             loop {
@@ -215,13 +199,6 @@ where
                     Some(forward_events) = to_output_rx.recv() => {
                         forward_events
                     }
-
-                    // Break out of the loop, thereby ending the task, when both the
-                    // `StreamPublisher` and `StreamSubscription` have been dropped.
-                    _ = cancellation_token_child.cancelled() => {
-                        debug!(topic = %topic.to_hex(), "aborting output event processing task");
-                        break
-                    }
                 };
 
                 // Send processing result to application layer.
@@ -239,20 +216,18 @@ where
                     }
                 }
             }
-        });
-    }
+        })
+    };
 
     // Spawn second task which assembles different sources of incoming operations (replays, external
     // streams, sync session, locally published, etc.) and inputs them into the processing pipeline.
     //
     // Here we only forward "system events" to the output stream, such as "sync started" or
     // "external stream import finished", etc.
-    {
+    let in_task = {
         let store = store.clone();
         let sync_handle = sync_handle.clone();
         let to_output_tx = to_output_tx.clone();
-
-        let cancellation_token_child = cancellation_token.child_token();
 
         tokio::spawn(async move {
             // =======================
@@ -412,51 +387,43 @@ where
                         }
                     },
 
-                    // Receive the next ready event from any imported local source.
-                    Some((input, signal_tx)) = import_local_rx.recv() => {
-                        match input {
-                            EgressDestination::Delivery(operation) => {
-                                let operation_id = operation.hash();
-                                if sync_handle.publish(operation).is_err() {
-                                    warn!(
-                                        %operation_id,
-                                        "failed sending operation on sync handle"
-                                    )
-                                }
-
-                                let _ = signal_tx.send(());
-
-                                continue;
-                            }
-                            EgressDestination::Processing(event) => {
-                                pipeline.process(event).await;
-                                let _ = signal_tx.send(());
-                                continue;
-                            },
+                    // Receive the next event from egress for delivery.
+                    //
+                    // TODO: Move this out of this module.
+                    Some((operation, signal_tx)) = egress_delivery_rx.next() => {
+                        let operation_id = operation.hash();
+                        if sync_handle.publish(operation).is_err() {
+                            warn!(
+                                %operation_id,
+                                "failed sending operation on sync handle"
+                            )
                         }
-                    },
 
-                    // Break out of the loop, thereby ending the task, when both the
-                    // `StreamPublisher` and `StreamSubscription` have been dropped.
-                    _ = cancellation_token_child.cancelled() => {
-                        debug!(topic = %topic.to_hex(), "aborting input event processing task");
-                        break
+                        let _ = signal_tx.send(());
+
+                        continue;
                     }
+
+                    // Receive the next event from egress for processing.
+                    Some((event, signal_tx)) = egress_processing_rx.next() => {
+                        let result = pipeline.process(event).await;
+                        let _ = signal_tx.send(result);
+                        continue;
+                    },
                 };
 
                 let _ = to_output_tx.send(forward_events).await;
             }
-        });
-    }
+        })
+    };
 
-    let drop_guard = StreamDropGuard::new(topic, cancellation_token.clone());
+    let drop_guard = StreamDropGuard::new(vec![out_task, in_task]);
     let tx = StreamPublisher::new(
         topic,
         forge,
         sync_handle,
         publish_tx,
         import_external_tx,
-        import_local_tx,
         drop_guard.clone(),
     );
     let rx = StreamSubscription::new(topic, store, acked, ReceiverStream::new(app_rx), drop_guard);
