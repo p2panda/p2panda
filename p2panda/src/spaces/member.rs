@@ -59,7 +59,9 @@ use tracing::{debug, error};
 use crate::egress::{DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
 use crate::spaces::Group;
 use crate::spaces::forge::member_log_id;
-use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesManager, SpacesManagerError};
+use crate::spaces::types::{
+    AuthCapabilities, InnerMember, InnerPendingMember, SpacesManager, SpacesManagerError,
+};
 use crate::streams::Event;
 
 #[derive(Debug)]
@@ -92,8 +94,8 @@ impl From<Member> for ActorId {
     }
 }
 
-impl From<Member> for p2panda_spaces::member::Member {
-    fn from(value: Member) -> p2panda_spaces::member::Member {
+impl From<Member> for p2panda_spaces::member::AuthenticatedMember {
+    fn from(value: Member) -> p2panda_spaces::member::AuthenticatedMember {
         value.inner
     }
 }
@@ -153,6 +155,29 @@ impl From<Group> for GroupActor {
 impl From<GroupActor> for ActorId {
     fn from(value: GroupActor) -> Self {
         value.id
+    }
+}
+
+/// Handle to a member whose key bundle might not be known yet.
+#[derive(Debug)]
+pub struct PendingMember {
+    pub(crate) inner: InnerPendingMember,
+}
+
+static_assertions::assert_impl_all!(PendingMember: Send, Sync);
+
+impl PendingMember {
+    pub fn id(&self) -> ActorId {
+        self.inner.id()
+    }
+
+    /// Wait until a valid key bundle of the member was received and return it.
+    ///
+    /// Key bundles arrive through any subscribed space the member is publishing into, or when
+    /// registering the member manually. If all known key bundles of the member expired, this waits
+    /// for a new one.
+    pub async fn registered(self) -> Result<LongTermKeyBundle, MemberError> {
+        Ok(self.inner.registered().await?)
     }
 }
 

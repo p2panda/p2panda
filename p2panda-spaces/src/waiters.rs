@@ -9,12 +9,12 @@ use std::task::{Context, Poll};
 use tokio::sync::oneshot;
 
 use crate::event::{Event, GroupEvent, SpaceEvent};
-use crate::member::Member;
+use crate::member::AuthenticatedMember;
 
 /// Registered handles awaiting a specific event to arrive for a member, group or space.
 #[derive(Debug)]
 pub(crate) struct EventWaiters<C> {
-    pub members: WaitEntries<Member>,
+    pub members: WaitEntries<AuthenticatedMember>,
     pub groups: WaitEntries<GroupEvent<C>>,
     pub spaces: WaitEntries<SpaceEvent<C>>,
 }

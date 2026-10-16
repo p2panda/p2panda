@@ -28,10 +28,10 @@ use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberAssociationHook,
-    MemberError, PendingGroup, PendingSpace, Space, SpaceEgressError, SpaceSubscription,
-    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream, is_group,
-    member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager, spaces_stream,
-    to_initial_members,
+    MemberError, PendingGroup, PendingMember, PendingSpace, Space, SpaceEgressError,
+    SpaceSubscription, SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream,
+    is_group, member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager,
+    spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -461,8 +461,18 @@ impl Node {
         std::mem::replace(&mut *current, resubscribed)
     }
 
+    /// Get a member by id.
+    ///
+    /// Returns a `PendingMember` handle which can be awaited until a valid key bundle of the
+    /// member was received.
+    pub fn member(&self, member_id: impl Into<ActorId>) -> PendingMember {
+        PendingMember {
+            inner: self.spaces_manager.member(member_id),
+        }
+    }
+
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
-        let member: p2panda_spaces::member::Member = member.into();
+        let member: p2panda_spaces::member::AuthenticatedMember = member.into();
         self.spaces_manager.register_member(&member).await?;
 
         Ok(())

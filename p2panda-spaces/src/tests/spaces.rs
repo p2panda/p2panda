@@ -18,7 +18,7 @@ use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle, PreKey};
 use crate::SpaceId;
 use crate::event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 use crate::manager::ManagerError;
-use crate::member::Member;
+use crate::member::AuthenticatedMember;
 use crate::message::SpacesArgs;
 use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::test_utils::{TestPeer, TestSpaceError};
@@ -1829,7 +1829,7 @@ async fn add_expired_member_to_group() {
             signature,
         );
 
-        Member::new(&rng, &bob.credentials, bundle).unwrap()
+        AuthenticatedMember::new(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
@@ -1882,7 +1882,7 @@ async fn process_operation_from_expired_member() {
             signature,
         );
 
-        Member::new(&rng, &bob.credentials, bundle).unwrap()
+        AuthenticatedMember::new(&rng, &bob.credentials, bundle).unwrap()
     };
 
     // Alice adds Bob's key bundle. At this point it is still valid.
