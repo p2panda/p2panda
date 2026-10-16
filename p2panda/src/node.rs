@@ -26,12 +26,12 @@ use crate::forge::{Forge, OperationForge};
 use crate::hooks::{GroupsHook, RepairHook};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
-use crate::spaces::types::{InnerSpace, NoBody, SpacesManager, SpacesManagerError};
+use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberAssociationHook,
-    MemberError, Space, SpaceEgressError, SpaceSubscription, SyncAuthoriserHook, actor_to_topic,
-    dispatch_spaces_events, group_stream, is_group, member_log_id, spaces_manager, spaces_stream,
-    to_initial_members,
+    MemberError, PendingSpace, Space, SpaceEgressError, SpaceSubscription, SyncAuthoriserHook,
+    actor_to_topic, dispatch_spaces_events, group_stream, is_group, member_log_id,
+    pending_spaces_stream, spaces_manager, spaces_stream, to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -587,7 +587,7 @@ impl Node {
     pub async fn space<M>(
         &self,
         space_id: impl Into<SpaceId>,
-    ) -> Result<(Space<M>, SpaceSubscription<M>), SubscribeSpaceError>
+    ) -> Result<(PendingSpace<M>, SpaceSubscription<M>), SubscribeSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -598,7 +598,7 @@ impl Node {
         &self,
         space_id: impl Into<SpaceId>,
         from: StreamFrom,
-    ) -> Result<(Space<M>, SpaceSubscription<M>), SubscribeSpaceError>
+    ) -> Result<(PendingSpace<M>, SpaceSubscription<M>), SubscribeSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
@@ -611,22 +611,15 @@ impl Node {
                 .await?;
         });
 
-        let inner = self
-            .spaces_manager
-            .space(space_id)
-            .await?
-            // TODO: even if there is no space yet we allow the user to subscribe and get a handle
-            // to the as-yet-non-existent space. In the current API if they tried to use the space
-            // API _before_ the space is instantiated then an error would occur. We maybe want to
-            // consider how we communicate to the user that they are subscribed to the space topic
-            // but only to announce their key bundles and await receiving control messages.
-            .unwrap_or(InnerSpace::new(self.spaces_manager.clone(), space_id));
+        // Even if there is no space yet we allow the user to subscribe, this is required to
+        // announce our key bundles and receive the control messages bringing us into the space. The
+        // returned handle can be awaited until we've joined.
+        let inner = self.spaces_manager.space(space_id);
 
         // Populate the connection authoriser block-list based on members who were removed from, and
-        // not later re-admitted to, the space. It is possible this is the first time subscribing to
-        // the space in which case there is no state to query yet. For this reason we ignore errors
-        // and fallback to a default empty vec.
-        let removed = inner.removed().await.ok().unwrap_or_default();
+        // not later re-admitted to, the space. This is empty if we're subscribing for the first time
+        // and the space is not known yet.
+        let removed = self.spaces_manager.removed_space_members(space_id).await?;
         for node in removed {
             self.sync_block_list
                 .block_topic(node, space_id.into())
@@ -640,7 +633,7 @@ impl Node {
         // Trigger repair so that any missing operations can be incorporated into the space.
         self.repair_task.repair_all().await?;
 
-        Ok(spaces_stream::<M>(
+        Ok(pending_spaces_stream::<M>(
             inner,
             self.store.clone(),
             egress_handle,

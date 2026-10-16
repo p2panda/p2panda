@@ -44,3 +44,6 @@ pub type InnerGroup =
 
 pub type InnerSpace =
     p2panda_spaces::space::Space<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;
+
+pub type InnerPendingSpace =
+    p2panda_spaces::PendingSpace<SqliteSpacesStore<Extensions>, OperationForge, AuthCapabilities>;

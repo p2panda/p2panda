@@ -379,9 +379,12 @@ async fn repair_space(
     space_id: SpaceId,
     include: Option<GroupId>,
 ) -> Result<(), RepairError> {
-    let Some(space) = manager.space(space_id).await? else {
+    // Only members with read access or higher can repair spaces.
+    if !manager.has_joined_space(space_id).await? {
         return Ok(());
-    };
+    }
+
+    let space = manager.space(space_id).created().await?;
 
     // We sync both the space group itself and the optional "other" group.
     let mut group_ids = vec![space.group_id().await?];
