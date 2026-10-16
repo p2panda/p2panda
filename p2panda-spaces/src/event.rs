@@ -11,7 +11,8 @@ use crate::member::Member;
 use crate::message::{AuthMessage, SpaceMembershipMessage};
 use crate::types::{AuthGroupAction, AuthGroupState, EncryptionGroupOutput};
 use crate::utils::{
-    added_members, demoted_members, promoted_members, removed_members, sort_members,
+    added_members_diff, demoted_members_diff, promoted_members_diff, removed_members_diff,
+    sort_members,
 };
 use crate::{ActorId, GroupId, MemberId, SpaceId};
 
@@ -420,7 +421,7 @@ where
             groups_context,
         },
         AuthGroupAction::Add { .. } => {
-            let added = added_members(previous_members, next_members);
+            let added = added_members_diff(previous_members, next_members);
             SpaceEvent::Added {
                 space_id,
                 added,
@@ -429,7 +430,7 @@ where
             }
         }
         AuthGroupAction::Remove { .. } => {
-            let removed = removed_members(previous_members, next_members);
+            let removed = removed_members_diff(previous_members, next_members);
             SpaceEvent::Removed {
                 space_id,
                 removed,
@@ -438,7 +439,7 @@ where
             }
         }
         AuthGroupAction::Promote { .. } => {
-            let promoted = promoted_members(previous_members, next_members);
+            let promoted = promoted_members_diff(previous_members, next_members);
             SpaceEvent::Promoted {
                 space_id,
                 promoted,
@@ -447,7 +448,7 @@ where
             }
         }
         AuthGroupAction::Demote { .. } => {
-            let demoted = demoted_members(previous_members, next_members);
+            let demoted = demoted_members_diff(previous_members, next_members);
             SpaceEvent::Demoted {
                 space_id,
                 demoted,
