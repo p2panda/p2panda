@@ -36,7 +36,7 @@ pub use credentials::Credentials;
 pub use event::{Event, GroupActor, GroupContext, GroupEvent, SpaceContext, SpaceEvent};
 pub use forge::Forge;
 pub use message::{AuthMessage, SpacesArgs, SpacesMessage};
-pub use pending::PendingSpace;
+pub use pending::{PendingGroup, PendingSpace};
 pub use store::SpacesStoreState;
 pub use types::{AuthGroupState, StrongRemoveResolver};
 

@@ -8,11 +8,12 @@ use p2panda_store::key_registry::KeyRegistryStore;
 use p2panda_store::key_secrets::PreKeyBundlesStore;
 use p2panda_store::spaces::{SpacesMessageStore, SpacesStore};
 
-use crate::event::SpaceEvent;
+use crate::event::{GroupEvent, SpaceEvent};
+use crate::group::Group;
 use crate::manager::{Manager, ManagerError};
 use crate::space::Space;
-use crate::utils::is_secret_member;
-use crate::{AuthMessage, Forge, SpaceId, SpacesStoreState};
+use crate::utils::{is_member, is_secret_member};
+use crate::{AuthMessage, Forge, GroupId, SpaceId, SpacesStoreState};
 
 #[derive(Debug)]
 pub struct PendingSpace<S, F, C> {
@@ -89,6 +90,81 @@ where
         }
 
         Ok(Space::new(self.manager_ref, id))
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingGroup<S, F, C> {
+    id: GroupId,
+    manager_ref: Manager<S, F, C>,
+}
+
+impl<S, F, C> PendingGroup<S, F, C> {
+    pub(crate) fn new(manager_ref: Manager<S, F, C>, id: GroupId) -> Self {
+        Self { id, manager_ref }
+    }
+
+    pub fn id(&self) -> GroupId {
+        self.id
+    }
+}
+
+impl<S, F, C> PendingGroup<S, F, C>
+where
+    S: Clone
+        + SpacesStore<SpacesStoreState<C>>
+        + SpacesMessageStore<F::Message>
+        + GroupsStore<AuthMessage<C>, C>
+        + KeyRegistryStore
+        + PreKeyBundlesStore
+        + Transaction,
+    F: Forge<C>,
+    C: Conditions,
+{
+    /// Wait until the group is known to us.
+    ///
+    /// Resolves as soon as we processed the "create" message of the group, even if we're not a
+    /// member of it.
+    ///
+    /// This never resolves if the group never arrives, consider wrapping it in a timeout.
+    pub async fn created(self) -> Result<Group<S, F, C>, ManagerError<F, C>> {
+        let id = self.id;
+
+        // Subscribe _before_ checking the store, otherwise we might miss a notification.
+        let waiter = self.manager_ref.waiters().groups.wait_for(
+            move |event| matches!(event, GroupEvent::Created { group_id, .. } if *group_id == id),
+        );
+
+        // Group exists already.
+        if !self.manager_ref.has_group(id).await? {
+            waiter.await;
+        }
+
+        Ok(Group::new(self.manager_ref, id))
+    }
+
+    /// Wait until we joined the group with any access level, either directly or through another
+    /// group which is a member of it.
+    ///
+    /// This never resolves if we're never added or been removed, consider wrapping it in a timeout.
+    pub async fn joined(self) -> Result<Group<S, F, C>, ManagerError<F, C>> {
+        let id = self.id;
+        let me = self.manager_ref.id();
+
+        // Subscribe _before_ checking the store, otherwise we might miss a notification.
+        let waiter = self.manager_ref.waiters().groups.wait_for(move |event| {
+            matches!(event, GroupEvent::Created { .. } | GroupEvent::Added { .. })
+                && event
+                    .members(id)
+                    .is_some_and(|members| is_member(members, me))
+        });
+
+        // We've joined already.
+        if !self.manager_ref.has_joined_group(id).await? {
+            waiter.await;
+        }
+
+        Ok(Group::new(self.manager_ref, id))
     }
 }
 
@@ -199,5 +275,77 @@ mod tests {
             .unwrap();
         assert_eq!(space.id(), space_id);
         assert!(bob.manager.has_joined_space(space_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn group_created_resolves_on_message() {
+        let alice = TestPeer::new(0).await;
+        let bob = TestPeer::new(1).await;
+
+        let (group, output) = alice.manager.create_group(&[]).await.unwrap();
+
+        // Bob waits for a group which doesn't exist yet.
+        let handle = tokio::spawn(bob.manager.group(group.id()).created());
+
+        bob.persist_operation(&output.message).await.unwrap();
+        bob.manager.process(&output.message).await.unwrap();
+
+        let bob_group = tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("pending group resolved")
+            .unwrap()
+            .unwrap();
+        assert_eq!(bob_group.id(), group.id());
+
+        // Bob knows about the group but is not a member.
+        assert!(bob.manager.has_group(group.id()).await.unwrap());
+        assert!(!bob.manager.has_joined_group(group.id()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn group_joined_through_nested() {
+        let alice = TestPeer::new(0).await;
+        let bob = TestPeer::new(1).await;
+        let bob_id = bob.manager.id();
+
+        // Alice creates a parent and a child group and adds the child to the parent.
+        let alice_manage = [(alice.manager.id(), Access::manage())];
+        let (parent, parent_output) = alice.manager.create_group(&alice_manage).await.unwrap();
+        let (child, child_output) = alice.manager.create_group(&alice_manage).await.unwrap();
+        let add_child_output = parent.add(child.id(), Access::read()).await.unwrap();
+
+        // Bob processes the resulting messages.
+        for message in [
+            parent_output.message,
+            child_output.message,
+            add_child_output.message,
+        ] {
+            bob.persist_operation(&message).await.unwrap();
+            bob.manager.process(&message).await.unwrap();
+        }
+
+        // Bob waits to join the parent group.
+        let joined = bob.manager.group(parent.id()).joined();
+        tokio::pin!(joined);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), &mut joined)
+                .await
+                .is_err()
+        );
+
+        // Alice adds Bob with pull access to the child group, which makes Bob a member of the
+        // parent group as well.
+        let add_bob_output = child.add(bob_id, Access::pull()).await.unwrap();
+        bob.persist_operation(&add_bob_output.message)
+            .await
+            .unwrap();
+        bob.manager.process(&add_bob_output.message).await.unwrap();
+
+        let bob_group = tokio::time::timeout(Duration::from_secs(1), joined)
+            .await
+            .expect("pending group resolved")
+            .unwrap();
+        assert_eq!(bob_group.id(), parent.id());
+        assert!(bob.manager.has_joined_group(parent.id()).await.unwrap());
     }
 }

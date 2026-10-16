@@ -8,7 +8,6 @@ use p2panda_core::Topic;
 use p2panda_net::iroh_endpoint::RelayUrl;
 use p2panda_net::sync::authoriser::SyncBlockList;
 use p2panda_net::{NetworkId, NodeId};
-use p2panda_spaces::group::Group as InnerGroup;
 use p2panda_spaces::{Config as SpacesConfig, GroupId, SpaceId};
 use p2panda_store::sqlite::{SqliteError, SqliteStore, SqliteStoreBuilder};
 use p2panda_store::topics::TopicStore;
@@ -29,9 +28,10 @@ use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberAssociationHook,
-    MemberError, PendingSpace, Space, SpaceEgressError, SpaceSubscription, SyncAuthoriserHook,
-    actor_to_topic, dispatch_spaces_events, group_stream, is_group, member_log_id,
-    pending_spaces_stream, spaces_manager, spaces_stream, to_initial_members,
+    MemberError, PendingGroup, PendingSpace, Space, SpaceEgressError, SpaceSubscription,
+    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream, is_group,
+    member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -479,11 +479,12 @@ impl Node {
 
     /// Subscribe to an existing group.
     ///
-    /// Returns a `Group` for accessing the group API and it's event stream.
+    /// Returns a `PendingGroup` handle and the group's event stream. The handle can be awaited
+    /// until the group is known or we've joined it, to then access the group API.
     pub async fn group(
         &self,
         group_id: impl Into<GroupId>,
-    ) -> Result<(Group, GroupSubscription), SubscribeGroupError> {
+    ) -> Result<(PendingGroup, GroupSubscription), SubscribeGroupError> {
         self.group_from(group_id, StreamFrom::Frontier).await
     }
 
@@ -492,7 +493,7 @@ impl Node {
         &self,
         group_id: impl Into<GroupId>,
         from: StreamFrom,
-    ) -> Result<(Group, GroupSubscription), SubscribeGroupError> {
+    ) -> Result<(PendingGroup, GroupSubscription), SubscribeGroupError> {
         let group_id = group_id.into();
         let topic = actor_to_topic(group_id);
 
@@ -503,12 +504,12 @@ impl Node {
         // Trigger repair so that any missing operations can be incorporated into the group.
         self.repair_task.repair_all().await?;
 
-        let inner = match self.spaces_manager.group(group_id).await? {
-            Some(inner) => inner,
-            None => InnerGroup::new(self.spaces_manager.clone(), group_id),
-        };
+        // Even if there is no group yet we allow the user to subscribe, this is required to
+        // receive the group's messages. The returned handle can be awaited until the group is
+        // known or we've joined.
+        let inner = self.spaces_manager.group(group_id);
 
-        Ok(group_stream(
+        Ok(pending_group_stream(
             inner,
             self.store.clone(),
             egress_handle,
