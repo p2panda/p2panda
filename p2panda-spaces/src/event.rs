@@ -70,9 +70,9 @@ pub enum Event<C> {
 
     /// A membership change occurred on a space.
     ///
-    /// This event is emitted every time the membership of a space changes. Events are silently
-    /// dropped if the local member is not (yet) a member of the space. For every Event::Groups
-    /// event a Event::Spaces event will be emitted for every effected space.
+    /// This event is emitted every time the membership of a space changes, also if the local
+    /// member is not (yet) a member of the space. For every Event::Groups event a Event::Spaces
+    /// event will be emitted for every effected space.
     Spaces(SpaceEvent<C>),
 }
 
