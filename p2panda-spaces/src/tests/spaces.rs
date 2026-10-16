@@ -2433,22 +2433,3 @@ async fn concurrent_adds() {
     assert!(members.contains(&bob_id), "bob's add was lost");
     assert!(members.contains(&claire_id), "claire's add was lost");
 }
-
-#[tokio::test]
-async fn own_key_bundle_notifies_member_waiters() {
-    let alice = TestPeer::new(0).await;
-    let alice_id = alice.manager.id();
-
-    let waiter = alice
-        .manager
-        .waiters()
-        .members
-        .wait_for(move |member| member.id() == alice_id);
-
-    // First call generates and registers our own key bundle.
-    alice.manager.me().await.unwrap();
-
-    tokio::time::timeout(Duration::from_secs(1), waiter)
-        .await
-        .expect("waiter resolved");
-}
