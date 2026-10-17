@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- node: Add custom_cursor_name optional param to Node::stream_from [1408](https://github.com/p2panda/p2panda/pull/1408)
 - net: `SyncHook` intercepting sync sessions to accept or reject them [#1451](https://github.com/p2panda/p2panda/pull/1451)
 - net: Introduce an `Authoriser` for maintaining and enforcing allow- and blocklists [#1321](https://github.com/p2panda/p2panda/pull/1321)
 - net: Use network id to separate mDNS discovery [#1511](https://github.com/p2panda/p2panda/pull/1511)
