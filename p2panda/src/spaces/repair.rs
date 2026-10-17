@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use p2panda_core::traits::{Provenance, ShortFormat};
 use p2panda_core::{Hash, Topic};
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
 use p2panda_spaces::manager::GLOBAL_GROUPS_CONTEXT_ID;
 use p2panda_spaces::{AuthGroupState, GroupId, SpaceId, SpacesStoreState};
 use p2panda_store::groups::GroupsStore;
@@ -21,10 +20,9 @@ use tracing::{debug, trace, warn};
 
 use crate::egress::{EgressError, EgressHandle, SubmitError};
 use crate::operation::Operation;
-use crate::spaces::authoriser::update_authoriser;
 use crate::spaces::space::SpaceEgressError;
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesManager, SpacesStore};
-use crate::spaces::{SpacesManagerError, group_log_id, submit_enriched_space_messages};
+use crate::spaces::{SpacesManagerError, dispatch_spaces_events, group_log_id};
 
 const REPAIR_FREQUENCY: Duration = Duration::from_secs(1);
 
@@ -79,8 +77,6 @@ pub(crate) async fn repair_space(
     manager: &SpacesManager,
     store: &SqliteStore,
     egress_handle: &EgressHandle,
-    // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    connection_authoriser: &ConnectionAuthoriser,
 ) -> Result<bool, RepairError> {
     let spaces_store = SpacesStore::new(store.clone());
 
@@ -179,22 +175,16 @@ pub(crate) async fn repair_space(
     // @TODO: This method uses transactions internally (eg. in the Forge) and so we can't make
     // everything part of one transaction on this level yet. It isn't a source of bugs though so
     // for now this is ok.
-    let (space_y, spaces_messages, spaces_events) =
-        manager.repair_space(space_id, &group_ids).await?;
+    let output = manager.repair_space(space_id, &group_ids).await?;
 
     // Persist spaces state.
     tx!(spaces_store, {
         spaces_store
-            .set_space_state_tx(&space_id, &SpacesStoreState::from(space_y))
+            .set_space_state_tx(&space_id, &SpacesStoreState::from(output.space_y))
             .await?;
     });
 
-    // Update the connection authoriser.
-    //
-    // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-    update_authoriser(connection_authoriser, &spaces_events).await;
-
-    submit_enriched_space_messages(egress_handle, space_id, spaces_messages, spaces_events).await?;
+    dispatch_spaces_events(egress_handle, space_id, output.messages).await?;
 
     debug!(
         node_id = manager.id().fmt_short(),
@@ -221,8 +211,6 @@ impl RepairTask {
         store: SqliteStore,
         strategy: RepairStrategy,
         egress_handle: EgressHandle,
-        // TODO: Only required until https://github.com/p2panda/p2panda/issues/1362 is resolved.
-        connection_authoriser: ConnectionAuthoriser,
     ) -> Self {
         debug!("repair management task started");
 
@@ -241,7 +229,6 @@ impl RepairTask {
                             &manager,
                             &store,
                             &egress_handle,
-                            &connection_authoriser
                         )
                         .await;
 
@@ -265,7 +252,6 @@ impl RepairTask {
                                     &manager,
                                     &store,
                                     &egress_handle,
-                                    &connection_authoriser
                                 )
                                 .await;
 

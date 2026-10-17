@@ -5,8 +5,8 @@ use std::pin::Pin;
 use futures_util::Stream;
 use futures_util::stream::{SelectAll, StreamExt};
 use p2panda_auth::AccessLevel;
-use p2panda_net::connection_authoriser::ConnectionAuthoriserEvent;
 use p2panda_net::discovery::DiscoveryEvent;
+use p2panda_net::sync::authoriser::SyncBlockListEvent;
 use p2panda_spaces::{ActorId, GroupId};
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
@@ -21,8 +21,8 @@ use crate::spaces::types::InnerGroupEvent;
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum SystemEvent {
-    /// Connection and topic sync allow / block events.
-    ConnectionAuthoriser(ConnectionAuthoriserEvent),
+    /// Allow / block events from sync sessions.
+    SyncAuthoriser(SyncBlockListEvent),
 
     /// Discovery protocol events.
     Discovery(DiscoveryEvent),
@@ -48,33 +48,32 @@ pub type EventStream = Pin<Box<dyn Stream<Item = SystemEvent> + Send + Unpin + '
 
 /// Merge the provided event streams into a single, unified system event stream.
 pub(crate) fn event_stream(
-    events_stream: broadcast::Receiver<SystemEvent>,
-    connection_authoriser_events: broadcast::Receiver<ConnectionAuthoriserEvent>,
+    system_events: broadcast::Receiver<SystemEvent>,
+    sync_block_list_events: broadcast::Receiver<SyncBlockListEvent>,
     discovery_events: broadcast::Receiver<DiscoveryEvent>,
 ) -> EventStream {
-    let events_broadcast_stream = BroadcastStream::new(events_stream);
-    let connection_authoriser_broadcast_stream = BroadcastStream::new(connection_authoriser_events);
-    let discovery_broadcast_stream = BroadcastStream::new(discovery_events);
-
-    let connection_authoriser_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
-        connection_authoriser_broadcast_stream
-            .filter_map(|event| async { event.ok().map(SystemEvent::ConnectionAuthoriser) })
+    let sync_block_stream = BroadcastStream::new(sync_block_list_events);
+    let sync_block_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
+        sync_block_stream
+            .filter_map(|event| async { event.ok().map(SystemEvent::SyncAuthoriser) })
             .boxed(),
     );
 
+    let discovery_stream = BroadcastStream::new(discovery_events);
     let discovery_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> = Box::pin(
-        discovery_broadcast_stream
+        discovery_stream
             .filter_map(|event| async { event.ok().map(SystemEvent::Discovery) })
             .boxed(),
     );
 
-    let events_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> =
-        Box::pin(events_broadcast_stream.filter_map(|event| async { event.ok() }));
+    let system_events_stream = BroadcastStream::new(system_events);
+    let system_events_stream: Pin<Box<dyn Stream<Item = SystemEvent> + Send>> =
+        Box::pin(system_events_stream.filter_map(|event| async { event.ok() }));
 
     let mut stream_set = SelectAll::new();
-    stream_set.push(connection_authoriser_stream);
+    stream_set.push(sync_block_stream);
     stream_set.push(discovery_stream);
-    stream_set.push(events_stream);
+    stream_set.push(system_events_stream);
 
     Box::pin(stream_set)
 }

@@ -9,6 +9,7 @@ use rand::Rng;
 use rand::rngs::OsRng;
 use thiserror::Error;
 
+use crate::traits::ShortFormat;
 use crate::{Hash, VerifyingKey};
 
 pub const TOPIC_LENGTH: usize = 32;
@@ -129,6 +130,12 @@ impl TryFrom<Vec<u8>> for Topic {
             .map_err(|_| TopicError::InvalidLength(value_len, TOPIC_LENGTH))?;
 
         Ok(Self::from(checked_value))
+    }
+}
+
+impl ShortFormat for Topic {
+    fn fmt_short(&self) -> String {
+        self.to_string()[0..10].to_string()
     }
 }
 

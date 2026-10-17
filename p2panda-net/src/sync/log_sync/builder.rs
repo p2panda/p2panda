@@ -9,10 +9,10 @@ use p2panda_store::topics::TopicStore;
 use p2panda_sync::manager::TopicSyncManager;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
-use crate::connection_authoriser::ConnectionAuthoriser;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
+use crate::sync::hooks::{SyncHooks, SyncHooksList};
 use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
 
 pub struct Builder<S, L, E>
@@ -28,7 +28,7 @@ where
     store: S,
     endpoint: Endpoint,
     gossip: Gossip,
-    connection_authoriser: ConnectionAuthoriser,
+    hooks: SyncHooksList<Topic>,
     _marker: PhantomData<(L, E)>,
 }
 
@@ -43,18 +43,24 @@ where
     E: Extensions + Send + 'static,
 {
     pub fn new(store: S, endpoint: Endpoint, gossip: Gossip) -> Self {
-        let connection_authoriser = ConnectionAuthoriser::new();
         Self {
             store,
             endpoint,
             gossip,
-            connection_authoriser,
+            hooks: SyncHooksList::new(),
             _marker: PhantomData,
         }
     }
 
-    pub fn connection_authoriser(mut self, connection_authoriser: ConnectionAuthoriser) -> Self {
-        self.connection_authoriser = connection_authoriser;
+    /// Install hooks onto the sync manager.
+    ///
+    /// Sync hooks intercept the sync session establishment process.
+    ///
+    /// You can install multiple [`SyncHooks`] by calling this function multiple times. Order
+    /// matters: hooks are invoked in the order they were installed onto the endpoint builder. Once
+    /// a hook returns reject, further processing is aborted and other hooks won't be invoked.
+    pub fn hooks(mut self, hook: impl SyncHooks<Handshake = Topic> + 'static + Clone) -> Self {
+        self.hooks.push(hook);
         self
     }
 
@@ -67,7 +73,7 @@ where
                 self.store,
                 self.endpoint,
                 self.gossip,
-                self.connection_authoriser,
+                self.hooks,
             );
 
             SyncManager::<TopicSyncManager<Topic, S, L, E>>::spawn(None, args, thread_pool).await?

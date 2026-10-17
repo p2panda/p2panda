@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_core::Hash;
-
-use crate::groups::GroupsOperation;
+use p2panda_spaces::AuthMessage;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
-pub enum GroupsArgs<C> {
+pub enum GroupsProcessorArgs<C> {
     Process {
-        state_id: Hash,
-        operation: GroupsOperation<C>,
+        message: AuthMessage<C>,
     },
     #[default]
     Ignore,

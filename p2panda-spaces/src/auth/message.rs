@@ -8,13 +8,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ActorId, GroupId, OperationId};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthMessage<C> {
-    pub(crate) operation_id: OperationId,
-    pub(crate) author: ActorId,
-    pub(crate) dependencies: Vec<OperationId>,
-    pub(crate) group_id: GroupId,
-    pub(crate) action: GroupAction<ActorId, C>,
+    pub operation_id: OperationId,
+    pub author: ActorId,
+    pub dependencies: Vec<OperationId>,
+    pub group_id: GroupId,
+    pub action: GroupAction<ActorId, C>,
 }
 
 impl<C> AuthOperation<ActorId, OperationId, C> for AuthMessage<C>

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda_net::connection_authoriser::ConnectionAuthoriser;
+use p2panda_net::sync::authoriser::SyncBlockList;
 use p2panda_spaces::SpaceEvent;
 use p2panda_stream::hooks::ProcessorHook;
 use p2panda_stream::spaces::SpacesResult;
@@ -9,22 +9,27 @@ use crate::processor::ProcessorStatus;
 use crate::spaces::types::AuthCapabilities;
 use crate::streams::Event;
 
-/// Pipeline hook to observe spaces events and add any members we observe being removed to the
-/// connection block-list for the space topic.
+/// Pipeline hook to observe spaces events and add any members we observe being removed to the sync
+/// block-list for the space topic.
 ///
-/// NOTE: State for the connection authoriser is not persisted so it's important that it be
-/// populated with initial state on startup if required.
-pub struct ConnectionAuthoriserHook {
-    inner: ConnectionAuthoriser,
+/// NOTE: State for the authoriser is not persisted so it's important that it be populated with
+/// initial state on startup if required.
+//
+// TODO: This should be state-less and implement something like SyncHook instead, quering the
+// internal spaces state to allow/block sync sessions.
+//
+// See related issue: <https://github.com/p2panda/p2panda/issues/1441>.
+pub struct SyncAuthoriserHook {
+    inner: SyncBlockList,
 }
 
-impl ConnectionAuthoriserHook {
-    pub fn new(inner: ConnectionAuthoriser) -> Self {
+impl SyncAuthoriserHook {
+    pub fn new(inner: SyncBlockList) -> Self {
         Self { inner }
     }
 }
 
-impl ProcessorHook<Event> for ConnectionAuthoriserHook {
+impl ProcessorHook<Event> for SyncAuthoriserHook {
     async fn on_input(&self, input: &Event) {
         let ProcessorStatus::Completed(ref result) = input.spaces else {
             return;
@@ -39,8 +44,8 @@ impl ProcessorHook<Event> for ConnectionAuthoriserHook {
 }
 
 pub(crate) async fn update_authoriser(
-    connection_authoriser: &ConnectionAuthoriser,
-    events: &Vec<p2panda_spaces::Event<AuthCapabilities>>,
+    sync_block_list: &SyncBlockList,
+    events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
 ) {
     for event in events {
         let p2panda_spaces::Event::Spaces(space_event) = event else {
@@ -61,8 +66,8 @@ pub(crate) async fn update_authoriser(
             } => {
                 // For remove events add removed members to the topic block-list.
                 for (member, _) in removed {
-                    connection_authoriser
-                        .topic_block(*member, { *space_id }.into())
+                    sync_block_list
+                        .block_topic(*member, { *space_id }.into())
                         .await;
                 }
 
@@ -75,8 +80,8 @@ pub(crate) async fn update_authoriser(
         //
         // This catches the case where a previously removed member has been re-added.
         for (member, _) in members {
-            connection_authoriser
-                .topic_allow(*member, { *space_id }.into())
+            sync_block_list
+                .allow_topic(*member, { *space_id }.into())
                 .await;
         }
     }

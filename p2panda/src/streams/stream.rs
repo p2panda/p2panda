@@ -15,8 +15,9 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
-use p2panda_spaces::{ActorId, SpaceContext, SpaceId};
+use p2panda_spaces::{ActorId, AuthMessage, GroupId, SpaceContext, SpaceId};
 use p2panda_store::SqliteStore;
+use p2panda_stream::groups::{GroupsProcessorArgs, GroupsResult};
 use p2panda_stream::spaces::SpacesResult;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
@@ -30,7 +31,7 @@ use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::{ProcessorError, ProcessorStatus};
-use crate::spaces::types::{InnerSpaceEvent, SpacesEvent};
+use crate::spaces::types::{AuthCapabilities, InnerSpaceEvent, SpacesEvent};
 use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
@@ -38,7 +39,7 @@ use crate::streams::external_stream::{
     ExternalStream, ExternalStreamEvent, ExternalStreamFuture, SessionId,
 };
 use crate::streams::publisher::StreamPublisher;
-use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges};
+use crate::streams::replay::{ReplayError, StreamFrom, replay_log_ranges, reset_orderer};
 use crate::streams::subscription::StreamSubscription;
 use crate::streams::sync_metrics::{self, Aggregator, SessionPhase, SyncError};
 use crate::streams::{Event, Pipeline, SystemEvent};
@@ -162,7 +163,7 @@ where
     //
     // TODO: Move replay logic into own place and make it part of ingress.
     let nacked_log_ranges = acked
-        .nacked_log_ranges(from)
+        .nacked_log_ranges(from.clone())
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
 
@@ -263,27 +264,57 @@ where
             // =======================
 
             {
-                // This will block processing of the sync stream and of locally created operations
-                // until it is complete.
-                let replay_result =
-                    replay_log_ranges(topic, &store, &to_output_tx, &pipeline, nacked_log_ranges)
-                        .await;
+                // TODO: This replay logic should be factored out into an own module.
+                // See related issue: <https://github.com/p2panda/p2panda/issues/1443>
 
-                // Errors occurring in the replay task which be returned to the user.
-                if let Err(error) = replay_result {
+                // Before a replay we need to reset the orderer by removing all operations we want
+                // to replay before, otherwise the orderer will not respect their causal ordering.
+                let namespace = topic.to_string(); // Needs to match orderer namespace given in pipeline.
+                let reset_result =
+                    reset_orderer(&store, &from, &namespace, nacked_log_ranges.clone()).await;
+
+                if let Err(error) = reset_result {
                     warn!(
                         topic = %topic.fmt_short(),
-                        "error occurred in replay task: {error}"
+                        "error occurred in replay task when resetting orderer: {error}"
                     );
 
                     let _ = to_output_tx
                         .send(vec![
                             StreamEvent::ReplayFailed {
-                                error: Arc::new(error),
+                                error: Arc::new(error.into()),
                             }
                             .into(),
                         ])
                         .await;
+                } else {
+                    // This will block processing of the sync stream and of locally created
+                    // operations until it is complete.
+                    let replay_result = replay_log_ranges(
+                        topic,
+                        &store,
+                        &to_output_tx,
+                        &pipeline,
+                        nacked_log_ranges,
+                    )
+                    .await;
+
+                    // Errors occurring in the replay task which be returned to the user.
+                    if let Err(error) = replay_result {
+                        warn!(
+                            topic = %topic.fmt_short(),
+                            "error occurred in replay task: {error}"
+                        );
+
+                        let _ = to_output_tx
+                            .send(vec![
+                                StreamEvent::ReplayFailed {
+                                    error: Arc::new(error),
+                                }
+                                .into(),
+                            ])
+                            .await;
+                    }
                 }
             }
 
@@ -335,7 +366,7 @@ where
                     Some((operation, _message, processed_tx)) = publish_rx.recv() => {
                         let event = process_operation_in(
                             operation,
-                            Source::LocalStore,
+                            Source::Publish,
                             topic,
                             &pipeline,
                             Some(&sync_handle),
@@ -518,6 +549,15 @@ where
     // processing any other event will only yield a single user event.
     let mut forward_events = Vec::new();
 
+    // Process group processor events.
+    if let ProcessorStatus::Completed(GroupsResult::Processed) = &event.groups
+        && let GroupsProcessorArgs::Process { message } = &event.groups_args
+    {
+        forward_events.push(ForwardEvent::Topic(Box::new(to_group_stream_event(
+            &event, message,
+        ))));
+    }
+
     // Process spaces events.
     if let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces {
         // Multiple events can be released at once.
@@ -566,9 +606,12 @@ where
                     ForwardEvent::system(to_system_event(group_event.to_owned())),
                 ),
 
-                p2panda_spaces::Event::Spaces(space_event) => forward_events.push(
-                    ForwardEvent::topic_stream(to_stream_event(space_event.to_owned())),
-                ),
+                p2panda_spaces::Event::Spaces(space_event) => {
+                    forward_events.push(ForwardEvent::topic_stream(to_stream_event(
+                        space_event.to_owned(),
+                        event.clone(),
+                    )))
+                }
             }
         }
     } else {
@@ -628,6 +671,29 @@ where
     }
 
     Some(forward_events)
+}
+
+/// Membership change action which has been applied to a group.
+#[derive(Clone, Debug, PartialEq)]
+pub enum GroupAction {
+    Created {
+        initial_actors: Vec<(GroupActor, AccessLevel)>,
+    },
+    Added {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
+    Removed {
+        actor: GroupActor,
+    },
+    Promoted {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
+    Demoted {
+        actor: GroupActor,
+        level: AccessLevel,
+    },
 }
 
 /// Operations with application messages, system events and errors coming from a topic stream
@@ -755,13 +821,28 @@ pub enum StreamEvent<M> {
         error: Arc<AckedError>,
     },
 
+    /// Membership of the subscribed group has changed.
+    ///
+    /// This may be a change in the "root" or any nested group.
+    Group {
+        /// Event which caused this group change.
+        event: Event,
+
+        /// Id of the group which the action applies to.
+        group_id: GroupId,
+
+        /// The membership change applied to the group.
+        action: GroupAction,
+    },
+
     /// Space has been created or modified.
     ///
-    /// An event is emitted for every space membership change which occurs. This could be the
-    /// result of a change of membership in a child group. In all cases the new membership of the
-    /// space is included directly in the event along with additional meta-information, including
-    /// regarding the action (possibly targeting a child group) which caused the membership change.
+    /// An event is emitted for every space membership change which occurs. This could be the result
+    /// of a change of membership in a child group. In all cases the new membership of the space is
+    /// included directly in the event along with additional meta-information, including regarding
+    /// the action (possibly targeting a child group) which caused the membership change.
     Space {
+        event: Box<Event>,
         space_id: SpaceId,
         members: Vec<(ActorId, AccessLevel)>,
         actors: Vec<(GroupActor, AccessLevel)>,
@@ -772,8 +853,8 @@ pub enum StreamEvent<M> {
     Member(VerifyingKey),
 }
 
-pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
-    match &event {
+pub(crate) fn to_stream_event<M>(spaces_event: InnerSpaceEvent, event: Event) -> StreamEvent<M> {
+    match &spaces_event {
         p2panda_spaces::SpaceEvent::Created {
             space_id,
             context: SpaceContext {
@@ -809,17 +890,55 @@ pub(crate) fn to_stream_event<M>(event: InnerSpaceEvent) -> StreamEvent<M> {
             },
             ..
         } => StreamEvent::Space {
+            event: Box::new(event),
             space_id: *space_id,
             members: to_members(members),
             actors: to_actors(actors),
-            inner: event,
+            inner: spaces_event,
         },
         p2panda_spaces::SpaceEvent::Ejected { space_id } => StreamEvent::Space {
+            event: Box::new(event),
             space_id: *space_id,
             members: vec![],
             actors: vec![],
-            inner: event,
+            inner: spaces_event,
         },
+    }
+}
+
+/// Convert a AuthMessage into p2panda::GroupEvent.
+pub fn to_group_stream_event<M>(
+    event: &Event,
+    message: &AuthMessage<AuthCapabilities>,
+) -> StreamEvent<M> {
+    let action = match message.action.clone() {
+        p2panda_auth::group::GroupAction::Create { initial_members } => GroupAction::Created {
+            initial_actors: initial_members
+                .into_iter()
+                .map(|(actor, access)| (actor.into(), access.level()))
+                .collect::<Vec<_>>(),
+        },
+        p2panda_auth::group::GroupAction::Add { member, access } => GroupAction::Added {
+            actor: member.into(),
+            level: access.level(),
+        },
+        p2panda_auth::group::GroupAction::Remove { member } => GroupAction::Removed {
+            actor: member.into(),
+        },
+        p2panda_auth::group::GroupAction::Promote { member, access } => GroupAction::Promoted {
+            actor: member.into(),
+            level: access.level(),
+        },
+        p2panda_auth::group::GroupAction::Demote { member, access } => GroupAction::Demoted {
+            actor: member.into(),
+            level: access.level(),
+        },
+    };
+
+    StreamEvent::Group {
+        event: event.clone(),
+        group_id: message.group_id,
+        action,
     }
 }
 
@@ -1016,9 +1135,11 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Operation was published locally or replayed.
-    // TODO
-    LocalStore,
+    /// Operation was published locally.
+    Publish,
+
+    /// Operation was replayed.
+    Replay,
 
     /// Operation was forged locally and handled in egress.
     Egress,

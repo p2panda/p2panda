@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::borrow::Borrow;
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -17,8 +16,8 @@ use crate::groups::GroupsStore;
 use crate::key_registry::KeyRegistryStore;
 use crate::key_secrets::KeySecretsStore;
 use crate::operations::OperationStore;
+use crate::spaces::SpacesStore;
 use crate::spaces::traits::SpacesMessageStore;
-use crate::spaces::{SpacesMessage, SpacesStore};
 use crate::sqlite::TransactionPermit;
 use crate::{SqliteError, SqliteStore};
 
@@ -41,29 +40,18 @@ impl<E> SqliteSpacesStore<E> {
     }
 }
 
-impl<ARG, E> SpacesMessageStore<ARG> for SqliteSpacesStore<E>
+impl<T, E> SpacesMessageStore<T> for SqliteSpacesStore<E>
 where
-    ARG: Clone,
-    E: Extensions + Borrow<ARG>,
+    T: From<Operation<E>> + Clone,
+    E: Extensions,
 {
     type Error = SqliteError;
 
-    async fn get_spaces_message(
-        &self,
-        id: &Hash,
-    ) -> Result<Option<SpacesMessage<ARG>>, Self::Error> {
+    async fn get_spaces_message(&self, id: &Hash) -> Result<Option<T>, Self::Error> {
         match <SqliteStore as OperationStore<Operation<E>, Hash>>::get_operation(&self.store, id)
             .await?
         {
-            Some(operation) => {
-                let args = operation.header.extensions.borrow().clone();
-                let message = SpacesMessage {
-                    id: operation.hash,
-                    author: operation.header.verifying_key,
-                    args,
-                };
-                Ok(Some(message))
-            }
+            Some(operation) => Ok(Some(T::from(operation))),
             None => Ok(None),
         }
     }

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(
+    clippy::result_large_err,
+    reason = "https://github.com/p2panda/p2panda/issues/1458"
+)]
 
 //! Data-type-agnostic p2p networking, discovery, gossip and local-first sync.
 //!
@@ -236,8 +240,6 @@
 pub mod address_book;
 pub mod addrs;
 pub mod codec;
-#[cfg(feature = "iroh_endpoint")]
-pub mod connection_authoriser;
 #[cfg(feature = "discovery")]
 pub mod discovery;
 #[cfg(feature = "gossip")]

@@ -100,6 +100,15 @@ impl Acked {
         let cursor = match from {
             StreamFrom::Frontier => self.cursor().await?,
             StreamFrom::Start => {
+                // TODO: This is a bit surprising here (unrelated to querying the nacked log
+                // ranges).
+                //
+                // The replay flow can be refactored into a dedicated place where we want to:
+                //
+                // 1. Replace the cursor
+                // 2. Calculate nacked log range
+                // 3. Reset orderer state
+                // 4. Replay operations
                 self.replace_cursor(Cursor::new(&self.cursor_name, LogHeights::default()))
                     .await?
             }

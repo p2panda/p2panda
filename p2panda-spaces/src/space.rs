@@ -28,7 +28,7 @@ use crate::encryption::message::{EncryptionArgs, EncryptionMessage};
 use crate::encryption::orderer::EncryptionOrdererState;
 use crate::event::{Event, encryption_output_to_space_events, to_space_event};
 use crate::forge::Forge;
-use crate::group::{Group, GroupError};
+use crate::group::{Group, GroupError, GroupOutput};
 use crate::identity::IdentityError;
 use crate::manager::{Manager, StoreError};
 use crate::message::{ApplicationMessage, SpaceMembershipMessage, SpacesArgs, SpacesMessage};
@@ -74,7 +74,7 @@ impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
@@ -104,15 +104,7 @@ where
         manager_ref: Manager<S, F, C>,
         space_id: SpaceId,
         mut initial_members: Vec<(ActorId, Access<C>)>,
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            Vec<F::Message>,
-            Vec<Event<C>>,
-        ),
-        SpaceError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
         let my_id = manager_ref.id();
 
         // Automatically add ourselves with "manage" level without any conditions as default.
@@ -139,29 +131,35 @@ where
             .collect::<Vec<_>>();
 
         // Instantiate new space state from existing global auth state.
-        let (space_y, space_history) =
+        let (space_y, from_group_messages) =
             Self::from_group(manager_ref.clone(), space_id, group_id, &include).await?;
 
+        let mut messages = vec![];
+        messages.extend(
+            from_group_messages
+                .into_iter()
+                .map(|message| (message, vec![])),
+        );
+
         // Create the space group.
-        let (groups_y, create_group, auth_event) =
+        let group_output =
             Group::create(manager_ref.clone(), groups_y, group_id, initial_members).await?;
+        let create_group_message = SpacesMessage::auth(&group_output.message);
+
+        messages.push((group_output.message, vec![group_output.event]));
 
         // Apply the "create" auth message to the space state.
-        let (space_y, create_space, space_events) = Space::process_auth_message(
-            manager_ref.clone(),
+        let (space_y, message, events) =
+            Space::process_auth_message(manager_ref.clone(), space_y, &create_group_message)
+                .await?;
+
+        messages.push((message, events));
+
+        Ok(SpaceOutput {
+            groups_y: group_output.groups_y,
             space_y,
-            &SpacesMessage::auth(&create_group),
-        )
-        .await?;
-
-        let mut messages = vec![create_group];
-        messages.extend(space_history);
-        messages.extend([create_space]);
-
-        let mut events = vec![auth_event];
-        events.extend(space_events);
-
-        Ok((groups_y, space_y, messages, events))
+            messages,
+        })
     }
 
     /// Add a member to the space with assigned access level.
@@ -171,34 +169,26 @@ where
         &self,
         member: impl Into<ActorId>,
         access: Access<C>,
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            F::Message,
-            F::Message,
-            Vec<Event<C>>,
-        ),
-        SpaceError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) = group.add(member, access).await?;
+        let group_output = group.add(member, access).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
             space_y,
-            &SpacesMessage::auth(&auth_message),
+            &SpacesMessage::auth(&group_output.message),
         )
         .await?;
 
-        let mut events = vec![auth_event];
-        events.extend(space_events);
-
-        Ok((groups_y, space_y, auth_message, space_message, events))
+        Ok(SpaceOutput::from(
+            group_output,
+            space_y,
+            vec![(space_message, space_events)],
+        ))
     }
 
     /// Remove a member from the space.
@@ -207,34 +197,26 @@ where
     pub async fn remove(
         &self,
         member: impl Into<ActorId>,
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            F::Message,
-            F::Message,
-            Vec<Event<C>>,
-        ),
-        SpaceError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) = group.remove(member).await?;
+        let group_output = group.remove(member).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
             space_y,
-            &SpacesMessage::auth(&auth_message),
+            &SpacesMessage::auth(&group_output.message),
         )
         .await?;
 
-        let mut events = vec![auth_event];
-        events.extend(space_events);
-
-        Ok((groups_y, space_y, auth_message, space_message, events))
+        Ok(SpaceOutput::from(
+            group_output,
+            space_y,
+            vec![(space_message, space_events)],
+        ))
     }
 
     /// Promote an existing space member to the assigned access level.
@@ -244,34 +226,26 @@ where
         &self,
         member: impl Into<ActorId>,
         access: Access<C>,
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            F::Message,
-            F::Message,
-            Vec<Event<C>>,
-        ),
-        SpaceError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) = group.promote(member, access).await?;
+        let group_output = group.promote(member, access).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
             space_y,
-            &SpacesMessage::auth(&auth_message),
+            &SpacesMessage::auth(&group_output.message),
         )
         .await?;
 
-        let mut events = vec![auth_event];
-        events.extend(space_events);
-
-        Ok((groups_y, space_y, auth_message, space_message, events))
+        Ok(SpaceOutput::from(
+            group_output,
+            space_y,
+            vec![(space_message, space_events)],
+        ))
     }
 
     /// Demote an existing space member to the assigned access level.
@@ -281,34 +255,26 @@ where
         &self,
         member: impl Into<ActorId>,
         access: Access<C>,
-    ) -> Result<
-        (
-            AuthGroupState<C>,
-            SpacesState<C>,
-            F::Message,
-            F::Message,
-            Vec<Event<C>>,
-        ),
-        SpaceError<F, C>,
-    > {
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
         let member = member.into();
 
         let space_y = self.state().await?;
         let group = Group::new(self.manager.clone(), space_y.group_id);
 
-        let (groups_y, auth_message, auth_event) = group.demote(member, access).await?;
+        let group_output = group.demote(member, access).await?;
 
         let (space_y, space_message, space_events) = Space::process_auth_message(
             self.manager.clone(),
             space_y,
-            &SpacesMessage::auth(&auth_message),
+            &SpacesMessage::auth(&group_output.message),
         )
         .await?;
 
-        let mut events = vec![auth_event];
-        events.extend(space_events);
-
-        Ok((groups_y, space_y, auth_message, space_message, events))
+        Ok(SpaceOutput::from(
+            group_output,
+            space_y,
+            vec![(space_message, space_events)],
+        ))
     }
 
     /// Forge a "pointer" space message from an already existing auth message and apply any
@@ -378,16 +344,22 @@ where
             &current_ancestors,
         );
 
+        // Record any individuals that were removed from the space.
+        update_removed(&mut y.removed, &current_members, &events);
+
         Ok((y, space_message, events))
     }
 
     /// Handle messages which effect the space membership. Each of these messages contained a
     /// pointer to an auth message and the auth message is required here.
+    ///
+    /// This method can be a no-op if all state transitions already happened previously
+    /// (idempotency), in this case the returned state will be `None`.
     pub(crate) async fn handle_membership_message(
         &self,
         space_message: &SpaceMembershipMessage,
         auth_message: &AuthMessage<C>,
-    ) -> Result<Option<(SpacesState<C>, Vec<Event<C>>)>, SpaceError<F, C>> {
+    ) -> Result<(Option<SpacesState<C>>, Vec<Event<C>>), SpaceError<F, C>> {
         let SpaceMembershipMessage {
             id,
             group_id,
@@ -399,18 +371,6 @@ where
         // Get space state and current members.
         let mut y = Self::get_or_init_state(self.id, *group_id, self.manager.clone()).await?;
 
-        // If we already processed this message return here.
-        if y.encryption_y.orderer.has_seen(*id) {
-            debug!(
-                space_id = self.id().fmt_short(),
-                space_message = space_message.id.fmt_short(),
-                "ignore already processed space membership message"
-            );
-            return Ok(None);
-        }
-
-        let duplicate_pointer = y.groups_y.inner.operations.contains_key(&auth_message.id());
-
         let current_members = y.groups_y.members(y.group_id);
         let current_ancestors = y.groups_y.inner.ancestors(y.group_id);
         let current_secret_members = secret_members(&current_members);
@@ -419,6 +379,7 @@ where
         //
         // Skip processing if this auth message has already been processed. This can happen when
         // multiple peers concurrently publish pointers to some auth message into the space.
+        let duplicate_pointer = y.groups_y.inner.operations.contains_key(&auth_message.id());
         if !duplicate_pointer {
             y.groups_y = AuthGroup::<C>::process(y.groups_y, auth_message)?;
         } else {
@@ -431,40 +392,60 @@ where
         };
 
         let me = self.manager.id();
-        let next_members = y.groups_y.members(y.group_id);
-        let next_secret_members = secret_members(&next_members);
-        let has_my_direct_message = direct_messages
-            .iter()
-            .any(|message| message.recipient == me);
-
-        // Make the dgm aware of the new space members.
-        y.encryption_y.dcgka.dgm.members = next_secret_members.clone();
-
-        // If there are direct messages for us we need to process them.
         let mut application_events = vec![];
-        if has_my_direct_message {
-            // Construct encryption message.
-            let encryption_message = EncryptionMessage::from_membership(
-                space_message,
-                me,
-                auth_message,
-                &current_secret_members,
-                &next_secret_members,
+
+        // Process key agreement message.
+        //
+        // Internally this involves cryptography which can not be "repeated" (due to dropped
+        // secrets, their forward-secret nature). Processing can thus never be done more than once.
+        let has_seen = y.encryption_y.orderer.has_seen(*id);
+        if has_seen {
+            debug!(
+                space_id = self.id().fmt_short(),
+                space_message = space_message.id.fmt_short(),
+                "ignore already processed space membership message"
             );
 
-            // Process encryption message.
-            let (encryption_y, encryption_output) =
-                EncryptionGroup::receive(y.encryption_y, &encryption_message)?;
+            debug_assert!(
+                duplicate_pointer,
+                "we never change group state without spaces state"
+            );
+        } else {
+            let next_members = y.groups_y.members(y.group_id);
+            let next_secret_members = secret_members(&next_members);
+            let has_my_direct_message = direct_messages
+                .iter()
+                .any(|message| message.recipient == me);
 
-            y.encryption_y = encryption_y;
-            let events = encryption_output_to_space_events(&self.id(), encryption_output);
-            application_events.extend(events);
-        };
+            // Make the dgm aware of the new space members.
+            y.encryption_y.dcgka.dgm.members = next_secret_members.clone();
 
-        y.encryption_y
-            .orderer
-            .add_dependency(*id, space_dependencies);
+            // If there are direct messages for us we need to process them.
+            if has_my_direct_message {
+                // Construct encryption message.
+                let encryption_message = EncryptionMessage::from_membership(
+                    space_message,
+                    me,
+                    auth_message,
+                    &current_secret_members,
+                    &next_secret_members,
+                );
 
+                // Process encryption message.
+                let (encryption_y, encryption_output) =
+                    EncryptionGroup::receive(y.encryption_y, &encryption_message)?;
+
+                y.encryption_y = encryption_y;
+                let events = encryption_output_to_space_events(&self.id(), encryption_output);
+                application_events.extend(events);
+            };
+
+            y.encryption_y
+                .orderer
+                .add_dependency(*id, space_dependencies);
+        }
+
+        // Even if we didn't change any state, we always want to return system events.
         let mut events = Self::generate_space_events(
             me,
             &y,
@@ -473,25 +454,16 @@ where
             &current_members,
             &current_ancestors,
         );
-
-        // Record any individuals that were removed from the space.
-        for event in events.iter() {
-            if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
-                // We accumulate all members who were ever removed from a space here. If only the
-                // diff was used, it would be harder for consumers to implement block patterns
-                // based on this field as information about historic removals would be lost. To
-                // account for re-adds the current membership of the group can be compared against
-                // the remove list.
-                let removed = removed_members(&current_members, &context.members)
-                    .into_iter()
-                    .map(|(member, _)| member);
-                y.removed.extend(removed);
-            }
-        }
-
         events.extend(application_events);
 
-        Ok(Some((y, events)))
+        // Record any individuals that were removed from the space.
+        update_removed(&mut y.removed, &current_members, &events);
+
+        if has_seen {
+            Ok((None, events))
+        } else {
+            Ok((Some(y), events))
+        }
     }
 
     /// Generate spaces events based on previous and next space members.
@@ -504,24 +476,12 @@ where
         previous_ancestors: &[ActorId],
     ) -> Vec<Event<C>> {
         let mut events = vec![];
-        // If current and next member sets are equal it indicates that the space is not affected
-        // by this auth change. This can be because the space wasn't created yet, or the auth
-        // change simply does not effect the members of this space. In either case we don't want
-        // to emit any space events.
         let next_members = y.groups_y.members(y.group_id);
-        if previous_members == next_members {
-            return events;
-        };
 
         // Check if this membership change removes the local actor.
         let was_member = previous_members.iter().any(|(member, _)| member == &me);
         let is_member = next_members.iter().any(|(member, _)| member == &me);
         let ejected = was_member && !is_member;
-
-        // If we were not a member and haven't become one then don't emit any space events.
-        if !was_member && !is_member {
-            return events;
-        }
 
         // Construct space membership event.
         let space_event = to_space_event(
@@ -642,18 +602,21 @@ where
         Ok(Some((y, events)))
     }
 
+    /// Incorporate any missing groups messages into the space state.
+    ///
+    /// Returns all existing group messages which needed incorporating into the space as well as
+    /// any newly forge space membership messages.
     pub async fn repair(
         &self,
         groups: &[GroupId],
-    ) -> Result<(SpacesState<C>, Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
+    ) -> Result<RepairOutput<C, F::Message>, SpaceError<F, C>> {
         let groups_y = self.manager.get_groups_state().await?;
         let mut space_y = self.state().await?;
 
-        let mut messages = vec![];
-        let mut events = vec![];
         // @TODO: we can optimize here by calculating the diff between the current space auth
         // graph tips and the global auth graph tips. Then we could apply only the diff, rather
         // than processing all operations as we do here.
+        let mut messages = vec![];
         let sorted = groups_y.inner.toposort(groups);
         for id in sorted {
             // This auth message has already been processed by the space.
@@ -661,17 +624,25 @@ where
                 continue;
             };
 
-            let operation = groups_y.inner.operations.get(&id).unwrap();
-            let (space_y_i, space_message, space_events) =
-                Space::process_auth_message(self.manager.clone(), space_y, operation).await?;
+            let group_message = self
+                .manager
+                .get_space_message(id)
+                .await?
+                .expect("all auth messages exist");
+
+            let (space_y_i, space_message, space_events) = Space::process_auth_message(
+                self.manager.clone(),
+                space_y,
+                &SpacesMessage::auth(&group_message),
+            )
+            .await?;
 
             space_y = space_y_i;
-
-            messages.push(space_message);
-            events.extend(space_events);
+            messages.push((group_message, vec![]));
+            messages.push((space_message, space_events));
         }
 
-        Ok((space_y, messages, events))
+        Ok(RepairOutput::from(space_y, messages))
     }
 
     /// Instantiate space state from existing global auth state.
@@ -699,29 +670,34 @@ where
         let mut manager = manager_ref.inner.write().await;
         let mut space_dependencies = vec![];
         for id in groups_y.inner.toposort(include) {
-            let operation = groups_y
-                .inner
-                .operations
-                .get(&id)
+            let group_message = manager
+                .store
+                .get_spaces_message(&id)
+                .await
+                .map_err(|err| StoreError::MessageStore(err.to_string()))?
                 .expect("all auth operations exist");
+
+            // Apply the group message from the global state onto the local space state.
+            y.groups_y = AuthGroup::<C>::process(y.groups_y, &SpacesMessage::auth(&group_message))?;
 
             let args = SpacesArgs::SpaceMembership {
                 space_id: y.space_id,
                 group_id: y.group_id,
-                auth_message_id: operation.id(),
+                auth_message_id: group_message.hash(),
                 direct_messages: vec![],
                 space_dependencies: space_dependencies.clone(),
             };
-            let message = manager.identity.forge(args).await?;
+            let space_message = manager.identity.forge(args).await?;
 
             y.encryption_y
                 .orderer
-                .add_dependency(message.hash(), &space_dependencies);
+                .add_dependency(space_message.hash(), &space_dependencies);
 
-            space_dependencies = vec![message.hash()];
-            messages.push(message);
+            space_dependencies = vec![space_message.hash()];
+
+            messages.push(group_message);
+            messages.push(space_message);
         }
-        y.groups_y = groups_y;
 
         Ok((y, messages))
     }
@@ -824,11 +800,12 @@ where
     /// Returns all members who were removed from, and not re-admitted to, this space.
     pub async fn removed(&self) -> Result<Vec<MemberId>, SpaceError<F, C>> {
         let y = self.state().await?;
-        let mut members = y.groups_y.members(y.group_id).into_iter();
+        let members = y.groups_y.members(y.group_id);
         let removed = y
             .removed
             .iter()
-            .filter(|removed| members.any(|(member, _)| member != **removed))
+            // Filter out historically removed members which are now current members (they were re-added).
+            .filter(|removed| !members.iter().any(|(member, _)| member == *removed))
             .cloned();
         Ok(removed.collect())
     }
@@ -907,12 +884,79 @@ where
     }
 }
 
+/// Output from methods which create a new space or change the membership of an existing space.
+#[derive(Debug)]
+pub struct SpaceOutput<C, M> {
+    pub groups_y: AuthGroupState<C>,
+    pub space_y: SpacesState<C>,
+    pub messages: Vec<(M, Vec<Event<C>>)>,
+}
+
+impl<C, M> SpaceOutput<C, M> {
+    pub(crate) fn from(
+        group_output: GroupOutput<C, M>,
+        space_y: SpacesState<C>,
+        mut messages: Vec<(M, Vec<Event<C>>)>,
+    ) -> Self {
+        // We insert the group messages and event to the front so that they come before space
+        // ones.
+        messages.insert(0, (group_output.message, vec![group_output.event]));
+        Self {
+            groups_y: group_output.groups_y,
+            space_y,
+            messages,
+        }
+    }
+
+    pub fn events(&self) -> impl Iterator<Item = &Event<C>> {
+        self.messages.iter().flat_map(|(_, events)| events)
+    }
+}
+
+/// Output from methods which repair a space.
+#[derive(Debug)]
+pub struct RepairOutput<C, M> {
+    pub space_y: SpacesState<C>,
+    pub messages: Vec<(M, Vec<Event<C>>)>,
+}
+
+impl<C, M> RepairOutput<C, M> {
+    pub fn from(space_y: SpacesState<C>, messages: Vec<(M, Vec<Event<C>>)>) -> Self {
+        Self { space_y, messages }
+    }
+
+    pub fn events(&self) -> impl Iterator<Item = &Event<C>> {
+        self.messages.iter().flat_map(|(_, events)| events)
+    }
+}
+
+fn update_removed<C: Conditions>(
+    removed: &mut HashSet<MemberId>,
+    current_members: &[(MemberId, Access<C>)],
+    events: &[Event<C>],
+) {
+    for event in events.iter() {
+        if let Event::Spaces(SpaceEvent::Removed { context, .. }) = &event {
+            // We accumulate all members who were ever removed from a space here. If only the
+            // diff was used, it would be harder for consumers to implement block patterns
+            // based on this field as information about historic removals would be lost. To
+            // account for re-adds the current membership of the group can be compared against
+            // the remove list.
+            removed.extend(
+                removed_members(current_members, &context.members)
+                    .into_iter()
+                    .map(|(member, _)| member),
+            );
+        }
+    }
+}
+
 #[cfg(any(test, feature = "test_utils"))]
 impl<S, F, C> Space<S, F, C>
 where
     S: Clone
         + SpacesStore<SpacesStoreState<C>>
-        + SpacesMessageStore<SpacesArgs<C>>
+        + SpacesMessageStore<F::Message>
         + GroupsStore<AuthMessage<C>, C>
         + KeyRegistryStore
         + KeySecretsStore
@@ -927,16 +971,15 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
-        let (groups_y, space_y, auth_message, space_message, events) =
-            self.add(member, access).await?;
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
+        let result = self.add(member, access).await?;
 
-        self.manager.set_groups_state(&groups_y).await?;
+        self.manager.set_groups_state(&result.groups_y).await?;
         self.manager
-            .set_space_state(&self.id(), &space_y.into())
+            .set_space_state(&self.id(), &result.space_y.clone().into())
             .await?;
 
-        Ok((auth_message, space_message, events))
+        Ok(result)
     }
 
     /// Remove a member from the space.
@@ -945,15 +988,15 @@ where
     pub async fn remove_persisted(
         &self,
         member: ActorId,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
-        let (groups_y, space_y, auth_message, space_message, events) = self.remove(member).await?;
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
+        let result = self.remove(member).await?;
 
-        self.manager.set_groups_state(&groups_y).await?;
+        self.manager.set_groups_state(&result.groups_y).await?;
         self.manager
-            .set_space_state(&self.id(), &space_y.into())
+            .set_space_state(&self.id(), &result.space_y.clone().into())
             .await?;
 
-        Ok((auth_message, space_message, events))
+        Ok(result)
     }
 
     /// Promote an existing space member.
@@ -963,16 +1006,15 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
-        let (groups_y, space_y, auth_message, space_message, events) =
-            self.promote(member, access).await?;
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
+        let result = self.promote(member, access).await?;
 
-        self.manager.set_groups_state(&groups_y).await?;
+        self.manager.set_groups_state(&result.groups_y).await?;
         self.manager
-            .set_space_state(&self.id(), &space_y.into())
+            .set_space_state(&self.id(), &result.space_y.clone().into())
             .await?;
 
-        Ok((auth_message, space_message, events))
+        Ok(result)
     }
 
     /// Demote an existing space member.
@@ -982,16 +1024,14 @@ where
         &self,
         member: ActorId,
         access: Access<C>,
-    ) -> Result<(F::Message, F::Message, Vec<Event<C>>), SpaceError<F, C>> {
-        let (groups_y, space_y, auth_message, space_message, events) =
-            self.demote(member, access).await?;
-
-        self.manager.set_groups_state(&groups_y).await?;
+    ) -> Result<SpaceOutput<C, F::Message>, SpaceError<F, C>> {
+        let result = self.demote(member, access).await?;
+        self.manager.set_groups_state(&result.groups_y).await?;
         self.manager
-            .set_space_state(&self.id(), &space_y.into())
+            .set_space_state(&self.id(), &result.space_y.clone().into())
             .await?;
 
-        Ok((auth_message, space_message, events))
+        Ok(result)
     }
 
     /// Publish a message encrypted towards all current group members.
@@ -1009,12 +1049,12 @@ where
     pub async fn repair_persisted(
         &self,
         groups: &[GroupId],
-    ) -> Result<(Vec<F::Message>, Vec<Event<C>>), SpaceError<F, C>> {
-        let (space_y, messages, events) = self.repair(groups).await?;
+    ) -> Result<RepairOutput<C, F::Message>, SpaceError<F, C>> {
+        let result = self.repair(groups).await?;
         self.manager
-            .set_space_state(&self.id(), &space_y.into())
+            .set_space_state(&self.id(), &result.space_y.clone().into())
             .await?;
-        Ok((messages, events))
+        Ok(result)
     }
 }
 

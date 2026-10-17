@@ -122,3 +122,17 @@ pub enum LogSyncError<E> {
     #[error(transparent)]
     ActorRpc(#[from] Box<ractor::RactorErr<ToSyncManager<Operation<E>, TopicLogSyncEvent<E>>>>),
 }
+
+#[derive(Debug, Error)]
+#[error("sync session was rejected: {reason}")]
+pub struct LogSyncRejected {
+    reason: String,
+}
+
+impl LogSyncRejected {
+    pub fn new(reason: &str) -> Self {
+        Self {
+            reason: reason.to_string(),
+        }
+    }
+}

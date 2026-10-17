@@ -42,9 +42,6 @@ where
     #[error(transparent)]
     Inner(#[from] GroupCrdtInnerError<OP>),
 
-    #[error("duplicate operation {0} processed in group {1}")]
-    DuplicateOperation(OP, ID),
-
     #[error("missing dependency {0} for operation {1}")]
     MissingDependencies(OP, OP),
 
@@ -606,6 +603,12 @@ where
         mut y: GroupCrdtState<ID, OP, M, C>,
         operation: &M,
     ) -> Result<GroupCrdtState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+        // Detect already processed operations.
+        if y.inner.operations.contains_key(&operation.id()) {
+            // The operation has already been processed.
+            return Ok(y);
+        }
+
         for dependency in operation.dependencies() {
             if !y.inner.operations.contains_key(&dependency) {
                 return Err(GroupCrdtError::MissingDependencies(
@@ -673,15 +676,6 @@ where
         y: &GroupCrdtState<ID, OP, M, C>,
         operation: &M,
     ) -> Result<(), GroupCrdtError<ID, OP>> {
-        // Detect already processed operations.
-        if y.inner.operations.contains_key(&operation.id()) {
-            // The operation has already been processed.
-            return Err(GroupCrdtError::DuplicateOperation(
-                operation.id(),
-                operation.group_id(),
-            ));
-        }
-
         // Adding a group as a manager of another group is currently not
         // supported.
         //

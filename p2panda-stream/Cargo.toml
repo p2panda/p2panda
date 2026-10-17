@@ -33,6 +33,7 @@ default = [
 groups = [
   "p2panda-auth/serde",
   "p2panda-store/groups",
+  "p2panda-spaces",
   "dep:serde",
 ]
 ingest = [

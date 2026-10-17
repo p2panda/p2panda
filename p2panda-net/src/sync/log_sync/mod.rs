@@ -6,7 +6,7 @@ mod builder;
 #[cfg(test)]
 mod tests;
 
-pub use api::{LogSync, LogSyncError};
+pub use api::{LogSync, LogSyncError, LogSyncRejected};
 pub use builder::Builder;
 
 pub const LOG_SYNC_PROTOCOL_ID: &[u8] = b"p2panda/log_sync/v1";
