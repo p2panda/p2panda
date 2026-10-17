@@ -521,7 +521,7 @@ impl Node {
         post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
 
         // TODO: Add "repair" processor hooks.
-        self.stream_from_inner(topic, from, false, post_pipeline)
+        self.stream_from_inner(topic, from, false, post_pipeline, None)
             .await
     }
 
