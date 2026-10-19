@@ -83,13 +83,13 @@ impl<M> StreamSubscription<M> {
     /// _after_ applicaton-level processing has successfully finished. See high-level description in
     /// [`Node::stream`](crate::node::Node::stream) for more details.
     pub async fn ack(&self, id: Hash) -> Result<(), AckedError> {
-        let operation = tx!(self.store, {
-            OperationStore::<_, _>::get_operation_tx(&self.store, &id).await?
-        });
+        tx!(self.store, {
+            let operation = OperationStore::<_, _>::get_operation_tx(&self.store, &id).await?;
 
-        if let Some(operation) = operation {
-            self.acked.ack(&operation.header).await?;
-        }
+            if let Some(operation) = operation {
+                self.acked.ack_tx(&operation.header).await?;
+            }
+        });
 
         Ok(())
     }
