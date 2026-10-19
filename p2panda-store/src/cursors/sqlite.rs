@@ -16,9 +16,12 @@ where
     type Error = SqliteError;
 
     /// Returns the cursor matching the given name from the database.
-    async fn get_cursor(&self, name: impl AsRef<str>) -> Result<Option<Cursor<A, L>>, Self::Error> {
+    async fn get_cursor_tx(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Result<Option<Cursor<A, L>>, Self::Error> {
         let state_bytes: Option<Vec<u8>> = self
-            .execute(async |pool| {
+            .tx(async |tx| {
                 query_scalar(
                     "
                     SELECT
@@ -30,7 +33,7 @@ where
                     ",
                 )
                 .bind(name.as_ref())
-                .fetch_optional(pool)
+                .fetch_optional(&mut **tx)
                 .await
                 .map_err(SqliteError::Sqlite)
             })

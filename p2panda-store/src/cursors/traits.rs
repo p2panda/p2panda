@@ -11,7 +11,7 @@ pub trait CursorStore<A, L> {
     /// Returns the cursor matching the given name.
     ///
     /// Returns `None` if no cursor was found.
-    fn get_cursor(
+    fn get_cursor_tx(
         &self,
         name: impl AsRef<str>,
     ) -> impl Future<Output = Result<Option<Cursor<A, L>>, Self::Error>>;

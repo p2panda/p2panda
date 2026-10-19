@@ -2,7 +2,6 @@
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use p2panda_core::logs::{LogHeights, LogRanges};
 use p2panda_core::{AnyOperation, Cursor, Hash, SeqNum, Topic, VerifyingKey};
@@ -11,7 +10,6 @@ use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use thiserror::Error;
-use tokio::sync::Semaphore;
 
 use crate::operation::{Header, LogId};
 use crate::streams::StreamFrom;
@@ -24,7 +22,6 @@ pub struct Acked {
     cursor_name: String,
     topic: Topic,
     store: SqliteStore,
-    semaphore: Arc<Semaphore>,
 }
 
 impl Acked {
@@ -43,7 +40,6 @@ impl Acked {
             store,
             topic: topic.into(),
             cursor_name: name.as_ref().to_string(),
-            semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 
@@ -52,8 +48,8 @@ impl Acked {
         &self.cursor_name
     }
 
-    pub async fn cursor(&self) -> Result<Cursor<VerifyingKey, LogId>, AckedError> {
-        let cursor = self.store.get_cursor(&self.cursor_name).await?;
+    async fn cursor(&self) -> Result<Cursor<VerifyingKey, LogId>, AckedError> {
+        let cursor = self.store.get_cursor_tx(&self.cursor_name).await?;
         Ok(cursor.unwrap_or(Cursor::new(&self.cursor_name, LogHeights::default())))
     }
 
@@ -70,9 +66,7 @@ impl Acked {
             ));
         }
 
-        tx!(self.store, {
-            self.store.set_cursor_tx(&new_cursor).await?;
-        });
+        self.store.set_cursor_tx(&new_cursor).await?;
 
         Ok(new_cursor)
     }
@@ -82,8 +76,6 @@ impl Acked {
         &self,
         from: StreamFrom,
     ) -> Result<LogRanges<VerifyingKey, LogId>, AckedError> {
-        let _permit = self.semaphore.acquire().await;
-
         // Get state vector of local replica for all logs related to this topic.
         let local_log_heights = {
             let logs: Logs = self.store.resolve(&self.topic).await?;
@@ -95,25 +87,27 @@ impl Acked {
         // If a new cursor was given we replace the current one with it. This changes the persisted
         // state as well and can't be reversed!
         //
-        // We do this to simplify the API, otherwise we would need to keep track of two cursors
-        // (one for managing the replay, another for managing the stream itself).
-        let cursor = match from {
-            StreamFrom::Frontier => self.cursor().await?,
-            StreamFrom::Start => {
-                // TODO: This is a bit surprising here (unrelated to querying the nacked log
-                // ranges).
-                //
-                // The replay flow can be refactored into a dedicated place where we want to:
-                //
-                // 1. Replace the cursor
-                // 2. Calculate nacked log range
-                // 3. Reset orderer state
-                // 4. Replay operations
-                self.replace_cursor(Cursor::new(&self.cursor_name, LogHeights::default()))
-                    .await?
+        // We do this to simplify the API, otherwise we would need to keep track of two cursors (one
+        // for managing the replay, another for managing the stream itself).
+        let cursor = tx!(self.store, {
+            match from {
+                StreamFrom::Frontier => self.cursor().await?,
+                StreamFrom::Start => {
+                    // TODO: This is a bit surprising here (unrelated to querying the nacked log
+                    // ranges).
+                    //
+                    // The replay flow can be refactored into a dedicated place where we want to:
+                    //
+                    // 1. Replace the cursor
+                    // 2. Calculate nacked log range
+                    // 3. Reset orderer state
+                    // 4. Replay operations
+                    self.replace_cursor(Cursor::new(&self.cursor_name, LogHeights::default()))
+                        .await?
+                }
+                StreamFrom::Cursor(cursor) => self.replace_cursor(cursor).await?,
             }
-            StreamFrom::Cursor(cursor) => self.replace_cursor(cursor).await?,
-        };
+        });
 
         // Compute difference between local set and what was acked so far. The result is the set of
         // all not-acked operations expressed as log ranges.
@@ -124,20 +118,25 @@ impl Acked {
 
     /// Advance internal cursor by acking an operation.
     pub async fn ack(&self, header: impl Borrow<Header>) -> Result<(), AckedError> {
-        let _permit = self.semaphore.acquire().await;
+        tx!(self.store, {
+            self.ack_tx(header).await?;
+        });
 
+        Ok(())
+    }
+
+    pub(crate) async fn ack_tx(&self, header: impl Borrow<Header>) -> Result<(), AckedError> {
         let header = header.borrow();
 
         let mut cursor = self.cursor().await?;
+
         cursor.advance(
             header.verifying_key,
             header.extensions.log_id(),
             header.seq_num,
         );
 
-        tx!(self.store, {
-            self.store.set_cursor_tx(&cursor).await?;
-        });
+        self.store.set_cursor_tx(&cursor).await?;
 
         Ok(())
     }
@@ -307,6 +306,70 @@ mod tests {
                 .get(&log_id)
                 .unwrap(),
             &(None, Some(0)),
+        );
+    }
+
+    #[tokio::test]
+    async fn fix_concurrent_acks_on_same_cursor() {
+        // Related issue: <https://github.com/p2panda/p2panda/issues/1517>
+        let topic = Topic::random();
+        let store = SqliteStore::temporary().await;
+        let log_id = LogId::from_topic(topic);
+
+        // Two authors write to the same topic.
+        let forge_1 = OperationForge::new(Credentials::generate(), store.clone());
+        let forge_2 = OperationForge::new(Credentials::generate(), store.clone());
+
+        let mut operations_1 = Vec::new();
+        let mut operations_2 = Vec::new();
+        for _ in 0..20 {
+            for (forge, operations) in
+                [(&forge_1, &mut operations_1), (&forge_2, &mut operations_2)]
+            {
+                let operation = forge
+                    .create_operation(
+                        Some(topic),
+                        log_id,
+                        Some(b"la".to_vec()),
+                        Extensions::from_topic(topic),
+                    )
+                    .await
+                    .unwrap();
+                operations.push(operation);
+            }
+        }
+
+        // Two instances tracking the same cursor ack concurrently.
+        let acked_1 = Acked::new(store.clone(), topic);
+        let acked_2 = Acked::new(store.clone(), topic);
+
+        tokio::join!(
+            async {
+                for operation in operations_1 {
+                    acked_1.ack(operation).await.unwrap();
+                }
+            },
+            async {
+                for operation in operations_2 {
+                    acked_2.ack(operation).await.unwrap();
+                }
+            },
+        );
+
+        // No ack should have been lost.
+        assert!(
+            acked_1
+                .nacked_log_ranges(StreamFrom::Frontier)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            acked_2
+                .nacked_log_ranges(StreamFrom::Frontier)
+                .await
+                .unwrap()
+                .is_empty()
         );
     }
 
