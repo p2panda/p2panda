@@ -229,18 +229,12 @@ impl KeyBundleTask {
         {
             let ready_signal = ready_signal.clone();
 
-            tokio::spawn(async move {
-                let result =
-                    renew_expired_key_bundles(manager, egress_handle, ready_signal, frequency)
-                        .await;
-
-                match result {
-                    Ok(_) => debug!("key bundle management task ended"),
-                    Err(ref err) => {
-                        error!("failed task to automatically renew key bundles: {}", err);
-                    }
-                }
-            });
+            tokio::spawn(renew_expired_key_bundles(
+                manager,
+                egress_handle,
+                ready_signal,
+                frequency,
+            ));
         }
 
         // Wait until we've received a "ready" signal from the internal task. Like this we can
@@ -263,12 +257,7 @@ async fn renew_expired_key_bundles(
     egress_handle: EgressHandle,
     ready_signal: Arc<Notify>,
     frequency: Duration,
-) -> Result<(), SpacesManagerError> {
-    let config = DispatchConfig {
-        delivery: EventDeliveryPolicy::OnlySpaces,
-        processing: EventProcessingPolicy::Disabled,
-    };
-
+) {
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
     let mut interval = tokio::time::interval(frequency);
@@ -276,28 +265,46 @@ async fn renew_expired_key_bundles(
     loop {
         interval.tick().await;
 
-        // Avoid acquiring a write transaction when no rotation is required.
-        if !manager.is_key_bundle_rotation_due().await? {
-            ready_signal.notify_one();
-            continue;
+        if let Err(err) = renew_expired_key_bundle(&manager, &egress_handle).await {
+            error!("failed to automatically renew key bundle: {}", err);
         }
 
-        // Rotation is checked again inside the transaction, `None` means the key bundle was
-        // already rotated in the meantime.
-        if let Some(message) = manager.rotate_key_bundle().await? {
-            let operation = message.into_operation();
-
-            debug!(
-                seq_num = operation.header.seq_num,
-                "key bundle non-existent or about to expire, automatically generate new one"
-            );
-
-            // TODO: Handle error?
-            let _ = egress_handle.dispatch_with_config(operation, &config).await;
-        }
-
+        // Signal readiness even after a failure to not block startup, we retry on the next tick.
         ready_signal.notify_one();
     }
+}
+
+async fn renew_expired_key_bundle(
+    manager: &SpacesManager,
+    egress_handle: &EgressHandle,
+) -> Result<(), SpacesManagerError> {
+    // Avoid acquiring a write transaction when no rotation is required.
+    if !manager.is_key_bundle_rotation_due().await? {
+        return Ok(());
+    }
+
+    // Rotation is checked again inside the transaction, `None` means the key bundle was already
+    // rotated in the meantime.
+    let Some(message) = manager.rotate_key_bundle().await? else {
+        return Ok(());
+    };
+
+    let operation = message.into_operation();
+
+    debug!(
+        seq_num = operation.header.seq_num,
+        "key bundle non-existent or about to expire, automatically generate new one"
+    );
+
+    let config = DispatchConfig {
+        delivery: EventDeliveryPolicy::OnlySpaces,
+        processing: EventProcessingPolicy::Disabled,
+    };
+
+    // TODO: Handle error?
+    let _ = egress_handle.dispatch_with_config(operation, &config).await;
+
+    Ok(())
 }
 
 /// Associate member log's by observing spaces events.
