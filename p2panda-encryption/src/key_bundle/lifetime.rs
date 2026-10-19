@@ -40,6 +40,22 @@ impl Lifetime {
         }
     }
 
+    /// Create a lifetime from UNIX timestamps in seconds.
+    pub fn from_range(not_before: u64, not_after: u64) -> Self {
+        Self {
+            not_before,
+            not_after,
+        }
+    }
+
+    pub fn not_before(&self) -> u64 {
+        self.not_before
+    }
+
+    pub fn not_after(&self) -> u64 {
+        self.not_after
+    }
+
     /// Returns true if this lifetime is valid.
     pub fn verify(&self) -> Result<(), LifetimeError> {
         let is_valid = match SystemTime::now()
@@ -106,16 +122,6 @@ impl Ord for Lifetime {
 impl PartialOrd for Lifetime {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-#[cfg(any(test, feature = "test_utils"))]
-impl Lifetime {
-    pub fn from_range(not_before: u64, not_after: u64) -> Self {
-        Self {
-            not_before,
-            not_after,
-        }
     }
 }
 
