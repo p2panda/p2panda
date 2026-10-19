@@ -97,6 +97,10 @@ impl LongTermKeyBundle {
             prekey_signature,
         }
     }
+
+    pub fn prekey_signature(&self) -> &XSignature {
+        &self.prekey_signature
+    }
 }
 
 impl KeyBundle for LongTermKeyBundle {
