@@ -199,18 +199,12 @@ where
                     // Handle resulting output events from the pipeline and forward them as stream
                     // events to application layer, when applicable.
                     from_pipeline_event = pipeline.next() => {
-                        if let Some(forward_events) =
-                            process_operation_out::<M>(
-                                from_pipeline_event,
-                                topic,
-                                ack_policy,
-                                &acked
-                            ).await
-                        {
-                            forward_events
-                        } else {
-                            continue;
-                        }
+                        process_operation_out::<M>(
+                            from_pipeline_event,
+                            topic,
+                            ack_policy,
+                            &acked
+                        ).await
                     },
 
                     // Any other process forwarding an event (like "replay ended", etc.) to the
