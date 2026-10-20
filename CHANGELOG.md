@@ -101,6 +101,7 @@ Highlights are marked with a pancake 🥞
 - store: Use `BEGIN IMMEDIATE` in database transaction to allow awaiting busy write locks across processes [#1502](https://github.com/p2panda/p2panda/pull/1502)
 - net: Do not block sync actor awaiting `send_after` on retry [#1506](https://github.com/p2panda/p2panda/pull/1506)
 - store: Fix "write" methods not using transactions, consistent naming with _tx suffix [#1515](https://github.com/p2panda/p2panda/pull/1515)
+- node: Fix flaky spaces tests [#1539](https://github.com/p2panda/p2panda/pull/1539)
 
 ## [0.7.1] - 21/08/2026
 
