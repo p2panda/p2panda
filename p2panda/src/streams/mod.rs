@@ -5,6 +5,7 @@ mod drop_guard;
 mod ephemeral_stream;
 mod event_stream;
 mod external_stream;
+mod post_pipeline;
 mod publisher;
 mod replay;
 mod stream;
@@ -27,6 +28,7 @@ pub use ephemeral_stream::{
 pub use event_stream::SystemEvent;
 pub(crate) use event_stream::event_stream;
 pub use external_stream::ExternalStreamFuture;
+pub(crate) use post_pipeline::process_operation_out;
 pub(crate) use publisher::ImportLocalTx;
 pub use publisher::{CloseError, ImportError, PublishError, PublishFuture, StreamPublisher};
 pub use replay::{ReplayError, StreamFrom};
