@@ -22,7 +22,7 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::{group_log_id, member_log_id};
 pub use group::{
-    AddGroupMemberError, Group, GroupError, GroupSubscription, PendingGroup, RemoveGroupMemberError,
+    AddGroupMemberError, Group, GroupSubscription, PendingGroup, RemoveGroupMemberError,
 };
 pub(crate) use group::{group_stream, is_group, pending_group_stream};
 pub use member::{GroupActor, Member, MemberError};

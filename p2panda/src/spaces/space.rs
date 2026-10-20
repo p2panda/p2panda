@@ -157,6 +157,8 @@ where
             err,
         })?;
 
+        self.repair(None).await.map_err(Box::new)?;
+
         // TODO: We'll remove custom `M` types in the future, users will only provide bytes on this
         // level.
         let body_bytes = encode_cbor(&message)?;
@@ -197,11 +199,7 @@ where
             err,
         })?;
 
-        // If the new actor is a group then push any required group operations into the space and
-        // make log associations.
-        if is_group(&self.store, actor).await? {
-            self.repair_task.repair_space_with(space_id, actor).await?;
-        }
+        self.repair(Some(actor)).await?;
 
         let output = self
             .inner
@@ -232,6 +230,8 @@ where
             }
         })?;
 
+        self.repair(None).await?;
+
         let output = self.inner.remove(actor).await?;
         self.process_change(output).await?;
 
@@ -256,6 +256,8 @@ where
                 err,
             }
         })?;
+
+        self.repair(None).await?;
 
         let output = self
             .inner
@@ -292,6 +294,8 @@ where
             }
         })?;
 
+        self.repair(None).await?;
+
         let output = self
             .inner
             .demote(
@@ -304,6 +308,23 @@ where
             .await?;
 
         self.process_change(output).await?;
+
+        Ok(())
+    }
+
+    async fn repair(&self, new_member: Option<ActorId>) -> Result<(), RepairError> {
+        let space_id = self.id();
+
+        // Repair the space to account for any unprocessed changes which may have occurred due to
+        // concurrent actions or repair errors. If the new actor is a group then additionally
+        // request that the group is incorporated into the space.
+        if let Some(actor) = new_member
+            && is_group(&self.store, actor).await?
+        {
+            self.repair_task.repair_space_with(space_id, actor).await?;
+        } else {
+            self.repair_task.repair_space(space_id).await?;
+        }
 
         Ok(())
     }
@@ -449,10 +470,7 @@ pub enum AddSpaceMemberError {
     },
 
     #[error(transparent)]
-    Sqlite(#[from] SqliteError),
-
-    #[error(transparent)]
-    Repair(#[from] RepairCommandError),
+    Repair(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -473,6 +491,9 @@ pub enum RemoveSpaceMemberError {
         space_id: SpaceId,
         err: RemoveMemberError,
     },
+
+    #[error(transparent)]
+    Repair(#[from] RepairError),
 
     #[error(transparent)]
     Space(#[from] InnerSpaceError),
@@ -496,6 +517,9 @@ pub enum PromoteSpaceMemberError {
     },
 
     #[error(transparent)]
+    Repair(#[from] RepairError),
+
+    #[error(transparent)]
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
@@ -517,10 +541,22 @@ pub enum DemoteSpaceMemberError {
     },
 
     #[error(transparent)]
+    Repair(#[from] RepairError),
+
+    #[error(transparent)]
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
     Process(#[from] ProcessError),
+}
+
+#[derive(Debug, Error)]
+pub enum RepairError {
+    #[error(transparent)]
+    Repair(#[from] RepairCommandError),
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]
@@ -534,9 +570,6 @@ pub enum ProcessError {
 
     #[error(transparent)]
     SpaceEgress(#[from] SpaceEgressError),
-
-    #[error(transparent)]
-    Store(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]
@@ -548,6 +581,9 @@ pub enum PublishSpaceError {
     Validation { space_id: SpaceId, err: WriteError },
 
     #[error(transparent)]
+    Repair(#[from] Box<RepairError>),
+
+    #[error(transparent)]
     Space(#[from] Box<InnerSpaceError>),
 
     #[error(transparent)]
@@ -555,7 +591,4 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Store(#[from] SqliteError),
 }

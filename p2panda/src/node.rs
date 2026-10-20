@@ -563,9 +563,10 @@ impl Node {
                 group_ids.push(actor_id);
             }
         }
+
         if !group_ids.is_empty() {
             self.repair_task
-                .repair_group_with(group_id, group_ids)
+                .repair_group_with(group_id, &group_ids)
                 .await?;
         }
 
