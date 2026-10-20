@@ -97,6 +97,7 @@ Highlights are marked with a pancake 🥞
 - node: Exit leaking pipeline thread on drop [#1524](https://github.com/p2panda/p2panda/pull/1524)
 - node: Fix deadlock caused by nested transactions when clearing orderer state during replay [#1516](https://github.com/p2panda/p2panda/pull/1516)
 - node: Fix lost cursor updates when acking across duplicate topic streams [#1545](https://github.com/p2panda/p2panda/pull/1545)
+- node: Fix acking space control messages [#1546](https://github.com/p2panda/p2panda/pull/1546)
 - spaces: Deterministic deserialization of `SpacesArgs` [#1264](https://github.com/p2panda/p2panda/pull/1264)
 - spaces: Fix calculation of historically removed members [#1455](https://github.com/p2panda/p2panda/pull/1455)
 - spaces: Fix bug instantiating space from existing groups state [#1457](https://github.com/p2panda/p2panda/pull/1457)
