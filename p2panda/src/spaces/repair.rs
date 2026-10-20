@@ -268,9 +268,19 @@ impl RepairTask {
                                 }
                                 let _ = reply.send(result);
                             }
+                            Some(RepairTaskCommand::RepairSpace { space_id, reply }) => {
+                                let egress_handle = egress.handle();
+                                let result = repair_space(&manager, &store, &egress_handle, space_id, None).await;
+                                let _ = reply.send(result);
+                            }
                             Some(RepairTaskCommand::RepairSpaceWith { space_id, include, reply }) => {
                                 let egress_handle = egress.handle();
                                 let result = repair_space(&manager, &store, &egress_handle, space_id, Some(include)).await;
+                                let _ = reply.send(result);
+                            }
+                            Some(RepairTaskCommand::RepairGroup { group_id, reply }) => {
+                                let egress_handle = egress.handle();
+                                let result = sync_group(&store, &egress_handle, group_id, &[]).await;
                                 let _ = reply.send(result);
                             }
                             Some(RepairTaskCommand::RepairGroupWith { group_id, include, reply }) => {
@@ -302,6 +312,17 @@ impl RepairTask {
         Ok(())
     }
 
+    /// Repair a space.
+    pub async fn repair_space(&self, space_id: SpaceId) -> Result<(), RepairCommandError> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(RepairTaskCommand::RepairSpace {
+            space_id,
+            reply: tx,
+        })?;
+        rx.await??;
+        Ok(())
+    }
+
     /// Repair a space and include a "new" non-member group which should be incorporated ready to
     /// be added as a member later.
     pub async fn repair_space_with(
@@ -319,17 +340,28 @@ impl RepairTask {
         Ok(())
     }
 
+    /// Repair a group.
+    pub async fn repair_group(&self, group_id: GroupId) -> Result<(), RepairCommandError> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(RepairTaskCommand::RepairGroup {
+            group_id,
+            reply: tx,
+        })?;
+        rx.await??;
+        Ok(())
+    }
+
     /// Repair a group and include a set of "new" non-member groups which should be incorporated
     /// ready to be added as a member later.
     pub async fn repair_group_with(
         &self,
         group_id: GroupId,
-        include: Vec<GroupId>,
+        include: &[GroupId],
     ) -> Result<(), RepairCommandError> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(RepairTaskCommand::RepairGroupWith {
             group_id,
-            include,
+            include: include.to_vec(),
             reply: tx,
         })?;
         rx.await??;
@@ -380,14 +412,14 @@ async fn repair_space(
     include: Option<GroupId>,
 ) -> Result<(), RepairError> {
     // Only members with read access or higher can repair spaces.
-    if !manager.has_joined_space(space_id).await? {
+    if !manager.has_joined_space(space_id).await.map_err(Box::new)? {
         return Ok(());
     }
 
-    let space = manager.space(space_id).created().await?;
+    let space = manager.space(space_id).created().await.map_err(Box::new)?;
 
     // We sync both the space group itself and the optional "other" group.
-    let mut group_ids = vec![space.group_id().await?];
+    let mut group_ids = vec![space.group_id().await.map_err(Box::new)?];
     if let Some(id) = include {
         group_ids.push(id)
     };
@@ -402,7 +434,7 @@ async fn repair_space(
 
     // Incorporate the missing operations into the space, this forges new "space membership"
     // operations.
-    let output = space.repair(&group_ids).await?;
+    let output = space.repair(&group_ids).await.map_err(Box::new)?;
 
     dispatch_spaces_events(egress_handle, space_id, output.messages).await?;
 
@@ -586,6 +618,18 @@ pub enum RepairTaskCommand {
     /// Repair all groups and spaces and debounce multiple requests with a max wait.
     RepairDebounced,
 
+    /// Repair a space.
+    RepairSpace {
+        space_id: SpaceId,
+        reply: Sender<Result<(), RepairError>>,
+    },
+
+    /// Repair a group.
+    RepairGroup {
+        group_id: GroupId,
+        reply: Sender<Result<(), SyncError>>,
+    },
+
     /// Repair a space and include a "new" non-member group which should be incorporated ready to
     /// be added as a member later.
     RepairSpaceWith {
@@ -627,10 +671,10 @@ pub enum RepairError {
     Sync(#[from] SyncError),
 
     #[error(transparent)]
-    SpacesManager(#[from] SpacesManagerError),
+    Manager(#[from] Box<SpacesManagerError>),
 
     #[error(transparent)]
-    Space(#[from] InnerSpaceError),
+    Space(#[from] Box<InnerSpaceError>),
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
