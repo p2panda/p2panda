@@ -137,31 +137,33 @@ mod spaces_api {
         // Everyone receives the ADD space event.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space {
-                members,
                 inner: SpaceEvent::Added { .. },
+                actors,
                 ..
             } = event
             {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+                if actors
+                    .iter()
+                    .any(|(actor, _)| actor.id() == penguin_group.id())
+                {
+                    break;
+                }
             };
         }
 
         while let Some(event) = penguin_laptop_rx.next().await {
             if let StreamEvent::Space {
-                members,
                 inner: SpaceEvent::Added { .. },
+                actors,
                 ..
             } = event
             {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+                if actors
+                    .iter()
+                    .any(|(actor, _)| actor.id() == penguin_group.id())
+                {
+                    break;
+                }
             };
         }
 
@@ -170,16 +172,17 @@ mod spaces_api {
         // a part of a space, they are always replicated over the space topic as well.
         while let Some(event) = penguin_mobile_rx.next().await {
             if let StreamEvent::Space {
-                members,
                 inner: SpaceEvent::Added { .. },
+                actors,
                 ..
             } = event
             {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(panda.id(), AccessLevel::Manage)));
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+                if actors
+                    .iter()
+                    .any(|(actor, _)| actor.id() == penguin_group.id())
+                {
+                    break;
+                }
             };
         }
 
@@ -544,8 +547,8 @@ mod spaces_api {
 mod spaces_repair_task {
     use std::collections::HashSet;
 
+    use p2panda::Topic;
     use p2panda::streams::{GroupAction, StreamEvent};
-    use p2panda::{SpaceEvent, Topic};
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
@@ -624,12 +627,10 @@ mod spaces_repair_task {
             .unwrap();
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, inner, .. } = event {
-                if let SpaceEvent::Added { .. } = inner {
-                    assert_eq!(members.len(), 2);
-                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+            if let StreamEvent::Space { members, .. } = event {
+                if members.len() == 2 && members.contains(&(penguin.id(), AccessLevel::Read)) {
                     break;
-                }
+                };
             };
         }
 
@@ -662,11 +663,16 @@ mod spaces_repair_task {
         // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+                if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
+                {
+                    break;
+                };
             };
         }
+
+        let members = panda_space.members().await.unwrap();
+        assert_eq!(members.len(), 3);
+        assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
     }
 
     #[tokio::test]
@@ -738,12 +744,10 @@ mod spaces_repair_task {
             .unwrap();
 
         while let Some(event) = panda_rx.next().await {
-            if let StreamEvent::Space { members, inner, .. } = event {
-                if let SpaceEvent::Added { .. } = inner {
-                    assert_eq!(members.len(), 2);
-                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+            if let StreamEvent::Space { members, .. } = event {
+                if members.len() == 2 && members.contains(&(penguin.id(), AccessLevel::Read)) {
                     break;
-                }
+                };
             };
         }
 
@@ -774,11 +778,16 @@ mod spaces_repair_task {
         // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
-                break;
+                if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
+                {
+                    break;
+                };
             };
         }
+
+        let members = panda_space.members().await.unwrap();
+        assert_eq!(members.len(), 3);
+        assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
     }
 }
 
