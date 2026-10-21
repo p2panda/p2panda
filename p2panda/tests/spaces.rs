@@ -1118,6 +1118,7 @@ mod filtered_messages {
 
 mod members {
     use p2panda::Topic;
+    use p2panda::spaces::Member;
     use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
@@ -1171,9 +1172,11 @@ mod members {
         drop(node_d_space);
         drop(node_d_rx);
 
-        // Node A brings everyone into the space. The space has the members {A, B, C, D} now.
+        // Node A brings everyone into the space. The space has the members {A, B, C, D} now. Node
+        // B's key bundle is shared "offchain" as bytes.
+        let node_b_bytes = node_b.me().await.unwrap().to_bytes();
         node_a
-            .register_member(node_b.me().await.unwrap())
+            .register_member(Member::from_bytes(&node_b_bytes).unwrap())
             .await
             .unwrap();
 

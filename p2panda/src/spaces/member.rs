@@ -64,12 +64,24 @@ use crate::spaces::types::{
 };
 use crate::streams::Event;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Member {
     pub(crate) inner: InnerMember,
 }
 
 impl Member {
+    /// Decode a member from bytes, for example received via a QR code.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, p2panda_spaces::member::MemberError> {
+        Ok(Self {
+            inner: InnerMember::from_bytes(bytes)?,
+        })
+    }
+
+    /// Compact byte encoding of this member, for example to share it via a QR code.
+    pub fn to_bytes(&self) -> [u8; p2panda_spaces::member::MEMBER_BYTES_LEN] {
+        self.inner.to_bytes()
+    }
+
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
