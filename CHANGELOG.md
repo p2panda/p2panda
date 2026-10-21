@@ -21,6 +21,7 @@ Highlights are marked with a pancake 🥞
 - net: Gracefully close all sync actors [#1598](https://github.com/p2panda/p2panda/pull/1598)
 - net: Sync session management re-write [#1612](https://github.com/p2panda/p2panda/pull/1612)
 - node: Always emit replay started/ended events in Node [#1620](https://github.com/p2panda/p2panda/pull/1620)
+- node: Egress improvements and refactors [#1518](https://github.com/p2panda/p2panda/pull/1518)
 
 ### Fixed
 

@@ -14,7 +14,7 @@ use p2panda_store::groups::GroupsStore;
 use p2panda_store::{SqliteError, SqliteStore};
 use thiserror::Error;
 
-use crate::egress::{EgressError, EgressHandle, SubmitError};
+use crate::egress::{DispatchError, EgressHandle};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{
     AuthCapabilities, InnerGroup, InnerGroupError, InnerPendingGroup, NoBody, SpacesManagerError,
@@ -241,7 +241,7 @@ impl Group {
         let processed = self
             .egress_handle
             .dispatch(output.message.into_operation(), self.id().into())
-            .await?;
+            .await;
         processed.await?;
 
         Ok(())
@@ -268,7 +268,7 @@ impl Group {
         let processed = self
             .egress_handle
             .dispatch(output.message.into_operation(), self.id().into())
-            .await?;
+            .await;
         processed.await?;
 
         Ok(())
@@ -387,10 +387,7 @@ pub enum AddGroupMemberError {
     GroupActors(#[from] GroupActorsError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
+    Dispatch(#[from] DispatchError),
 }
 
 /// Error occurred when removing a member from a group.
@@ -417,10 +414,7 @@ pub enum RemoveGroupMemberError {
     GroupActors(#[from] GroupActorsError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
+    Dispatch(#[from] DispatchError),
 }
 
 #[derive(Debug, Error)]
