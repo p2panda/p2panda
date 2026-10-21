@@ -182,8 +182,16 @@ impl PendingMember {
 }
 
 #[derive(Debug, Error)]
-#[error(transparent)]
-pub struct MemberError(#[from] SpacesManagerError);
+#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
+pub enum MemberError {
+    #[error(transparent)]
+    SpacesManager(#[from] SpacesManagerError),
+
+    /// Our own key bundle is missing or expired. This should only occur if the key bundle
+    /// background task failed or did not renew our key bundle in time.
+    #[error("no valid key bundle available for this node")]
+    KeyBundleUnavailable,
+}
 
 /// Background task to automatically publish a new member message into all currently active space
 /// streams if the associated key bundle is about to expire.
@@ -221,18 +229,12 @@ impl KeyBundleTask {
         {
             let ready_signal = ready_signal.clone();
 
-            tokio::spawn(async move {
-                let result =
-                    renew_expired_key_bundles(manager, egress_handle, ready_signal, frequency)
-                        .await;
-
-                match result {
-                    Ok(_) => debug!("key bundle management task ended"),
-                    Err(ref err) => {
-                        error!("failed task to automatically renew key bundles: {}", err);
-                    }
-                }
-            });
+            tokio::spawn(renew_expired_key_bundles(
+                manager,
+                egress_handle,
+                ready_signal,
+                frequency,
+            ));
         }
 
         // Wait until we've received a "ready" signal from the internal task. Like this we can
@@ -255,12 +257,7 @@ async fn renew_expired_key_bundles(
     egress_handle: EgressHandle,
     ready_signal: Arc<Notify>,
     frequency: Duration,
-) -> Result<(), SpacesManagerError> {
-    let config = DispatchConfig {
-        delivery: EventDeliveryPolicy::OnlySpaces,
-        processing: EventProcessingPolicy::Disabled,
-    };
-
+) {
     // The interval always fires at start, later in the given frequency. This assures that we always
     // check the current key bundle at least once on process start.
     let mut interval = tokio::time::interval(frequency);
@@ -268,23 +265,46 @@ async fn renew_expired_key_bundles(
     loop {
         interval.tick().await;
 
-        if !manager.key_bundle_expired().await? {
-            ready_signal.notify_one();
-            continue;
+        if let Err(err) = renew_expired_key_bundle(&manager, &egress_handle).await {
+            error!("failed to automatically renew key bundle: {}", err);
         }
 
-        let operation = manager.key_bundle_message().await?.into_operation();
-
-        debug!(
-            seq_num = operation.header.seq_num,
-            "key bundle non-existent or expired, automatically generate new one"
-        );
-
-        // TODO: Handle error?
-        let _ = egress_handle.dispatch_with_config(operation, &config).await;
-
+        // Signal readiness even after a failure to not block startup, we retry on the next tick.
         ready_signal.notify_one();
     }
+}
+
+async fn renew_expired_key_bundle(
+    manager: &SpacesManager,
+    egress_handle: &EgressHandle,
+) -> Result<(), SpacesManagerError> {
+    // Avoid acquiring a write transaction when no rotation is required.
+    if !manager.is_key_bundle_rotation_due().await? {
+        return Ok(());
+    }
+
+    // Rotation is checked again inside the transaction, `None` means the key bundle was already
+    // rotated in the meantime.
+    let Some(message) = manager.rotate_key_bundle().await? else {
+        return Ok(());
+    };
+
+    let operation = message.into_operation();
+
+    debug!(
+        seq_num = operation.header.seq_num,
+        "key bundle non-existent or about to expire, automatically generate new one"
+    );
+
+    let config = DispatchConfig {
+        delivery: EventDeliveryPolicy::OnlySpaces,
+        processing: EventProcessingPolicy::Disabled,
+    };
+
+    // TODO: Handle error?
+    let _ = egress_handle.dispatch_with_config(operation, &config).await;
+
+    Ok(())
 }
 
 /// Associate member log's by observing spaces events.
@@ -441,7 +461,7 @@ mod tests {
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
 
         // 3. The key bundle exists and is valid. Calling "me" doesn't generate a new one.
-        let key_bundle = spaces_manager.me().await.unwrap();
+        let key_bundle = spaces_manager.me().await.unwrap().into_valid().unwrap();
         assert!(key_bundle.verify().is_ok());
         assert_eq!(get_op_count(&store, credentials.verifying_key()).await, 1);
     }
@@ -505,7 +525,7 @@ mod tests {
         };
         assert!(member_msg.verify().is_ok());
 
-        let expected_member_msg = spaces_manager.me().await.unwrap();
+        let expected_member_msg = spaces_manager.me().await.unwrap().into_valid().unwrap();
         // Compare key-bundles since every member instance will be generated with a new signature
         // and is therefore not equal.
         assert_eq!(expected_member_msg.key_bundle(), member_msg.key_bundle());

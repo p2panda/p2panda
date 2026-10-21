@@ -49,7 +49,7 @@ pub struct AuthenticatedMember {
 }
 
 impl AuthenticatedMember {
-    pub(crate) fn new(
+    pub(crate) fn sign(
         rng: &Rng,
         credentials: &Credentials,
         key_bundle: LongTermKeyBundle,
@@ -160,7 +160,7 @@ mod tests {
             )
         };
 
-        let member = AuthenticatedMember::new(&rng, &credentials, key_bundle).unwrap();
+        let member = AuthenticatedMember::sign(&rng, &credentials, key_bundle).unwrap();
         assert!(member.verify().is_ok());
 
         // Member id / verifying key is not matching signatures.
@@ -191,12 +191,12 @@ mod tests {
             )
         };
 
-        let member_1 = AuthenticatedMember::new(&rng, &credentials, key_bundle_1.clone()).unwrap();
+        let member_1 = AuthenticatedMember::sign(&rng, &credentials, key_bundle_1.clone()).unwrap();
         assert!(member_1.verify().is_ok());
 
         // Re-signing of the same key bundle using same credentials is okay, but will lead to
         // different signature (XEdDSA uses a random entropy source).
-        let member_2 = AuthenticatedMember::new(&rng, &credentials, key_bundle_1).unwrap();
+        let member_2 = AuthenticatedMember::sign(&rng, &credentials, key_bundle_1).unwrap();
         assert!(member_2.verify().is_ok());
         assert_ne!(member_1, member_2);
 
