@@ -11,7 +11,6 @@ use p2panda_auth::validation::{
 use p2panda_auth::{Access, AccessLevel};
 use p2panda_core::cbor::{EncodeError, encode_cbor};
 use p2panda_core::traits::ShortFormat;
-use p2panda_spaces::space::SpaceOutput;
 use p2panda_spaces::{ActorId, MemberId, SpaceId};
 use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
@@ -19,12 +18,10 @@ use thiserror::Error;
 
 use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
 use crate::spaces::is_group;
-use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{
-    AuthCapabilities, InnerPendingSpace, InnerSpace, InnerSpaceError, SpacesEvent,
-    SpacesManagerError,
+    InnerPendingSpace, InnerSpace, InnerSpaceError, SpacesEvent, SpacesManagerError,
 };
 use crate::streams::{CloseError, StreamEvent, StreamPublisher, StreamSubscription};
 
@@ -212,7 +209,7 @@ where
             )
             .await?;
 
-        self.process_change(output).await?;
+        dispatch_spaces_events(&self.egress_handle, self.id(), output.messages).await?;
 
         Ok(())
     }
@@ -233,7 +230,8 @@ where
         self.repair(None).await?;
 
         let output = self.inner.remove(actor).await?;
-        self.process_change(output).await?;
+
+        dispatch_spaces_events(&self.egress_handle, self.id(), output.messages).await?;
 
         Ok(())
     }
@@ -270,7 +268,7 @@ where
             )
             .await?;
 
-        self.process_change(output).await?;
+        dispatch_spaces_events(&self.egress_handle, self.id(), output.messages).await?;
 
         Ok(())
     }
@@ -307,7 +305,7 @@ where
             )
             .await?;
 
-        self.process_change(output).await?;
+        dispatch_spaces_events(&self.egress_handle, self.id(), output.messages).await?;
 
         Ok(())
     }
@@ -325,20 +323,6 @@ where
         } else {
             self.repair_task.repair_space(space_id).await?;
         }
-
-        Ok(())
-    }
-
-    async fn process_change(
-        &self,
-        space_output: SpaceOutput<AuthCapabilities, SpacesMessage>,
-    ) -> Result<(), ProcessError> {
-        // Associate member logs with this space. This is equivalent to the member association hook
-        // which is registered on the event processing pipeline. Since locally issued events are not
-        // going through the pipeline, we have to repeat it here as well.
-        associate_members(self.inner.me(), &self.store, space_output.events()).await;
-
-        dispatch_spaces_events(&self.egress_handle, self.id(), space_output.messages).await?;
 
         Ok(())
     }
@@ -476,7 +460,7 @@ pub enum AddSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Process(#[from] ProcessError),
+    Egress(#[from] SpaceEgressError),
 }
 
 #[derive(Debug, Error)]
@@ -499,7 +483,7 @@ pub enum RemoveSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Process(#[from] ProcessError),
+    Egress(#[from] SpaceEgressError),
 }
 
 #[derive(Debug, Error)]
@@ -523,7 +507,7 @@ pub enum PromoteSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Process(#[from] ProcessError),
+    Egress(#[from] SpaceEgressError),
 }
 
 #[derive(Debug, Error)]
@@ -547,7 +531,7 @@ pub enum DemoteSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Process(#[from] ProcessError),
+    Egress(#[from] SpaceEgressError),
 }
 
 #[derive(Debug, Error)]
@@ -557,19 +541,6 @@ pub enum RepairError {
 
     #[error(transparent)]
     Sqlite(#[from] SqliteError),
-}
-
-#[derive(Debug, Error)]
-#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
-pub enum ProcessError {
-    #[error(transparent)]
-    Space(#[from] InnerSpaceError),
-
-    #[error(transparent)]
-    Manager(#[from] SpacesManagerError),
-
-    #[error(transparent)]
-    SpaceEgress(#[from] SpaceEgressError),
 }
 
 #[derive(Debug, Error)]
