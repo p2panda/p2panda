@@ -25,8 +25,8 @@ pub use group::{
     AddGroupMemberError, Group, GroupSubscription, PendingGroup, RemoveGroupMemberError,
 };
 pub(crate) use group::{group_stream, is_group, pending_group_stream};
+pub(crate) use member::KeyBundleTask;
 pub use member::{GroupActor, Member, MemberError, PendingMember};
-pub(crate) use member::{KeyBundleTask, MemberAssociationHook};
 pub use space::{
     AddSpaceMemberError, PendingSpace, PublishSpaceError, RemoveSpaceMemberError, Space,
     SpaceEgressError, SpaceFuture, SpaceSubscription,

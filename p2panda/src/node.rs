@@ -22,16 +22,16 @@ use crate::credentials::Credentials;
 use crate::debouncer::Debouncer;
 use crate::egress::{Egress, EgressError, StreamType, SubmitError};
 use crate::forge::{Forge, OperationForge};
-use crate::hooks::{GroupsHook, RepairHook};
+use crate::hooks::{GroupsHook, MembersHook, RepairHook};
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
-    AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberAssociationHook,
-    MemberError, PendingGroup, PendingMember, PendingSpace, Space, SpaceEgressError,
-    SpaceSubscription, SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream,
-    is_group, member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager,
-    spaces_stream, to_initial_members,
+    AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberError,
+    PendingGroup, PendingMember, PendingSpace, Space, SpaceEgressError, SpaceSubscription,
+    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream, is_group,
+    member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -667,7 +667,7 @@ impl Node {
 
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
-        post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
+        post_pipeline.push(MembersHook::new(self.id(), self.store.clone()));
         post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
