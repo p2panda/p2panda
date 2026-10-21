@@ -192,7 +192,7 @@ mod nested_groups {
     use crate::spawn_node;
 
     #[tokio::test]
-    async fn team_with_device_groups() {
+    async fn team_with_device_groups_sync() {
         setup_logging();
 
         let network_id = Topic::random().into();
