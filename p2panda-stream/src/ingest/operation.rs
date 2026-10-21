@@ -88,6 +88,18 @@ where
         .map_err(|err| IngestError::StoreError(err.to_string()))?;
 
     if already_exists {
+        // Every operation should have it's author and log associated with the topic. This is to
+        // account for the case where a single operation is processed on multiple topics.
+        let verifying_key = operation.header.verifying_key;
+        <S as TopicStore<TP, VerifyingKey, L>>::associate_tx(store, topic, &verifying_key, log_id)
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
+        store
+            .commit(permit)
+            .await
+            .map_err(|err| IngestError::StoreError(err.to_string()))?;
+
         return Ok(IngestResult::AlreadyExists);
     }
 
