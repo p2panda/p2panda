@@ -27,8 +27,8 @@
 //! The pre-key is published in form of a key bundle in the member's own log. This log is dedicated
 //! to only these kinds of messages.
 //!
-//! Alternatively they can also be shared "offchain" in a side-channel, for example via a QR code
-//! etc. to increase privacy.
+//! Alternatively they can also be shared in a side-channel, for example via a QR code etc. to
+//! increase privacy.
 //!
 //! ## Expiring key bundles
 //!
@@ -336,7 +336,7 @@ async fn renew_expired_key_bundle(
 /// If Peer B would already associate D's member log when they've observed the CREATE event they
 /// would have had a chance to receive it from A. This hook makes sure that the association takes
 /// place.
-pub async fn associate_members(
+async fn associate_members(
     my_node_id: VerifyingKey,
     store: &SqliteStore,
     events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
