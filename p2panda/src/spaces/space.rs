@@ -17,7 +17,7 @@ use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
+use crate::egress::{DispatchError, DispatchFuture, EgressHandle};
 use crate::spaces::is_group;
 use crate::spaces::member::associate_members;
 use crate::spaces::message::SpacesMessage;
@@ -175,7 +175,7 @@ where
         let processed = self
             .egress_handle
             .dispatch(message.into_operation(), self.id().into())
-            .await?;
+            .await;
 
         Ok(SpaceFuture {
             processed,
@@ -381,18 +381,18 @@ pub(crate) async fn dispatch_spaces_events(
     egress_handle: &EgressHandle,
     space_id: SpaceId,
     events: Vec<(SpacesMessage, Vec<SpacesEvent>)>,
-) -> Result<(), SpaceEgressError> {
+) -> Result<(), DispatchError> {
     let topic = space_id.into();
 
     for (message, events) in events {
         let processed = if events.is_empty() {
             egress_handle
                 .dispatch(message.into_operation(), topic)
-                .await?
+                .await
         } else {
             egress_handle
                 .dispatch_with_spaces_events(message.into_operation(), topic, Some(events))
-                .await?
+                .await
         };
 
         processed.await?;
@@ -429,7 +429,7 @@ where
 
 pub struct SpaceFuture {
     pub space_id: SpaceId,
-    pub processed: SubmitFuture,
+    pub processed: DispatchFuture,
 }
 
 impl SpaceFuture {
@@ -439,21 +439,11 @@ impl SpaceFuture {
 }
 
 impl Future for SpaceFuture {
-    type Output = Result<(), EgressError>;
+    type Output = Result<(), DispatchError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.processed.poll_unpin(cx)
     }
-}
-
-#[derive(Debug, Error)]
-#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
-pub enum SpaceEgressError {
-    #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
 }
 
 #[derive(Debug, Error)]
@@ -569,7 +559,10 @@ pub enum ProcessError {
     Manager(#[from] SpacesManagerError),
 
     #[error(transparent)]
-    SpaceEgress(#[from] SpaceEgressError),
+    Dispatch(#[from] DispatchError),
+
+    #[error(transparent)]
+    Store(#[from] SqliteError),
 }
 
 #[derive(Debug, Error)]
@@ -590,5 +583,5 @@ pub enum PublishSpaceError {
     Encode(#[from] EncodeError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
+    Store(#[from] SqliteError),
 }
