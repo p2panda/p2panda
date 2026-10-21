@@ -16,7 +16,7 @@ use p2panda_store::{SqliteError, SqliteStore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::egress::{EgressError, EgressHandle, SubmitError, SubmitFuture};
+use crate::egress::{DispatchError, DispatchFuture, EgressHandle};
 use crate::spaces::is_group;
 use crate::spaces::message::SpacesMessage;
 use crate::spaces::repair::{RepairCommandError, RepairTask};
@@ -195,7 +195,7 @@ where
 ///     #     // Leave time for the message to sync with panda.
 ///     #     tokio::time::sleep(Duration::from_secs(10)).await;
 ///     # });
-///     # penguin_id  
+///     # penguin_id
 /// };
 ///
 /// // Panda waits for penguin subscribe to space and send there Member message which is
@@ -298,7 +298,7 @@ where
         let processed = self
             .egress_handle
             .dispatch(message.into_operation(), self.id().into())
-            .await?;
+            .await;
 
         Ok(SpaceFuture {
             processed,
@@ -497,18 +497,18 @@ pub(crate) async fn dispatch_spaces_events(
     egress_handle: &EgressHandle,
     space_id: SpaceId,
     events: Vec<(SpacesMessage, Vec<SpacesEvent>)>,
-) -> Result<(), SpaceEgressError> {
+) -> Result<(), DispatchError> {
     let topic = space_id.into();
 
     for (message, events) in events {
         let processed = if events.is_empty() {
             egress_handle
                 .dispatch(message.into_operation(), topic)
-                .await?
+                .await
         } else {
             egress_handle
                 .dispatch_with_spaces_events(message.into_operation(), topic, Some(events))
-                .await?
+                .await
         };
 
         processed.await?;
@@ -547,7 +547,7 @@ where
 /// Future to await processing completion of a message published to a space.
 pub struct SpaceFuture {
     pub space_id: SpaceId,
-    pub processed: SubmitFuture,
+    pub processed: DispatchFuture,
 }
 
 impl SpaceFuture {
@@ -558,7 +558,7 @@ impl SpaceFuture {
 }
 
 impl Future for SpaceFuture {
-    type Output = Result<(), EgressError>;
+    type Output = Result<(), DispatchError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.processed.poll_unpin(cx)
@@ -579,17 +579,6 @@ pub struct SpaceMembersError(#[from] InnerSpaceError);
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub struct SpaceGroupIdError(#[from] InnerSpaceError);
-
-/// Error occurred when dispatching spaces events for delivery and processing.
-#[derive(Debug, Error)]
-#[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
-pub enum SpaceEgressError {
-    #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
-}
 
 /// Error occurred when adding a member to a space.
 #[derive(Debug, Error)]
@@ -612,13 +601,13 @@ pub enum AddSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
-
-    #[error(transparent)]
     SpaceActors(#[from] SpaceActorsError),
 
     #[error(transparent)]
     SpaceMembers(#[from] SpaceMembersError),
+
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
 }
 
 /// Error occurred when removing a member from a space.
@@ -642,13 +631,13 @@ pub enum RemoveSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
-
-    #[error(transparent)]
     SpaceActors(#[from] SpaceActorsError),
 
     #[error(transparent)]
     SpaceMembers(#[from] SpaceMembersError),
+
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
 }
 
 /// Error occurred when promoting a member in a space.
@@ -673,13 +662,13 @@ pub enum PromoteSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
-
-    #[error(transparent)]
     SpaceActors(#[from] SpaceActorsError),
 
     #[error(transparent)]
     SpaceMembers(#[from] SpaceMembersError),
+
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
 }
 
 /// Error occurred when demoting a member in a space.
@@ -704,13 +693,13 @@ pub enum DemoteSpaceMemberError {
     Space(#[from] InnerSpaceError),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
-
-    #[error(transparent)]
     SpaceActors(#[from] SpaceActorsError),
 
     #[error(transparent)]
     SpaceMembers(#[from] SpaceMembersError),
+
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
 }
 
 /// Error occurred when processing a change to the membership of a space.
@@ -747,5 +736,5 @@ pub enum PublishSpaceError {
     Encode(#[from] EncodeError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
+    Store(#[from] SqliteError),
 }
