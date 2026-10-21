@@ -22,7 +22,7 @@ use crate::credentials::Credentials;
 use crate::debouncer::Debouncer;
 use crate::egress::{Egress, EgressError, StreamType, SubmitError};
 use crate::forge::{Forge, OperationForge};
-use crate::hooks::{GroupsHook, RepairHook};
+use crate::hooks::RepairHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
@@ -512,6 +512,10 @@ impl Node {
         let egress_handle = self.egress.handle();
 
         // Trigger repair so that any missing operations can be incorporated into the group.
+        //
+        // Operations might have not yet been incorporated into the group if a critical error
+        // occurred which interrupted a preceding repair attempt, or if operations effecting this
+        // group arrived since the last subscription.
         self.repair_task.repair_all().await?;
 
         // Even if there is no group yet we allow the user to subscribe, this is required to
@@ -541,7 +545,6 @@ impl Node {
 
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
-        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
         self.stream_from_inner(topic, from, StreamType::Group, post_pipeline, None)
@@ -643,6 +646,10 @@ impl Node {
         let egress_handle = self.egress.handle();
 
         // Trigger repair so that any missing operations can be incorporated into the space.
+        //
+        // Operations might have not yet been incorporated into the space if a critical error
+        // occurred which interrupted a preceding repair attempt, or if operations effecting this
+        // space arrived since the last subscription.
         self.repair_task.repair_all().await?;
 
         Ok(pending_spaces_stream::<M>(
@@ -668,7 +675,6 @@ impl Node {
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
-        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
         self.stream_from_inner(topic, from, StreamType::Space, post_pipeline, None)
