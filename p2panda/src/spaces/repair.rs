@@ -270,22 +270,44 @@ impl RepairTask {
                             }
                             Some(RepairTaskCommand::RepairSpace { space_id, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = repair_space(&manager, &store, &egress_handle, space_id, None).await;
+                                let result = repair_space(
+                                    &manager,
+                                    &store,
+                                    &egress_handle,
+                                    space_id,
+                                    None
+                                ).await;
                                 let _ = reply.send(result);
                             }
                             Some(RepairTaskCommand::RepairSpaceWith { space_id, include, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = repair_space(&manager, &store, &egress_handle, space_id, Some(include)).await;
+                                let result = repair_space(
+                                    &manager,
+                                    &store,
+                                    &egress_handle,
+                                    space_id,
+                                    Some(include)
+                                ).await;
                                 let _ = reply.send(result);
                             }
                             Some(RepairTaskCommand::RepairGroup { group_id, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = sync_group(&store, &egress_handle, group_id, &[]).await;
+                                let result = sync_group(
+                                    &store,
+                                    &egress_handle,
+                                    group_id,
+                                    &[]
+                                ).await;
                                 let _ = reply.send(result);
                             }
                             Some(RepairTaskCommand::RepairGroupWith { group_id, include, reply }) => {
                                 let egress_handle = egress.handle();
-                                let result = sync_group(&store, &egress_handle, group_id, &include).await;
+                                let result = sync_group(
+                                    &store,
+                                    &egress_handle,
+                                    group_id,
+                                    &include
+                                ).await;
                                 let _ = reply.send(result);
                             }
                             None => closed = true,
