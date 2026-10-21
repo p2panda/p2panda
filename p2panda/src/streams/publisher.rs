@@ -16,7 +16,6 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::egress::EgressDestination;
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::Event;
@@ -29,8 +28,6 @@ type ImportExternalTx = mpsc::Sender<(
     BoxStream<'static, Operation>,
     oneshot::Sender<ExternalStreamFuture>,
 )>;
-
-pub(crate) type ImportLocalTx = mpsc::Sender<(EgressDestination, oneshot::Sender<()>)>;
 
 /// Publish messages into a topic stream.
 ///
@@ -100,9 +97,8 @@ pub struct StreamPublisher<M> {
     topic: Topic,
     forge: OperationForge,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-    pub(crate) publish_tx: PublishTx<M>,
+    publish_tx: PublishTx<M>,
     import_external_tx: ImportExternalTx,
-    pub(crate) import_local_tx: ImportLocalTx,
     _guard: StreamDropGuard,
 }
 
@@ -111,14 +107,12 @@ where
     M: Serialize,
 {
     /// Create a new `StreamPublisher`.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         topic: Topic,
         forge: OperationForge,
         sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
         publish_tx: PublishTx<M>,
         import_external_tx: ImportExternalTx,
-        import_local_tx: ImportLocalTx,
         _guard: StreamDropGuard,
     ) -> Self {
         Self {
@@ -127,7 +121,6 @@ where
             sync_handle,
             publish_tx,
             import_external_tx,
-            import_local_tx,
             _guard,
         }
     }

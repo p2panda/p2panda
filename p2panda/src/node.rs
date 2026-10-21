@@ -20,7 +20,7 @@ use tokio::sync::broadcast;
 pub use crate::builder::NodeBuilder;
 use crate::credentials::Credentials;
 use crate::debouncer::Debouncer;
-use crate::egress::{Egress, EgressError, StreamType, SubmitError};
+use crate::egress::{DispatchError, Egress, StreamType};
 use crate::forge::{Forge, OperationForge};
 use crate::hooks::{GroupsHook, RepairHook};
 use crate::network::{Network, NetworkConfig, NetworkError};
@@ -28,10 +28,10 @@ use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
 use crate::spaces::{
     AccessLevel, ActorId, Group, GroupSubscription, KeyBundleTask, Member, MemberAssociationHook,
-    MemberError, PendingGroup, PendingMember, PendingSpace, Space, SpaceEgressError,
-    SpaceSubscription, SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream,
-    is_group, member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager,
-    spaces_stream, to_initial_members,
+    MemberError, PendingGroup, PendingMember, PendingSpace, Space, SpaceSubscription,
+    SyncAuthoriserHook, actor_to_topic, dispatch_spaces_events, group_stream, is_group,
+    member_log_id, pending_group_stream, pending_spaces_stream, spaces_manager, spaces_stream,
+    to_initial_members,
 };
 use crate::streams::{
     EphemeralStreamPublisher, EphemeralStreamSubscription, Event, ImportError, Pipeline,
@@ -385,6 +385,16 @@ impl Node {
             post_pipeline_hooks,
         );
 
+        let egress_processing_rx = self
+            .egress
+            .register_processing(topic, stream_type)
+            .map_err(|err| CreateStreamError(err.to_string()))?;
+
+        let egress_delivery_rx = self
+            .egress
+            .register_delivery(topic, stream_type)
+            .map_err(|err| CreateStreamError(err.to_string()))?;
+
         let (tx, rx) = processed_stream(
             topic,
             self.config.ack_policy,
@@ -395,13 +405,11 @@ impl Node {
             self.events_tx.clone(),
             from,
             custom_cursor_name,
+            egress_processing_rx,
+            egress_delivery_rx,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
-
-        self.egress
-            .add_stream(topic, stream_type, tx.import_local_tx.clone())
-            .await;
 
         Ok((tx, rx))
     }
@@ -565,8 +573,9 @@ impl Node {
             .group_stream_from_inner(topic, StreamFrom::Frontier)
             .await?;
 
-        // Send group operations to the space processor and await completion.
         let egress_handle = self.egress.handle();
+
+        // Send group operations to the space processor and await completion.
         let mut group_ids = vec![];
         for (actor_id, _) in initial_members {
             if is_group(&self.store, actor_id).await? {
@@ -583,7 +592,7 @@ impl Node {
         // TODO: persist group state and dispatch enriched event.
         let processed = egress_handle
             .dispatch(output.message.into_operation(), topic)
-            .await?;
+            .await;
         processed.await?;
 
         Ok(group_stream(
@@ -857,7 +866,7 @@ pub enum CreateSpaceError {
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    SpaceEgress(#[from] SpaceEgressError),
+    Dispatch(#[from] DispatchError),
 
     #[error(transparent)]
     ImportKeyBundle(#[from] ImportError),
@@ -894,10 +903,7 @@ pub enum CreateGroupError {
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
+    Dispatch(#[from] DispatchError),
 
     #[error(transparent)]
     Repair(#[from] RepairCommandError),

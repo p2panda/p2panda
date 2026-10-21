@@ -23,10 +23,10 @@ use tokio::time::sleep_until;
 use tracing::{debug, warn};
 
 use crate::debouncer::Debouncer;
-use crate::egress::{Egress, EgressError, EgressHandle, SubmitError};
+use crate::egress::{DispatchError, Egress, EgressHandle};
 use crate::operation::Operation;
 use crate::spaces::types::{AuthCapabilities, InnerSpaceError, SpacesManager, SpacesStore};
-use crate::spaces::{SpaceEgressError, SpacesManagerError, actor_to_topic, dispatch_spaces_events};
+use crate::spaces::{SpacesManagerError, actor_to_topic, dispatch_spaces_events};
 
 pub type RepairTaskSender = mpsc::UnboundedSender<RepairTaskCommand>;
 
@@ -376,24 +376,24 @@ async fn sync_and_repair(
     egress: &Egress,
 ) -> Result<(), RepairError> {
     let egress_handle = egress.handle();
-    for topic in egress.group_topics().await {
+
+    for topic in egress.group_topics() {
         let group_id = GroupId::from_bytes(topic.as_bytes())?;
 
-        // In most cases we don't introduce a new group when syncing a group with the global
-        // state. For example when incorporating changes which occurred since last subscribing to
-        // a group or when changes arrive from a remote via a different stream. In this case we
-        // don't need to pass in an other to repair as the groups id is all that's needed to
-        // perform the diff with the global state. For this reason `include` is an empty array
-        // here.
+        // In most cases we don't introduce a new group when syncing a group with the global state.
+        // For example when incorporating changes which occurred since last subscribing to a group
+        // or when changes arrive from a remote via a different stream. In this case we don't need
+        // to pass in an other to repair as the groups id is all that's needed to perform the diff
+        // with the global state. For this reason `include` is an empty array here.
         sync_group(store, &egress_handle, group_id, &[]).await?;
     }
 
-    for topic in egress.space_topics().await {
+    for topic in egress.space_topics() {
         // In most cases we don't introduce a new group when repairing space. For example when
         // incorporating changes which occurred since last subscribing to a space or when changes
         // arrive from a remote via a different stream. In this case we don't need to pass in an
-        // other to repair as the spaces' group id is all that's needed to perform the diff with
-        // the global state. For this reason `include` is None here.
+        // other to repair as the spaces' group id is all that's needed to perform the diff with the
+        // global state. For this reason `include` is None here.
         repair_space(manager, store, &egress_handle, topic.into(), None).await?
     }
 
@@ -565,7 +565,7 @@ async fn send_missing_operations(
             continue;
         };
 
-        let processed = egress_handle.dispatch(operation, topic).await?;
+        let processed = egress_handle.dispatch(operation, topic).await;
         processed.await?;
     }
 
@@ -677,10 +677,10 @@ pub enum RepairError {
     Space(#[from] Box<InnerSpaceError>),
 
     #[error(transparent)]
-    Egress(#[from] SpaceEgressError),
+    Identity(#[from] IdentityError),
 
     #[error(transparent)]
-    Identity(#[from] IdentityError),
+    Dispatch(#[from] DispatchError),
 }
 
 #[derive(Debug, Error)]
@@ -698,10 +698,7 @@ pub enum SendOperationsError {
     Store(#[from] SqliteError),
 
     #[error(transparent)]
-    Submit(#[from] SubmitError),
-
-    #[error(transparent)]
-    Egress(#[from] EgressError),
+    Dispatch(#[from] DispatchError),
 }
 
 #[cfg(test)]
