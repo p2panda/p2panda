@@ -32,7 +32,8 @@ struct SecretData {
 mod spaces_api {
 
     use p2panda::Topic;
-    use p2panda::streams::{GroupAction, StreamEvent, StreamFrom};
+    use p2panda::spaces::InnerGroupEvent;
+    use p2panda::streams::{StreamEvent, StreamFrom};
     use p2panda_auth::{Access, AccessLevel};
     use p2panda_core::test_utils::setup_logging;
     use p2panda_spaces::{MemberId, SpaceEvent};
@@ -81,26 +82,12 @@ mod spaces_api {
         }
 
         // Penguin creates a device group (on their laptop).
-        let (penguin_group, mut penguin_group_rx) = penguin_laptop
+        let (penguin_group, _penguin_group_rx) = penguin_laptop
             .create_group(&[
                 (penguin_laptop.id(), AccessLevel::Write),
                 (penguin_mobile.id(), AccessLevel::Read),
             ])
             .await?;
-
-        // Penguin themselves receives the CREATE group event on the group stream.
-        while let Some(event) = penguin_group_rx.next().await {
-            if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
-                ..
-            } = event
-            {
-                if group_id == penguin_group.id() {
-                    break;
-                }
-            };
-        }
 
         // Panda wants to add Penguin to the space via their device group. First they need to
         // receive the group via a side-channel. This can be achieved by subscribing directly to
@@ -111,8 +98,7 @@ mod spaces_api {
         // Panda receives the CREATE group event.
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
+                inner: InnerGroupEvent::Created { group_id, .. },
                 ..
             } = event
             {
@@ -533,7 +519,8 @@ mod spaces_api {
 mod spaces_repair_task {
 
     use p2panda::Topic;
-    use p2panda::streams::{GroupAction, StreamEvent};
+    use p2panda::spaces::InnerGroupEvent;
+    use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
@@ -585,8 +572,7 @@ mod spaces_repair_task {
         // Panda receives the CREATE group event.
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
+                inner: InnerGroupEvent::Created { group_id, .. },
                 ..
             } = event
             {
@@ -628,12 +614,11 @@ mod spaces_repair_task {
 
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Added { .. },
+                inner: InnerGroupEvent::Added { added, .. },
                 ..
             } = event
             {
-                if group_id == penguin_group.id() {
+                if added.id() == penguin_mobile.id() {
                     break;
                 }
             };
@@ -693,22 +678,9 @@ mod spaces_repair_task {
         // Panda wants to add Penguin to the space via their device group. First they need to
         // receive the group via a side-channel. This can be achieved by subscribing directly to
         // the group.
-        let (_penguin_group_on_panda, mut penguin_group_on_panda_rx) =
+        let (penguin_group_on_panda, mut penguin_group_on_panda_rx) =
             panda.group(penguin_group.id()).await.unwrap();
-
-        // Panda receives the CREATE group event.
-        while let Some(event) = penguin_group_on_panda_rx.next().await {
-            if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
-                ..
-            } = event
-            {
-                if group_id == penguin_group.id() {
-                    break;
-                }
-            };
-        }
+        let _penguin_group_on_panda = penguin_group_on_panda.created().await.unwrap();
 
         // Panda adds penguin group to the space.
         panda_space
@@ -716,6 +688,7 @@ mod spaces_repair_task {
             .await
             .unwrap();
 
+        // Panda receives the event where penguin group is added.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
                 if members.len() == 2 && members.contains(&(penguin.id(), AccessLevel::Read)) {
@@ -737,12 +710,11 @@ mod spaces_repair_task {
 
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Added { .. },
+                inner: InnerGroupEvent::Added { added, .. },
                 ..
             } = event
             {
-                if group_id == penguin_group.id() {
+                if added.id() == penguin_mobile.id() {
                     break;
                 }
             };

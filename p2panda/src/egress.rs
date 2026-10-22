@@ -93,7 +93,7 @@ impl EgressDestination {
 }
 
 /// All different stream types.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum StreamType {
     Topic,
     Group,

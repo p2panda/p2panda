@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -15,7 +16,7 @@ use p2panda_net::sync::SyncHandle;
 // TODO: Replace with ShortFormat from p2panda-core.
 // See: https://github.com/p2panda/p2panda/issues/1270
 use p2panda_net::utils::ShortFormat;
-use p2panda_spaces::{ActorId, AuthMessage, GroupId, SpaceContext, SpaceId};
+use p2panda_spaces::{ActorId, GroupId, SpaceContext};
 use p2panda_store::SqliteStore;
 use p2panda_sync::protocols::TopicLogSyncEvent;
 use serde::{Deserialize, Serialize};
@@ -24,12 +25,12 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use crate::egress::EgressDestination;
+use crate::egress::{EgressDestination, StreamType};
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
 use crate::processor::ProcessorError;
-use crate::spaces::types::{AuthCapabilities, InnerSpaceEvent, SpacesEvent};
+use crate::spaces::types::{InnerSpaceEvent, SpacesEvent};
 use crate::spaces::{GroupActor, InnerGroupEvent, to_actors, to_members};
 use crate::streams::acked::{Acked, AckedError};
 use crate::streams::drop_guard::StreamDropGuard;
@@ -102,6 +103,7 @@ const IMPORT_BUFFER_SIZE: usize = 16;
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn processed_stream<M>(
     topic: Topic,
+    stream_type: StreamType,
     ack_policy: AckPolicy,
     sync_handle: SyncHandle<Operation, TopicLogSyncEvent<Extensions>>,
     store: SqliteStore,
@@ -202,6 +204,7 @@ where
                         process_operation_out::<M>(
                             from_pipeline_event,
                             topic,
+                            stream_type,
                             ack_policy,
                             &acked
                         ).await
@@ -658,16 +661,20 @@ pub enum StreamEvent<M> {
 
     /// Membership of the subscribed group has changed.
     ///
-    /// This may be a change in the "root" or any nested group.
+    /// This may be a change in the root or any nested group.
     Group {
-        /// Event which caused this group change.
-        event: Event,
+        /// Current group members.
+        members: HashMap<ActorId, AccessLevel>,
 
-        /// Id of the group which the action applies to.
-        group_id: GroupId,
+        /// Current actor members (can contain individuals and groups).
+        actors: HashMap<ActorId, (GroupActor, AccessLevel)>,
 
-        /// The membership change applied to the group.
-        action: GroupAction,
+        /// Inner group event.
+        ///
+        /// Contains additionally meta information regarding the exact change that occurred.
+        inner: InnerGroupEvent,
+
+        event: Box<Event>,
     },
 
     /// Space has been created or modified.
@@ -677,63 +684,58 @@ pub enum StreamEvent<M> {
     /// included directly in the event along with additional meta-information, including regarding
     /// the action (possibly targeting a child group) which caused the membership change.
     Space {
-        event: Box<Event>,
-        space_id: SpaceId,
         members: Vec<(ActorId, AccessLevel)>,
         actors: Vec<(GroupActor, AccessLevel)>,
         inner: InnerSpaceEvent,
+        event: Box<Event>,
     },
 
     /// Key bundle has been processed.
     Member(VerifyingKey),
 }
 
-pub(crate) fn to_stream_event<M>(spaces_event: InnerSpaceEvent, event: Event) -> StreamEvent<M> {
+pub(crate) fn to_space_stream_event<M>(
+    spaces_event: InnerSpaceEvent,
+    event: Event,
+) -> StreamEvent<M> {
     match &spaces_event {
         p2panda_spaces::SpaceEvent::Created {
-            space_id,
             context: SpaceContext {
                 members, actors, ..
             },
             ..
         }
         | p2panda_spaces::SpaceEvent::Added {
-            space_id,
             context: SpaceContext {
                 members, actors, ..
             },
             ..
         }
         | p2panda_spaces::SpaceEvent::Removed {
-            space_id,
             context: SpaceContext {
                 members, actors, ..
             },
             ..
         }
         | p2panda_spaces::SpaceEvent::Promoted {
-            space_id,
             context: SpaceContext {
                 members, actors, ..
             },
             ..
         }
         | p2panda_spaces::SpaceEvent::Demoted {
-            space_id,
             context: SpaceContext {
                 members, actors, ..
             },
             ..
         } => StreamEvent::Space {
             event: Box::new(event),
-            space_id: *space_id,
             members: to_members(members),
             actors: to_actors(actors),
             inner: spaces_event,
         },
-        p2panda_spaces::SpaceEvent::Ejected { space_id } => StreamEvent::Space {
+        p2panda_spaces::SpaceEvent::Ejected { .. } => StreamEvent::Space {
             event: Box::new(event),
-            space_id: *space_id,
             members: vec![],
             actors: vec![],
             inner: spaces_event,
@@ -741,39 +743,44 @@ pub(crate) fn to_stream_event<M>(spaces_event: InnerSpaceEvent, event: Event) ->
     }
 }
 
-/// Convert a AuthMessage into p2panda::GroupEvent.
+/// Convert a p2panda_spaces::GroupEvent into a StreamEvent::Group.
+///
+/// The passed `group_id` is the id of the subscribed group.
 pub fn to_group_stream_event<M>(
-    event: &Event,
-    message: &AuthMessage<AuthCapabilities>,
+    group_event: InnerGroupEvent,
+    event: Event,
+    group_id: GroupId,
 ) -> StreamEvent<M> {
-    let action = match message.action.clone() {
-        p2panda_auth::group::GroupAction::Create { initial_members } => GroupAction::Created {
-            initial_actors: initial_members
-                .into_iter()
-                .map(|(actor, access)| (actor.into(), access.level()))
-                .collect::<Vec<_>>(),
-        },
-        p2panda_auth::group::GroupAction::Add { member, access } => GroupAction::Added {
-            actor: member.into(),
-            level: access.level(),
-        },
-        p2panda_auth::group::GroupAction::Remove { member } => GroupAction::Removed {
-            actor: member.into(),
-        },
-        p2panda_auth::group::GroupAction::Promote { member, access } => GroupAction::Promoted {
-            actor: member.into(),
-            level: access.level(),
-        },
-        p2panda_auth::group::GroupAction::Demote { member, access } => GroupAction::Demoted {
-            actor: member.into(),
-            level: access.level(),
-        },
-    };
+    let members = group_event
+        .members(group_id)
+        .unwrap_or_default()
+        .iter()
+        .map(|(id, access)| (*id, access.level))
+        .collect();
+
+    let actors = group_event
+        .actors(group_id)
+        .unwrap_or_default()
+        .iter()
+        .map(|(actor, access)| {
+            (
+                actor.id(),
+                (
+                    GroupActor {
+                        id: actor.id(),
+                        group: actor.is_group(),
+                    },
+                    access.level,
+                ),
+            )
+        })
+        .collect();
 
     StreamEvent::Group {
-        event: event.clone(),
-        group_id: message.group_id,
-        action,
+        members,
+        actors,
+        inner: group_event.clone(),
+        event: Box::new(event),
     }
 }
 
@@ -791,11 +798,14 @@ pub(crate) fn to_system_event(event: InnerGroupEvent) -> SystemEvent {
         .iter()
         .map(|(actor, access)| {
             (
-                GroupActor {
-                    id: actor.id(),
-                    group: actor.is_group(),
-                },
-                access.level,
+                actor.id(),
+                (
+                    GroupActor {
+                        id: actor.id(),
+                        group: actor.is_group(),
+                    },
+                    access.level,
+                ),
             )
         })
         .collect();
