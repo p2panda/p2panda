@@ -38,7 +38,8 @@
 //! ## Space association
 //!
 //! Since this log is maintained independent of a particular space we need to explicitly associate
-//! it when the space starts to depend on the member's key bundles.
+//! it when the space starts to depend on the member's key bundles. This is handled inside the
+//! members hook.
 use std::sync::Arc;
 use std::time::Duration;
 

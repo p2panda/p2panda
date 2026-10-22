@@ -1,15 +1,52 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+//! Members log association via pipeline hooks.
+//!
+//! Logs of members contain public key bundle material we need for initial key agreement with this
+//! member. This material is required when encrypting a new group key towards someone for the first
+//! time in a space. This can happen when removing a member or manually rotating it ("update").
+//!
+//! When creating a space or adding someone the users will make sure to collect the member's key
+//! bundle beforehands. However, for other members in the space we can't assume that they'll collect
+//! the key bundles.
+//!
+//! Concretly, this is the problem we solve with automatic members log association:
+//!
+//! ```text
+//! Node [A] creates space S with [B], [C], [D]
+//!   [A] associates their member log to S
+//! Node [B] joins space S
+//!   [B] associates their member log to S
+//! Node [B] wants to remove [C]
+//!
+//! --> Node [B] needs to inform [A] & [D] about the new secret but doesn't have the member log of
+//! [D] yet.
+//! ```
+//!
+//! If Node B would already associate D's member log when they've observed the CREATE event they
+//! would have had a chance to receive it from A. This hook makes sure that the association takes
+//! place and we have a chance to sync key bundles in the background.
+//!
+//! Operations of newly associated member logs are pushed to all Node in live mode to make sure key
+//! bundles travel to everyone as fast as possible.
+use futures_util::StreamExt;
 use p2panda_auth::Access;
-use p2panda_core::VerifyingKey;
 use p2panda_core::traits::ShortFormat;
+use p2panda_core::{Topic, VerifyingKey};
 use p2panda_net::NodeId;
-use p2panda_spaces::{MemberId, SpaceId};
+use p2panda_spaces::SpaceId;
+use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
 use p2panda_stream::hooks::ProcessorHook;
+use p2panda_stream::spaces::SpacesResult;
+use thiserror::Error;
 use tracing::{debug, error};
 
+use crate::egress::{
+    DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy, SubmitError,
+};
+use crate::processor::ProcessorStatus;
 use crate::spaces::member_log_id;
 use crate::spaces::types::AuthCapabilities;
 use crate::streams::Event;
@@ -19,50 +56,40 @@ use crate::streams::Event;
 pub struct MembersHook {
     my_node_id: NodeId,
     store: SqliteStore,
+    egress_handle: EgressHandle,
 }
 
 impl MembersHook {
-    pub fn new(my_node_id: NodeId, store: SqliteStore) -> Self {
-        Self { my_node_id, store }
+    pub fn new(my_node_id: NodeId, store: SqliteStore, egress_handle: EgressHandle) -> Self {
+        Self {
+            my_node_id,
+            store,
+            egress_handle,
+        }
     }
 }
 
 impl ProcessorHook<Event> for MembersHook {
     async fn on_input(&self, input: &Event) {
-        let crate::processor::ProcessorStatus::Completed(ref result) = input.spaces else {
+        let ProcessorStatus::Completed(ref result) = input.spaces else {
             return;
         };
 
-        let p2panda_stream::spaces::SpacesResult::Processed { events } = result else {
+        let SpacesResult::Processed { events } = result else {
             return;
         };
 
-        associate_members(self.my_node_id, &self.store, events).await;
+        on_members_hook(self.my_node_id, &self.store, &self.egress_handle, events).await;
     }
 }
 
-/// Associate member log's by observing spaces events.
-///
-/// This helps with the following problem:
-///
-/// ```text
-/// Peer A creates space S with B, C, D
-///   A associates their member log to S
-/// Peer B joins space S
-///   B associates their member log to S
-/// Peer B wants to remove C
-///
-/// --> Peer B needs to inform A & D about the new secret but doesn't have the member log of D yet.
-/// ```
-///
-/// If Peer B would already associate D's member log when they've observed the CREATE event they
-/// would have had a chance to receive it from A. This hook makes sure that the association takes
-/// place.
-async fn associate_members(
+/// Associate member logs by observing spaces events.
+async fn on_members_hook(
     my_node_id: VerifyingKey,
     store: &SqliteStore,
+    egress_handle: &EgressHandle,
     events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
-) -> Option<(SpaceId, Vec<MemberId>)> {
+) {
     for event in events {
         let p2panda_spaces::Event::Spaces(space_event) = event else {
             continue;
@@ -82,36 +109,106 @@ async fn associate_members(
         // process all events from the beginning, especially if we've been added later to the group.
         let members = &context.members;
 
-        if let Err(err) = associate_members_inner(store, space_id, members).await {
-            error!(
-                my_node_id = %my_node_id.fmt_short(),
-                space_id = %space_id.fmt_short(),
-                "member association failed: {err}"
-            );
-        } else {
-            debug!(
-                my_node_id = %my_node_id.fmt_short(),
-                space_id = %space_id.fmt_short(),
-                "associate {} member logs", members.len()
-            );
+        match associate_members_inner(store, space_id, members).await {
+            Ok(new_members) => {
+                debug!(
+                    my_node_id = %my_node_id.fmt_short(),
+                    space_id = %space_id.fmt_short(),
+                    "associate {} member logs, {} new", members.len(), new_members.len()
+                );
+
+                if !new_members.is_empty() {
+                    let store = store.clone();
+                    let egress_handle = egress_handle.clone();
+                    let topic = Topic::from(*space_id);
+
+                    tokio::spawn(async move {
+                        let result =
+                            dispatch_member_logs(store, egress_handle, topic, new_members).await;
+
+                        if let Err(err) = &result {
+                            error!(
+                                my_node_id = %my_node_id.fmt_short(),
+                                space_id = %topic.fmt_short(),
+                                "dispatching member logs failed: {err}"
+                            );
+                        }
+                    });
+                }
+            }
+            Err(err) => {
+                error!(
+                    my_node_id = %my_node_id.fmt_short(),
+                    space_id = %space_id.fmt_short(),
+                    "member association failed: {err}"
+                );
+            }
         }
     }
-
-    None
 }
 
 async fn associate_members_inner(
     store: &SqliteStore,
     space_id: &SpaceId,
     members: &[(VerifyingKey, Access)],
-) -> Result<(), SqliteError> {
+) -> Result<Vec<VerifyingKey>, SqliteError> {
     let log_id = member_log_id();
+    let mut new_members = Vec::new();
 
     tx!(store, {
         for (id, _) in members {
-            store.associate_tx(space_id, id, &log_id).await?;
+            if store.associate_tx(space_id, id, &log_id).await? {
+                new_members.push(*id);
+            }
         }
     });
 
+    Ok(new_members)
+}
+
+/// Dispatch the full member log to all live nodes.
+async fn dispatch_member_logs(
+    store: SqliteStore,
+    egress_handle: EgressHandle,
+    topic: Topic,
+    members: Vec<VerifyingKey>,
+) -> Result<(), ReplayMemberLogsError> {
+    let log_id = member_log_id();
+
+    let config = DispatchConfig {
+        delivery: EventDeliveryPolicy::Topic(topic),
+        processing: EventProcessingPolicy::Disabled,
+    };
+
+    for member in members {
+        // We need to dispatch the full log as we can't assume that everyone who receives it (live
+        // mode nodes) will have all previous entries. Otherwise these operations will be rejected
+        // as there's gaps in the log.
+        //
+        // TODO: Later we want to prune the log when key bundles expired, so we don't send a whole
+        // log with outdated material inside.
+        let mut entries = store.log_entries(&member, &log_id, None, None)?;
+
+        while let Some(result) = entries.next().await {
+            let operation = result?
+                .entry
+                .try_into()
+                .expect("already validated extensions");
+
+            egress_handle
+                .dispatch_with_config(operation, &config)
+                .await?;
+        }
+    }
+
     Ok(())
+}
+
+#[derive(Debug, Error)]
+enum ReplayMemberLogsError {
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
+
+    #[error(transparent)]
+    Submit(#[from] SubmitError),
 }

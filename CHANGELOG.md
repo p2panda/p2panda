@@ -61,6 +61,7 @@ Highlights are marked with a pancake 🥞
 - node: Await created, joined group events with `PendingGroup` [#1530](https://github.com/p2panda/p2panda/pull/1530)
 - node: Await registration of member key bundles with `PendingMember` [#1531](https://github.com/p2panda/p2panda/pull/1531)
 - node: Efficient encoding of authenticated member info (for QR codes, etc.) [#1547](https://github.com/p2panda/p2panda/pull/1547)
+- node: Move member log association to hook and dispatch key bundle operations for live-mode [#1550](https://github.com/p2panda/p2panda/pull/1550)
 
 
 ### Changed
