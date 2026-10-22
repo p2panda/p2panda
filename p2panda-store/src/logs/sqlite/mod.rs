@@ -7,10 +7,9 @@ mod tests;
 use std::collections::BTreeMap;
 
 use async_stream::try_stream;
-use futures_util::TryStreamExt;
 use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{AnyOperation, Hash, LogId, SeqNum, VerifyingKey};
-use sqlx::{QueryBuilder, query, query_as};
+use sqlx::{QueryBuilder, query, query_as, query_scalar};
 
 use crate::logs::LogStore;
 use crate::logs::sqlite::models::{LogHeightRow, LogMetaRow};
@@ -32,11 +31,9 @@ const GET_LATEST_ENTRY: &str = "
         seq_num DESC LIMIT 1
 ";
 
-const GET_LOG_ENTRIES: &str = "
+const GET_LOG_ENTRY_HASHES: &str = "
     SELECT
-        hash,
-        header,
-        body
+        hash
     FROM
         operations_v1
     WHERE
@@ -50,6 +47,17 @@ const GET_LOG_ENTRIES: &str = "
         AND seq_num <= $5
     ORDER BY
         seq_num
+";
+
+const GET_ENTRY: &str = "
+    SELECT
+        hash,
+        header,
+        body
+    FROM
+        operations_v1
+    WHERE
+        hash = ?
 ";
 
 impl<L> LogStore<AnyOperation, VerifyingKey, L, SeqNum, Hash> for SqliteStore
@@ -181,12 +189,8 @@ where
         )))
     }
 
-    /// Stream all entries in a log after an optional starting point. This is the memory efficient
-    /// equivalent to `get_log_entries` and should only keep one entry in memory at a time.
-    //
-    // TODO: This keeps a connection lease until the stream terminated, causing processors with
-    // database writes to deadlock when combined with this method. See related issue:
-    // <https://github.com/p2panda/p2panda/issues/1512>.
+    /// Stream all entries in a log after an optional starting point keeping only keep one entry
+    /// in memory at a time.
     fn log_entries(
         &self,
         author: &VerifyingKey,
@@ -204,17 +208,32 @@ where
         let pool = self.pool.clone();
 
         let stream = try_stream! {
-            let mut rows = query_as::<_, OperationRow>(GET_LOG_ENTRIES)
+            // First query all ids for entries in this log range.
+            let operation_ids: Vec<String> = query_scalar(GET_LOG_ENTRY_HASHES)
                 .bind(author)
                 .bind(log_id_bytes)
                 .bind(after_is_none)
                 .bind(after_value)
                 .bind(until_value)
-                .fetch(&pool);
+                .fetch_all(&pool)
+                .await?;
 
-            while let Some(row) = rows.try_next().await? {
+            // Iterate over ids and retrieve each entry.
+            for id in operation_ids {
+                let row = query_as::<_, OperationRow>(GET_ENTRY)
+                    .bind(id)
+                    .fetch_optional(&pool)
+                    .await?;
+
+                // Ignore if the entry is missing now, it could have been deleted or pruned since
+                // the ids were retrieved.
+                let Some(row) = row else {
+                    continue;
+                };
+
                 let header = row.header.clone();
                 let operation: AnyOperation = row.try_into()?;
+
                 yield LogEntry { entry: operation, log_id: log_id.clone(), bytes: header };
             }
         };

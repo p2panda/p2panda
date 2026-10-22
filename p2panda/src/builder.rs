@@ -220,9 +220,7 @@ impl NodeBuilder {
         let store = match self.store_options {
             StoreBuilderOptions::Memory => {
                 SqliteStoreBuilder::memory()
-                    // @TODO: Temp fix required due to this issue
-                    // https://github.com/p2panda/p2panda/issues/1302
-                    .max_connections(16)
+                    .max_connections(1)
                     .build()
                     .await?
             }
