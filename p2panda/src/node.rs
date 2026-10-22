@@ -22,7 +22,7 @@ use crate::credentials::Credentials;
 use crate::debouncer::Debouncer;
 use crate::egress::{Egress, EgressError, StreamType, SubmitError};
 use crate::forge::{Forge, OperationForge};
-use crate::hooks::{GroupsHook, RepairHook};
+use crate::hooks::RepairHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
@@ -541,7 +541,6 @@ impl Node {
 
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
-        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
         self.stream_from_inner(topic, from, StreamType::Group, post_pipeline, None)
@@ -668,7 +667,6 @@ impl Node {
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
         post_pipeline.push(MemberAssociationHook::new(self.id(), self.store.clone()));
-        post_pipeline.push(GroupsHook::new(topic, self.store.clone()));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
         self.stream_from_inner(topic, from, StreamType::Space, post_pipeline, None)

@@ -108,6 +108,7 @@ Highlights are marked with a pancake 🥞
 - store: Fix "write" methods not using transactions, consistent naming with _tx suffix [#1515](https://github.com/p2panda/p2panda/pull/1515)
 - node: Fix flaky spaces tests [#1539](https://github.com/p2panda/p2panda/pull/1539)
 - node: Trigger repair before any local group or space action [#1541](https://github.com/p2panda/p2panda/pull/1541)
+- node: Associate group logs with topic in ingest processor [#1553](https://github.com/p2panda/p2panda/pull/1553)
 
 ## [0.7.1] - 21/08/2026
 
