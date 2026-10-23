@@ -128,6 +128,66 @@ where
     }
 }
 
+/// Space API with methods to publish messages and query and update membership.
+///
+/// A space represents an encrypted group context where all published messages are encrypted
+/// towards current group members. Spaces automatically perform key rotation when members are
+/// removed to ensure that access controls are strictly enforced based on active membership.
+///
+/// The `Space` type acts as a handle to publish messages into the space and represents the primary
+/// API for managing space membership. It is returned from the [`crate::Node::create_space()`],
+/// [`crate::Node::space()`] and [`crate::Node::space_from()`] methods.
+///
+/// ## Example
+///
+/// ```no_run
+/// use p2panda_core::SigningKey;
+/// use p2panda::Topic;
+/// use p2panda::spaces::AccessLevel;
+/// use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// struct SecretData {
+///     title: String,
+///     content: String,
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///
+/// // Spawn a p2panda node.
+/// let panda = p2panda::spawn().await?;
+///
+/// // Spaces behave like topic-streams, just that they're encrypted towards members.
+/// let topic = Topic::random();
+///
+/// // Create a space with only us inside.
+/// let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+///
+/// let penguin = SigningKey::generate().verifying_key();
+///
+/// // Add penguin as a member of the space with write access.
+/// panda_space.add(penguin, AccessLevel::Write).await?;
+///
+/// let message = SecretData {
+///     title: "Yo Penguin".to_string(),
+///     content: "I know where all the tasty fish live.".to_string(),
+/// };
+///
+/// // Publish a message into the space (this will be encrypted toward penguin).
+/// //
+/// // The message will be decrypted by penguin's node before they receive it from their space
+/// // subscription handle. In this way, the encryption and decryption processes are automatic; the
+/// // message is published in plaintext on one node, undergoes transport as encrypted bytes, and
+/// // emerges decrytped from the space subscription handle of all other active space members.
+/// let processing = panda_space.publish(message).await?;
+///
+/// // Wait for the message to be processed by the local pipeline.
+/// processing.await;
+/// #
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct Space<M>
 where
@@ -148,6 +208,9 @@ where
         self.inner.id()
     }
 
+    /// Publishes a message into the space.
+    ///
+    ///  Every message published into a space can be decrypted by it's members.
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
         let members = self.actors().await.map_err(Box::new)?;
@@ -183,6 +246,7 @@ where
         })
     }
 
+    /// Adds a member to the space with an associated access level.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
@@ -217,6 +281,7 @@ where
         Ok(())
     }
 
+    /// Removes a member from the space.
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveSpaceMemberError> {
         let me = self.inner.me();
         let actor = actor.into();
@@ -238,7 +303,7 @@ where
         Ok(())
     }
 
-    /// Promote an existing space member to the assigned access level.
+    /// Promotes an existing member to the assigned access level.
     pub async fn promote(
         &self,
         actor: impl Into<ActorId>,
@@ -275,7 +340,7 @@ where
         Ok(())
     }
 
-    /// Demote an existing space member to the assigned access level.
+    /// Demotes an existing member to the assigned access level.
     pub async fn demote(
         &self,
         actor: impl Into<ActorId>,
@@ -412,6 +477,7 @@ where
     }
 }
 
+/// Subscription to events arriving from a space.
 pub struct SpaceSubscription<M> {
     rx: StreamSubscription<M>,
 }
@@ -427,12 +493,14 @@ where
     }
 }
 
+/// Future to await processing completion of a message published to a space.
 pub struct SpaceFuture {
     pub space_id: SpaceId,
     pub processed: SubmitFuture,
 }
 
 impl SpaceFuture {
+    /// Returns the identifier (32-byte BLAKE3 hash) for the associated space.
     pub fn id(&self) -> SpaceId {
         self.space_id
     }
@@ -446,6 +514,7 @@ impl Future for SpaceFuture {
     }
 }
 
+/// Error occurred when dispatching spaces events for delivery and processing.
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpaceEgressError {
@@ -456,6 +525,7 @@ pub enum SpaceEgressError {
     Egress(#[from] EgressError),
 }
 
+/// Error occurred when adding a member to a space.
 #[derive(Debug, Error)]
 pub enum AddSpaceMemberError {
     #[error(
@@ -479,6 +549,7 @@ pub enum AddSpaceMemberError {
     Process(#[from] ProcessError),
 }
 
+/// Error occurred when removing a member from a space.
 #[derive(Debug, Error)]
 pub enum RemoveSpaceMemberError {
     #[error(
@@ -502,6 +573,7 @@ pub enum RemoveSpaceMemberError {
     Process(#[from] ProcessError),
 }
 
+/// Error occurred when promoting a member in a space.
 #[derive(Debug, Error)]
 pub enum PromoteSpaceMemberError {
     #[error(
@@ -526,6 +598,7 @@ pub enum PromoteSpaceMemberError {
     Process(#[from] ProcessError),
 }
 
+/// Error occurred when demoting a member in a space.
 #[derive(Debug, Error)]
 pub enum DemoteSpaceMemberError {
     #[error(
@@ -550,6 +623,7 @@ pub enum DemoteSpaceMemberError {
     Process(#[from] ProcessError),
 }
 
+/// Error occurred when processing a change to the membership of a space.
 #[derive(Debug, Error)]
 pub enum RepairError {
     #[error(transparent)]
@@ -572,6 +646,7 @@ pub enum ProcessError {
     SpaceEgress(#[from] SpaceEgressError),
 }
 
+/// Error occurred when publishing a message to a space.
 #[derive(Debug, Error)]
 pub enum PublishSpaceError {
     #[error(

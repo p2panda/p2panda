@@ -864,6 +864,7 @@ pub enum StoreError {
     Transaction(String),
 }
 
+/// Error occurred when creating or managing groups and spaces.
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)]
 pub enum ManagerError<F, C>

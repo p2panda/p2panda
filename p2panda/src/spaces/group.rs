@@ -116,6 +116,10 @@ impl PendingGroup {
     }
 }
 
+/// Group API with methods to query and update membership.
+///
+/// Operations created as a result of adding or removing members are automatically forwarded to the
+/// pipeline for processing. Resulting events are then received on the `GroupSubscription` stream.
 #[derive(Debug)]
 pub struct Group {
     inner: InnerGroup,
@@ -129,11 +133,12 @@ pub struct Group {
 static_assertions::assert_impl_all!(Group: Send, Sync);
 
 impl Group {
+    /// Returns the verifying key (Ed25519) of the group.
     pub fn id(&self) -> ActorId {
         self.inner.id()
     }
 
-    /// Add a new member to the group.
+    /// Adds a new member to the group.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
@@ -172,7 +177,7 @@ impl Group {
         Ok(())
     }
 
-    /// Remove an existing member from the group.
+    /// Removes an existing member from the group.
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveGroupMemberError> {
         let me = self.inner.my_id();
         let actor = actor.into();
@@ -203,7 +208,7 @@ impl Group {
     ///
     /// These members are all the individuals in the group after nested groups have been
     /// flattened.
-    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerGroupError> {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupMembersError> {
         let result = self.inner.members().await.map(|members| {
             members
                 .iter()
@@ -215,13 +220,15 @@ impl Group {
     }
 
     /// Returns all group actors (groups and individuals) and their access levels.
-    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerGroupError> {
-        self.inner.actors().await.map(|actors| {
+    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, GroupActorsError> {
+        let result = self.inner.actors().await.map(|actors| {
             actors
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
     /// Gracefully close the group and any associated sync sessions.
@@ -263,6 +270,7 @@ impl From<Group> for ActorId {
     }
 }
 
+/// Subscription to events arriving from a group.
 pub struct GroupSubscription {
     rx: StreamSubscription<NoBody>,
 }
@@ -275,6 +283,17 @@ impl Stream for GroupSubscription {
     }
 }
 
+/// Error occurred when querying the actors of a group.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GroupActorsError(#[from] InnerGroupError);
+
+/// Error occurred when querying the members of a group.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GroupMembersError(#[from] InnerGroupError);
+
+/// Error occurred when adding a member to a group.
 #[derive(Debug, Error)]
 pub enum AddGroupMemberError {
     #[error(
@@ -295,12 +314,19 @@ pub enum AddGroupMemberError {
     Group(#[from] InnerGroupError),
 
     #[error(transparent)]
+    Membership(#[from] GroupActorsError),
+
+    #[error(transparent)]
     Submit(#[from] SubmitError),
 
     #[error(transparent)]
     Egress(#[from] EgressError),
+
+    #[error(transparent)]
+    Sqlite(#[from] SqliteError),
 }
 
+/// Error occurred when removing a member from a group.
 #[derive(Debug, Error)]
 pub enum RemoveGroupMemberError {
     #[error(
@@ -319,6 +345,9 @@ pub enum RemoveGroupMemberError {
 
     #[error(transparent)]
     Group(#[from] InnerGroupError),
+
+    #[error(transparent)]
+    Membership(#[from] GroupActorsError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
