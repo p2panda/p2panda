@@ -297,7 +297,6 @@ where
 
         // Get next space members.
         let next_members = space_y.groups_y.members(space_y.group_id);
-        let current_ancestors = space_y.groups_y.inner.ancestors(space_y.group_id);
         let next_secret_members = secret_members(&next_members);
 
         // Process the change of membership on encryption the context.
@@ -343,7 +342,6 @@ where
             auth_message,
             &SpacesMessage::space_membership(&space_message),
             &current_members,
-            &current_ancestors,
         );
 
         // Record any individuals that were removed from the space.
@@ -375,7 +373,6 @@ where
         let space_id = space_y.space_id;
 
         let current_members = space_y.groups_y.members(space_y.group_id);
-        let current_ancestors = space_y.groups_y.inner.ancestors(space_y.group_id);
         let current_secret_members = secret_members(&current_members);
 
         // Process auth message on space auth state.
@@ -459,7 +456,6 @@ where
             auth_message,
             space_message,
             &current_members,
-            &current_ancestors,
         );
         events.extend(application_events);
 
@@ -480,7 +476,6 @@ where
         auth_message: &AuthMessage<C>,
         space_message: &SpaceMembershipMessage,
         previous_members: &[(ActorId, Access<C>)],
-        previous_ancestors: &[ActorId],
     ) -> Vec<Event<C>> {
         let mut events = vec![];
         let next_members = y.groups_y.members(y.group_id);
@@ -498,7 +493,6 @@ where
             space_message,
             auth_message,
             previous_members,
-            previous_ancestors,
         );
 
         events.push(space_event);

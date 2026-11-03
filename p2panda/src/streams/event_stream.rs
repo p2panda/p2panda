@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::collections::HashMap;
 use std::pin::Pin;
 
 use futures_util::Stream;
@@ -28,14 +29,14 @@ pub enum SystemEvent {
     Discovery(DiscoveryEvent),
 
     Groups {
-        /// Id of the group this event originated from.
+        /// Id of the group this event targets.
         group_id: GroupId,
 
         /// Current group members.
-        members: Vec<(ActorId, AccessLevel)>,
+        members: HashMap<ActorId, AccessLevel>,
 
         /// Current actor members (can contain individuals and groups).
-        actors: Vec<(GroupActor, AccessLevel)>,
+        actors: HashMap<ActorId, (GroupActor, AccessLevel)>,
 
         /// Inner group event.
         ///
