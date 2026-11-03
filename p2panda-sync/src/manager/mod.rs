@@ -36,7 +36,7 @@ use crate::{FromSync, SessionConfig, ToSync};
 pub use event_stream::ManagerEventStream;
 pub use session_map::SessionTopicMap;
 
-static CHANNEL_BUFFER: usize = 1028;
+static CHANNEL_BUFFER: usize = 1024;
 
 pub type ToTopicSync<E> = ToSync<Operation<E>>;
 
