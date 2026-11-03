@@ -202,9 +202,8 @@ mod tests {
                 author: actor,
                 actors: vec![],
                 members: vec![],
-                ancestors: vec![],
-                effected_group_members: HashMap::default(),
-                effected_group_actors: HashMap::default(),
+                ancestor_members: HashMap::default(),
+                ancestor_actors: HashMap::default(),
             },
         }
     }

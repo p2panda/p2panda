@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_core::VerifyingKey;
 
 use crate::member::AuthenticatedMember;
 use crate::message::{AuthMessage, SpaceMembershipMessage};
@@ -89,14 +88,11 @@ pub struct GroupContext<C> {
     /// Members of the group.
     pub members: Vec<(ActorId, Access<C>)>,
 
-    /// All groups for which the group is a child (direct or transitive).
-    pub ancestors: Vec<ActorId>,
+    /// All ancestor of the effected group and their members.
+    pub ancestor_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>>,
 
-    /// All groups effected by the associated group change and their members.
-    pub effected_group_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>>,
-
-    /// All groups effected by the associated group change and their direct actor members.
-    pub effected_group_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>>,
+    /// All ancestor of the effected group and their direct actor members.
+    pub ancestor_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>>,
 }
 
 /// Additional context attached to space events.
@@ -214,45 +210,36 @@ impl<C> GroupEvent<C> {
         }
     }
 
-    /// Current members of a group which was effected by this event. This can be the main group
-    /// itself or any nested ones.
+    /// Returns the members of any ancestor of the changed group. The returned members are
+    /// individuals resolved after all nested groups have been traversed.
     ///
-    /// Returns `None` if the given group was not effected by this event.
+    /// Returns `None` if the given group was not an ancestor.
     pub fn members(&self, group_id: GroupId) -> Option<&[(ActorId, Access<C>)]> {
         let context = self.context();
         if self.group_id() == group_id {
             Some(&context.members)
         } else {
             context
-                .effected_group_members
+                .ancestor_members
                 .get(&group_id)
                 .map(|members| members.as_slice())
         }
     }
 
-    /// Returns true if the passed group was effected by the action which triggered this event.
+    /// Returns the actors of any ancestor of the changed group. The actors are the "direct
+    /// members" of the group, and may be a group or individual.
     ///
-    /// An effected group is one whose membership changes as a result of the events' action,
-    /// including ancestor groups who transitively contain the actions target group as member. A
-    /// change could be if a member was added, removed, promoted or demoted.
-    ///
-    ///
-    /// ```text
-    ///    [group A]   [group B]   [group C]
-    ///           |     |
-    ///           v     v
-    ///          [group D]
-    /// ```
-    ///
-    /// In the above example, group D is effected by events for group A & B but not C.
-    pub fn effected_group(&self, group_id: GroupId) -> bool {
-        let mut effected_group = self.context().effected_group_actors.keys();
-
-        if effected_group.any(|id| *id == group_id) {
-            return true;
+    /// Returns `None` if the given group was not effected by this event.
+    pub fn actors(&self, group_id: GroupId) -> Option<&[(GroupActor, Access<C>)]> {
+        let context = self.context();
+        if self.group_id() == group_id {
+            Some(&context.actors)
+        } else {
+            context
+                .ancestor_actors
+                .get(&group_id)
+                .map(|members| members.as_slice())
         }
-
-        false
     }
 }
 
@@ -363,13 +350,12 @@ where
 pub(crate) fn to_groups_event<C>(
     auth_y: &AuthGroupState<C>,
     auth_message: &AuthMessage<C>,
-    previous_ancestors: &[MemberId],
 ) -> Event<C>
 where
     C: Conditions,
 {
     let group_id = auth_message.group_id();
-    let context = groups_context(auth_y, auth_message, previous_ancestors);
+    let context = groups_context(auth_y, auth_message);
     let group_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => GroupEvent::Created {
             group_id,
@@ -410,7 +396,6 @@ pub(crate) fn to_space_event<C>(
     space_message: &SpaceMembershipMessage,
     auth_message: &AuthMessage<C>,
     previous_members: &[(MemberId, Access<C>)],
-    previous_ancestors: &[MemberId],
 ) -> Event<C>
 where
     C: Conditions,
@@ -427,7 +412,7 @@ where
         members: next_members.to_vec(),
         actors: next_actors,
     };
-    let groups_context = groups_context(auth_y, auth_message, previous_ancestors);
+    let groups_context = groups_context(auth_y, auth_message);
 
     let space_event = match auth_message.action() {
         AuthGroupAction::Create { .. } => SpaceEvent::Created {
@@ -478,11 +463,7 @@ where
 }
 
 /// Compute groups context.
-fn groups_context<C>(
-    auth_y: &AuthGroupState<C>,
-    auth_message: &AuthMessage<C>,
-    previous_ancestors: &[MemberId],
-) -> GroupContext<C>
+fn groups_context<C>(auth_y: &AuthGroupState<C>, auth_message: &AuthMessage<C>) -> GroupContext<C>
 where
     C: Conditions,
 {
@@ -502,19 +483,17 @@ where
     ancestors.sort();
 
     // Retrieve members of all effected groups.
-    let effected: HashSet<&VerifyingKey> =
-        HashSet::from_iter(ancestors.iter().chain(previous_ancestors.iter()));
-    let effected_group_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>> = effected
+    let ancestor_members: HashMap<ActorId, Vec<(ActorId, Access<C>)>> = ancestors
         .iter()
-        .map(|id| (**id, auth_y.members(**id)))
+        .map(|id| (*id, auth_y.members(*id)))
         .collect();
-    let effected_group_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>> = effected
+    let ancestor_actors: HashMap<ActorId, Vec<(GroupActor, Access<C>)>> = ancestors
         .into_iter()
         .map(|id| {
             (
-                *id,
+                id,
                 auth_y
-                    .root_members(*id)
+                    .root_members(id)
                     .into_iter()
                     .map(|(member, access)| (GroupActor::from_group_member(member), access))
                     .collect(),
@@ -526,8 +505,7 @@ where
         author: auth_message.author(),
         members,
         actors,
-        effected_group_members,
-        effected_group_actors,
-        ancestors,
+        ancestor_members,
+        ancestor_actors,
     }
 }

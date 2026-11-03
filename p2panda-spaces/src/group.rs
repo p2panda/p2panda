@@ -212,7 +212,6 @@ where
         global_groups_y: AuthGroupState<C>,
         auth_message: &AuthMessage<C>,
     ) -> Result<(Option<AuthGroupState<C>>, Event<C>), GroupError<F, C>> {
-        let previous_ancestors = global_groups_y.inner.ancestors(auth_message.group_id());
         let has_seen = global_groups_y
             .inner
             .operations
@@ -223,13 +222,13 @@ where
                 message_id = auth_message.id().fmt_short(),
                 "ignore already processed auth groups message"
             );
-            let event = to_groups_event(&global_groups_y, auth_message, &previous_ancestors);
+            let event = to_groups_event(&global_groups_y, auth_message);
             return Ok((None, event));
         }
 
         let global_groups_y = AuthGroup::<C>::process(global_groups_y, auth_message)
             .map_err(GroupError::AuthGroup)?;
-        let event = to_groups_event(&global_groups_y, auth_message, &previous_ancestors);
+        let event = to_groups_event(&global_groups_y, auth_message);
 
         Ok((Some(global_groups_y), event))
     }
@@ -258,10 +257,9 @@ where
         let message = ctx.forge(args).await?;
 
         let group_message = SpacesMessage::auth(&message);
-        let previous_ancestors = global_groups_y.inner.ancestors(group_id);
         let global_groups_y = AuthGroup::<C>::process(global_groups_y, &group_message)
             .map_err(GroupError::AuthGroup)?;
-        let event = to_groups_event(&global_groups_y, &group_message, &previous_ancestors);
+        let event = to_groups_event(&global_groups_y, &group_message);
 
         Ok((global_groups_y, GroupOutput::from(group_id, message, event)))
     }

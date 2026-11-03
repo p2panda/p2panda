@@ -10,6 +10,8 @@ pub(crate) mod repair;
 mod space;
 pub(crate) mod types;
 
+use std::collections::HashMap;
+
 use p2panda_auth::Access;
 use p2panda_core::Topic;
 use p2panda_spaces::Config;
@@ -79,7 +81,7 @@ pub(crate) fn to_initial_members(
 
 pub(crate) fn to_members(
     members: &[(ActorId, Access<AuthCapabilities>)],
-) -> Vec<(ActorId, AccessLevel)> {
+) -> HashMap<ActorId, AccessLevel> {
     members
         .iter()
         .map(|(actor, access)| (*actor, access.level))
@@ -88,9 +90,9 @@ pub(crate) fn to_members(
 
 pub(crate) fn to_actors(
     actors: &[(p2panda_spaces::GroupActor, Access<AuthCapabilities>)],
-) -> Vec<(GroupActor, AccessLevel)> {
+) -> HashMap<ActorId, (GroupActor, AccessLevel)> {
     actors
         .iter()
-        .map(|(actor, access)| (actor.clone().into(), access.level))
+        .map(|(actor, access)| (actor.id(), (actor.clone().into(), access.level)))
         .collect()
 }
