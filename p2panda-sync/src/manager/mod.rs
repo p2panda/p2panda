@@ -126,10 +126,11 @@ where
     /// Instantiate a new sync session.
     async fn session(&mut self, session_id: u64, config: &SessionConfig<T>) -> Self::Protocol {
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
-        let (event_tx, event_rx) = broadcast::channel::<Self::Event>(CHANNEL_BUFFER);
 
-        self.from_session_tx
-            .insert((session_id, config.remote), event_tx.clone());
+        // FIXME: This mpmc can run full and will start dropping operations.
+        //
+        // Related issue: <https://github.com/p2panda/p2panda/issues/1559>.
+        let (event_tx, event_rx) = broadcast::channel::<Self::Event>(CHANNEL_BUFFER);
 
         self.from_session_rx
             .insert((session_id, config.remote), event_rx);
