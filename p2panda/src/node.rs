@@ -387,6 +387,7 @@ impl Node {
 
         let (tx, rx) = processed_stream(
             topic,
+            stream_type,
             self.config.ack_policy,
             sync_handle,
             self.store.clone(),
