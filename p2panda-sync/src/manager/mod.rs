@@ -243,7 +243,7 @@ mod tests {
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_core::{Body, Operation, Topic};
+    use p2panda_core::{Body, Operation, SigningKey, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::protocols::TopicLogSyncEvent;
@@ -710,5 +710,32 @@ mod tests {
                 _ => panic!(),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn prune_finished_sessions() {
+        let peer = Peer::new(0).await;
+        let remote = SigningKey::generate().verifying_key();
+        let topic = Topic::random();
+
+        let mut manager = TestTopicSyncManager::new(peer.store.clone());
+        let config = SessionConfig {
+            topic,
+            remote,
+            live_mode: true,
+        };
+
+        // Create two sessions and expect handles for them.
+        let session_0 = manager.session(0, &config).await;
+        let _session_1 = manager.session(1, &config).await;
+        assert_eq!(manager.from_session_tx.len(), 2);
+        assert!(manager.session_handle(0).await.is_some());
+        assert!(manager.session_handle(1).await.is_some());
+
+        // Finished sessions are removed.
+        drop(session_0);
+        assert_eq!(manager.from_session_tx.len(), 1);
+        assert!(manager.session_handle(0).await.is_none());
+        assert!(manager.session_handle(1).await.is_some());
     }
 }
