@@ -111,6 +111,7 @@ Highlights are marked with a pancake 🥞
 - encryption: Fix RUSTSEC-2026-0387 by updating hpke-rs v0.8.0 [#1557](https://github.com/p2panda/p2panda/pull/1557)
 - node: Associate group logs with topic in ingest processor [#1553](https://github.com/p2panda/p2panda/pull/1553)
 - node: Rename chat example to prevent filename collision [#1560](https://github.com/p2panda/p2panda/pull/1560)
+- store: Fix LogStore::log_entries long-lived database connection blocking pipeline [#1554](https://github.com/p2panda/p2panda/pull/1554)
 
 ## [0.7.1] - 21/08/2026
 

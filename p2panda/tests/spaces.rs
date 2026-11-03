@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use p2panda::{NetworkId, Node, Topic};
+use p2panda::{NetworkId, Node, NodeBuilder, Topic};
 use serde::{Deserialize, Serialize};
 
 struct Swarm {
@@ -20,6 +20,10 @@ impl Swarm {
             .spawn()
             .await
             .unwrap()
+    }
+
+    pub async fn spawn_node_with_builder(&self, builder: NodeBuilder) -> Node {
+        builder.network_id(self.network_id).spawn().await.unwrap()
     }
 }
 
@@ -1595,5 +1599,85 @@ mod spaces_groups_membership {
             assert!(members.contains(&(claire.id(), AccessLevel::Read)));
             break;
         }
+    }
+}
+
+mod database {
+    use futures_util::StreamExt;
+    use p2panda::streams::{StreamEvent, StreamFrom};
+    use p2panda::{Node, NodeBuilder, Topic};
+    use p2panda_core::test_utils::setup_logging;
+    use p2panda_store::SqliteStoreBuilder;
+
+    use crate::{SecretData, Swarm};
+
+    #[tokio::test]
+    async fn pipeline_blocked_by_log_ranges_query_regression()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // This test reproduces the conditions which caused the pipeline to block due to
+        // `LogStore::log_entries` (called within `log_ranges`) keeping a connection open for the
+        // duration of it's streaming query. Operations are processed one at a time in the
+        // pipeline, and during processing new database connections are opened. Setting
+        // max_connections to 1 resulted in the pipeline blocking forever.
+        //
+        // https://github.com/p2panda/p2panda/issues/1512
+        async fn spawn_node(swarm: &Swarm) -> Node {
+            let db = SqliteStoreBuilder::memory()
+                // Set max_connections to 1 in order to reproduce blocking conditions.
+                .max_connections(1)
+                .build()
+                .await
+                .unwrap();
+
+            let builder = NodeBuilder::new().database_pool(db.pool().to_owned());
+            swarm.spawn_node_with_builder(builder).await
+        }
+
+        setup_logging();
+
+        let swarm = Swarm::new();
+        let topic = Topic::random();
+
+        let panda = spawn_node(&swarm).await;
+
+        // Panda creates and subscribes to a space.
+        let (space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
+
+        // Panda publishes some messages to all members.
+        let mut messages = vec![];
+        for i in 0..10 {
+            let message = SecretData {
+                title: "Message".to_string(),
+                content: i.to_string(),
+            };
+            messages.push(message.clone());
+
+            let ready = space.publish(message).await?;
+            assert!(ready.await.is_ok());
+        }
+
+        space.close().await.unwrap();
+
+        // Replay the space stream from the start which calls `log_ranges` up front and then
+        // processes each operation in the pipeline. This would block if the above described
+        // connection issue was present.
+        let (_space, mut panda_rx) = panda
+            .space_from::<SecretData>(topic, StreamFrom::Start)
+            .await?;
+
+        // panda receives and processes all messages.
+        loop {
+            let Some(event) = panda_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+            let StreamEvent::Processed { operation, .. } = event else {
+                continue;
+            };
+            if messages.last().unwrap() == operation.message() {
+                break;
+            };
+        }
+
+        Ok(())
     }
 }
