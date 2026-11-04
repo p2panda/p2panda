@@ -1820,24 +1820,32 @@ mod messages {
 
         // We expect penguin to receive messages from before and after they were a member in the
         // order they were published.
-        let mut messages = Vec::new();
+        let mut operations = Vec::new();
         let expected_message_count = 3;
         loop {
             let Some(event) = penguin_rx.next().await else {
                 panic!("unexpected stream closure");
             };
+
             let StreamEvent::Processed { operation, .. } = event else {
                 continue;
             };
 
-            messages.push(operation.message().clone());
+            operations.push(operation.clone());
 
-            println!("message received: {:?}", operation.message());
-
-            // Test blocks here as only message 1 & 3 are received.
-            if messages.len() == expected_message_count {
+            if operations.len() == expected_message_count {
                 break;
             }
+        }
+
+        // Make sure each operation has a different id.
+        let mut seen_operation_ids = Vec::new();
+        for op in operations {
+            if seen_operation_ids.contains(&op.id()) {
+                panic!("ids need to be unique");
+            }
+
+            seen_operation_ids.push(op.id());
         }
 
         Ok(())
