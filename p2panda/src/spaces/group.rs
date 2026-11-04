@@ -393,7 +393,7 @@ pub enum AddGroupMemberError {
     Group(#[from] InnerGroupError),
 
     #[error(transparent)]
-    Membership(#[from] GroupActorsError),
+    GroupActors(#[from] GroupActorsError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
@@ -426,7 +426,7 @@ pub enum RemoveGroupMemberError {
     Group(#[from] InnerGroupError),
 
     #[error(transparent)]
-    Membership(#[from] GroupActorsError),
+    GroupActors(#[from] GroupActorsError),
 
     #[error(transparent)]
     Submit(#[from] SubmitError),
