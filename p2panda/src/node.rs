@@ -22,7 +22,7 @@ use crate::credentials::Credentials;
 use crate::debouncer::Debouncer;
 use crate::egress::{Egress, EgressError, StreamType, SubmitError};
 use crate::forge::{Forge, OperationForge};
-use crate::hooks::{MembersHook, RepairHook};
+use crate::hooks::RepairHook;
 use crate::network::{Network, NetworkConfig, NetworkError};
 use crate::spaces::repair::{RepairCommandError, RepairTask};
 use crate::spaces::types::{NoBody, SpacesManager, SpacesManagerError};
@@ -382,6 +382,7 @@ impl Node {
             self.store.clone(),
             self.tasks.clone(),
             self.spaces_manager.clone(),
+            self.egress.handle(),
             post_pipeline_hooks,
         );
 
@@ -674,11 +675,6 @@ impl Node {
 
         let mut post_pipeline = ProcessorHooksList::new();
         post_pipeline.push(SyncAuthoriserHook::new(self.sync_block_list.clone()));
-        post_pipeline.push(MembersHook::new(
-            self.id(),
-            self.store.clone(),
-            self.egress.handle(),
-        ));
         post_pipeline.push(RepairHook::new(self.repair_task.clone()));
 
         self.stream_from_inner(topic, from, StreamType::Space, post_pipeline, None)

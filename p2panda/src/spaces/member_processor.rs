@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Members log association via pipeline hooks.
+//! Members log association via pipeline processor.
 //!
 //! Logs of members contain public key bundle material we need for initial key agreement with this
 //! member. This material is required when encrypting a new group key towards someone for the first
@@ -24,74 +24,113 @@
 //! ```
 //!
 //! If Node B would already associate D's member log when they've observed the CREATE event they
-//! would have had a chance to receive it from A. This hook makes sure that the association takes
-//! place and we have a chance to sync key bundles in the background.
+//! would have had a chance to receive it from A. This processor makes sure that the association
+//! takes place and we have a chance to sync key bundles in the background.
 //!
 //! Operations of newly associated member logs are pushed to all Node in live mode to make sure key
 //! bundles travel to everyone as fast as possible.
-use futures_util::StreamExt;
+use std::cell::RefCell;
+use std::collections::VecDeque;
+
 use p2panda_auth::Access;
 use p2panda_core::traits::ShortFormat;
 use p2panda_core::{Topic, VerifyingKey};
-use p2panda_net::NodeId;
-use p2panda_spaces::SpaceId;
+use p2panda_spaces::{MemberId, SpaceId};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteError, SqliteStore, tx};
-use p2panda_stream::hooks::ProcessorHook;
+use p2panda_stream::Processor;
 use p2panda_stream::spaces::SpacesResult;
 use thiserror::Error;
+use tokio::sync::Notify;
+use tokio_stream::StreamExt;
 use tracing::{debug, error};
 
 use crate::egress::{
     DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy, SubmitError,
 };
-use crate::processor::ProcessorStatus;
+use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::member_log_id;
-use crate::spaces::types::AuthCapabilities;
-use crate::streams::Event;
 
-/// Pipeline hook to observe spaces events and automatically associate member logs to the space when
-/// someone new was added.
-pub struct MembersHook {
-    my_node_id: NodeId,
+/// Pipeline processor to observe spaces events and automatically associate member logs to the space
+/// when someone new was added.
+pub struct MembersProcessor<L, E, TP> {
     store: SqliteStore,
     egress_handle: EgressHandle,
+    notify: Notify,
+    #[allow(clippy::type_complexity)]
+    queue: RefCell<VecDeque<(Event<L, E, TP>, MembersProcessorResult)>>,
 }
 
-impl MembersHook {
-    pub fn new(my_node_id: NodeId, store: SqliteStore, egress_handle: EgressHandle) -> Self {
+impl<L, E, TP> MembersProcessor<L, E, TP> {
+    pub fn new(store: SqliteStore, egress_handle: EgressHandle) -> Self {
         Self {
-            my_node_id,
             store,
             egress_handle,
+            notify: Notify::new(),
+            queue: RefCell::new(VecDeque::new()),
         }
     }
 }
 
-impl ProcessorHook<Event> for MembersHook {
-    async fn on_input(&self, input: &Event) {
-        let ProcessorStatus::Completed(ref result) = input.spaces else {
-            return;
-        };
+impl<L, E, TP> Processor<Event<L, E, TP>> for MembersProcessor<L, E, TP> {
+    type Output = (Event<L, E, TP>, MembersProcessorResult);
 
-        let SpacesResult::Processed { events } = result else {
-            return;
-        };
+    type Error = (Event<L, E, TP>, MembersProcessorError);
 
-        on_members_hook(self.my_node_id, &self.store, &self.egress_handle, events).await;
+    async fn process(&self, input: Event<L, E, TP>) -> Result<(), Self::Error> {
+        match associate_members(&self.store, &self.egress_handle, &input).await {
+            Ok(result) => {
+                self.queue.borrow_mut().push_back((input, result));
+                self.notify.notify_one();
+                Ok(())
+            }
+            Err(error) => Err((input, MembersProcessorError(error.to_string()))),
+        }
+    }
+
+    async fn next(&self) -> Result<Self::Output, Self::Error> {
+        loop {
+            if let Some(item) = self.queue.borrow_mut().pop_front() {
+                return Ok(item);
+            }
+
+            self.notify.notified().await;
+        }
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum MembersProcessorResult {
+    Processed { new_members_len: usize },
+    Ignored,
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("{0}")]
+pub struct MembersProcessorError(String);
+
 /// Associate member logs by observing spaces events.
-async fn on_members_hook(
-    my_node_id: VerifyingKey,
+async fn associate_members<L, E, TP>(
     store: &SqliteStore,
     egress_handle: &EgressHandle,
-    events: impl IntoIterator<Item = &p2panda_spaces::Event<AuthCapabilities>>,
-) {
-    for event in events {
-        let p2panda_spaces::Event::Spaces(space_event) = event else {
+    input: &Event<L, E, TP>,
+) -> Result<MembersProcessorResult, SqliteError> {
+    let ProcessorStatus::Completed(ref result) = input.spaces else {
+        return Ok(MembersProcessorResult::Ignored);
+    };
+
+    let SpacesResult::Processed {
+        events: spaces_events,
+    } = result
+    else {
+        return Ok(MembersProcessorResult::Ignored);
+    };
+
+    let mut new_members_len = 0;
+
+    for space_event in spaces_events {
+        let p2panda_spaces::Event::Spaces(space_event) = space_event else {
             continue;
         };
 
@@ -111,8 +150,9 @@ async fn on_members_hook(
 
         match associate_members_inner(store, space_id, members).await {
             Ok(new_members) => {
+                new_members_len += new_members.len();
+
                 debug!(
-                    my_node_id = %my_node_id.fmt_short(),
                     space_id = %space_id.fmt_short(),
                     "associate {} member logs, {} new", members.len(), new_members.len()
                 );
@@ -126,9 +166,10 @@ async fn on_members_hook(
                         let result =
                             dispatch_member_logs(store, egress_handle, topic, new_members).await;
 
+                        // Dispatch errors are not propagated as this is not critical. Nodes will
+                        // need to re-sync if this failed.
                         if let Err(err) = &result {
                             error!(
-                                my_node_id = %my_node_id.fmt_short(),
                                 space_id = %topic.fmt_short(),
                                 "dispatching member logs failed: {err}"
                             );
@@ -138,20 +179,23 @@ async fn on_members_hook(
             }
             Err(err) => {
                 error!(
-                    my_node_id = %my_node_id.fmt_short(),
                     space_id = %space_id.fmt_short(),
                     "member association failed: {err}"
                 );
+
+                return Err(err);
             }
         }
     }
+
+    Ok(MembersProcessorResult::Processed { new_members_len })
 }
 
 async fn associate_members_inner(
     store: &SqliteStore,
     space_id: &SpaceId,
-    members: &[(VerifyingKey, Access)],
-) -> Result<Vec<VerifyingKey>, SqliteError> {
+    members: &[(MemberId, Access)],
+) -> Result<Vec<MemberId>, SqliteError> {
     let log_id = member_log_id();
     let mut new_members = Vec::new();
 
@@ -205,7 +249,7 @@ async fn dispatch_member_logs(
 }
 
 #[derive(Debug, Error)]
-enum ReplayMemberLogsError {
+pub enum ReplayMemberLogsError {
     #[error(transparent)]
     Sqlite(#[from] SqliteError),
 
