@@ -131,8 +131,8 @@ where
 /// towards current group members. Spaces automatically perform key rotation when members are
 /// removed to ensure that only current members can read new messages.
 ///
-/// The `Space` type acts as a handle to publish messages into the space and represents the primary
-/// API for managing space membership. It is returned from the [`Node::create_space()`].
+/// The `Space` type acts as a handle to publish messages into the space and represents the
+/// primary API for managing space membership. It is returned from the [`Node::create_space()`].
 ///
 /// The [`Node::space()`] and [`Node::space_from()`] methods return a [`PendingSpace`] which
 /// exposes a `joined` method; messages can be read from and published to the space once the
@@ -141,10 +141,14 @@ where
 /// ## Example
 ///
 /// ```no_run
-/// use p2panda_core::SigningKey;
-/// use p2panda::Topic;
-/// use p2panda::spaces::AccessLevel;
-/// use serde::{Deserialize, Serialize};
+/// # use std::time::Duration;
+/// #
+/// # use p2panda_core::SigningKey;
+/// # use p2panda::streams::StreamEvent;
+/// # use p2panda::Topic;
+/// # use p2panda::spaces::AccessLevel;
+/// # use serde::{Deserialize, Serialize};
+/// # use tokio_stream::StreamExt;
 ///
 /// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 /// struct SecretData {
@@ -154,20 +158,62 @@ where
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///
 /// // Spawn a p2panda node.
 /// let panda = p2panda::spawn().await?;
 ///
 /// // Spaces behave like topic-streams, just that they're encrypted towards members.
-/// let topic = Topic::random();
+/// let space_id = Topic::random();
 ///
+/// let penguin_id = {
+///     // The space id is shared with Penguin over a secure side-channel. They subscribe
+///     // to the space, automatically share their key-bundle with us, await being added as
+///     // a member and then publish their own message. 
+///     //
+///     // We also assume here that they have shared their verifying key with us.
+///     # let penguin = p2panda::spawn().await?;
+///     # let penguin_id = penguin.id();
+///     # let _handle = tokio::spawn(async move {
+///     #     // Penguin subscribes to the space.
+///     #     let (pending, _space_rx) = penguin.space(space_id).await.unwrap();
+///     #
+///     #     // And awaits being added.
+///     #     let space = pending.joined().await.unwrap();
+///     #
+///     #     // Then publishes a message.
+///     #     let processing = space
+///     #         .publish(SecretData {
+///     #             title: "Greetings".to_string(),
+///     #             content: "Nice to be here".to_string(),
+///     #         })
+///     #         .await
+///     #         .unwrap();
+///     #
+///     #     // Wait for the message to be processed by the local pipeline.
+///     #     processing.await.unwrap();
+///     #
+///     #     // Leave time for the message to sync with panda.
+///     #     tokio::time::sleep(Duration::from_secs(10)).await;
+///     # });
+///     # penguin_id  
+/// };
+/// 
 /// // Create a space with only us inside.
-/// let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+/// let (space, mut panda_rx) = panda.create_space::<SecretData>(space_id).await?;
 ///
-/// let penguin = SigningKey::generate().verifying_key();
+/// // Panda waits for penguin subscribe to space and send there Member message which is
+/// // needed before they can be added as a member.
+/// while let Some(event) = panda_rx.next().await {
+///     let StreamEvent::Member(member) = event else {
+///         continue;
+///     };
+///
+///     if member == penguin_id {
+///         break;
+///     }
+/// }
 ///
 /// // Add penguin as a member of the space with write access.
-/// panda_space.add(penguin, AccessLevel::Write).await?;
+/// space.add(penguin_id, AccessLevel::Write).await?;
 ///
 /// let message = SecretData {
 ///     title: "Yo Penguin".to_string(),
@@ -180,10 +226,21 @@ where
 /// // subscription handle. In this way, the encryption and decryption processes are automatic; the
 /// // message is published in plaintext on one node, undergoes transport as encrypted bytes, and
 /// // emerges decrytped from the space subscription handle of all other active space members.
-/// let processing = panda_space.publish(message).await?;
+/// let processing = space.publish(message).await?;
 ///
 /// // Wait for the message to be processed by the local pipeline.
-/// processing.await;
+/// processing.await?;
+///
+/// while let Some(event) = panda_rx.next().await {
+///     let StreamEvent::Processed { operation, .. } = event else {
+///         continue;
+///     };
+///
+///     if operation.author() == penguin_id {
+///         // We received a message from penguin.
+///         break;
+///     }
+/// }
 /// #
 /// # Ok(())
 /// # }
