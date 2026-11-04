@@ -116,6 +116,7 @@ Highlights are marked with a pancake 🥞
 - node: Associate group logs with topic in ingest processor [#1553](https://github.com/p2panda/p2panda/pull/1553)
 - node: Rename chat example to prevent filename collision [#1560](https://github.com/p2panda/p2panda/pull/1560)
 - store: Fix LogStore::log_entries long-lived database connection blocking pipeline [#1554](https://github.com/p2panda/p2panda/pull/1554)
+- net: Fix flaky e2e_log_sync test [#1566](https://github.com/p2panda/p2panda/pull/1566)
 
 ## [0.7.1] - 21/08/2026
 
