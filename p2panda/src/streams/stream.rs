@@ -185,6 +185,7 @@ where
     // forwarded to the application layer.
     {
         let pipeline = pipeline.clone();
+        let store = store.clone();
         let acked = acked.clone();
 
         let cancellation_token_child = cancellation_token.child_token();
@@ -206,6 +207,7 @@ where
                             topic,
                             stream_type,
                             ack_policy,
+                            &store,
                             &acked
                         ).await
                     },

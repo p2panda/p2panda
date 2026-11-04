@@ -178,7 +178,7 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use p2panda_core::Topic;
+    use p2panda_core::{Hash, Topic};
 
     use crate::SpaceId;
     use crate::event::{Event, GroupContext, SpaceContext, SpaceEvent};
@@ -270,6 +270,7 @@ mod tests {
         let events = [
             Event::Application {
                 space_id,
+                operation_id: Hash::digest(b"test"),
                 data: vec![],
             },
             Event::Spaces(created_space_event(space_id)),
