@@ -167,7 +167,7 @@ where
 /// let penguin_id = {
 ///     // The space id is shared with Penguin over a secure side-channel. They subscribe
 ///     // to the space, automatically share their key-bundle with us, await being added as
-///     // a member and then publish their own message. 
+///     // a member and then publish their own message.
 ///     //
 ///     // We also assume here that they have shared their verifying key with us.
 ///     # let penguin = p2panda::spawn().await?;
@@ -196,7 +196,7 @@ where
 ///     # });
 ///     # penguin_id  
 /// };
-/// 
+///
 /// // Create a space with only us inside.
 /// let (space, mut panda_rx) = panda.create_space::<SecretData>(space_id).await?;
 ///
