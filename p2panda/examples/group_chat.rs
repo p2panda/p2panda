@@ -28,6 +28,7 @@
 //! remove <MEMBER_ID>
 //! ```
 use std::collections::VecDeque;
+use std::io::Read;
 use std::str::FromStr;
 use std::thread;
 
@@ -200,6 +201,12 @@ fn spawn_event_handler(mut space_rx: SpaceSubscription<Message>) {
 }
 
 fn input_loop(line_tx: mpsc::Sender<String>) -> Result<(), std::io::Error> {
+    // Drain stdin before spawning the read loop.
+    {
+        let mut buffer = Vec::new();
+        let _ = std::io::stdin().read_to_end(&mut buffer);
+    }
+
     let mut buffer = String::new();
     let stdin = std::io::stdin();
     loop {
