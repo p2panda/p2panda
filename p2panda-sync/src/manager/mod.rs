@@ -36,7 +36,7 @@ use crate::{FromSync, SessionConfig, ToSync};
 pub use event_stream::ManagerEventStream;
 pub use session_map::SessionTopicMap;
 
-static CHANNEL_BUFFER: usize = 1028;
+static CHANNEL_BUFFER: usize = 1024;
 
 pub type ToTopicSync<E> = ToSync<Operation<E>>;
 
@@ -65,8 +65,13 @@ where
 {
     store: S,
     session_topic_map: SessionTopicMap<T, mpsc::Sender<ToTopicSync<E>>>,
-    from_session_tx: HashMap<(u64, VerifyingKey), broadcast::Sender<TopicLogSyncEvent<E>>>,
-    from_session_rx: HashMap<(u64, VerifyingKey), broadcast::Receiver<TopicLogSyncEvent<E>>>,
+    // We use the `Sender` object as a reference-counter to understand when we can clean-up any
+    // finished sessions.
+    //
+    // Senders are marked as "weak" references as they are not strictly used yet when kept here.
+    // When we create a protocol (actual sync) or handles we upgrade the sender to a regular
+    // "strong" reference to count the reference.
+    from_session_tx: HashMap<(u64, VerifyingKey), broadcast::WeakSender<TopicLogSyncEvent<E>>>,
     manager_tx: Vec<mpsc::Sender<SessionStream<T, E>>>,
     _phantom: PhantomData<L>,
 }
@@ -92,12 +97,29 @@ where
     pub fn new(store: S) -> Self {
         Self {
             store,
-            manager_tx: Default::default(),
-            session_topic_map: Default::default(),
-            from_session_tx: Default::default(),
-            from_session_rx: Default::default(),
+            manager_tx: Vec::new(),
+            session_topic_map: SessionTopicMap::default(),
+            from_session_tx: HashMap::new(),
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<T, S, L, E> TopicSyncManager<T, S, L, E>
+where
+    T: Clone + Eq + StdHash,
+    E: Extensions,
+{
+    fn remove_finished_sessions(&mut self) {
+        // The sync protocol and -handles hold the the strong senders, so it being dropped closes
+        // the channel for all subscribers and marks the session as finished.
+        self.from_session_tx.retain(|(id, _), tx| {
+            let is_running = tx.strong_count() > 0;
+            if !is_running {
+                self.session_topic_map.drop(*id);
+            }
+            is_running
+        });
     }
 }
 
@@ -125,14 +147,17 @@ where
 
     /// Instantiate a new sync session.
     async fn session(&mut self, session_id: u64, config: &SessionConfig<T>) -> Self::Protocol {
+        self.remove_finished_sessions();
+
         let (live_tx, live_rx) = mpsc::channel(CHANNEL_BUFFER);
-        let (event_tx, event_rx) = broadcast::channel::<Self::Event>(CHANNEL_BUFFER);
+
+        // FIXME: This mpmc can run full and will start dropping operations.
+        //
+        // Related issue: <https://github.com/p2panda/p2panda/issues/1559>.
+        let (event_tx, _) = broadcast::channel::<Self::Event>(CHANNEL_BUFFER);
 
         self.from_session_tx
-            .insert((session_id, config.remote), event_tx.clone());
-
-        self.from_session_rx
-            .insert((session_id, config.remote), event_rx);
+            .insert((session_id, config.remote), event_tx.downgrade());
 
         self.session_topic_map
             .insert_with_topic(session_id, config.topic.clone(), live_tx.clone());
@@ -183,11 +208,19 @@ where
 
     /// Subscribe to the event stream for all running sync sessions.
     fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
+        self.remove_finished_sessions();
+
         let (manager_tx, manager_rx) = mpsc::channel(CHANNEL_BUFFER);
         self.manager_tx.push(manager_tx);
 
         let mut session_rx_set = SelectAll::new();
         for ((id, remote), tx) in self.from_session_tx.iter() {
+            // Turn into a regular "strong" reference. If it is `None` and upgrading failed, we know
+            // that the session already ended.
+            let Some(tx) = tx.upgrade() else {
+                continue;
+            };
+
             let session_id = *id;
             let remote = *remote;
             let stream = BroadcastStream::new(tx.subscribe());
@@ -235,6 +268,7 @@ pub enum TopicSyncManagerError {
     #[error(transparent)]
     Send(#[from] mpsc::SendError),
 }
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -243,7 +277,7 @@ mod tests {
     use futures_channel::mpsc;
     use futures_util::{SinkExt, StreamExt};
     use p2panda_core::test_utils::setup_logging;
-    use p2panda_core::{Body, Operation, Topic};
+    use p2panda_core::{Body, Operation, SigningKey, Topic};
     use p2panda_store::SqliteStore;
 
     use crate::protocols::TopicLogSyncEvent;
@@ -710,5 +744,36 @@ mod tests {
                 _ => panic!(),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn prune_finished_sessions() {
+        let peer = Peer::new(0).await;
+        let remote = SigningKey::generate().verifying_key();
+        let topic = Topic::random();
+
+        let mut manager = TestTopicSyncManager::new(peer.store.clone());
+        let config = SessionConfig {
+            topic,
+            remote,
+            live_mode: true,
+        };
+
+        // Create two sessions and expect handles for them.
+        let session_0 = manager.session(0, &config).await;
+        let _session_1 = manager.session(1, &config).await;
+        assert_eq!(manager.from_session_tx.len(), 2);
+        assert!(manager.session_handle(0).await.is_some());
+        assert!(manager.session_handle(1).await.is_some());
+
+        // Dropping the session keeps it still around (but doesn't have any references anymore).
+        drop(session_0);
+        assert_eq!(manager.from_session_tx.len(), 2);
+
+        // Finished sessions are cleaned up as soon as the next one gets created.
+        let _session_2 = manager.session(2, &config).await;
+        assert_eq!(manager.from_session_tx.len(), 2);
+        assert!(manager.session_handle(0).await.is_none());
+        assert!(manager.session_handle(1).await.is_some());
     }
 }
