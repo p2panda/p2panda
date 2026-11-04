@@ -4,12 +4,15 @@ use std::sync::Arc;
 
 use crate::node::AckPolicy;
 use crate::processor::ProcessorStatus;
+use crate::spaces::types::AuthCapabilities;
 use crate::streams::acked::Acked;
 use crate::streams::stream::{to_group_stream_event, to_stream_event, to_system_event};
 use crate::streams::{Event, ForwardEvent, ProcessedOperation, StreamEvent};
-use p2panda_core::Topic;
 use p2panda_core::cbor::decode_cbor;
 use p2panda_core::traits::Digest;
+use p2panda_core::{Hash, Topic};
+use p2panda_store::SqliteStore;
+use p2panda_store::operations::OperationStore;
 use p2panda_stream::groups::{GroupsProcessorArgs, GroupsResult};
 use p2panda_stream::spaces::SpacesResult;
 use serde::Deserialize;
@@ -27,6 +30,7 @@ pub(crate) async fn process_operation_out<M>(
     event: Event,
     topic: Topic,
     ack_policy: AckPolicy,
+    store: &SqliteStore,
     acked: &Acked,
 ) -> Vec<ForwardEvent<M>>
 where
@@ -57,13 +61,6 @@ where
     // 2. System-level event stream
     let mut forward_events = Vec::new();
 
-    // Convert events from groups and spaces.
-    //
-    // Processing of a spaces event may yield multiple events to be forwarded to the user, while
-    // processing any other event will only yield a single user event.
-    process_groups_events(&event, &mut forward_events);
-    process_spaces_events(&event, &mut forward_events);
-
     // Handle application events: Decoding & acking.
     //
     // Most events with an body are meant for the application-layer, except of member's key bundle
@@ -73,20 +70,34 @@ where
     //
     // 1. Regular topic-streams
     // 2. Encrypted application messages from spaces-streams
-    let application_bodies = application_bodies(&event);
-    for bytes in &application_bodies {
-        let success = decode_application_event(&event, topic, acked, bytes, &mut forward_events);
+    //
+    // Processing a spaces event can release multiple, previously buffered messages. They are
+    // forwarded and acked as the original operations they were published in.
+    //
+    // NOTE: This needs to happen before forwarding system events, as acking those would otherwise
+    // move the cursor past the released messages.
+    let application_messages = application_messages(&event, store).await;
+
+    for (origin, bytes) in &application_messages {
+        let success = decode_application_event(origin, topic, acked, bytes, &mut forward_events);
 
         // Only ack events automatically if decoding did not fail.
         if success {
-            ack_if_automatic(&event, ack_policy, acked, &mut forward_events).await;
+            ack_if_automatic(origin, ack_policy, acked, &mut forward_events).await;
         }
     }
 
     // Always ack events which don't have an application body and are not spaces events.
-    if application_bodies.is_empty() && !is_spaces_event(&event) {
+    if application_messages.is_empty() && !is_spaces_event(&event) {
         always_ack(&event, acked, &mut forward_events).await;
     }
+
+    // Convert events from groups and spaces.
+    //
+    // Processing of a spaces event may yield multiple events to be forwarded to the user, while
+    // processing any other event will only yield a single user event.
+    process_groups_events(&event, &mut forward_events);
+    process_spaces_events(&event, &mut forward_events);
 
     // Spaces events are forwarded to the application layer.
     if is_spaces_event(&event) {
@@ -112,22 +123,59 @@ fn is_spaces_event(event: &Event) -> bool {
 }
 
 /// Extracts the bodies from an event which are meant for the application layer.
-fn application_bodies(event: &Event) -> Vec<&[u8]> {
-    // There can be multiple application bodies inside own spaces event.
-    if let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces {
-        events
-            .iter()
-            .filter_map(|space_event| match space_event {
-                p2panda_spaces::Event::Application { data, .. } => Some(data.as_slice()),
-                _ => None,
-            })
-            .collect()
-    } else {
-        event
+async fn application_messages<'a>(event: &'a Event, store: &SqliteStore) -> Vec<(Event, &'a [u8])> {
+    let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces else {
+        return event
             .body()
-            .map(|body| body.as_bytes())
+            .map(|body| (event.clone(), body.as_bytes()))
             .into_iter()
-            .collect()
+            .collect();
+    };
+
+    // TODO: This feels like a workaround for the buffered application messages inside of
+    // p2panda-spaces.
+    let mut messages = Vec::new();
+    for space_event in events {
+        if let p2panda_spaces::Event::Application {
+            operation_id: id,
+            data,
+            ..
+        } = space_event
+            && let Some(event) = original_operation(event, *id, space_event, store).await
+        {
+            messages.push((event, data.as_slice()));
+        }
+    }
+    messages
+}
+
+/// Returns the event for the operation an application message was originally published in.
+async fn original_operation(
+    event: &Event,
+    id: Hash,
+    space_event: &p2panda_spaces::Event<AuthCapabilities>,
+    store: &SqliteStore,
+) -> Option<Event> {
+    if id == event.hash() {
+        return Some(event.clone());
+    }
+
+    match OperationStore::<_, _>::get_operation(store, &id).await {
+        Ok(Some(operation)) => Some(Event {
+            operation,
+            spaces: ProcessorStatus::Completed(SpacesResult::Processed {
+                events: vec![space_event.clone()],
+            }),
+            ..event.clone()
+        }),
+        Ok(None) => {
+            warn!(%id, "operation not found");
+            None
+        }
+        Err(error) => {
+            warn!(%id, "failed getting operation: {error}");
+            None
+        }
     }
 }
 
@@ -258,6 +306,7 @@ mod tests {
     struct TestNode {
         topic: Topic,
         forge: OperationForge,
+        store: SqliteStore,
         acked: Acked,
     }
 
@@ -266,11 +315,12 @@ mod tests {
             let topic = Topic::random();
             let store = SqliteStore::temporary().await;
             let forge = OperationForge::new(Credentials::generate(), store.clone());
-            let acked = Acked::new(store, topic);
+            let acked = Acked::new(store.clone(), topic);
 
             Self {
                 topic,
                 forge,
+                store,
                 acked,
             }
         }
@@ -405,9 +455,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            AckPolicy::Automatic,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(!node.has_nacked_events().await, "was automatically acked");
@@ -421,9 +476,14 @@ mod tests {
         let event = node.forge_event(Some(vec![1, 2, 3])).await;
 
         // Try to decode as CBOR.
-        let mut forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let mut forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            AckPolicy::Automatic,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         if let ForwardEvent::Topic(inner) = forwarded.pop().unwrap() {
@@ -449,9 +509,14 @@ mod tests {
         let event = node.forge_prune_event(None).await;
 
         // .. we should automatically ack them, independent of the given ack policy.
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            AckPolicy::Explicit,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 0, "not forwarded to application layer");
         assert!(!node.has_nacked_events().await, "was automatically acked");
@@ -460,9 +525,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_prune_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            AckPolicy::Explicit,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "need to be manually acked");
@@ -475,9 +545,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            AckPolicy::Explicit,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "needs to be manually acked");
@@ -489,9 +564,14 @@ mod tests {
 
         let event = node.forge_space_event(None).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            AckPolicy::Automatic,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         // We expect spaces events to be forwarded to application layer.
         assert_eq!(forwarded.len(), 1);
@@ -506,9 +586,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_space_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            AckPolicy::Explicit,
+            &node.store,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "needs to be manually acked");

@@ -14,7 +14,7 @@ use crate::utils::{
     added_members_diff, demoted_members_diff, promoted_members_diff, removed_members_diff,
     sort_members,
 };
-use crate::{ActorId, GroupId, MemberId, SpaceId};
+use crate::{ActorId, GroupId, MemberId, OperationId, SpaceId};
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GroupActor {
@@ -67,7 +67,11 @@ pub enum Event<C> {
     ///
     /// Encrypted application messages are buffered until the local member is welcomed into a
     /// space with a "create" or "add" message.
-    Application { space_id: SpaceId, data: Vec<u8> },
+    Application {
+        space_id: SpaceId,
+        operation_id: OperationId,
+        data: Vec<u8>,
+    },
 
     /// A membership change occurred on a space.
     ///
@@ -343,19 +347,30 @@ pub enum SpaceEvent<C> {
 
 pub(crate) fn encryption_output_to_space_events<C>(
     space_id: &SpaceId,
+    operation_ids: Vec<OperationId>,
     encryption_output: Vec<EncryptionGroupOutput>,
 ) -> Vec<Event<C>>
 where
     C: Conditions,
 {
-    encryption_output
+    let plaintexts: Vec<_> = encryption_output
         .into_iter()
         .filter_map(|event| match event {
-            EncryptionGroupOutput::Application { plaintext } => Some(Event::Application {
-                space_id: *space_id,
-                data: plaintext,
-            }),
+            EncryptionGroupOutput::Application { plaintext } => Some(plaintext),
             _ => None,
+        })
+        .collect();
+
+    // Release either nothing or all queued messages in order.
+    debug_assert!(plaintexts.is_empty() || plaintexts.len() == operation_ids.len());
+
+    operation_ids
+        .into_iter()
+        .zip(plaintexts)
+        .map(|(id, data)| Event::Application {
+            space_id: *space_id,
+            operation_id: id,
+            data,
         })
         .collect()
 }

@@ -5,7 +5,7 @@ use std::convert::Infallible;
 
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
 use p2panda_encryption::data_scheme::GroupSecretId;
-use p2panda_encryption::traits::GroupMessage;
+use p2panda_encryption::traits::{GroupMessage, GroupMessageContent};
 use petgraph::prelude::DiGraphMap;
 use petgraph::visit::NodeIndexable;
 use serde::{Deserialize, Serialize};
@@ -100,6 +100,20 @@ impl EncryptionOrdererState {
     pub fn has_seen(&self, id: OperationId) -> bool {
         self.graph.contains_node(id)
     }
+
+    /// Identifiers of all queued application messages in the order they will be released.
+    pub fn queued_operation_ids(&self) -> Vec<OperationId> {
+        self.queue
+            .iter()
+            .filter(|id| {
+                matches!(
+                    self.messages[*id].content(),
+                    GroupMessageContent::Application { .. }
+                )
+            })
+            .copied()
+            .collect()
+    }
 }
 
 impl p2panda_encryption::traits::Ordering<MemberId, OperationId, EncryptionGroupMembership>
@@ -148,7 +162,12 @@ impl p2panda_encryption::traits::Ordering<MemberId, OperationId, EncryptionGroup
     fn queue(mut y: Self::State, message: &Self::Message) -> Result<Self::State, Self::Error> {
         let id = message.id();
         y.messages.insert(id, message.clone());
-        y.queue.push_back(id);
+
+        // Replayed messages might already be waiting in the queue.
+        if !y.queue.contains(&id) {
+            y.queue.push_back(id);
+        }
+
         Ok(y)
     }
 

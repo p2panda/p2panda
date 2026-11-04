@@ -1768,13 +1768,17 @@ mod messages {
 
         // Make sure each operation has a different id.
         let mut seen_operation_ids = Vec::new();
-        for op in operations {
+        for op in &operations {
             if seen_operation_ids.contains(&op.id()) {
                 panic!("ids need to be unique");
             }
 
             seen_operation_ids.push(op.id());
+            assert_eq!(op.author(), panda.id());
         }
+
+        let messages: Vec<_> = operations.iter().map(|op| op.message().clone()).collect();
+        assert_eq!(messages, vec![message_01, message_02, message_03]);
 
         Ok(())
     }
