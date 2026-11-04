@@ -230,6 +230,22 @@ impl<C> GroupEvent<C> {
         }
     }
 
+    /// Current actors of a group which was effected by this event. This can be the main group
+    /// itself or any nested ones.
+    ///
+    /// Returns `None` if the given group was not effected by this event.
+    pub fn actors(&self, group_id: GroupId) -> Option<&[(GroupActor, Access<C>)]> {
+        let context = self.context();
+        if self.group_id() == group_id {
+            Some(&context.actors)
+        } else {
+            context
+                .effected_group_actors
+                .get(&group_id)
+                .map(|members| members.as_slice())
+        }
+    }
+
     /// Returns true if the passed group was effected by the action which triggered this event.
     ///
     /// An effected group is one whose membership changes as a result of the events' action,

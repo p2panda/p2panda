@@ -115,6 +115,7 @@ Highlights are marked with a pancake 🥞
 - node: Associate group logs with topic in ingest processor [#1553](https://github.com/p2panda/p2panda/pull/1553)
 - node: Rename chat example to prevent filename collision [#1560](https://github.com/p2panda/p2panda/pull/1560)
 - store: Fix LogStore::log_entries long-lived database connection blocking pipeline [#1554](https://github.com/p2panda/p2panda/pull/1554)
+- node: Add `members` and `actors` fields to `StreamEvent::Group` [#1561](https://github.com/p2panda/p2panda/pull/1561)
 
 ## [0.7.1] - 21/08/2026
 

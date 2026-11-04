@@ -2,15 +2,16 @@
 
 use std::sync::Arc;
 
+use crate::egress::StreamType;
 use crate::node::AckPolicy;
 use crate::processor::ProcessorStatus;
 use crate::streams::acked::Acked;
-use crate::streams::stream::{to_group_stream_event, to_stream_event, to_system_event};
+use crate::streams::stream::{to_group_stream_event, to_space_stream_event, to_system_event};
 use crate::streams::{Event, ForwardEvent, ProcessedOperation, StreamEvent};
 use p2panda_core::Topic;
 use p2panda_core::cbor::decode_cbor;
 use p2panda_core::traits::Digest;
-use p2panda_stream::groups::{GroupsProcessorArgs, GroupsResult};
+use p2panda_spaces::GroupId;
 use p2panda_stream::spaces::SpacesResult;
 use serde::Deserialize;
 use tracing::{debug, warn};
@@ -26,6 +27,7 @@ use tracing::{debug, warn};
 pub(crate) async fn process_operation_out<M>(
     event: Event,
     topic: Topic,
+    stream_type: StreamType,
     ack_policy: AckPolicy,
     acked: &Acked,
 ) -> Vec<ForwardEvent<M>>
@@ -61,8 +63,11 @@ where
     //
     // Processing of a spaces event may yield multiple events to be forwarded to the user, while
     // processing any other event will only yield a single user event.
-    process_groups_events(&event, &mut forward_events);
-    process_spaces_events(&event, &mut forward_events);
+    match stream_type {
+        StreamType::Topic => (),
+        StreamType::Group => process_groups_events(&event, &mut forward_events),
+        StreamType::Space => process_spaces_events(&event, &mut forward_events),
+    };
 
     // Handle application events: Decoding & acking.
     //
@@ -94,17 +99,6 @@ where
     }
 
     forward_events
-}
-
-/// Handle processed groups events.
-fn process_groups_events<M>(event: &Event, forward_events: &mut Vec<ForwardEvent<M>>) {
-    if let ProcessorStatus::Completed(GroupsResult::Processed) = &event.groups
-        && let GroupsProcessorArgs::Process { message } = &event.groups_args
-    {
-        forward_events.push(ForwardEvent::Topic(Box::new(to_group_stream_event(
-            event, message,
-        ))));
-    }
 }
 
 fn is_spaces_event(event: &Event) -> bool {
@@ -145,12 +139,55 @@ fn process_spaces_events<M>(event: &Event, forward_events: &mut Vec<ForwardEvent
             p2panda_spaces::Event::Member(member) => {
                 forward_events.push(ForwardEvent::topic_stream(StreamEvent::Member(member.id())))
             }
-            p2panda_spaces::Event::Groups(group_event) => forward_events.push(
-                ForwardEvent::system(to_system_event(group_event.to_owned())),
-            ),
-            p2panda_spaces::Event::Spaces(space_event) => forward_events.push(
-                ForwardEvent::topic_stream(to_stream_event(space_event.to_owned(), event.clone())),
-            ),
+            p2panda_spaces::Event::Groups(group_event) => {
+                // Group events arriving on a spaces stream are forwarded to the system event
+                // stream.
+                forward_events.push(ForwardEvent::system(to_system_event(
+                    group_event.to_owned(),
+                )));
+            }
+            p2panda_spaces::Event::Spaces(space_event) => {
+                forward_events.push(ForwardEvent::topic_stream(to_space_stream_event(
+                    space_event.to_owned(),
+                    event.clone(),
+                )))
+            }
+        }
+    }
+}
+
+/// Handle processed groups events.
+fn process_groups_events<M>(event: &Event, forward_events: &mut Vec<ForwardEvent<M>>) {
+    let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces else {
+        return;
+    };
+
+    // Multiple spaces events can be released at once, convert them to stream- or system-events.
+    for space_event in events {
+        match space_event {
+            p2panda_spaces::Event::Groups(group_event) => {
+                forward_events.push(ForwardEvent::system(to_system_event(
+                    group_event.to_owned(),
+                )));
+
+                // We know this is a group stream, so we can convert the topic into a group id.
+                let topic = event.ingest_args.topic;
+                let Ok(group_id) = GroupId::from_bytes(topic.as_bytes()) else {
+                    warn!(
+                        "error converting expected group topic to group id: {}",
+                        topic
+                    );
+                    continue;
+                };
+
+                forward_events.push(ForwardEvent::topic_stream(to_group_stream_event(
+                    group_event.to_owned(),
+                    event.clone(),
+                    group_id,
+                )));
+            }
+            // Group streams only forward group events.
+            _ => warn!("unexpected event type found on group stream"),
         }
     }
 }
@@ -244,6 +281,7 @@ mod tests {
     use p2panda_stream::spaces::SpacesResult;
 
     use crate::Credentials;
+    use crate::egress::StreamType;
     use crate::forge::{Forge, OperationForge};
     use crate::node::AckPolicy;
     use crate::operation::{Builder, Extensions, LogId};
@@ -404,9 +442,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            StreamType::Topic,
+            AckPolicy::Automatic,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(!node.has_nacked_events().await, "was automatically acked");
@@ -420,9 +463,14 @@ mod tests {
         let event = node.forge_event(Some(vec![1, 2, 3])).await;
 
         // Try to decode as CBOR.
-        let mut forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let mut forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            StreamType::Topic,
+            AckPolicy::Automatic,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         if let ForwardEvent::Topic(inner) = forwarded.pop().unwrap() {
@@ -448,9 +496,14 @@ mod tests {
         let event = node.forge_prune_event(None).await;
 
         // .. we should automatically ack them, independent of the given ack policy.
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            StreamType::Topic,
+            AckPolicy::Explicit,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 0, "not forwarded to application layer");
         assert!(!node.has_nacked_events().await, "was automatically acked");
@@ -459,9 +512,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_prune_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            StreamType::Topic,
+            AckPolicy::Explicit,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "need to be manually acked");
@@ -474,9 +532,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            StreamType::Topic,
+            AckPolicy::Explicit,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "needs to be manually acked");
@@ -488,9 +551,14 @@ mod tests {
 
         let event = node.forge_space_event(None).await;
 
-        let forwarded =
-            process_operation_out::<Vec<u8>>(event, node.topic, AckPolicy::Automatic, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<Vec<u8>>(
+            event,
+            node.topic,
+            StreamType::Space,
+            AckPolicy::Automatic,
+            &node.acked,
+        )
+        .await;
 
         // We expect spaces events to be forwarded to application layer.
         assert_eq!(forwarded.len(), 1);
@@ -505,9 +573,14 @@ mod tests {
         let cbor_bytes = encode_cbor(&"Hallo Hallo!").unwrap();
         let event = node.forge_space_event(Some(cbor_bytes)).await;
 
-        let forwarded =
-            process_operation_out::<String>(event, node.topic, AckPolicy::Explicit, &node.acked)
-                .await;
+        let forwarded = process_operation_out::<String>(
+            event,
+            node.topic,
+            StreamType::Space,
+            AckPolicy::Explicit,
+            &node.acked,
+        )
+        .await;
 
         assert_eq!(forwarded.len(), 1);
         assert!(node.has_nacked_events().await, "needs to be manually acked");

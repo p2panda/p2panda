@@ -36,7 +36,8 @@ struct SecretData {
 mod spaces_api {
 
     use p2panda::Topic;
-    use p2panda::streams::{GroupAction, StreamEvent, StreamFrom};
+    use p2panda::spaces::InnerGroupEvent;
+    use p2panda::streams::{StreamEvent, StreamFrom};
     use p2panda_auth::{Access, AccessLevel};
     use p2panda_core::test_utils::setup_logging;
     use p2panda_spaces::{MemberId, SpaceEvent};
@@ -85,26 +86,12 @@ mod spaces_api {
         }
 
         // Penguin creates a device group (on their laptop).
-        let (penguin_group, mut penguin_group_rx) = penguin_laptop
+        let (penguin_group, _penguin_group_rx) = penguin_laptop
             .create_group(&[
                 (penguin_laptop.id(), AccessLevel::Write),
                 (penguin_mobile.id(), AccessLevel::Read),
             ])
             .await?;
-
-        // Penguin themselves receives the CREATE group event on the group stream.
-        while let Some(event) = penguin_group_rx.next().await {
-            if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
-                ..
-            } = event
-            {
-                if group_id == penguin_group.id() {
-                    break;
-                }
-            };
-        }
 
         // Panda wants to add Penguin to the space via their device group. First they need to
         // receive the group via a side-channel. This can be achieved by subscribing directly to
@@ -115,8 +102,7 @@ mod spaces_api {
         // Panda receives the CREATE group event.
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
+                inner: InnerGroupEvent::Created { group_id, .. },
                 ..
             } = event
             {
@@ -139,10 +125,7 @@ mod spaces_api {
                 ..
             } = event
             {
-                if actors
-                    .iter()
-                    .any(|(actor, _)| actor.id() == penguin_group.id())
-                {
+                if actors.contains_key(&penguin_group.id()) {
                     break;
                 }
             };
@@ -155,10 +138,7 @@ mod spaces_api {
                 ..
             } = event
             {
-                if actors
-                    .iter()
-                    .any(|(actor, _)| actor.id() == penguin_group.id())
-                {
+                if actors.contains_key(&penguin_group.id()) {
                     break;
                 }
             };
@@ -174,10 +154,7 @@ mod spaces_api {
                 ..
             } = event
             {
-                if actors
-                    .iter()
-                    .any(|(actor, _)| actor.id() == penguin_group.id())
-                {
+                if actors.contains_key(&penguin_group.id()) {
                     break;
                 }
             };
@@ -269,8 +246,14 @@ mod spaces_api {
             } = event
             {
                 assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Write)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                assert_eq!(
+                    members.get(&penguin_laptop.id()).unwrap(),
+                    &AccessLevel::Write
+                );
+                assert_eq!(
+                    members.get(&penguin_mobile.id()).unwrap(),
+                    &AccessLevel::Read
+                );
                 break;
             };
         }
@@ -283,8 +266,14 @@ mod spaces_api {
             } = event
             {
                 assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Write)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                assert_eq!(
+                    members.get(&penguin_laptop.id()).unwrap(),
+                    &AccessLevel::Write
+                );
+                assert_eq!(
+                    members.get(&penguin_mobile.id()).unwrap(),
+                    &AccessLevel::Read
+                );
                 break;
             };
         }
@@ -300,8 +289,14 @@ mod spaces_api {
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
                 assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                assert_eq!(
+                    members.get(&penguin_laptop.id()).unwrap(),
+                    &AccessLevel::Read
+                );
+                assert_eq!(
+                    members.get(&penguin_mobile.id()).unwrap(),
+                    &AccessLevel::Read
+                );
                 break;
             };
         }
@@ -317,8 +312,14 @@ mod spaces_api {
         while let Some(event) = penguin_laptop_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
                 assert_eq!(members.len(), 3);
-                assert!(members.contains(&(penguin_laptop.id(), AccessLevel::Read)));
-                assert!(members.contains(&(penguin_mobile.id(), AccessLevel::Read)));
+                assert_eq!(
+                    members.get(&penguin_laptop.id()).unwrap(),
+                    &AccessLevel::Read
+                );
+                assert_eq!(
+                    members.get(&penguin_mobile.id()).unwrap(),
+                    &AccessLevel::Read
+                );
                 break;
             };
         }
@@ -367,7 +368,7 @@ mod spaces_api {
             if let StreamEvent::Space { members, inner, .. } = event {
                 if let SpaceEvent::Added { .. } = inner {
                     assert_eq!(members.len(), 2);
-                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    assert_eq!(members.get(&penguin.id()).unwrap(), &AccessLevel::Read);
                     break;
                 }
             };
@@ -377,7 +378,7 @@ mod spaces_api {
             if let StreamEvent::Space { members, inner, .. } = event {
                 if let SpaceEvent::Added { .. } = inner {
                     assert_eq!(members.len(), 2);
-                    assert!(members.contains(&(penguin.id(), AccessLevel::Read)));
+                    assert_eq!(members.get(&penguin.id()).unwrap(), &AccessLevel::Read);
                     break;
                 }
             };
@@ -472,8 +473,8 @@ mod spaces_api {
             .unwrap();
         processed.await.unwrap();
 
-        // We expect Penguin to be fine with processing out-of-order operations and normally joining
-        // the space.
+        // We expect Penguin to be fine with processing out-of-order operations and normally
+        // joining the space.
         let penguin_space = penguin_space.joined().await.unwrap();
 
         let members: Vec<MemberId> = penguin_space
@@ -537,7 +538,8 @@ mod spaces_api {
 mod spaces_repair_task {
 
     use p2panda::Topic;
-    use p2panda::streams::{GroupAction, StreamEvent};
+    use p2panda::spaces::InnerGroupEvent;
+    use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
@@ -589,8 +591,7 @@ mod spaces_repair_task {
         // Panda receives the CREATE group event.
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
+                inner: InnerGroupEvent::Created { group_id, .. },
                 ..
             } = event
             {
@@ -611,7 +612,7 @@ mod spaces_repair_task {
 
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                if members.len() == 2 && members.contains(&(penguin.id(), AccessLevel::Read)) {
+                if members.len() == 2 && members.get(&penguin.id()).unwrap() == &AccessLevel::Read {
                     break;
                 };
             };
@@ -632,12 +633,11 @@ mod spaces_repair_task {
 
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Added { .. },
+                inner: InnerGroupEvent::Added { added, .. },
                 ..
             } = event
             {
-                if group_id == penguin_group.id() {
+                if added.id() == penguin_mobile.id() {
                     break;
                 }
             };
@@ -646,7 +646,8 @@ mod spaces_repair_task {
         // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
+                if members.len() == 3
+                    && members.get(&penguin_mobile.id()).unwrap() == &AccessLevel::Read
                 {
                     break;
                 };
@@ -697,22 +698,9 @@ mod spaces_repair_task {
         // Panda wants to add Penguin to the space via their device group. First they need to
         // receive the group via a side-channel. This can be achieved by subscribing directly to
         // the group.
-        let (_penguin_group_on_panda, mut penguin_group_on_panda_rx) =
+        let (penguin_group_on_panda, mut penguin_group_on_panda_rx) =
             panda.group(penguin_group.id()).await.unwrap();
-
-        // Panda receives the CREATE group event.
-        while let Some(event) = penguin_group_on_panda_rx.next().await {
-            if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Created { .. },
-                ..
-            } = event
-            {
-                if group_id == penguin_group.id() {
-                    break;
-                }
-            };
-        }
+        let _penguin_group_on_panda = penguin_group_on_panda.created().await.unwrap();
 
         // Panda adds penguin group to the space.
         panda_space
@@ -720,9 +708,10 @@ mod spaces_repair_task {
             .await
             .unwrap();
 
+        // Panda receives the event where penguin group is added.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                if members.len() == 2 && members.contains(&(penguin.id(), AccessLevel::Read)) {
+                if members.len() == 2 && members.get(&penguin.id()).unwrap() == &AccessLevel::Read {
                     break;
                 };
             };
@@ -741,12 +730,11 @@ mod spaces_repair_task {
 
         while let Some(event) = penguin_group_on_panda_rx.next().await {
             if let StreamEvent::Group {
-                group_id,
-                action: GroupAction::Added { .. },
+                inner: InnerGroupEvent::Added { added, .. },
                 ..
             } = event
             {
-                if group_id == penguin_group.id() {
+                if added.id() == penguin_mobile.id() {
                     break;
                 }
             };
@@ -755,7 +743,8 @@ mod spaces_repair_task {
         // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
-                if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
+                if members.len() == 3
+                    && members.get(&penguin_mobile.id()).unwrap() == &AccessLevel::Read
                 {
                     break;
                 };
@@ -1014,7 +1003,8 @@ mod filtered_messages {
         // Panda subscribes again.
         let (_panda_space, mut panda_rx) = panda.space::<SecretData>(topic).await.unwrap();
 
-        // And manually adds penguin to the allow-list as removed members are automatically blocked.
+        // And manually adds penguin to the allow-list as removed members are automatically
+        // blocked.
         panda.sync_block_list().allow_topic(penguin_id, topic).await;
 
         // Panda will be sent the second message from penguin, however it will not be forwarded to
@@ -1133,8 +1123,8 @@ mod members {
     // 1. Node A creates space S with {A, B, C, D} inside
     // 2. Node B removes C from S
     //
-    // Node B needs to inform A & D about the new secret after removing C and needs a key bundle of
-    // D to do that. If all member logs are correctly associated, B should have received it
+    // Node B needs to inform A & D about the new secret after removing C and needs a key bundle
+    // of D to do that. If all member logs are correctly associated, B should have received it
     // indirectly via A.
     #[tokio::test]
     async fn indirect_members_log_sync() {
@@ -1199,8 +1189,8 @@ mod members {
             .await
             .unwrap();
 
-        // Wait until B finished processing being added to the space and received all required
-        // key bundles AND got informed about all other members (C and D) being added.
+        // Wait until B finished processing being added to the space and received all required key
+        // bundles AND got informed about all other members (C and D) being added.
         let (node_b_space, mut node_b_rx) = node_b.space::<String>(topic).await.unwrap();
 
         let mut required_key_bundles = vec![node_a.id(), node_d.id()];
@@ -1226,8 +1216,8 @@ mod members {
 
         let node_b_space = node_b_space.joined().await.unwrap();
 
-        // B wants to remove C and needs the key bundles of D to do this since they've never sent a
-        // direct message to D. Note that B doesn't need a key bundle for A because A already
+        // B wants to remove C and needs the key bundles of D to do this since they've never sent
+        // a direct message to D. Note that B doesn't need a key bundle for A because A already
         // initiated a 2SM session with B when they've been added to the space.
         node_b_space.remove(node_c.id()).await.unwrap();
     }
@@ -1469,8 +1459,8 @@ mod spaces_groups_membership {
                 continue;
             }
             assert_eq!(members.len(), 2);
-            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
-            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            assert_eq!(members.get(&alice.id()).unwrap(), &AccessLevel::Manage);
+            assert_eq!(members.get(&bob.id()).unwrap(), &AccessLevel::Write);
             break;
         }
 
@@ -1514,8 +1504,8 @@ mod spaces_groups_membership {
                 continue;
             }
             assert_eq!(members.len(), 2);
-            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
-            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
+            assert_eq!(members.get(&alice.id()).unwrap(), &AccessLevel::Manage);
+            assert_eq!(members.get(&bob.id()).unwrap(), &AccessLevel::Write);
             break;
         }
 
@@ -1563,9 +1553,9 @@ mod spaces_groups_membership {
                 continue;
             }
             assert_eq!(members.len(), 3);
-            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
-            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
-            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            assert_eq!(members.get(&alice.id()).unwrap(), &AccessLevel::Manage);
+            assert_eq!(members.get(&bob.id()).unwrap(), &AccessLevel::Write);
+            assert_eq!(members.get(&claire.id()).unwrap(), &AccessLevel::Read);
             break;
         }
 
@@ -1580,9 +1570,9 @@ mod spaces_groups_membership {
                 continue;
             }
             assert_eq!(members.len(), 3);
-            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
-            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
-            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            assert_eq!(members.get(&alice.id()).unwrap(), &AccessLevel::Manage);
+            assert_eq!(members.get(&bob.id()).unwrap(), &AccessLevel::Write);
+            assert_eq!(members.get(&claire.id()).unwrap(), &AccessLevel::Read);
             break;
         }
 
@@ -1597,9 +1587,9 @@ mod spaces_groups_membership {
                 continue;
             }
             assert_eq!(members.len(), 3);
-            assert!(members.contains(&(alice.id(), AccessLevel::Manage)));
-            assert!(members.contains(&(bob.id(), AccessLevel::Write)));
-            assert!(members.contains(&(claire.id(), AccessLevel::Read)));
+            assert_eq!(members.get(&alice.id()).unwrap(), &AccessLevel::Manage);
+            assert_eq!(members.get(&bob.id()).unwrap(), &AccessLevel::Write);
+            assert_eq!(members.get(&claire.id()).unwrap(), &AccessLevel::Read);
             break;
         }
     }
