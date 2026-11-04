@@ -15,6 +15,7 @@ use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::spaces::member_processor::{MembersProcessorError, MembersProcessorResult};
 use crate::spaces::types::{AuthCapabilities, SpacesArgs, SpacesEvent};
 use crate::streams::Source;
 
@@ -70,6 +71,9 @@ pub struct Event<L, E, TP> {
 
     /// Status of the "spaces" processor.
     pub spaces: ProcessorStatus<SpacesResult<AuthCapabilities>, SpacesError>,
+
+    /// Status of the "members" processor.
+    pub members: ProcessorStatus<MembersProcessorResult, MembersProcessorError>,
 }
 
 impl<L, E, TP> Event<L, E, TP>
@@ -155,6 +159,7 @@ where
             // Even if this is an enriched event the spaces processor result is still pending as
             // the processor will replace this in any case.
             spaces: ProcessorStatus::Pending,
+            members: ProcessorStatus::Pending,
             operation,
             source,
         }
@@ -177,6 +182,7 @@ where
             && matches!(self.log_prune, ProcessorStatus::Completed(_))
             && matches!(self.groups, ProcessorStatus::Completed(_))
             && matches!(self.spaces, ProcessorStatus::Completed(_))
+            && matches!(self.members, ProcessorStatus::Completed(_))
     }
 
     /// Returns `true` if event failed somewhere during processing.
@@ -186,6 +192,7 @@ where
             || matches!(self.log_prune, ProcessorStatus::Failed(_))
             || matches!(self.groups, ProcessorStatus::Failed(_))
             || matches!(self.spaces, ProcessorStatus::Failed(_))
+            || matches!(self.members, ProcessorStatus::Failed(_))
     }
 
     /// Returns `true` if event got buffered by some processor and is therefore in "pending" state
@@ -221,6 +228,10 @@ where
             return Some(err.to_owned().into());
         }
 
+        if let ProcessorStatus::Failed(err) = &self.members {
+            return Some(err.to_owned().into());
+        }
+
         None
     }
 
@@ -246,6 +257,7 @@ where
             groups: self.groups,
             spaces_args: SpacesProcessorArgs::Ignore,
             spaces: self.spaces,
+            members: self.members,
         }
     }
 }
@@ -331,6 +343,9 @@ pub enum ProcessorError {
 
     #[error("spaces processor failed with: {0}")]
     Spaces(#[from] SpacesError),
+
+    #[error("members processor failed with: {0}")]
+    Members(#[from] MembersProcessorError),
 }
 
 impl<L, E, TP> Borrow<Operation<E>> for Event<L, E, TP> {

@@ -4,6 +4,7 @@ mod authoriser;
 mod forge;
 mod group;
 mod member;
+pub(crate) mod member_processor;
 pub(crate) mod message;
 pub(crate) mod repair;
 mod space;
