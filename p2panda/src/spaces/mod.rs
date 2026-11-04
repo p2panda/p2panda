@@ -33,8 +33,7 @@ pub use space::{
     SpaceEgressError, SpaceFuture, SpaceSubscription,
 };
 pub(crate) use space::{dispatch_spaces_events, pending_spaces_stream, spaces_stream};
-// TODO: Should `InnerGroupEvent` and `InnerSpaceError` be exported to the public API?
-pub use types::{InnerGroupEvent, InnerSpaceError, SpacesManagerError};
+pub use types::{InnerGroupEvent, SpacesManagerError};
 
 use crate::Credentials;
 use crate::forge::OperationForge;
