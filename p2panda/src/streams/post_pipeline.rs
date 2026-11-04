@@ -78,8 +78,8 @@ where
     //
     // 1. Regular topic-streams
     // 2. Encrypted application messages from spaces-streams
-    let application_bytes = application_body(&event);
-    if let Some(bytes) = application_bytes {
+    let application_bodies = application_bodies(&event);
+    for bytes in &application_bodies {
         let success = decode_application_event(&event, topic, acked, bytes, &mut forward_events);
 
         // Only ack events automatically if decoding did not fail.
@@ -89,7 +89,7 @@ where
     }
 
     // Always ack events which don't have an application body and are not spaces events.
-    if application_bytes.is_none() && !is_spaces_event(&event) {
+    if application_bodies.is_empty() && !is_spaces_event(&event) {
         always_ack(&event, acked, &mut forward_events).await;
     }
 
@@ -105,23 +105,24 @@ fn is_spaces_event(event: &Event) -> bool {
     event.operation.header.extensions.spaces_args().is_some()
 }
 
-/// Extracts the body from an event which is meant for the application layer.
-fn application_body(event: &Event) -> Option<&[u8]> {
+/// Extracts the bodies from an event which are meant for the application layer.
+fn application_bodies(event: &Event) -> Vec<&[u8]> {
+    // There can be multiple application bodies inside own spaces event.
     if let ProcessorStatus::Completed(SpacesResult::Processed { ref events }) = event.spaces {
-        for space_event in events {
-            if let p2panda_spaces::Event::Application { data, .. } = space_event {
-                // Encrypted application body from a space.
-                return Some(data);
-            } else {
-                // Some spaces events can have bodies but they are not meant for the application
-                // layer (such as key bundles).
-            }
-        }
+        events
+            .iter()
+            .filter_map(|space_event| match space_event {
+                p2panda_spaces::Event::Application { data, .. } => Some(data.as_slice()),
+                _ => None,
+            })
+            .collect()
     } else {
-        return event.body().map(|body| body.as_bytes());
+        event
+            .body()
+            .map(|body| body.as_bytes())
+            .into_iter()
+            .collect()
     }
-
-    None
 }
 
 /// Handle processed spaces events.

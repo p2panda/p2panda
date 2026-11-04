@@ -44,7 +44,10 @@ async fn receive_space_history_after_add() {
     alice_messages.extend([auth_message, space_message]);
 
     // Alice publishes a message after Dave was added.
-    let (message, _) = space.publish("Feeling less lonely :-)".as_bytes()).await.unwrap();
+    let (message, _) = space
+        .publish("Feeling less lonely :-)".as_bytes())
+        .await
+        .unwrap();
     alice_messages.push(message);
 
     // Dave processes all Alice's control & application messages.
