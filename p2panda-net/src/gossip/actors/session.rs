@@ -211,6 +211,9 @@ impl ThreadLocalActor for GossipSession {
                         session_id,
                     });
                 }
+                // We've already matched on all variants but need the wildcard because
+                // `iroh_gossip::api::Event` is marked as `#[non_exhaustive]`.
+                _ => (),
             },
             ToGossipSession::JoinNodes(nodes) => {
                 debug!(
