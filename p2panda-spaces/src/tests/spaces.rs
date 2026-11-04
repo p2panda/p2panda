@@ -204,7 +204,7 @@ async fn send_and_receive() {
     );
 
     #[allow(irrefutable_let_patterns)]
-    let Event::Application { space_id, data } = events.first().unwrap() else {
+    let Event::Application { space_id, data, .. } = events.first().unwrap() else {
         panic!("unexpected event returned");
     };
 
