@@ -481,6 +481,8 @@ impl Node {
         }
     }
 
+    /// Register a member with long-term key bundle material which was provided through another
+    /// channel (QR code scan etc.).
     pub async fn register_member(&self, member: Member) -> Result<(), MemberError> {
         let member: p2panda_spaces::member::AuthenticatedMember = member.into();
         self.spaces_manager.register_member(&member).await?;
@@ -600,6 +602,10 @@ impl Node {
         ))
     }
 
+    /// Subscribe to an existing space.
+    ///
+    /// Returns a `PendingSpace` handle and the space's event stream. The handle can be awaited
+    /// until the space is joined, to then access the space API.
     pub async fn space<M>(
         &self,
         space_id: impl Into<SpaceId>,
@@ -610,6 +616,7 @@ impl Node {
         self.space_from(space_id, StreamFrom::Frontier).await
     }
 
+    /// Subscribe to an existing space and stream events starting from a given point.
     pub async fn space_from<M>(
         &self,
         space_id: impl Into<SpaceId>,
@@ -688,6 +695,9 @@ impl Node {
             .await
     }
 
+    /// Create a new space.
+    ///
+    /// Returns a `Space` for accessing the space API and it's event stream.
     pub async fn create_space<M>(
         &self,
         space_id: impl Into<SpaceId>,
