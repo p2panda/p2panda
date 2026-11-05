@@ -34,7 +34,6 @@ struct SecretData {
 }
 
 mod spaces_api {
-
     use p2panda::Topic;
     use p2panda::streams::{GroupAction, StreamEvent, StreamFrom};
     use p2panda_auth::{Access, AccessLevel};
@@ -1680,6 +1679,106 @@ mod database {
                 break;
             };
         }
+
+        Ok(())
+    }
+}
+
+mod messages {
+    use futures_util::StreamExt;
+    use p2panda::streams::StreamEvent;
+    use p2panda::{AccessLevel, Topic};
+    use p2panda_core::test_utils::setup_logging;
+
+    use crate::{SecretData, Swarm};
+
+    #[tokio::test]
+    async fn receive_space_history_after_add() -> Result<(), Box<dyn std::error::Error>> {
+        setup_logging();
+
+        let swarm = Swarm::new();
+        let topic = Topic::random();
+
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
+
+        // Panda creates and subscribes to a space.
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+
+        // Panda publishes two message into the space.
+        let message_01 = SecretData {
+            title: "Greetings".to_string(),
+            content: "Hello, everyone!".to_string(),
+        };
+
+        let ready = panda_space.publish(message_01.clone()).await?;
+        assert!(ready.await.is_ok());
+
+        let message_02 = SecretData {
+            title: "Feeling lonely".to_string(),
+            content: "Anyone there!?".to_string(),
+        };
+
+        let ready = panda_space.publish(message_02.clone()).await?;
+        assert!(ready.await.is_ok());
+
+        // Penguin subscribes to the space.
+        let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
+
+        // Panda receives Penguin's key bundle.
+        while let Some(event) = panda_rx.next().await {
+            if let StreamEvent::Member(member) = event {
+                if penguin.id() == member {
+                    break;
+                }
+            };
+        }
+
+        // Panda adds penguin as a member of the space.
+        panda_space.add(penguin.id(), AccessLevel::Write).await?;
+
+        // Panda publishes one more message.
+        let message_03 = SecretData {
+            title: "Hello friend :-)".to_string(),
+            content: "Happy you're here.".to_string(),
+        };
+
+        let ready = panda_space.publish(message_03.clone()).await?;
+        assert!(ready.await.is_ok());
+
+        // We expect penguin to receive messages from before and after they were a member in the
+        // order they were published.
+        let mut operations = Vec::new();
+        let expected_message_count = 3;
+        loop {
+            let Some(event) = penguin_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+
+            let StreamEvent::Processed { operation, .. } = event else {
+                continue;
+            };
+
+            operations.push(operation.clone());
+
+            if operations.len() == expected_message_count {
+                break;
+            }
+        }
+
+        // Make sure each operation has a different id.
+        let mut seen_operation_ids = Vec::new();
+        for op in &operations {
+            if seen_operation_ids.contains(&op.id()) {
+                panic!("ids need to be unique");
+            }
+
+            seen_operation_ids.push(op.id());
+            assert_eq!(op.author(), panda.id());
+        }
+
+        let messages: Vec<_> = operations.iter().map(|op| op.message().clone()).collect();
+        assert_eq!(messages, vec![message_01, message_02, message_03]);
 
         Ok(())
     }

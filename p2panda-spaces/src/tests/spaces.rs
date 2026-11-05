@@ -24,7 +24,7 @@ use crate::space::{Space, SpaceError, SpaceOutput};
 use crate::test_utils::{TestPeer, TestSpaceError};
 use crate::types::AuthGroupAction;
 
-fn split_messages<C, M>(messages: Vec<(M, Vec<Event<C>>)>) -> (Vec<M>, Vec<Event<C>>) {
+pub fn split_messages<C, M>(messages: Vec<(M, Vec<Event<C>>)>) -> (Vec<M>, Vec<Event<C>>) {
     let mut all_messages = vec![];
     let mut all_events = vec![];
     for (message, events) in messages {
@@ -34,7 +34,7 @@ fn split_messages<C, M>(messages: Vec<(M, Vec<Event<C>>)>) -> (Vec<M>, Vec<Event
     (all_messages, all_events)
 }
 
-fn split_space_output<C, M>(output: SpaceOutput<C, M>) -> (M, M, Vec<Event<C>>) {
+pub fn split_space_output<C, M>(output: SpaceOutput<C, M>) -> (M, M, Vec<Event<C>>) {
     let (mut messages, events) = split_messages(output.messages);
     assert_eq!(messages.len(), 2);
     let space_message = messages.pop().unwrap();
@@ -204,7 +204,7 @@ async fn send_and_receive() {
     );
 
     #[allow(irrefutable_let_patterns)]
-    let Event::Application { space_id, data } = events.first().unwrap() else {
+    let Event::Application { space_id, data, .. } = events.first().unwrap() else {
         panic!("unexpected event returned");
     };
 
