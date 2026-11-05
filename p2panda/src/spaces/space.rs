@@ -125,6 +125,131 @@ where
     }
 }
 
+/// Space API with methods to publish messages and query and update membership.
+///
+/// A space represents an encrypted group context where all published messages are encrypted
+/// towards current group members. Spaces automatically perform key rotation when members are
+/// removed to ensure that only current members can read new messages.
+///
+/// The `Space` type acts as a handle to publish messages into the space and represents the
+/// primary API for managing space membership. It is returned from the [`Node::create_space()`].
+///
+/// The [`Node::space()`] and [`Node::space_from()`] methods return a [`PendingSpace`] which
+/// exposes a `joined` method; messages can be read from and published to the space once the
+/// `joined` method has successfully returned.
+///
+/// ## Example
+///
+/// ```no_run
+/// # use std::time::Duration;
+/// #
+/// # use p2panda_core::SigningKey;
+/// # use p2panda::streams::StreamEvent;
+/// # use p2panda::Topic;
+/// # use p2panda::spaces::AccessLevel;
+/// # use serde::{Deserialize, Serialize};
+/// # use tokio_stream::StreamExt;
+///
+/// #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// struct SecretData {
+///     title: String,
+///     content: String,
+/// }
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // Spawn a p2panda node.
+/// let panda = p2panda::spawn().await?;
+///
+/// // Spaces behave like topic-streams, just that they're encrypted towards members.
+/// let space_id = Topic::random();
+///
+/// let penguin_id = {
+///     // The space id is shared with Penguin over a secure side-channel. They subscribe
+///     // to the space, automatically share their key-bundle with us, await being added as
+///     // a member and then publish their own message.
+///     //
+///     // We also assume here that they have shared their verifying key with us.
+///     # let penguin = p2panda::spawn().await?;
+///     # let penguin_id = penguin.id();
+///     # let _handle = tokio::spawn(async move {
+///     #     // Penguin subscribes to the space.
+///     #     let (pending, _space_rx) = penguin.space(space_id).await.unwrap();
+///     #
+///     #     // And awaits being added.
+///     #     let space = pending.joined().await.unwrap();
+///     #
+///     #     // Then publishes a message.
+///     #     let processing = space
+///     #         .publish(SecretData {
+///     #             title: "Greetings".to_string(),
+///     #             content: "Nice to be here".to_string(),
+///     #         })
+///     #         .await
+///     #         .unwrap();
+///     #
+///     #     // Wait for the message to be processed by the local pipeline.
+///     #     processing.await.unwrap();
+///     #
+///     #     // Leave time for the message to sync with panda.
+///     #     tokio::time::sleep(Duration::from_secs(10)).await;
+///     # });
+///     # penguin_id  
+/// };
+///
+/// // Create a space with only us inside.
+/// let (space, mut panda_rx) = panda.create_space::<SecretData>(space_id).await?;
+///
+/// // Panda waits for penguin subscribe to space and send there Member message which is
+/// // needed before they can be added as a member.
+/// while let Some(event) = panda_rx.next().await {
+///     let StreamEvent::Member(member) = event else {
+///         continue;
+///     };
+///
+///     if member == penguin_id {
+///         break;
+///     }
+/// }
+///
+/// // Add penguin as a member of the space with write access.
+/// space.add(penguin_id, AccessLevel::Write).await?;
+///
+/// let message = SecretData {
+///     title: "Yo Penguin".to_string(),
+///     content: "I know where all the tasty fish live.".to_string(),
+/// };
+///
+/// // Publish a message into the space (this will be encrypted toward penguin).
+/// //
+/// // The message will be decrypted by penguin's node before they receive it from their space
+/// // subscription handle. In this way, the encryption and decryption processes are automatic; the
+/// // message is published in plaintext on one node, undergoes transport as encrypted bytes, and
+/// // emerges decrytped from the space subscription handle of all other active space members.
+/// let processing = space.publish(message).await?;
+///
+/// // Wait for the message to be processed by the local pipeline.
+/// processing.await?;
+///
+/// while let Some(event) = panda_rx.next().await {
+///     let StreamEvent::Processed { operation, .. } = event else {
+///         continue;
+///     };
+///
+///     if operation.author() == penguin_id {
+///         // We received a message from penguin.
+///         break;
+///     }
+/// }
+/// #
+/// # Ok(())
+/// # }
+/// ```
+///
+/// [`Node::create_space()`]: crate::Node::create_space()
+/// [`Node::space()`]: crate::Node::space()
+/// [`Node::space_from()`]: crate::Node::space_from()
+/// [`PendingSpace`]: crate::spaces::PendingSpace
 #[derive(Debug)]
 pub struct Space<M>
 where
@@ -145,6 +270,9 @@ where
         self.inner.id()
     }
 
+    /// Publishes a message into the space.
+    ///
+    ///  Every message published into a space can be decrypted by it's members.
     #[allow(clippy::result_large_err)]
     pub async fn publish(&self, message: M) -> Result<SpaceFuture, PublishSpaceError> {
         let members = self.actors().await.map_err(Box::new)?;
@@ -180,6 +308,7 @@ where
         })
     }
 
+    /// Adds a member to the space with an associated access level.
     pub async fn add(
         &self,
         actor: impl Into<ActorId>,
@@ -214,6 +343,7 @@ where
         Ok(())
     }
 
+    /// Removes a member from the space.
     pub async fn remove(&self, actor: impl Into<ActorId>) -> Result<(), RemoveSpaceMemberError> {
         let me = self.inner.me();
         let actor = actor.into();
@@ -236,7 +366,7 @@ where
         Ok(())
     }
 
-    /// Promote an existing space member to the assigned access level.
+    /// Promotes an existing member to the assigned access level.
     pub async fn promote(
         &self,
         actor: impl Into<ActorId>,
@@ -273,7 +403,7 @@ where
         Ok(())
     }
 
-    /// Demote an existing space member to the assigned access level.
+    /// Demotes an existing member to the assigned access level.
     pub async fn demote(
         &self,
         actor: impl Into<ActorId>,
@@ -331,26 +461,30 @@ where
     ///
     /// These members are all the individuals in the space after nested groups have been
     /// flattened.
-    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerSpaceError> {
-        self.inner.members().await.map(|members| {
+    pub async fn members(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceMembersError> {
+        let result = self.inner.members().await.map(|members| {
             members
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
     /// Returns all space actors (groups and individuals) and their access levels.
-    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, InnerSpaceError> {
-        self.inner.actors().await.map(|actors| {
+    pub async fn actors(&self) -> Result<Vec<(MemberId, AccessLevel)>, SpaceActorsError> {
+        let result = self.inner.actors().await.map(|actors| {
             actors
                 .iter()
                 .map(|(actor, access)| (*actor, access.level))
                 .collect()
-        })
+        })?;
+
+        Ok(result)
     }
 
-    pub async fn group_id(&self) -> Result<ActorId, InnerSpaceError> {
+    pub async fn group_id(&self) -> Result<ActorId, SpaceGroupIdError> {
         let group_id = self.inner.group_id().await?;
         Ok(group_id)
     }
@@ -396,6 +530,7 @@ where
     }
 }
 
+/// Subscription to events arriving from a space.
 pub struct SpaceSubscription<M> {
     rx: StreamSubscription<M>,
 }
@@ -411,12 +546,14 @@ where
     }
 }
 
+/// Future to await processing completion of a message published to a space.
 pub struct SpaceFuture {
     pub space_id: SpaceId,
     pub processed: SubmitFuture,
 }
 
 impl SpaceFuture {
+    /// Returns the identifier (32-byte BLAKE3 hash) for the associated space.
     pub fn id(&self) -> SpaceId {
         self.space_id
     }
@@ -430,6 +567,22 @@ impl Future for SpaceFuture {
     }
 }
 
+/// Error occurred when querying the actors of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceActorsError(#[from] InnerSpaceError);
+
+/// Error occurred when querying the members of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceMembersError(#[from] InnerSpaceError);
+
+/// Error occurred when querying the identifier of a space.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct SpaceGroupIdError(#[from] InnerSpaceError);
+
+/// Error occurred when dispatching spaces events for delivery and processing.
 #[derive(Debug, Error)]
 #[allow(clippy::large_enum_variant)] // TODO: Reduce size of spaces error types.
 pub enum SpaceEgressError {
@@ -440,6 +593,7 @@ pub enum SpaceEgressError {
     Egress(#[from] EgressError),
 }
 
+/// Error occurred when adding a member to a space.
 #[derive(Debug, Error)]
 pub enum AddSpaceMemberError {
     #[error(
@@ -461,8 +615,15 @@ pub enum AddSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
+/// Error occurred when removing a member from a space.
 #[derive(Debug, Error)]
 pub enum RemoveSpaceMemberError {
     #[error(
@@ -484,8 +645,15 @@ pub enum RemoveSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
+/// Error occurred when promoting a member in a space.
 #[derive(Debug, Error)]
 pub enum PromoteSpaceMemberError {
     #[error(
@@ -508,8 +676,15 @@ pub enum PromoteSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
+/// Error occurred when demoting a member in a space.
 #[derive(Debug, Error)]
 pub enum DemoteSpaceMemberError {
     #[error(
@@ -532,8 +707,15 @@ pub enum DemoteSpaceMemberError {
 
     #[error(transparent)]
     Egress(#[from] SpaceEgressError),
+
+    #[error(transparent)]
+    SpaceActors(#[from] SpaceActorsError),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] SpaceMembersError),
 }
 
+/// Error occurred when processing a change to the membership of a space.
 #[derive(Debug, Error)]
 pub enum RepairError {
     #[error(transparent)]
@@ -556,6 +738,12 @@ pub enum PublishSpaceError {
 
     #[error(transparent)]
     Space(#[from] Box<InnerSpaceError>),
+
+    #[error(transparent)]
+    SpaceActors(#[from] Box<SpaceActorsError>),
+
+    #[error(transparent)]
+    SpaceMembers(#[from] Box<SpaceMembersError>),
 
     #[error(transparent)]
     Encode(#[from] EncodeError),

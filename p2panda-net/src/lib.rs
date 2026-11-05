@@ -223,19 +223,20 @@
 //! - Introduce **Allow- and Deny-lists** for nodes to give fine-grained access with whom we can
 //!   ever form a connection with. This can be nicely paired with an access control system. [`#925`]
 //!
-//! [local-first]: https://www.inkandswitch.com/local-first-software/
-//! [Publish & Subscribe]: https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern
-//! [Eventual Consistency]: https://en.wikipedia.org/wiki/Eventual_consistency
-//! [Actor Model]: https://en.wikipedia.org/wiki/Actor_model
-//! [Private Set Intersection]: https://en.wikipedia.org/wiki/Private_set_intersection
-//! [Supervision Trees]: https://adoptingerlang.org/docs/development/supervision_trees/
-//! [iroh]: https://www.iroh.computer/
-//! [`chat.rs`]: https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs
-//! [`#925`]: https://github.com/p2panda/p2panda/issues/925
-//! [`#934`]: https://github.com/p2panda/p2panda/issues/934
-//! [`#965`]: https://github.com/p2panda/p2panda/issues/965
-//! [`p2panda-discovery`]: https://docs.rs/p2panda-discovery/latest/p2panda_discovery/
-//! [`p2panda-sync`]: https://docs.rs/p2panda-discovery/latest/p2panda_sync/
+//! [local-first]: <https://www.inkandswitch.com/local-first-software/>
+//! [Publish & Subscribe]: <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>
+//! [Eventual Consistency]: <https://en.wikipedia.org/wiki/Eventual_consistency>
+//! [`Supervisor`]: <https://docs.rs/p2panda-net/latest/p2panda_net/struct.Supervisor.html>
+//! [Actor Model]: <https://en.wikipedia.org/wiki/Actor_model>
+//! [Private Set Intersection]: <https://en.wikipedia.org/wiki/Private_set_intersection>
+//! [Supervision Trees]: <https://adoptingerlang.org/docs/development/supervision_trees/>
+//! [iroh]: <https://www.iroh.computer/>
+//! [`chat.rs`]: <https://github.com/p2panda/p2panda/blob/main/p2panda-net/examples/chat.rs>
+//! [`#925`]: <https://github.com/p2panda/p2panda/issues/925>
+//! [`#934`]: <https://github.com/p2panda/p2panda/issues/934>
+//! [`#965`]: <https://github.com/p2panda/p2panda/issues/965>
+//! [`p2panda-discovery`]: <https://docs.rs/p2panda-discovery/latest/p2panda_discovery/>
+//! [`p2panda-sync`]: <https://docs.rs/p2panda-discovery/latest/p2panda_sync/>
 #[cfg(feature = "address_book")]
 pub mod address_book;
 pub mod addrs;

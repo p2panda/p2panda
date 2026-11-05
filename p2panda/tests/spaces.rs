@@ -35,6 +35,8 @@ struct SecretData {
 
 mod spaces_api {
 
+    use std::time::Duration;
+
     use p2panda::Topic;
     use p2panda::streams::{GroupAction, StreamEvent, StreamFrom};
     use p2panda_auth::{Access, AccessLevel};
@@ -43,6 +45,91 @@ mod spaces_api {
     use tokio_stream::StreamExt;
 
     use super::{SecretData, Swarm};
+
+    #[tokio::test]
+    async fn add_member() -> Result<(), Box<dyn std::error::Error>> {
+        // Spawn a p2panda node.
+        let panda = p2panda::spawn().await?;
+
+        // Spawn another p2panda node.
+        //
+        // This would usually be running on a separate process.
+        let penguin = p2panda::spawn().await?;
+        let penguin_id = penguin.id();
+
+        // Spaces behave like topic-streams, just that they're encrypted towards members.
+        let space_id = Topic::random();
+
+        // Create a space with only us inside.
+        let (space, mut panda_rx) = panda.create_space::<SecretData>(space_id).await?;
+
+        let _handle = tokio::spawn(async move {
+            // Penguin subscribes to the space.
+            let (pending, _space_rx) = penguin.space(space_id).await.unwrap();
+
+            // And awaits being added.
+            let space = pending.joined().await.unwrap();
+
+            // Then publishes a message.
+            let processing = space
+                .publish(SecretData {
+                    title: "Greetings".to_string(),
+                    content: "Nice to be here".to_string(),
+                })
+                .await
+                .unwrap();
+
+            // Wait for the message to be processed by the local pipeline.
+            processing.await.unwrap();
+
+            // Leave time for the message to sync with panda.
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        });
+
+        // Panda waits for penguin subscribe to space and send there Member message which is
+        // needed before they can be added as a member.
+        while let Some(event) = panda_rx.next().await {
+            let StreamEvent::Member(member) = event else {
+                continue;
+            };
+
+            if member == penguin_id {
+                break;
+            }
+        }
+
+        // Add penguin as a member of the space with write access.
+        space.add(penguin_id, AccessLevel::Write).await?;
+
+        let message = SecretData {
+            title: "Yo Penguin".to_string(),
+            content: "I know where all the tasty fish live.".to_string(),
+        };
+
+        // Publish a message into the space (this will be encrypted toward penguin).
+        //
+        // The message will be decrypted by penguin's node before they receive it from their space
+        // subscription handle. In this way, the encryption and decryption processes are automatic; the
+        // message is published in plaintext on one node, undergoes transport as encrypted bytes, and
+        // emerges decrytped from the space subscription handle of all other active space members.
+        let processing = space.publish(message).await?;
+
+        // Wait for the message to be processed by the local pipeline.
+        processing.await?;
+
+        while let Some(event) = panda_rx.next().await {
+            let StreamEvent::Processed { operation, .. } = event else {
+                continue;
+            };
+
+            if operation.author() == penguin_id {
+                // We received a message from penguin.
+                break;
+            }
+        }
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn space_with_device_group_member() -> Result<(), Box<dyn std::error::Error>> {
@@ -752,7 +839,6 @@ mod spaces_repair_task {
             };
         }
 
-        // The repair task should be triggered and the ADD message incorporated into the space.
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space { members, .. } = event {
                 if members.len() == 3 && members.contains(&(penguin_mobile.id(), AccessLevel::Read))
