@@ -125,6 +125,19 @@ impl Acked {
         Ok(())
     }
 
+    /// Returns `true` if the operation was acked.
+    pub async fn is_acked(&self, header: impl Borrow<Header>) -> Result<bool, AckedError> {
+        let header = header.borrow();
+
+        let cursor = tx!(self.store, { self.cursor().await? });
+
+        Ok(cursor.contains(
+            &header.verifying_key,
+            &header.extensions.log_id(),
+            header.seq_num,
+        ))
+    }
+
     pub(crate) async fn ack_tx(&self, header: impl Borrow<Header>) -> Result<(), AckedError> {
         let header = header.borrow();
 
