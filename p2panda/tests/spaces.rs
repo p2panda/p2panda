@@ -35,8 +35,9 @@ struct SecretData {
 
 mod spaces_api {
     use p2panda::Topic;
-    use p2panda::streams::{GroupAction, StreamEvent, StreamFrom};
+    use p2panda::streams::{Acked, GroupAction, StreamEvent, StreamFrom};
     use p2panda_auth::{Access, AccessLevel};
+    use p2panda_core::cbor::encode_cbor;
     use p2panda_core::test_utils::setup_logging;
     use p2panda_spaces::{MemberId, SpaceEvent};
     use tokio_stream::StreamExt;
@@ -531,10 +532,91 @@ mod spaces_api {
             }
         }
     }
+
+    #[tokio::test]
+    async fn ooo_spaces_not_acked_before_welcome() {
+        setup_logging();
+
+        let swarm = Swarm::new();
+
+        let panda = swarm.spawn_node().await;
+        let penguin = swarm.spawn_node().await;
+
+        {
+            let penguin_member_info = penguin.me().await.unwrap();
+            panda
+                .spaces_manager()
+                .register_member(&penguin_member_info.into())
+                .await
+                .unwrap();
+        }
+
+        // Panda creates a space without Penguin and publishes an encrypted message into it.
+        let topic = Topic::random();
+        let (space, out) = panda
+            .spaces_manager()
+            .create_space(topic, &[(panda.id(), Access::manage())])
+            .await
+            .unwrap();
+        let mut operations: Vec<_> = out
+            .messages
+            .into_iter()
+            .map(|(msg, _)| msg.into_operation())
+            .collect();
+
+        let plaintext = encode_cbor(&"Secret!".to_string()).unwrap();
+        let (message, _) = space.publish(&plaintext).await.unwrap();
+        let secret_op = message.into_operation();
+        operations.push(secret_op.clone());
+
+        // We manually import the spaces messages for penguin already. Penguin is _not_ welcomed
+        // yet, so they will not be able to decrypt anything.
+        let (penguin_space, mut penguin_rx) = penguin.space::<String>(topic).await.unwrap();
+        penguin_space
+            .inner_tx()
+            .import(futures_util::stream::iter(operations))
+            .await
+            .unwrap()
+            .await
+            .unwrap();
+
+        // The buffered message was not delivered, so it should not be acked.
+        let acked = Acked::new(penguin.store(), topic);
+        assert!(
+            !acked.is_acked(&secret_op.header).await.unwrap(),
+            "buffered message acked before delivery"
+        );
+
+        // Panda adds Penguin, which releases the buffered message.
+        let out = space.add(penguin.id(), Access::write()).await.unwrap();
+        let operations = out
+            .messages
+            .into_iter()
+            .map(|(msg, _)| msg.into_operation());
+        penguin_space
+            .inner_tx()
+            .import(futures_util::stream::iter(operations))
+            .await
+            .unwrap()
+            .await
+            .unwrap();
+
+        while let Some(stream_event) = penguin_rx.next().await {
+            if let StreamEvent::Processed { operation, .. } = stream_event {
+                assert_eq!(operation.id(), secret_op.hash);
+                assert_eq!(operation.message(), "Secret!");
+                break;
+            }
+        }
+
+        assert!(
+            acked.is_acked(&secret_op.header).await.unwrap(),
+            "delivered message acked"
+        );
+    }
 }
 
 mod spaces_repair_task {
-
     use p2panda::Topic;
     use p2panda::streams::{GroupAction, StreamEvent};
     use p2panda_auth::AccessLevel;
@@ -1693,7 +1775,7 @@ mod messages {
     use crate::{SecretData, Swarm};
 
     #[tokio::test]
-    async fn receive_space_history_after_add() -> Result<(), Box<dyn std::error::Error>> {
+    async fn receive_space_history_after_add() {
         setup_logging();
 
         let swarm = Swarm::new();
@@ -1703,7 +1785,7 @@ mod messages {
         let penguin = swarm.spawn_node().await;
 
         // Panda creates and subscribes to a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
 
         // Panda publishes two message into the space.
         let message_01 = SecretData {
@@ -1711,7 +1793,7 @@ mod messages {
             content: "Hello, everyone!".to_string(),
         };
 
-        let ready = panda_space.publish(message_01.clone()).await?;
+        let ready = panda_space.publish(message_01.clone()).await.unwrap();
         assert!(ready.await.is_ok());
 
         let message_02 = SecretData {
@@ -1719,11 +1801,11 @@ mod messages {
             content: "Anyone there!?".to_string(),
         };
 
-        let ready = panda_space.publish(message_02.clone()).await?;
+        let ready = panda_space.publish(message_02.clone()).await.unwrap();
         assert!(ready.await.is_ok());
 
         // Penguin subscribes to the space.
-        let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
+        let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
 
         // Panda receives Penguin's key bundle.
         while let Some(event) = panda_rx.next().await {
@@ -1735,7 +1817,10 @@ mod messages {
         }
 
         // Panda adds penguin as a member of the space.
-        panda_space.add(penguin.id(), AccessLevel::Write).await?;
+        panda_space
+            .add(penguin.id(), AccessLevel::Write)
+            .await
+            .unwrap();
 
         // Panda publishes one more message.
         let message_03 = SecretData {
@@ -1743,7 +1828,7 @@ mod messages {
             content: "Happy you're here.".to_string(),
         };
 
-        let ready = panda_space.publish(message_03.clone()).await?;
+        let ready = panda_space.publish(message_03.clone()).await.unwrap();
         assert!(ready.await.is_ok());
 
         // We expect penguin to receive messages from before and after they were a member in the
@@ -1779,7 +1864,5 @@ mod messages {
 
         let messages: Vec<_> = operations.iter().map(|op| op.message().clone()).collect();
         assert_eq!(messages, vec![message_01, message_02, message_03]);
-
-        Ok(())
     }
 }
