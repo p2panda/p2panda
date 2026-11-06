@@ -20,7 +20,7 @@ pub use p2panda_core::cbor::DecodeError;
 use crate::operation::{Extensions, LogId};
 use crate::processor::PipelineTaskId;
 
-pub use acked::AckedError;
+pub use acked::{Acked, AckedError};
 pub(crate) use ephemeral_stream::ephemeral_stream;
 pub use ephemeral_stream::{
     EphemeralMessage, EphemeralPublishError, EphemeralStreamPublisher, EphemeralStreamSubscription,
