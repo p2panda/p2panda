@@ -215,10 +215,11 @@ where
                         // Prepare event processing pipeline.
                         let ingest =
                             Ingest::<SqliteStore, Event<L, E, TP>, L, E, TP>::new(store.clone());
-                        let orderer = Orderer::<SqliteStore, Event<L, E, TP>, E>::from_namespace(
-                            store.clone(),
-                            pipeline_id.to_string(),
-                        );
+                        let orderer =
+                            Orderer::<SqliteStore, Event<L, E, TP>, E, Hash>::from_namespace(
+                                store.clone(),
+                                pipeline_id.to_string(),
+                            );
                         let log_prune =
                             LogPrune::<SqliteStore, Event<L, E, TP>, L>::new(store.clone());
                         let groups = Groups::<SqliteStore, Event<L, E, TP>, AuthCapabilities>::new(
@@ -353,6 +354,7 @@ where
                                     // <https://github.com/p2panda/p2panda/issues/1522>
                                     if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
                                         ref dependent_operations,
+                                        ..
                                     }) = output_event.orderer
                                     {
                                         pending_dependencies =
@@ -502,7 +504,7 @@ mod tests {
     use p2panda_spaces::Config;
     use p2panda_store::SqliteStore;
     use p2panda_stream::hooks::{ProcessorHook, ProcessorHooksList};
-    use p2panda_stream::orderer::{OrdererArgs, OrdererResult};
+    use p2panda_stream::orderer::{OrdererArgs, OrdererItem, OrdererResult};
 
     use crate::credentials::Credentials;
     use crate::egress::Egress;
@@ -622,12 +624,14 @@ mod tests {
             );
 
             event.orderer_args = OrdererArgs::Process {
+                operation_id: operation.hash(),
+                other_ids: vec![],
                 dependencies: dependencies,
             };
 
             events.push(event);
 
-            dependencies = vec![operation.hash()];
+            dependencies = vec![OrdererItem::Operation(operation.hash())];
         }
 
         events.reverse();
@@ -681,6 +685,8 @@ mod tests {
                 None,
             );
             event.orderer_args = OrdererArgs::Process {
+                operation_id: event.hash(),
+                other_ids: vec![],
                 dependencies: vec![],
             };
             event
@@ -697,7 +703,9 @@ mod tests {
                 None,
             );
             event.orderer_args = OrdererArgs::Process {
-                dependencies: vec![event_1.hash()],
+                operation_id: event.hash(),
+                other_ids: vec![],
+                dependencies: vec![OrdererItem::Operation(event_1.hash())],
             };
             event
         };
@@ -713,7 +721,9 @@ mod tests {
                 None,
             );
             event.orderer_args = OrdererArgs::Process {
-                dependencies: vec![event_1.hash()],
+                operation_id: event.hash(),
+                other_ids: vec![],
+                dependencies: vec![OrdererItem::Operation(event_1.hash())],
             };
             event
         };
@@ -746,6 +756,7 @@ mod tests {
 
         if let ProcessorStatus::Completed(OrdererResult::ReadyInput {
             mut dependent_operations,
+            ..
         }) = result.orderer
         {
             let mut expected_operations = vec![event_2.hash(), event_3.hash()];
