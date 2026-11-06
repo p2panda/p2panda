@@ -43,6 +43,12 @@ where
         self.state.get(author).and_then(|logs| logs.get(log_id))
     }
 
+    /// Returns `true` if the given log entry is part of the state vector.
+    pub fn contains(&self, author: &A, log_id: &L, seq_num: SeqNum) -> bool {
+        self.log_height(author, log_id)
+            .is_some_and(|height| *height >= seq_num)
+    }
+
     /// Calculates the difference between two state vectors.
     pub fn compare(&self, other: &LogHeights<A, L>) -> LogRanges<A, L> {
         compare_logs(other, &self.state)
@@ -91,6 +97,11 @@ mod tests {
         assert_eq!(cursor.log_height(&author_1, &0), Some(&23));
         assert_eq!(cursor.log_height(&author_2, &0), Some(&10));
         assert_eq!(cursor.log_height(&author_2, &1), Some(&2));
+
+        assert!(cursor.contains(&author_1, &0, 0));
+        assert!(cursor.contains(&author_1, &0, 23));
+        assert!(!cursor.contains(&author_1, &0, 24));
+        assert!(!cursor.contains(&author_1, &1, 0));
     }
 
     #[test]
