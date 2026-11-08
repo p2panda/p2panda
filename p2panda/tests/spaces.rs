@@ -916,7 +916,7 @@ mod filtered_messages {
     use std::time::Duration;
 
     use p2panda::Topic;
-    use p2panda::streams::StreamEvent;
+    use p2panda::streams::{StreamEvent, StreamFrom};
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
@@ -1060,12 +1060,15 @@ mod filtered_messages {
         let penguin_space = penguin_space.joined().await.unwrap();
 
         // Penguin publishes a message to all members.
-        let message = SecretData {
+        let penguin_message = SecretData {
             title: "My favorite things".to_string(),
             content: "Hello, everyone!".to_string(),
         };
 
-        let ready = penguin_space.publish(message.clone()).await.unwrap();
+        let ready = penguin_space
+            .publish(penguin_message.clone())
+            .await
+            .unwrap();
         assert!(ready.await.is_ok());
 
         // Panda receives the message from Penguin.
@@ -1076,7 +1079,7 @@ mod filtered_messages {
             let StreamEvent::Processed { operation, .. } = event else {
                 continue;
             };
-            assert_eq!(&message, operation.message());
+            assert_eq!(&penguin_message, operation.message());
             break;
         }
 
@@ -1104,7 +1107,31 @@ mod filtered_messages {
                 continue;
             };
 
-            assert_eq!(&message, operation.message());
+            assert_eq!(&penguin_message, operation.message());
+            break;
+        }
+
+        panda_space.close().await.unwrap();
+        drop(panda_rx);
+
+        // Panda replays the space from the start. When the stream replays we expect penguins
+        // message to be emitted again. They should not be filtered out even though penguin is now
+        // removed from the space.
+        let (_panda_space, mut panda_rx) = panda
+            .space_from::<SecretData>(topic, StreamFrom::Start)
+            .await
+            .unwrap();
+
+        loop {
+            let Some(event) = panda_rx.next().await else {
+                panic!("unexpected stream closure");
+            };
+
+            let StreamEvent::Processed { operation, .. } = event else {
+                continue;
+            };
+
+            assert_eq!(&penguin_message, operation.message());
             break;
         }
     }

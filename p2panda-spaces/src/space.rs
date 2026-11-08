@@ -7,7 +7,9 @@ use std::fmt::Debug;
 use p2panda_auth::Access;
 use p2panda_auth::group::GroupMember;
 use p2panda_auth::traits::{Conditions, Operation};
-use p2panda_auth::validation::{VerifyClaimedWriteError, verify_claimed_write_access};
+use p2panda_auth::validation::{
+    VerifyClaimedWriteError, verify_claimed_write_access, write_access_stands,
+};
 use p2panda_core::traits::{Digest, ShortFormat};
 use p2panda_core::{SigningKey, VerifyingKey};
 use p2panda_encryption::key_manager::KeyManagerState;
@@ -604,22 +606,14 @@ where
         // This case occurs if a member published messages before receiving the control message
         // which removed them. Their claim to have write access is still historically valid,
         // however we have already learned that they have actually been removed.
-        //
-        // NOTE: Application _and_ control messages are partially-ordered based on their causal
-        // relationships, application messages are always emitted together with the member's
-        // (create/add) welcome message. For that reason application messages from members which
-        // have been removed at a causally later point (not concurrently) will not be affected by
-        // this filter and are correctly forwarded to the application layer.
-        let has_write_access =
-            space_y
-                .groups_y
-                .members(space_y.group_id)
-                .iter()
-                .any(|(member, access)| {
-                    *member == message.author && (access.is_write() || access.is_manage())
-                });
+        let retain = write_access_stands::<_, _, _, _, StrongRemoveResolver<C>>(
+            &space_y.groups_y,
+            message.author,
+            space_y.group_id,
+            HashSet::from_iter(message.proof.clone()),
+        )?;
 
-        if !has_write_access {
+        if !retain {
             events.retain(|event| !matches!(event, Event::Application { .. }));
         }
 

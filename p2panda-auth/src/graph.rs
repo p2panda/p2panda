@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use p2panda_core::traits::OperationId;
 use petgraph::algo::has_path_connecting;
 use petgraph::graphmap::DiGraphMap;
-use petgraph::visit::{Dfs, Reversed};
+use petgraph::visit::{Dfs, IntoNodeIdentifiers, Reversed};
 
 /// Recursively identify all operations concurrent with the given target operation.
 fn concurrent_bubble<OP>(
@@ -56,7 +56,7 @@ where
 ///
 /// Operations are considered concurrent if they are neither predecessors nor successors of the
 /// target operation.
-fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
+pub(crate) fn concurrent_operations<OP>(graph: &DiGraphMap<OP, ()>, target: OP) -> HashSet<OP>
 where
     OP: OperationId,
 {
@@ -131,13 +131,50 @@ where
     a != b && !has_path(graph, a, b) && !has_path(graph, b, a)
 }
 
+/// Return a graph with predecessor and concurrent nodes of the passed heads included. This is
+/// required when wanting to validate an operation against a specific point in the groups
+/// graph history while including any concurrent activity we know about locally.
+pub fn prune_graph_include_concurrent<OP>(
+    graph: &DiGraphMap<OP, ()>,
+    heads: &HashSet<OP>,
+) -> DiGraphMap<OP, ()>
+where
+    OP: OperationId,
+{
+    // Collect successors of the given heads.
+    let mut graph = graph.clone();
+    let mut remove = HashSet::new();
+    for id in heads {
+        let mut dfs = Dfs::new(&graph, *id);
+        while let Some(id) = dfs.next(&graph) {
+            // Exclude the heads themselves from the filter as we want these to be retained.
+            if heads.contains(&id) {
+                continue;
+            }
+            remove.insert(id);
+        }
+    }
+
+    // Remove all successor nodes, leaving only predecessors and concurrent.
+    let to_remove: Vec<_> = graph
+        .node_identifiers()
+        .filter(|n| remove.contains(n))
+        .collect();
+
+    for node in &to_remove {
+        graph.remove_node(*node);
+    }
+
+    graph
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use petgraph::{graph::DiGraph, prelude::DiGraphMap};
 
-    use crate::graph::concurrent_bubbles;
+    use crate::graph::{concurrent_bubbles, prune_graph_include_concurrent};
 
     #[test]
     fn test_linear_chain_no_concurrency() {
@@ -240,6 +277,90 @@ mod tests {
         let bubble = concurrent_bubbles.first().unwrap();
         for id in &["B", "C", "D", "E", "F", "G", "H"] {
             assert!(bubble.contains(id));
+        }
+    }
+
+    #[test]
+    fn prune_and_include_concurrent() {
+        //       A
+        //     /   \
+        //    B     C
+        //   / \     \
+        //  D   E     F
+        //   \ /     /
+        //    G     H
+        //     \   /
+        //       I
+        //       |
+        //       J
+        let mut graph = DiGraph::new();
+
+        // Add nodes A–J.
+        let a = graph.add_node("A"); // 0
+        let b = graph.add_node("B"); // 1
+        let c = graph.add_node("C"); // 2
+        let d = graph.add_node("D"); // 3
+        let e = graph.add_node("E"); // 4
+        let f = graph.add_node("F"); // 5
+        let g = graph.add_node("G"); // 6
+        let h = graph.add_node("H"); // 7
+        let i = graph.add_node("I"); // 8
+        let j = graph.add_node("J"); // 9
+
+        // Add edges.
+        graph.extend_with_edges([
+            (a, b),
+            (a, c),
+            (b, d),
+            (b, e),
+            (d, g),
+            (e, g),
+            (c, f),
+            (f, h),
+            (h, i),
+            (g, i),
+            (i, j),
+        ]);
+
+        //       A
+        //     /   \
+        //    B     C
+        //   / \     \
+        //  D   E     F <-- we prune here
+        //   \ /     /
+        //    G     H
+        //     \   /
+        //       I
+        //       |
+        //       J
+        let graph_map = DiGraphMap::from_graph(graph);
+        let pruned = prune_graph_include_concurrent(&graph_map, &HashSet::from(["F"]));
+
+        // We expect all preceding and concurrent operations to be retained after pruning.
+        assert_eq!(pruned.nodes().len(), 7);
+        for id in &["A", "B", "C", "D", "E", "F", "G"] {
+            assert!(pruned.nodes().find(|node| node == id).is_some(), "{id:?}");
+        }
+
+        //       A
+        //     /   \
+        //    B     C
+        //   / \     \
+        //  D   E <-- F <-- we prune here
+        //   \ /     /
+        //    G     H
+        //     \   /
+        //       I
+        //       |
+        //       J
+        //
+        // Multiple heads can be passed.
+        let pruned = prune_graph_include_concurrent(&graph_map, &HashSet::from(["E", "F"]));
+
+        // We expect only nodes concurrent to _all_ heads to be included.
+        assert_eq!(pruned.nodes().len(), 6);
+        for id in &["A", "B", "C", "D", "E", "F"] {
+            assert!(pruned.nodes().find(|node| node == id).is_some(), "{id:?}");
         }
     }
 }
