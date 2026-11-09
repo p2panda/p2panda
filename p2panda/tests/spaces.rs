@@ -49,14 +49,11 @@ mod spaces_api {
         setup_logging();
 
         let swarm = Swarm::new();
-
         let panda = swarm.spawn_node().await;
 
-        // Spaces behave like topic-streams, just that they're encrypted towards members.
-        let topic = Topic::random();
-
-        // Create a space with only us inside.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+        // Create a space with only us inside. Spaces behave like topic-streams, just that they're encrypted towards members.
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await?;
+        let topic = panda_space.id();
 
         // Panda receives a space created event for their own action.
         while let Some(event) = panda_rx.next().await {
@@ -331,16 +328,16 @@ mod spaces_api {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
 
+        // Panda creates and subscribes to a space.
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await?;
+        let topic = panda_space.id();
+
         // Penguin subscribes to the space (and publishes a key bundle).
         let (_penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await?;
-
-        // Panda creates and subscribes to a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
 
         while let Some(event) = panda_rx.next().await {
             if let StreamEvent::Space {
@@ -536,7 +533,6 @@ mod spaces_api {
 
 mod spaces_repair_task {
 
-    use p2panda::Topic;
     use p2panda::spaces::InnerGroupEvent;
     use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
@@ -552,14 +548,14 @@ mod spaces_repair_task {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
         let penguin_mobile = swarm.spawn_node().await;
 
         // Panda creates a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
 
         // Penguin and Penguin (mobile) subscribe to the space and send their key-bundles.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -665,14 +661,14 @@ mod spaces_repair_task {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
         let penguin_mobile = swarm.spawn_node().await;
 
         // Panda creates a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
 
         // Penguin and Penguin (mobile) subscribe to the space and send their key-bundles.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -759,8 +755,8 @@ mod spaces_repair_task {
 mod spaces_api_validation {
     use std::assert_matches;
 
+    use p2panda::SigningKey;
     use p2panda::spaces::{AddSpaceMemberError, PublishSpaceError, RemoveSpaceMemberError};
-    use p2panda::{SigningKey, Topic};
     use p2panda_auth::AccessLevel;
     use p2panda_auth::validation::{AddMemberError, RemoveMemberError, WriteError};
     use p2panda_core::test_utils::setup_logging;
@@ -772,11 +768,11 @@ mod spaces_api_validation {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
 
-        let (panda_space, _panda_rx) = panda.create_space::<String>(topic).await.unwrap();
+        let (panda_space, _panda_rx) = panda.create_space::<String>().await.unwrap();
+        let topic = panda_space.id();
 
         // Panda can't re-add themselves.
         let result = panda_space.add(panda.id(), AccessLevel::Write).await;
@@ -841,7 +837,6 @@ mod spaces_api_validation {
 }
 
 mod system_events {
-    use p2panda::Topic;
     use p2panda::spaces::InnerGroupEvent;
     use p2panda::streams::SystemEvent;
     use p2panda_auth::AccessLevel;
@@ -862,8 +857,9 @@ mod system_events {
         let mut panda_system_rx = panda.event_stream().await.unwrap();
         let mut penguin_system_rx = penguin.event_stream().await.unwrap();
 
-        let topic = Topic::random();
-        let (space, _) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (space, _) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = space.id();
+
         let (_space_on_penguin, _) = penguin.space::<SecretData>(topic).await.unwrap();
 
         // Panda creates a device group.
@@ -914,7 +910,6 @@ mod system_events {
 mod filtered_messages {
     use std::time::Duration;
 
-    use p2panda::Topic;
     use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
@@ -927,13 +922,13 @@ mod filtered_messages {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
 
         // Panda creates a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
 
         // Penguin subscribes to the space.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -1004,7 +999,10 @@ mod filtered_messages {
 
         // And manually adds penguin to the allow-list as removed members are automatically
         // blocked.
-        panda.sync_block_list().allow_topic(penguin_id, topic).await;
+        panda
+            .sync_block_list()
+            .allow_topic(penguin_id, topic.into())
+            .await;
 
         // Panda will be sent the second message from penguin, however it will not be forwarded to
         // the app layer as they know penguin has been removed (concurrent to the application
@@ -1036,14 +1034,14 @@ mod filtered_messages {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
         let tiger = swarm.spawn_node().await;
 
         // Panda creates a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
 
         // Penguin subscribes to the space.
         let (penguin_space, _penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -1110,7 +1108,6 @@ mod filtered_messages {
 }
 
 mod members {
-    use p2panda::Topic;
     use p2panda::spaces::Member;
     use p2panda::streams::StreamEvent;
     use p2panda_auth::AccessLevel;
@@ -1130,14 +1127,14 @@ mod members {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let node_a = swarm.spawn_node().await;
         let node_b = swarm.spawn_node().await;
         let node_c = swarm.spawn_node().await;
         let node_d = swarm.spawn_node().await;
 
-        let (node_a_space, mut node_a_rx) = node_a.create_space::<String>(topic).await.unwrap();
+        let (node_a_space, mut node_a_rx) = node_a.create_space::<String>().await.unwrap();
+        let topic = node_a_space.id();
 
         // Nodes C and D come online to sync their member logs with A. Node A will from now on
         // "carry" their logs. We will shut down C and D directly afterwards to make sure this is
@@ -1223,7 +1220,6 @@ mod members {
 }
 
 mod sync_authorisation {
-    use p2panda::Topic;
     use p2panda::streams::{StreamEvent, SystemEvent};
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
@@ -1237,14 +1233,14 @@ mod sync_authorisation {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let mut panda_system_rx = panda.event_stream().await.unwrap();
         let penguin = swarm.spawn_node().await;
 
         // Panda creates a space.
-        let (panda_space, _panda_rx) = panda.create_space::<SecretData>(topic).await.unwrap();
+        let (panda_space, _panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
 
         // Penguin subscribes to the space.
         let (penguin_space, mut penguin_rx) = penguin.space::<SecretData>(topic).await.unwrap();
@@ -1289,7 +1285,7 @@ mod sync_authorisation {
             };
 
             assert_eq!(remote_node_id, penguin_id);
-            assert_eq!(topic_inner, topic);
+            assert_eq!(topic_inner, topic.into());
             break;
         }
 
@@ -1313,17 +1309,17 @@ mod sync_authorisation {
             };
 
             assert_eq!(remote_node_id, penguin_id);
-            assert_eq!(topic_inner, topic);
+            assert_eq!(topic_inner, topic.into());
             break;
         }
     }
 }
 
 mod spaces_groups_membership {
+    use p2panda::Node;
     use p2panda::operation::Extensions;
     use p2panda::spaces::{Group, InnerGroupEvent};
     use p2panda::streams::{StreamEvent, SystemEvent};
-    use p2panda::{Node, Topic};
     use p2panda_auth::AccessLevel;
     use p2panda_core::test_utils::setup_logging;
     use p2panda_spaces::{SpaceEvent, SpacesStoreState};
@@ -1349,7 +1345,6 @@ mod spaces_groups_membership {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         // Alice, Bob and Claire each create a device group with only themselves inside.
         let (alice, alice_device) = spawn_node_with_device_group(&swarm).await;
@@ -1370,7 +1365,9 @@ mod spaces_groups_membership {
         }
 
         // Alice creates a space.
-        let (alice_space, mut alice_rx) = alice.create_space::<SecretData>(topic).await.unwrap();
+        let (alice_space, mut alice_rx) = alice.create_space::<SecretData>().await.unwrap();
+        let topic = alice_space.id();
+
         let space_group_id = alice_space.group_id().await.unwrap();
 
         let store = SqliteSpacesStore::<Extensions>::new(alice.store());
@@ -1597,7 +1594,7 @@ mod spaces_groups_membership {
 mod database {
     use futures_util::StreamExt;
     use p2panda::streams::{StreamEvent, StreamFrom};
-    use p2panda::{Node, NodeBuilder, Topic};
+    use p2panda::{Node, NodeBuilder};
     use p2panda_core::test_utils::setup_logging;
     use p2panda_store::SqliteStoreBuilder;
 
@@ -1628,12 +1625,12 @@ mod database {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = spawn_node(&swarm).await;
 
         // Panda creates and subscribes to a space.
-        let (space, _panda_rx) = panda.create_space::<SecretData>(topic).await?;
+        let (space, _panda_rx) = panda.create_space::<SecretData>().await?;
+        let topic = space.id();
 
         // Panda publishes some messages to all members.
         let mut messages = vec![];
@@ -1676,8 +1673,8 @@ mod database {
 
 mod messages {
     use futures_util::StreamExt;
+    use p2panda::AccessLevel;
     use p2panda::streams::StreamEvent;
-    use p2panda::{AccessLevel, Topic};
     use p2panda_core::test_utils::setup_logging;
 
     use crate::{SecretData, Swarm};
@@ -1687,13 +1684,13 @@ mod messages {
         setup_logging();
 
         let swarm = Swarm::new();
-        let topic = Topic::random();
 
         let panda = swarm.spawn_node().await;
         let penguin = swarm.spawn_node().await;
 
         // Panda creates and subscribes to a space.
-        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>(topic).await?;
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await?;
+        let topic = panda_space.id();
 
         // Panda publishes two message into the space.
         let message_01 = SecretData {
