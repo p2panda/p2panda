@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::access::Access;
+use crate::graph::prune_graph_include_concurrent;
 use crate::group::{GroupAction, GroupMember, GroupMembersState, GroupMembershipError};
 use crate::traits::{Conditions, Operation, Resolver};
 
@@ -210,6 +211,16 @@ where
         }
 
         graph
+    }
+
+    /// Return a graph with predecessor and concurrent nodes of the passed heads included. This is
+    /// required when wanting to validate an operation against a specific point in the groups
+    /// graph history while including any concurrent activity we know about locally.
+    pub(crate) fn trimmed_graph_include_concurrent(
+        &self,
+        heads: &HashSet<OP>,
+    ) -> DiGraphMap<OP, ()> {
+        prune_graph_include_concurrent(&self.graph, heads)
     }
 
     /// Current group states.
@@ -762,6 +773,39 @@ where
         RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))
     }
 
+    /// Rebuild the auth groups graph to a specific point in it's history while including any
+    /// locally known concurrent operations.
+    ///
+    /// This is required for validating an operation which doesn't point at the current graph
+    /// heads. This method is optimized to only actually perform the rebuild if the request
+    /// rebuild point (heads) is not equal to the current graph heads.
+    pub(crate) fn rebuild_at_include_concurrent(
+        mut y: GroupCrdtInnerState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+    ) -> Result<GroupCrdtInnerState<ID, OP, M, C>, GroupCrdtError<ID, OP>> {
+        y.graph = y.trimmed_graph_include_concurrent(&heads);
+        RS::process(y).map_err(|err| GroupCrdtError::Resolver(err.to_string()))
+    }
+
+    /// Get group members and access levels at a specific point in a groups history while
+    /// including any locally known concurrent operations.
+    ///
+    /// NOTE: This method is optimised to only rebuild the group graph if the passed heads do not match
+    /// the current group tips.
+    #[allow(clippy::type_complexity)]
+    pub fn members_at_include_concurrent(
+        y: &GroupCrdtState<ID, OP, M, C>,
+        heads: HashSet<OP>,
+        group_id: ID,
+    ) -> Result<Vec<(ID, Access<C>)>, GroupCrdtError<ID, OP>> {
+        if y.inner.heads(&[group_id]) != heads {
+            let inner = Self::rebuild_at_include_concurrent(y.inner.clone(), heads)?;
+            Ok(inner.members(group_id))
+        } else {
+            Ok(y.members(group_id))
+        }
+    }
+
     /// Get group members and access levels at a specific point in a groups history.
     #[allow(clippy::type_complexity)]
     pub fn members_at(
@@ -940,6 +984,8 @@ where
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::collections::HashSet;
+
     pub use p2panda_core::cbor::{decode_cbor, encode_cbor};
 
     use crate::Access;
@@ -2087,5 +2133,117 @@ pub(crate) mod tests {
                 (DAN, Access::manage())
             ]
         );
+    }
+
+    #[test]
+    fn members_at_include_concurrent() {
+        // This test demonstrates that we can query the group graph at a specific point and
+        // include any concurrent operations.
+        //
+        //          add Bob   query
+        //             |        |
+        //  [op1] <- [op2] <- [op3] <-- [op5]
+        //              \              /
+        //               \--- [op4] <-/
+        //                      |
+        //                  remove Bob
+        //
+        let y = TestGroupState::new();
+
+        // Alice: create group.
+        let op1 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        let y_i = TestGroup::process(y, &op1).unwrap();
+        let mut members = y_i.members(G1);
+        members.sort();
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        // Alice: add Bob.
+        let op2 = add_member(
+            ALICE,
+            1,
+            G1,
+            GroupMember::Individual(BOB),
+            Access::manage(),
+            vec![op1.id()],
+        );
+
+        let y_ii = TestGroup::process(y_i, &op2).unwrap();
+        let mut members = y_ii.members(G1);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![(ALICE, Access::manage()), (BOB, Access::manage())]
+        );
+
+        // Bob: add Claire.
+        let op3 = add_member(
+            BOB,
+            2,
+            G1,
+            GroupMember::Individual(CLAIRE),
+            Access::write(),
+            vec![op2.id()],
+        );
+
+        let y_iii = TestGroup::process(y_ii, &op3).unwrap();
+        let mut members = y_iii.members(G1);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![
+                (ALICE, Access::manage()),
+                (BOB, Access::manage()),
+                (CLAIRE, Access::write())
+            ]
+        );
+
+        // Alice: remove Bob (concurrently to him adding Claire).
+        let op4 = remove_member(ALICE, 3, G1, GroupMember::Individual(BOB), vec![op2.id()]);
+
+        let y_iv = TestGroup::process(y_iii, &op4).unwrap();
+        let mut members = y_iv.members(G1);
+        members.sort();
+        assert_eq!(members, vec![(ALICE, Access::manage())]);
+
+        // Querying the group graph at op3 while including concurrent operations should account
+        // for Alice's concurrent removal of BOB. This would result in both Bob and Claire no
+        // longer being members.
+        let members =
+            TestGroup::members_at_include_concurrent(&y_iv, HashSet::from([op3.id]), G1).unwrap();
+
+        assert!(!members.contains(&(BOB, Access::manage())));
+        assert!(!members.contains(&(CLAIRE, Access::write())));
+
+        // Alice: add Dan.
+        let op5 = add_member(
+            ALICE,
+            4,
+            G1,
+            GroupMember::Individual(DAN),
+            Access::write(),
+            vec![op3.id(), op4.id()],
+        );
+
+        let y_v = TestGroup::process(y_iv, &op5).unwrap();
+        let mut members = y_v.members(G1);
+        members.sort();
+        assert_eq!(
+            members,
+            vec![(ALICE, Access::manage()), (DAN, Access::write())]
+        );
+
+        // This operation was not concurrent to op 3, so this change should not be reflected when
+        // querying again from the same point.
+        let members =
+            TestGroup::members_at_include_concurrent(&y_v, HashSet::from([op3.id]), G1).unwrap();
+
+        assert!(!members.contains(&(DAN, Access::write())));
     }
 }

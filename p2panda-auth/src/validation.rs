@@ -62,6 +62,28 @@ where
     Ok(members)
 }
 
+pub(crate) fn members_at_include_concurrent<ID, OP, M, C, RS>(
+    y: &GroupCrdtState<ID, OP, M, C>,
+    group_id: ID,
+    heads: HashSet<OP>,
+) -> Result<Vec<(ID, AccessLevel)>, MembersAtError>
+where
+    ID: Author,
+    OP: OperationId,
+    M: Operation<ID, OP, C> + Clone,
+    C: Conditions,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
+{
+    let members: Vec<_> =
+        GroupCrdt::<ID, OP, M, C, RS>::members_at_include_concurrent(y, heads, group_id)
+            .map_err(|err| MembersAtError::RebuildFailure(err.to_string()))?
+            .into_iter()
+            .map(|(id, access)| (id, access.level))
+            .collect();
+
+    Ok(members)
+}
+
 /// Returns `true` if the passed actor id represents a group.
 pub fn is_group<ID, OP, M, C>(y: &GroupCrdtState<ID, OP, M, C>, actor: ID) -> bool
 where
@@ -265,6 +287,30 @@ where
     let members = members_at::<ID, OP, M, C, RS>(y, group_id, heads)?;
     can_write(actor, &members)?;
     Ok(())
+}
+
+/// Verify that a member had write access at a specific point in the auth graphs history and that
+/// no locally known concurrent operations invalidated it.
+///
+/// This is required when processing application messages which refer to a specific set of graph
+/// heads. These can be considered as the authors claimed "proof" that they have write access.
+/// However the caller may have processed concurrent operations locally (eg. a concurrent REMOVE)
+/// which revoked the write access.
+pub fn write_access_stands<ID, OP, M, C, RS>(
+    y: &GroupCrdtState<ID, OP, M, C>,
+    actor: ID,
+    group_id: ID,
+    heads: HashSet<OP>,
+) -> Result<bool, VerifyClaimedWriteError>
+where
+    ID: Author,
+    OP: OperationId,
+    M: Operation<ID, OP, C> + Clone,
+    C: Conditions,
+    RS: Resolver<ID, OP, M, C, State = GroupCrdtInnerState<ID, OP, M, C>>,
+{
+    let members = members_at_include_concurrent::<ID, OP, M, C, RS>(y, group_id, heads)?;
+    Ok(can_write(actor, &members).is_ok())
 }
 
 #[derive(Debug, Error)]
