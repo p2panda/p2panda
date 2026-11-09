@@ -105,8 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             space
         }
         None => {
-            let space_id = Topic::random();
-            let (space, space_rx) = node.create_space::<Message>(space_id).await?;
+            let (space, space_rx) = node.create_space::<Message>().await?;
             println!("CHAT ID: {}", space.id().to_hex());
             spawn_event_handler(space_rx);
 

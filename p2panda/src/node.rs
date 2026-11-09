@@ -684,12 +684,12 @@ impl Node {
 
     pub async fn create_space<M>(
         &self,
-        space_id: impl Into<SpaceId>,
     ) -> Result<(Space<M>, SpaceSubscription<M>), CreateSpaceError>
     where
         M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
     {
-        let space_id = space_id.into();
+        // TODO: Derive space id from the hash of the first control message.
+        let space_id = Topic::random().into();
 
         // Associate the space topic with our own member / key bundle log.
         tx!(&self.store, {

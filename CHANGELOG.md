@@ -91,6 +91,7 @@ Highlights are marked with a pancake 🥞
 - node: Repair task re-write with hook trigger [#1500](https://github.com/p2panda/p2panda/pull/1500)
 - node: Integrate new repair task into Node, Space and Group [#1498](https://github.com/p2panda/p2panda/pull/1498)
 - net: Update iroh to `v1.4.1` and iroh-gossip to `v0.102.0` [#1565](https://github.com/p2panda/p2panda/pull/1565)
+- node: Remove space_id arg from Node::create_space [#1574](https://github.com/p2panda/p2panda/pull/1574)
 
 ### Fixed
 
