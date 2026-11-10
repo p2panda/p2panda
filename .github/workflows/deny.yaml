@@ -7,6 +7,8 @@ on:
 
 jobs:
   deny:
+    # Make sure forks don't need to run the scheduled "deny" job.
+    if: github.event_name != 'schedule' || github.repository == 'p2panda/p2panda'
     runs-on: ubuntu-latest
 
     steps:
