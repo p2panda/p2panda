@@ -3,6 +3,12 @@ all-features = true
 
 [advisories]
 ignore = [
+    # FIXME: <https://github.com/p2panda/p2panda/issues/1577>.
+    {
+      id = "RUSTSEC-2026-0459",
+      reason = "Blocked by sqlx crate release",
+    },
+
     # paste is not maintained anymore - used by netlink-packet-core > .. > netwatch .. > iroh.
     # https://github.com/rust-netlink/netlink-packet-core/issues/41
     {
