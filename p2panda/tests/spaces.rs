@@ -1843,3 +1843,89 @@ mod messages {
         Ok(())
     }
 }
+
+mod late_joiner {
+    use std::time::Duration;
+
+    use p2panda::streams::{ProcessedOperation, StreamEvent};
+    use p2panda_auth::AccessLevel;
+    use p2panda_core::test_utils::setup_logging;
+    use tokio_stream::{Stream, StreamExt};
+
+    use super::{SecretData, Swarm};
+
+    /// Collects the next `count` processed operations from a stream, returning whatever arrived
+    /// if they don't all show up within ten seconds.
+    async fn processed_operations(
+        rx: &mut (impl Stream<Item = StreamEvent<SecretData>> + Unpin),
+        count: usize,
+    ) -> Vec<ProcessedOperation<SecretData>> {
+        let mut operations = Vec::new();
+        let collect = async {
+            while operations.len() < count {
+                let Some(event) = rx.next().await else {
+                    panic!("unexpected stream closure");
+                };
+                if let StreamEvent::Processed { operation, .. } = event {
+                    operations.push(operation);
+                }
+            }
+        };
+        let _ = tokio::time::timeout(Duration::from_secs(10), collect).await;
+        operations
+    }
+
+    /// A member added to a space receives the messages published before they joined, each as
+    /// the operation it was published in.
+    #[tokio::test]
+    async fn receives_every_earlier_message_as_its_own_operation() {
+        setup_logging();
+
+        let swarm = Swarm::new();
+
+        let panda = swarm.spawn_node().await;
+        let tiger = swarm.spawn_node().await;
+
+        let (panda_space, mut panda_rx) = panda.create_space::<SecretData>().await.unwrap();
+        let topic = panda_space.id();
+
+        // Panda publishes two messages while alone in the space, and learns each one's operation
+        // from their own stream.
+        let messages: Vec<SecretData> = ["first", "second"]
+            .into_iter()
+            .map(|content| SecretData {
+                title: "Before Tiger".to_string(),
+                content: content.to_string(),
+            })
+            .collect();
+        for message in &messages {
+            let ready = panda_space.publish(message.clone()).await.unwrap();
+            ready.await.unwrap();
+        }
+
+        let published: Vec<_> = processed_operations(&mut panda_rx, messages.len())
+            .await
+            .iter()
+            .map(|operation| (operation.id(), operation.message().clone()))
+            .collect();
+        let published_messages: Vec<_> = published.iter().map(|(_, m)| m.clone()).collect();
+        assert_eq!(published_messages, messages);
+
+        // Tiger subscribes and is added only afterwards.
+        let (_tiger_space, mut tiger_rx) = tiger.space::<SecretData>(topic).await.unwrap();
+        panda.member(tiger.id()).registered().await.unwrap();
+        panda_space
+            .add(tiger.id(), AccessLevel::Read)
+            .await
+            .unwrap();
+
+        let received: Vec<_> = processed_operations(&mut tiger_rx, published.len())
+            .await
+            .iter()
+            .inspect(|operation| assert_eq!(operation.author(), panda.id()))
+            .map(|operation| (operation.id(), operation.message().clone()))
+            .collect();
+
+        assert_eq!(published, received);
+    }
+}
