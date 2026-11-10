@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+### Fixed
+
+- sync: Close memory-leak by correctly pruning sync sessions [#1558](https://github.com/p2panda/p2panda/pull/1558)
+
 ## [0.8.0] - 09/11/2026
 
 ### Added
