@@ -97,8 +97,6 @@ impl SqliteStoreBuilder {
     pub fn memory() -> Self {
         Self::default()
             .database_url(":memory:")
-            .min_connections(1)
-            .max_connections(1)
             .idle_timeout(None)
             .max_lifetime(None)
     }
