@@ -46,9 +46,7 @@ use tokio::sync::Notify;
 use tokio_stream::StreamExt;
 use tracing::{debug, error};
 
-use crate::egress::{
-    DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy, SubmitError,
-};
+use crate::egress::{DispatchConfig, EgressHandle, EventDeliveryPolicy, EventProcessingPolicy};
 use crate::processor::{Event, ProcessorStatus};
 use crate::spaces::member_log_id;
 
@@ -239,9 +237,7 @@ async fn dispatch_member_logs(
                 .try_into()
                 .expect("already validated extensions");
 
-            egress_handle
-                .dispatch_with_config(operation, &config)
-                .await?;
+            egress_handle.dispatch_with_config(operation, &config).await;
         }
     }
 
@@ -252,7 +248,4 @@ async fn dispatch_member_logs(
 pub enum ReplayMemberLogsError {
     #[error(transparent)]
     Sqlite(#[from] SqliteError),
-
-    #[error(transparent)]
-    Submit(#[from] SubmitError),
 }
