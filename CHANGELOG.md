@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+### Changed
+
+- node: Remove hard-coded SQLite max and min connection defaults for in-memory use [#1581](https://github.com/p2panda/p2panda/pull/1581)
+
 ### Fixed
 
 - sync: Drop the session that has no sender instead of the sending session [#1593](https://github.com/p2panda/p2panda/pull/1593)
