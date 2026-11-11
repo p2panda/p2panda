@@ -25,14 +25,16 @@ pub use p2panda_spaces::{ActorId, GroupContext, GroupId, MemberId, SpaceContext,
 pub(crate) use authoriser::SyncAuthoriserHook;
 pub(crate) use forge::member_log_id;
 pub use group::{
-    AddGroupMemberError, Group, GroupSubscription, PendingGroup, RemoveGroupMemberError,
+    AddGroupMemberError, Group, GroupActorsError, GroupMembersError, GroupSubscription,
+    PendingGroup, RemoveGroupMemberError,
 };
 pub(crate) use group::{group_stream, is_group, pending_group_stream};
 pub(crate) use member::KeyBundleTask;
 pub use member::{GroupActor, Member, MemberError, PendingMember};
 pub use space::{
     AddSpaceMemberError, PendingSpace, PublishSpaceError, RemoveSpaceMemberError, Space,
-    SpaceEgressError, SpaceFuture, SpaceSubscription,
+    SpaceActorsError, SpaceEgressError, SpaceFuture, SpaceGroupIdError, SpaceMembersError,
+    SpaceSubscription,
 };
 pub(crate) use space::{dispatch_spaces_events, pending_spaces_stream, spaces_stream};
 pub use types::{InnerGroupEvent, SpacesManagerError};
