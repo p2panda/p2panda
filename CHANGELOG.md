@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+### Fixed
+
+- sync: Drop the session that has no sender instead of the sending session [#1593](https://github.com/p2panda/p2panda/pull/1593)
+
 ## [0.8.0] - 09/11/2026
 
 ### Added

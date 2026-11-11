@@ -122,7 +122,7 @@ where
 
                             let Some(tx) = state.session_topic_map.sender_mut(id) else {
                                 debug!(session_id = id, "drop session: channel unexpectedly closed");
-                                state.session_topic_map.drop(session_id);
+                                state.session_topic_map.drop(id);
                                 continue;
                             };
 
