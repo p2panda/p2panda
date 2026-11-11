@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - sync: Drop the session that has no sender instead of the sending session [#1593](https://github.com/p2panda/p2panda/pull/1593)
+- node: Fix unexposed error types [#1590](https://github.com/p2panda/p2panda/pull/1590)
 
 ## [0.8.0] - 09/11/2026
 
