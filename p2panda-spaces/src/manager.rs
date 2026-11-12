@@ -399,7 +399,7 @@ where
             }
 
             // Received control message related to a space.
-            SpacesArgs::SpaceMembership { space_id, .. } => {
+            SpacesArgs::KeyAgreement { space_id, .. } => {
                 let (space_y, events) = self
                     .handle_space_membership_message(
                         &tx,

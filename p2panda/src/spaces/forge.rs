@@ -155,7 +155,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
             // 3. Space logs.
             //
             // TODO: These variants have a pending naming change in -spaces.
-            p2panda_spaces::SpacesArgs::SpaceMembership { space_id, .. } => {
+            p2panda_spaces::SpacesArgs::KeyAgreement { space_id, .. } => {
                 // Every author maintains their own log of control messages _per_ space.
                 let log_id = space_log_id(space_id);
 

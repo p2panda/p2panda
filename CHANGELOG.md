@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Changed
 
 - node: Remove hard-coded SQLite max and min connection defaults for in-memory use [#1581](https://github.com/p2panda/p2panda/pull/1581)
+- spaces: Rename `SpaceMembership` -> `KeyAgreement` control message [#1596](https://github.com/p2panda/p2panda/pull/1596)
 
 ### Fixed
 

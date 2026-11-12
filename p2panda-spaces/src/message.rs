@@ -118,7 +118,7 @@ where
     where
         M: Provenance<VerifyingKey> + Digest<Hash> + Borrow<SpacesArgs<C>>,
     {
-        let SpacesArgs::SpaceMembership {
+        let SpacesArgs::KeyAgreement {
             group_id,
             space_dependencies,
             auth_message_id,
@@ -209,7 +209,7 @@ pub enum SpacesArgs<C> {
 
     /// System message containing a reference to an `SpacesArgs::Group` message and additional
     /// fields for applying the resulting membership change to a specific space.
-    SpaceMembership {
+    KeyAgreement {
         /// Space this message should be applied to.
         space_id: SpaceId,
 
@@ -277,7 +277,7 @@ impl<C> SpacesArgs<C> {
             SpacesArgs::Group {
                 auth_dependencies, ..
             } => auth_dependencies.to_owned(),
-            SpacesArgs::SpaceMembership {
+            SpacesArgs::KeyAgreement {
                 space_dependencies,
                 auth_message_id,
                 ..
@@ -299,7 +299,7 @@ impl<C> SpacesArgs<C> {
         match self {
             SpacesArgs::Member { .. } => "key bundle".to_string(),
             SpacesArgs::Group { .. } => "auth group".to_string(),
-            SpacesArgs::SpaceMembership { .. } => "space membership".to_string(),
+            SpacesArgs::KeyAgreement { .. } => "space membership".to_string(),
             SpacesArgs::SpaceUpdate { .. } => "space update".to_string(),
             SpacesArgs::Application { .. } => "application".to_string(),
         }
