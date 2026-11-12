@@ -10,7 +10,9 @@ use p2panda_spaces::AuthMessage;
 use p2panda_stream::groups::{GroupsError, GroupsProcessorArgs, GroupsResult};
 use p2panda_stream::ingest::{IngestArgs, IngestError, IngestResult};
 use p2panda_stream::log_prune::{LogPruneArgs, LogPruneError, LogPruneResult};
-use p2panda_stream::orderer::{OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
+use p2panda_stream::orderer::{
+    OrdererArgs, OrdererError, OrdererItem, OrdererMetadata, OrdererResult,
+};
 use p2panda_stream::spaces::{SpacesError, SpacesProcessorArgs, SpacesResult};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -49,10 +51,10 @@ pub struct Event<L, E, TP> {
     pub ingest: ProcessorStatus<IngestResult<E>, IngestError>,
 
     /// Input arguments for the "orderer" processor.
-    pub orderer_args: OrdererArgs,
+    pub orderer_args: OrdererArgs<Hash>,
 
     /// Status of the "orderer" processor.
-    pub orderer: ProcessorStatus<OrdererResult, OrdererError>,
+    pub orderer: ProcessorStatus<OrdererResult<Hash>, OrdererError>,
 
     /// Input arguments for the "log prune" processor.
     pub log_prune_args: LogPruneArgs<VerifyingKey, L, SeqNum>,
@@ -97,8 +99,14 @@ where
             },
             ingest: ProcessorStatus::Pending,
             orderer_args: OrdererArgs::Process {
+                operation_id: operation.hash,
+                other_ids: vec![],
                 dependencies: match &spaces_args {
-                    Some(args) => args.dependencies(),
+                    Some(args) => args
+                        .dependencies()
+                        .into_iter()
+                        .map(OrdererItem::Operation)
+                        .collect(),
                     None => vec![],
                 },
             },
@@ -370,12 +378,12 @@ where
     }
 }
 
-impl<L, E, TP> Borrow<OrdererArgs> for Event<L, E, TP>
+impl<L, E, TP> Borrow<OrdererArgs<Hash>> for Event<L, E, TP>
 where
     L: LogId,
     TP: Clone,
 {
-    fn borrow(&self) -> &OrdererArgs {
+    fn borrow(&self) -> &OrdererArgs<Hash> {
         &self.orderer_args
     }
 }

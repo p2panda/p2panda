@@ -8,4 +8,7 @@ mod processor;
 mod tests;
 
 pub(crate) use orderer::CausalOrderer;
-pub use processor::{Orderer, OrdererArgs, OrdererError, OrdererMetadata, OrdererResult};
+pub use processor::{
+    Orderer, OrdererArgs, OrdererError, OrdererItem, OrdererItemParseError, OrdererMetadata,
+    OrdererResult,
+};
