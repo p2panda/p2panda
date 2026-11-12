@@ -58,7 +58,7 @@ where
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         _message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -68,6 +68,9 @@ where
         while let Some(event) = state.stream.next().await {
             state.sender.send(event).map_err(|err| err.to_string())?;
         }
+
+        // Stop the poller task when the event stream closes.
+        myself.stop(Some("sync poller shutting down".into()));
 
         Ok(())
     }

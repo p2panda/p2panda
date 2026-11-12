@@ -17,6 +17,7 @@ breaking changes to the API of `p2panda-net`:
 ### Changed
 
 - net: Update iroh to v1.5.0 [#1614](https://github.com/p2panda/p2panda/pull/1614)
+- net: Gracefully close all sync actors [#1598](https://github.com/p2panda/p2panda/pull/1598)
 
 ## [0.8.1] - 13/11/2026
 
