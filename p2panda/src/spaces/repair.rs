@@ -37,8 +37,8 @@ pub type RepairTaskSender = mpsc::UnboundedSender<RepairTaskCommand>;
 /// 1) diff - compare global and per-stream group/space state to detect any operations the latter
 ///    is missing
 /// 2) sync - send missing operations into the group/space stream for processing
-/// 3) repair - for spaces only, also publish "space membership" messages to integrate the new
-///    group operations
+/// 3) repair - for spaces only, also publish "key agreement" messages to integrate the new group
+///    operations
 ///
 /// ## Global groups state
 ///
@@ -454,7 +454,7 @@ async fn repair_space(
         return Ok(());
     }
 
-    // Incorporate the missing operations into the space, this forges new "space membership"
+    // Incorporate the missing operations into the space, this forges new "key agreement"
     // operations.
     let output = space.repair(&group_ids).await.map_err(Box::new)?;
 

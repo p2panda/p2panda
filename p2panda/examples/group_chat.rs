@@ -117,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (line_tx, mut line_rx) = mpsc::channel(1);
     thread::spawn(move || input_loop(line_tx));
 
-    // Parse text commands into space membership actions and call related space API methods.
+    // Parse text commands into key agreement actions and call related space API methods.
     while let Some(str) = line_rx.recv().await {
         let action = match parse_action(str).await {
             Ok(action) => action,

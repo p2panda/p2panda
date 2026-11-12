@@ -317,7 +317,7 @@ where
         // Construct space message and sign it in the forge (F)
         let dependencies: Vec<OperationId> = space_y.encryption_y.orderer.heads().to_vec();
         let space_message = {
-            let args = SpacesArgs::SpaceMembership {
+            let args = SpacesArgs::KeyAgreement {
                 space_id: space_y.space_id,
                 group_id: space_y.group_id,
                 space_dependencies: dependencies.clone(),
@@ -757,7 +757,7 @@ where
             space_y.groups_y =
                 AuthGroup::<C>::process(space_y.groups_y, &SpacesMessage::auth(&group_message))?;
 
-            let args = SpacesArgs::SpaceMembership {
+            let args = SpacesArgs::KeyAgreement {
                 space_id: space_y.space_id,
                 group_id: space_y.group_id,
                 auth_message_id: group_message.hash(),

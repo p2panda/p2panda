@@ -88,7 +88,7 @@ async fn create_space() {
         panic!("expected auth message");
     };
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         space_id,
         group_id,
         space_dependencies,
@@ -266,7 +266,7 @@ async fn add_member_to_space() {
         panic!("expected auth message");
     };
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         space_id,
         group_id,
         space_dependencies,
@@ -442,7 +442,7 @@ async fn add_pull_member_to_space() {
         panic!("expected auth message");
     };
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         space_id,
         group_id,
         space_dependencies,
@@ -677,7 +677,7 @@ async fn remove_member() {
         panic!("expected auth message");
     };
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         direct_messages, ..
     } = message_04.borrow()
     else {
@@ -800,7 +800,7 @@ async fn concurrent_removal_conflict() {
         panic!("expected auth message");
     };
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         direct_messages, ..
     } = message_06.borrow()
     else {
@@ -886,7 +886,7 @@ async fn space_from_existing_auth_state() {
     let message_03 = messages[2].clone();
     let message_04 = messages[3].clone();
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         direct_messages,
         auth_message_id,
         ..
@@ -916,7 +916,7 @@ async fn space_from_existing_auth_state() {
         }
     );
 
-    let SpacesArgs::SpaceMembership {
+    let SpacesArgs::KeyAgreement {
         direct_messages,
         auth_message_id,
         ..
