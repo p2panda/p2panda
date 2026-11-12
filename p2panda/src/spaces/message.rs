@@ -27,7 +27,7 @@ impl From<Operation> for SpacesMessage {
             .header
             .extensions
             .spaces_args(operation.body.as_ref())
-            .expect("at this point we're only dealing with space extensions");
+            .expect("at this point we're only dealing with valid spaces operations");
         Self { operation, args }
     }
 }

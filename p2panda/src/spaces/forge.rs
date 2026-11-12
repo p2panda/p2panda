@@ -126,6 +126,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
         let operation = match args {
             // 1. Member logs (with associated key bundles).
             p2panda_spaces::SpacesArgs::Member(ref member) => {
+                // The key bundle lives in the body (instead of the header) to allow pruning it.
                 let bytes = encode_cbor(&member).expect("serialisation of key bundle to CBOR");
 
                 // Every member maintains their own log with key bundles inside. Please note that
@@ -134,8 +135,6 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // New member messages are created automatically by a background task.
                 let log_id = member_log_id();
 
-                // TODO: The key bundle itself should not be in the header to allow deleting it
-                // after a while (without breaking the whole key bundle log.
                 let extensions = Extensions::builder(log_id).build_space(args.into());
 
                 self.create_operation_tx(None, log_id, Some(bytes), extensions)

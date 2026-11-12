@@ -435,12 +435,12 @@ mod tests {
         //    this update.
         let (item, _) = import_rx.recv().await.expect("import stream exists");
 
-        let member_msg = match item
-            .operation()
+        let operation = item.operation();
+        let member_msg = match operation
             .header
             .extensions
-            .spaces_args(None)
-            .expect("spaces args in header")
+            .spaces_args(operation.body.as_ref())
+            .expect("spaces args in header and body")
         {
             p2panda_spaces::SpacesArgs::Member(member) => member,
             _ => panic!("expected spaces args to be of type 'member'"),
