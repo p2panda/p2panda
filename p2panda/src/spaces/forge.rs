@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+
 use std::io::Write;
 
 use p2panda_core::cbor::encode_cbor;
@@ -135,7 +136,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
 
                 // TODO: The key bundle itself should not be in the header to allow deleting it
                 // after a while (without breaking the whole key bundle log.
-                let extensions = Extensions::builder(log_id).build_space(args);
+                let extensions = Extensions::builder(log_id).build_space(args.into());
 
                 self.create_operation_tx(None, log_id, Some(bytes), extensions)
                     .await?
@@ -146,7 +147,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // Every author maintains their own log of control messages _per_ group.
                 let log_id = group_log_id(group_id);
 
-                let extensions = Extensions::builder(log_id).build_space(args);
+                let extensions = Extensions::builder(log_id).build_space(args.into());
 
                 self.create_operation_tx(None, log_id, None, extensions)
                     .await?
@@ -159,7 +160,7 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 // Every author maintains their own log of control messages _per_ space.
                 let log_id = space_log_id(space_id);
 
-                let extensions = Extensions::builder(log_id).build_space(args);
+                let extensions = Extensions::builder(log_id).build_space(args.into());
 
                 let topic = Topic::from(space_id);
 
@@ -180,8 +181,10 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                 ref ciphertext,
                 ..
             } => {
+                // The ciphertext lives in the body (instead of the header) to allow pruning it.
+                //
                 // TODO: This should be plaintext. We encrypt _later_ in the processor.
-                let _body = ciphertext.clone();
+                let body = ciphertext.clone();
 
                 // Every author maintains their own log of application messages _per_ space.
                 let log_id = logid_digest_from_slices! (
@@ -189,12 +192,12 @@ impl p2panda_spaces::Forge<AuthCapabilities> for OperationForge {
                     SPACE_APPLICATION_MESSAGE
                 );
 
-                let extensions = Extensions::builder(log_id).build_space(args);
+                let extensions = Extensions::builder(log_id).build_space(args.into());
 
                 // Associate this log with the space id / topic.
                 let topic = Topic::from(space_id);
 
-                self.create_operation_tx(Some(topic), log_id, None, extensions)
+                self.create_operation_tx(Some(topic), log_id, Some(body), extensions)
                     .await?
             }
         };
