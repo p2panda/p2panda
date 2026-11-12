@@ -477,7 +477,10 @@ pub(crate) async fn process_operation_in(
 ) -> Event {
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
-    let spaces_args = operation.header.extensions.spaces_args();
+    let spaces_args = operation
+        .header
+        .extensions
+        .spaces_args(operation.body.as_ref());
 
     if let Some(sync_handle) = sync_handle {
         // Try pushing operation to other nodes if we have an active and "live" sync session with

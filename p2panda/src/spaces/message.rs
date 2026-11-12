@@ -6,45 +6,50 @@ use p2panda_core::traits::{Digest, Provenance};
 use p2panda_core::{Hash, VerifyingKey};
 use p2panda_spaces::SpacesArgs;
 
-use crate::operation::{ExtensionsVariantV1, Operation};
+use crate::operation::Operation;
 use crate::spaces::types::AuthCapabilities;
 
 #[derive(Clone, Debug)]
-pub struct SpacesMessage(Operation);
+pub struct SpacesMessage {
+    operation: Operation,
+    args: SpacesArgs<AuthCapabilities>,
+}
 
 impl SpacesMessage {
     pub fn into_operation(self) -> Operation {
-        self.0
+        self.operation
     }
 }
 
 impl From<Operation> for SpacesMessage {
     fn from(operation: Operation) -> Self {
-        Self(operation)
+        let args = operation
+            .header
+            .extensions
+            .spaces_args(operation.body.as_ref())
+            .expect("at this point we're only dealing with space extensions");
+        Self { operation, args }
     }
 }
 
 impl Borrow<SpacesArgs<AuthCapabilities>> for SpacesMessage {
     fn borrow(&self) -> &SpacesArgs<AuthCapabilities> {
-        match &self.0.header.extensions.variant {
-            ExtensionsVariantV1::Space(extensions) => &extensions.args,
-            _ => unreachable!("at this point we're only dealing with space extensions"),
-        }
+        &self.args
     }
 }
 
 impl Digest<Hash> for SpacesMessage {
     fn hash(&self) -> Hash {
-        self.0.hash
+        self.operation.hash
     }
 }
 
 impl Provenance<VerifyingKey> for SpacesMessage {
     fn author(&self) -> VerifyingKey {
-        self.0.author()
+        self.operation.author()
     }
 
     fn verify(&self) -> bool {
-        self.0.verify()
+        self.operation.verify()
     }
 }

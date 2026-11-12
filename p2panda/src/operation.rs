@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::borrow::Borrow;
-
 // ## Node Extensions Format
 //
 // The Node Extensions Format (NEF) defines a specialised extensions data-type used in p2panda's
@@ -185,6 +183,7 @@ use std::borrow::Borrow;
 //     // Extension variant
 //     log_id[32],
 //     timestamp[u64],
+//     args[..],                // ciphertext of application messages is in the body
 // )
 // ```
 //
@@ -345,13 +344,17 @@ use std::borrow::Borrow;
 //
 use std::hash::Hash as StdHash;
 
+use p2panda_auth::group::GroupAction;
 use p2panda_core::hash::{HASH_LEN, Hash};
-use p2panda_core::{PruneFlag, Timestamp, Topic};
+use p2panda_core::{Body, PruneFlag, Timestamp, Topic};
+use p2panda_encryption::crypto::xchacha20::XAeadNonce;
+use p2panda_encryption::data_scheme::GroupSecretId;
+use p2panda_spaces::{ActorId, EncryptionDirectMessage, GroupId, OperationId, SpaceId};
 use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 
-use crate::spaces::types::SpacesArgs;
+use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesArgs};
 
 /// Extensions version type.
 pub type Version = u16;
@@ -437,7 +440,7 @@ impl Builder {
     }
 
     /// Returns "space" extensions.
-    pub fn build_space(self, args: SpacesArgs) -> Extensions {
+    pub fn build_space(self, args: SpacesHeaderArgs) -> Extensions {
         Extensions {
             version: EXTENSIONS_VERSION,
             variant: ExtensionsVariantV1::Space(SpaceExtensions {
@@ -471,11 +474,148 @@ pub struct SpaceExtensions {
     // TODO: We likely want to split spaces args into more extensions types. At least one for
     // application messages & key bundles, potentially also auth / group messages.
     //
-    // TODO: The serialization of spaces args is not-optimal, we probably want to bring our own
-    // types in here and convert between them.
-    //
     // TODO: Is causally ordering information encoded here or in another field?
-    pub args: SpacesArgs,
+    pub args: SpacesHeaderArgs,
+}
+
+/// Spaces arguments as they are encoded in the operation header as part of the extensions.
+///
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SpacesHeaderArgs {
+    Member(InnerMember),
+    Group {
+        group_id: GroupId,
+        group_action: GroupAction<ActorId, AuthCapabilities>,
+        auth_dependencies: Vec<OperationId>,
+    },
+    KeyAgreement {
+        space_id: SpaceId,
+        group_id: GroupId,
+        space_dependencies: Vec<OperationId>,
+        auth_message_id: OperationId,
+        direct_messages: Vec<EncryptionDirectMessage>,
+    },
+    SpaceUpdate {
+        space_id: SpaceId,
+        group_id: GroupId,
+        space_dependencies: Vec<OperationId>,
+    },
+    // Ciphertext is held in the operation body to allow pruning it.
+    Application {
+        space_id: SpaceId,
+        space_dependencies: Vec<OperationId>,
+        proof: Vec<OperationId>,
+        group_secret_id: GroupSecretId,
+        nonce: XAeadNonce,
+    },
+}
+
+impl SpacesHeaderArgs {
+    pub fn into_spaces_args(self, body: Option<&Body>) -> SpacesArgs {
+        match self {
+            Self::Member(member) => SpacesArgs::Member(member),
+            Self::Group {
+                group_id,
+                group_action,
+                auth_dependencies,
+            } => SpacesArgs::Group {
+                group_id,
+                group_action,
+                auth_dependencies,
+            },
+            Self::KeyAgreement {
+                space_id,
+                group_id,
+                space_dependencies,
+                auth_message_id,
+                direct_messages,
+            } => SpacesArgs::KeyAgreement {
+                space_id,
+                group_id,
+                space_dependencies,
+                auth_message_id,
+                direct_messages,
+            },
+            Self::SpaceUpdate {
+                space_id,
+                group_id,
+                space_dependencies,
+            } => SpacesArgs::SpaceUpdate {
+                space_id,
+                group_id,
+                space_dependencies,
+            },
+            Self::Application {
+                space_id,
+                space_dependencies,
+                proof,
+                group_secret_id,
+                nonce,
+            } => SpacesArgs::Application {
+                space_id,
+                space_dependencies,
+                proof,
+                group_secret_id,
+                nonce,
+                // NOTE: A missing body (off-chain data was deleted) results in an empty ciphertext
+                // which can't be decrypted.
+                ciphertext: body.map(Body::to_bytes).unwrap_or_default(),
+            },
+        }
+    }
+}
+
+impl From<SpacesArgs> for SpacesHeaderArgs {
+    fn from(args: SpacesArgs) -> Self {
+        match args {
+            SpacesArgs::Member(member) => Self::Member(member),
+            SpacesArgs::Group {
+                group_id,
+                group_action,
+                auth_dependencies,
+            } => Self::Group {
+                group_id,
+                group_action,
+                auth_dependencies,
+            },
+            SpacesArgs::KeyAgreement {
+                space_id,
+                group_id,
+                space_dependencies,
+                auth_message_id,
+                direct_messages,
+            } => Self::KeyAgreement {
+                space_id,
+                group_id,
+                space_dependencies,
+                auth_message_id,
+                direct_messages,
+            },
+            SpacesArgs::SpaceUpdate {
+                space_id,
+                group_id,
+                space_dependencies,
+            } => Self::SpaceUpdate {
+                space_id,
+                group_id,
+                space_dependencies,
+            },
+            SpacesArgs::Application {
+                space_id,
+                space_dependencies,
+                proof,
+                group_secret_id,
+                nonce,
+                ..
+            } => Self::Application {
+                space_id,
+                space_dependencies,
+                proof,
+                group_secret_id,
+                nonce,
+            },
+        }
+    }
 }
 
 impl SpaceExtensions {
@@ -537,11 +677,17 @@ impl Extensions {
         }
     }
 
-    pub fn spaces_args(&self) -> Option<SpacesArgs> {
+    pub fn spaces_args(&self, body: Option<&Body>) -> Option<SpacesArgs> {
         match &self.variant {
             ExtensionsVariantV1::Basic(_) => None,
-            ExtensionsVariantV1::Space(extensions) => Some(extensions.args.clone()),
+            ExtensionsVariantV1::Space(extensions) => {
+                Some(extensions.args.clone().into_spaces_args(body))
+            }
         }
+    }
+
+    pub fn is_space(&self) -> bool {
+        matches!(self.variant, ExtensionsVariantV1::Space(_))
     }
 }
 
@@ -636,7 +782,7 @@ impl<'de> Deserialize<'de> for Extensions {
                         .next_element()?
                         .ok_or(SerdeError::custom("timestamp missing"))?;
 
-                    let args: SpacesArgs = seq
+                    let args: SpacesHeaderArgs = seq
                         .next_element()?
                         .ok_or(SerdeError::custom("spaces arguments missing"))?;
 
@@ -654,17 +800,6 @@ impl<'de> Deserialize<'de> for Extensions {
         }
 
         deserializer.deserialize_seq(ExtensionsVisitor)
-    }
-}
-
-impl Borrow<SpacesArgs> for Extensions {
-    fn borrow(&self) -> &SpacesArgs {
-        match &self.variant {
-            ExtensionsVariantV1::Space(extensions) => &extensions.args,
-            _ => unreachable!(
-                "before passing operations to p2panda-spaces we make sure they have spaces args"
-            ),
-        }
     }
 }
 
@@ -702,9 +837,14 @@ impl From<Hash> for LogId {
 #[cfg(test)]
 mod tests {
     use p2panda_core::cbor::{decode_cbor, encode_cbor};
-    use p2panda_core::{PruneFlag, Timestamp, Topic};
+    use p2panda_core::{Body, Hash, PruneFlag, Timestamp, Topic};
 
-    use super::{BasicExtensions, EXTENSIONS_VERSION, Extensions, ExtensionsVariantV1, LogId};
+    use crate::spaces::types::SpacesArgs;
+
+    use super::{
+        BasicExtensions, EXTENSIONS_VERSION, Extensions, ExtensionsVariantV1, LogId,
+        SpaceExtensions, SpacesHeaderArgs,
+    };
 
     #[test]
     fn derive_from_topic() {
@@ -731,6 +871,34 @@ mod tests {
             let result: Extensions = decode_cbor(&bytes[..]).unwrap();
             assert_eq!(result, basic);
         }
+    }
+
+    #[test]
+    fn application_ciphertext_in_body() {
+        let args = SpacesArgs::Application {
+            space_id: Hash::digest(b"space"),
+            space_dependencies: vec![],
+            proof: vec![],
+            group_secret_id: [1; 32],
+            nonce: [2; 24],
+            ciphertext: vec![1, 2, 3],
+        };
+
+        let body = Body::from_bytes([1, 2, 3]);
+        let extensions =
+            Extensions::builder(LogId::digest(b"log")).build_space(args.clone().into());
+        assert!(matches!(
+            extensions.variant,
+            ExtensionsVariantV1::Space(SpaceExtensions {
+                args: SpacesHeaderArgs::Application { .. },
+                ..
+            })
+        ));
+
+        // Ciphertext is not part of the header but can be taken from the body.
+        let bytes = encode_cbor(&extensions).unwrap();
+        let result: Extensions = decode_cbor(&bytes[..]).unwrap();
+        assert_eq!(result.spaces_args(Some(&body)), Some(args));
     }
 
     #[test]

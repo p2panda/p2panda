@@ -439,7 +439,7 @@ mod tests {
             .operation()
             .header
             .extensions
-            .spaces_args()
+            .spaces_args(None)
             .expect("spaces args in header")
         {
             p2panda_spaces::SpacesArgs::Member(member) => member,

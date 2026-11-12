@@ -113,7 +113,7 @@ where
 }
 
 fn is_spaces_event(event: &Event) -> bool {
-    event.operation.header.extensions.spaces_args().is_some()
+    event.operation.header.extensions.is_space()
 }
 
 /// Extracts the bodies from an event which are meant for the application layer.
@@ -426,7 +426,7 @@ mod tests {
                     Some(self.topic),
                     log_id,
                     body,
-                    Builder::new(log_id).build_space(spaces_args.clone()),
+                    Builder::new(log_id).build_space(spaces_args.clone().into()),
                 )
                 .await
                 .unwrap();

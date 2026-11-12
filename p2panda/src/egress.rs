@@ -342,7 +342,10 @@ fn to_event(operation: Operation, topic: Topic, spaces_events: Option<Vec<Spaces
 
     let log_id = operation.header.extensions.log_id();
     let prune_flag = operation.header.extensions.prune_flag();
-    let spaces_args = operation.header.extensions.spaces_args();
+    let spaces_args = operation
+        .header
+        .extensions
+        .spaces_args(operation.body.as_ref());
 
     Event::new(
         operation,
