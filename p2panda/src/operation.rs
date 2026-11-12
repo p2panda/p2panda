@@ -183,7 +183,8 @@
 //     // Extension variant
 //     log_id[32],
 //     timestamp[u64],
-//     args[..],                // ciphertext of application messages is in the body
+//     args[..],                // key bundles and ciphertexts of application messages are
+//                              // in the body
 // )
 // ```
 //
@@ -345,6 +346,7 @@
 use std::hash::Hash as StdHash;
 
 use p2panda_auth::group::GroupAction;
+use p2panda_core::cbor::decode_cbor;
 use p2panda_core::hash::{HASH_LEN, Hash};
 use p2panda_core::{Body, PruneFlag, Timestamp, Topic};
 use p2panda_encryption::crypto::xchacha20::XAeadNonce;
@@ -354,7 +356,7 @@ use serde::de::{Error as SerdeError, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Serialize};
 
-use crate::spaces::types::{AuthCapabilities, InnerMember, SpacesArgs};
+use crate::spaces::types::{AuthCapabilities, SpacesArgs};
 
 /// Extensions version type.
 pub type Version = u16;
@@ -479,10 +481,10 @@ pub struct SpaceExtensions {
 }
 
 /// Spaces arguments as they are encoded in the operation header as part of the extensions.
-///
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SpacesHeaderArgs {
-    Member(InnerMember),
+    // Key bundle is held in the operation body to allow pruning it.
+    Member,
     Group {
         group_id: GroupId,
         group_action: GroupAction<ActorId, AuthCapabilities>,
@@ -511,9 +513,13 @@ pub enum SpacesHeaderArgs {
 }
 
 impl SpacesHeaderArgs {
-    pub fn into_spaces_args(self, body: Option<&Body>) -> SpacesArgs {
-        match self {
-            Self::Member(member) => SpacesArgs::Member(member),
+    /// Returns the full spaces arguments, taking key bundles and the ciphertext of application
+    /// messages from the operation body.
+    ///
+    /// Returns `None` if body doesnt contain a key bundle for a member message.
+    pub fn into_spaces_args(self, body: Option<&Body>) -> Option<SpacesArgs> {
+        let args = match self {
+            Self::Member => SpacesArgs::Member(decode_cbor(body?.as_bytes()).ok()?),
             Self::Group {
                 group_id,
                 group_action,
@@ -561,14 +567,16 @@ impl SpacesHeaderArgs {
                 // which can't be decrypted.
                 ciphertext: body.map(Body::to_bytes).unwrap_or_default(),
             },
-        }
+        };
+
+        Some(args)
     }
 }
 
 impl From<SpacesArgs> for SpacesHeaderArgs {
     fn from(args: SpacesArgs) -> Self {
         match args {
-            SpacesArgs::Member(member) => Self::Member(member),
+            SpacesArgs::Member(_) => Self::Member,
             SpacesArgs::Group {
                 group_id,
                 group_action,
@@ -681,7 +689,7 @@ impl Extensions {
         match &self.variant {
             ExtensionsVariantV1::Basic(_) => None,
             ExtensionsVariantV1::Space(extensions) => {
-                Some(extensions.args.clone().into_spaces_args(body))
+                extensions.args.clone().into_spaces_args(body)
             }
         }
     }
