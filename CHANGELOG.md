@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+## [0.8.1] - 13/11/2026
+
 ### Changed
 
 - node: Remove hard-coded SQLite max and min connection defaults for in-memory use [#1581](https://github.com/p2panda/p2panda/pull/1581)
