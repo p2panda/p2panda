@@ -9,6 +9,8 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+## [0.8.1] - 13/11/2026
+
 ### Changed
 
 - node: Remove hard-coded SQLite max and min connection defaults for in-memory use [#1581](https://github.com/p2panda/p2panda/pull/1581)
@@ -437,7 +439,8 @@ Highlights are marked with a pancake 🥞
 
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
-[unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/p2panda/p2panda/releases/tag/v0.8.1
 [0.8.0]: https://github.com/p2panda/p2panda/releases/tag/v0.8.0
 [0.7.1]: https://github.com/p2panda/p2panda/releases/tag/v0.7.1
 [0.7.0]: https://github.com/p2panda/p2panda/releases/tag/v0.6.1
