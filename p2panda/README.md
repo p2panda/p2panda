@@ -22,7 +22,7 @@
   </h3>
 </div>
 
-p2panda's high-level API is an opiniated, out-of-the-box peer-to-peer stack which orchestrates
+p2panda's high-level API is an opinionated, out-of-the-box peer-to-peer stack which orchestrates
 all individual [p2panda] modules.
 
 ```rust
