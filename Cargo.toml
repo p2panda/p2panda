@@ -41,7 +41,6 @@ tracing = { version = "0.1.44" }
 tracing-subscriber = { version = "0.3.23" }
 
 # p2panda workspace
-p2panda = { path = "p2panda", version = "0.8.1", default-features = false }
 p2panda-auth = { path = "p2panda-auth", version = "0.8.1", default-features = false }
 p2panda-core = { path = "p2panda-core", version = "0.8.1", default-features = false }
 p2panda-discovery = { path = "p2panda-discovery", version = "0.8.1", default-features = false }
