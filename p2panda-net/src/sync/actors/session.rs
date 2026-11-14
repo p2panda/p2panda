@@ -72,7 +72,7 @@ where
 
     async fn handle(
         &self,
-        _myself: ActorRef<Self::Msg>,
+        myself: ActorRef<Self::Msg>,
         message: Self::Msg,
         state: &mut Self::State,
     ) -> Result<(), ActorProcessingErr> {
@@ -134,6 +134,12 @@ where
                 connection.close(VarInt::from_u32(0), b"sync protocol accept completed");
             }
         }
+
+        // Gracefully close the actor when the sync session is complete.
+        //
+        // Note the actor will only ever process one message ("initiate" or "accept").
+        myself.stop(Some("sync session shutting down".into()));
+
         Ok(())
     }
 }
