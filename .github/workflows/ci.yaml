@@ -14,7 +14,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TOOLCHAIN: 1.96.0
+  RUST_TOOLCHAIN: 1.100.0
 
 jobs:
   test:
