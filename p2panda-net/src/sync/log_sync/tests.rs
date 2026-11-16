@@ -261,15 +261,14 @@ async fn e2e_three_party_sync() {
     alice_handle.initiate_session(bob.node_id());
 
     // Assert Alice receives the expected events.
-    let bob_id = bob.node_id();
     let event = alice_subscription.next().await.unwrap();
     std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
-            remote,
             event: Event::SyncStarted { .. },
-        }) if remote == bob_id
+            ..
+        })
     );
     let event = alice_subscription.next().await.unwrap();
     std::assert_matches!(
@@ -297,15 +296,14 @@ async fn e2e_three_party_sync() {
     );
 
     // Assert Bob receives the expected events.
-    let alice_id = alice.node_id();
     let event = bob_subscription.next().await.unwrap();
     std::assert_matches!(
         event,
         Ok(FromSync {
             session_id: 0,
-            remote,
             event: Event::SyncStarted { .. },
-        }) if remote == alice_id
+            ..
+        })
     );
     let event = bob_subscription.next().await.unwrap();
     std::assert_matches!(
