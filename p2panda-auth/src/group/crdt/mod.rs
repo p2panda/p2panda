@@ -1883,6 +1883,87 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn concurrent_nested_group_cycle_converges() {
+        // Alice creates a group G1 with only Alice inside.
+        let op0 = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![(GroupMember::Individual(ALICE), Access::manage())],
+            vec![],
+        );
+
+        // Bob creates a group G2 with only Bob inside.
+        let op1 = create_group(
+            BOB,
+            1,
+            G2,
+            vec![(GroupMember::Individual(BOB), Access::manage())],
+            vec![op0.id()],
+        );
+
+        // Concurrently Alice adds G2 to G1 and Bob adds G1 to G2. This creates a cycle.
+        let op2 = add_member(
+            ALICE,
+            2,
+            G1,
+            GroupMember::Group(G2),
+            Access::read(),
+            vec![op1.id()],
+        );
+        let op3 = add_member(
+            BOB,
+            3,
+            G2,
+            GroupMember::Group(G1),
+            Access::read(),
+            vec![op1.id()],
+        );
+
+        // OP2 and OP3 can be delivered in different order for another peer.
+        let delivery_order_a = [&op0, &op1, &op2, &op3];
+        let delivery_order_b = [&op0, &op1, &op3, &op2];
+
+        // Here we have one peer A which receives them in order OP2 then OP3, while peer B receives
+        // them OP3 then OP2.
+        //
+        // `process` returns an error when the operation is considered invalid / is rejected.
+        let peer_a = {
+            let mut y = TestGroupState::new();
+            let mut accepted = Vec::new();
+
+            for op in delivery_order_a {
+                if let Ok(y_next) = TestGroup::process(y.clone(), op) {
+                    y = y_next;
+                    accepted.push(op.id());
+                }
+            }
+
+            accepted.sort();
+            accepted
+        };
+
+        let peer_b = {
+            let mut y = TestGroupState::new();
+            let mut accepted = Vec::new();
+
+            for op in delivery_order_b {
+                if let Ok(y_next) = TestGroup::process(y.clone(), op) {
+                    y = y_next;
+                    accepted.push(op.id());
+                }
+            }
+
+            accepted.sort();
+            accepted
+        };
+
+        // Independent of how they've received these operations creating a cycle, they should
+        // converge to the same state.
+        assert_eq!(peer_a, peer_b, "peers diverged depending on delivery order");
+    }
+
+    #[test]
     fn serde_to_from_bytes() {
         let y = TestGroupState::new();
         let op1 = create_group(
