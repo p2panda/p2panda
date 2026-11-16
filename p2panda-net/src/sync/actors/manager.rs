@@ -13,10 +13,10 @@ use iroh::protocol::ProtocolHandler;
 use p2panda_core::Topic;
 use p2panda_sync::FromSync;
 use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, TopicHandshakeMessage};
-use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
+use p2panda_sync::traits::Protocol;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
-use tokio::sync::{RwLock, broadcast, oneshot};
+use tokio::sync::{RwLock, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
@@ -26,6 +26,7 @@ use crate::iroh_endpoint::Endpoint;
 use crate::sync::LogSyncRejected;
 use crate::sync::actors::{ToTopicManager, TopicManager};
 use crate::sync::hooks::{AfterHandshakeOutcome, SyncHooks, SyncHooksList};
+use crate::sync::session::SessionBuilder;
 use crate::utils::{ShortFormat, to_verifying_key};
 use crate::{NodeId, ProtocolId};
 
@@ -47,7 +48,7 @@ pub enum ToSyncManager<M, E> {
     Create(
         Topic,
         IsLiveModeEnabled,
-        RpcReplyPort<ActorRef<ToTopicManager<M>>>,
+        RpcReplyPort<ActorRef<ToTopicManager<M, E>>>,
     ),
 
     /// Subscribe to the given topic to receive incoming sync events.
@@ -79,8 +80,8 @@ pub enum ToSyncManager<M, E> {
 type TopicManagerReceivers<E> = HashMap<Topic, broadcast::Receiver<FromSync<E>>>;
 
 /// Mapping of the topic to the regarding manager.
-struct TopicManagers<T> {
-    topic_manager_map: HashMap<Topic, (ActorRef<ToTopicManager<T>>, IsLiveModeEnabled)>,
+struct TopicManagers<M, E> {
+    topic_manager_map: HashMap<Topic, (ActorRef<ToTopicManager<M, E>>, IsLiveModeEnabled)>,
     actor_topic_map: HashMap<ActorId, Topic>,
 }
 
@@ -91,7 +92,7 @@ type GossipHandles = HashMap<Topic, (GossipHandle, JoinHandle<()>)>;
 /// used by sync.
 type GossipTopicMap = Arc<RwLock<HashMap<Topic, Topic>>>;
 
-impl<T> Default for TopicManagers<T> {
+impl<M, E> Default for TopicManagers<M, E> {
     fn default() -> Self {
         Self {
             topic_manager_map: Default::default(),
@@ -100,25 +101,26 @@ impl<T> Default for TopicManagers<T> {
     }
 }
 
-pub struct SyncManagerState<M>
+pub struct SyncManagerState<S>
 where
-    M: SyncManagerTrait<Topic> + Send + 'static,
+    S: SessionBuilder,
 {
     protocol_id: ProtocolId,
     endpoint: Endpoint,
     gossip: Gossip,
     hooks: SyncHooksList<Topic>,
     gossip_handles: GossipHandles,
-    topic_managers: TopicManagers<M::Message>,
-    sync_receivers: TopicManagerReceivers<M::Event>,
+    topic_managers: TopicManagers<S::Operation, S::Event>,
+    sync_receivers: TopicManagerReceivers<S::Event>,
     gossip_topics: GossipTopicMap,
-    sync_args: M::Args,
+    /// Builds the protocol of each session, passed on to the topic managers.
+    session_builder: S,
     thread_pool: ThreadLocalActorSpawner,
 }
 
-impl<M> SyncManagerState<M>
+impl<S> SyncManagerState<S>
 where
-    M: SyncManagerTrait<Topic> + Send + 'static,
+    S: SessionBuilder,
 {
     /// Drop all internal state associated with the given topic.
     fn drop_topic_state(&mut self, topic: &Topic) {
@@ -139,7 +141,7 @@ where
     /// to initiate sync sessions with the new node in the "active view".
     async fn spawn_membership_task(
         &mut self,
-        myself: &ActorRef<ToSyncManager<M::Message, M::Event>>,
+        myself: &ActorRef<ToSyncManager<S::Operation, S::Event>>,
         topic: Topic,
     ) -> Result<(), ActorProcessingErr> {
         // To avoid collisions when topics are re-used across the application for different purposes
@@ -216,11 +218,11 @@ where
     }
 }
 
-pub struct SyncManager<M> {
-    _phantom: PhantomData<M>,
+pub struct SyncManager<S> {
+    _phantom: PhantomData<S>,
 }
 
-impl<M> Default for SyncManager<M> {
+impl<S> Default for SyncManager<S> {
     fn default() -> Self {
         Self {
             _phantom: Default::default(),
@@ -228,22 +230,22 @@ impl<M> Default for SyncManager<M> {
     }
 }
 
-impl<M> ThreadLocalActor for SyncManager<M>
+impl<S> ThreadLocalActor for SyncManager<S>
 where
-    M: SyncManagerTrait<Topic> + Send + 'static,
+    S: SessionBuilder,
 {
-    type State = SyncManagerState<M>;
+    type State = SyncManagerState<S>;
 
-    type Msg = ToSyncManager<M::Message, M::Event>;
+    type Msg = ToSyncManager<S::Operation, S::Event>;
 
-    type Arguments = (ProtocolId, M::Args, Endpoint, Gossip, SyncHooksList<Topic>);
+    type Arguments = (ProtocolId, S, Endpoint, Gossip, SyncHooksList<Topic>);
 
     async fn pre_start(
         &self,
         myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, sync_args, endpoint, gossip, hooks) = args;
+        let (protocol_id, session_builder, endpoint, gossip, hooks) = args;
 
         let gossip_handles = HashMap::new();
         let sync_receivers = HashMap::new();
@@ -263,7 +265,7 @@ where
             topic_managers: sync_managers,
             gossip_topics: Arc::default(),
             sync_receivers,
-            sync_args,
+            session_builder,
             hooks,
             thread_pool,
         })
@@ -333,12 +335,12 @@ where
                 // TODO: Pass the from_sync_tx sender into the sync manager actor.
                 //
                 // Spawn a sync manager for this topic.
-                let (sync_manager_ref, _) = TopicManager::<M>::spawn_linked(
+                let (sync_manager_ref, _) = TopicManager::<S>::spawn_linked(
                     None,
                     (
                         state.protocol_id.clone(),
                         topic,
-                        state.sync_args.clone(),
+                        state.session_builder.clone(),
                         from_sync_tx,
                         state.endpoint.clone(),
                     ),
@@ -563,8 +565,7 @@ where
         //
         // We don't need to observe these events here as the topic is returned as output when the
         // protocol completes, so these channels exist only to satisfy the API.
-        let (event_tx, _event_rx) =
-            futures_channel::mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
+        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
         let protocol = TopicHandshakeAcceptor::new(event_tx);
         let topic = protocol
             .run(&mut tx, &mut rx)
