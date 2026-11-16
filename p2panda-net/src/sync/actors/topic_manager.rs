@@ -9,17 +9,15 @@
 //! A separate topic manager actor is spawned by the sync manager for each topic of interest.
 
 use std::collections::{HashMap, HashSet};
-use std::error::Error as StdError;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::pin::Pin;
 
-use futures_util::{Sink, SinkExt};
+use futures_channel::mpsc;
 use iroh::endpoint::Connection;
-use p2panda_core::Topic;
-use p2panda_sync::manager::SessionTopicMap;
-use p2panda_sync::traits::Manager as SyncManagerTrait;
-use p2panda_sync::{FromSync, SessionConfig, ToSync};
+use p2panda_core::traits::Digest;
+use p2panda_core::{Hash, Topic};
+use p2panda_sync::dedup::DeduplicationBuffer;
+use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, SupervisionEvent};
 use tokio::sync::{broadcast, oneshot};
@@ -27,24 +25,19 @@ use tokio::time::Duration;
 use tracing::{debug, warn};
 
 use crate::iroh_endpoint::Endpoint;
-use crate::sync::actors::poller::{SyncPoller, ToSyncPoller};
-use crate::sync::actors::session::{SyncSession, SyncSessionId, SyncSessionMessage};
+use crate::sync::actors::session::{SessionState, SyncSession, SyncSessionId, SyncSessionMessage};
+use crate::sync::session::{SessionBuilder, SyncSessionItem};
+use crate::sync::sessions::LiveSessions;
 use crate::utils::ShortFormat;
 use crate::{NodeId, ProtocolId};
 
 const RETRY_RATE: Duration = Duration::from_secs(5);
 
-type SessionSink<M> = Pin<
-    Box<
-        dyn Sink<
-                ToSync<<M as SyncManagerTrait<Topic>>::Message>,
-                Error = <M as SyncManagerTrait<Topic>>::Error,
-            >,
-    >,
->;
+/// Capacity of each session's channel for payloads to send to the remote in live mode.
+const LIVE_BUFFER: usize = 1024;
 
 #[derive(Debug)]
-pub enum ToTopicManager<T> {
+pub enum ToTopicManager<M, E> {
     /// Initiate a sync session with this peer over the given topic
     Initiate {
         node_id: NodeId,
@@ -64,7 +57,7 @@ pub enum ToTopicManager<T> {
     Retry { node_id: NodeId, live_mode: bool },
 
     /// Send newly published data to all sync sessions running over the given topic.
-    Publish(T),
+    Publish(M),
 
     /// Close all active sync sessions running over the given topic. This essentially shuts down
     /// the whole manager.
@@ -75,31 +68,64 @@ pub enum ToTopicManager<T> {
         node_id: NodeId,
         reply: oneshot::Sender<()>,
     },
+
+    /// Event emitted by one of the sync sessions.
+    SessionItem(FromSync<E>),
 }
 
-pub struct TopicManagerState<M>
+pub struct TopicManagerState<S>
 where
-    M: SyncManagerTrait<Topic>,
+    S: SessionBuilder,
 {
+    /// Topic of this manager instance.
     topic: Topic,
-    manager: M,
+
+    /// Session builder.
+    session_builder: S,
+
+    /// ALPN used for iroh connection establishment.
     protocol_id: ProtocolId,
-    session_topic_map: SessionTopicMap<Topic, SessionSink<M>>,
-    node_session_map: HashMap<NodeId, HashSet<SyncSessionId>>,
+
+    /// Nodes with which we are currently actively sync with.
+    ///
+    /// If a sync session fails with one of these nodes we will attempt a retry.
     active_sync_set: HashSet<NodeId>,
-    actor_session_id_map: HashMap<ActorId, SyncSessionId>,
+
+    /// Session run by each session actor, until the actor has stopped.
+    sessions: HashMap<ActorId, SessionInfo>,
+
+    /// Id of the next session.
     next_session_id: SyncSessionId,
-    sync_poller_actor: ActorRef<ToSyncPoller>,
+
+    /// Iroh endpoint.
     endpoint: Endpoint,
+
+    /// Local pool.
     pool: ThreadLocalActorSpawner,
+
+    /// All currently active live-mode sessions.
+    live_sessions: LiveSessions<S::Operation>,
+
+    /// Topic event stream sender.
+    event_tx: broadcast::Sender<FromSync<S::Event>>,
+
+    /// Deduplication buffer for this topics' event stream.
+    received: DeduplicationBuffer<Hash>,
+}
+
+/// Info for an active sync session.
+struct SessionInfo {
+    session_id: SyncSessionId,
+    remote: NodeId,
+    live_mode: bool,
 }
 
 #[derive(Debug)]
-pub struct TopicManager<M> {
-    _marker: PhantomData<M>,
+pub struct TopicManager<S> {
+    _marker: PhantomData<S>,
 }
 
-impl<M> Default for TopicManager<M> {
+impl<S> Default for TopicManager<S> {
     fn default() -> Self {
         Self {
             _marker: PhantomData,
@@ -107,67 +133,43 @@ impl<M> Default for TopicManager<M> {
     }
 }
 
-impl<M> ThreadLocalActor for TopicManager<M>
+impl<S> ThreadLocalActor for TopicManager<S>
 where
-    M: SyncManagerTrait<Topic> + Send + 'static,
+    S: SessionBuilder,
 {
-    type State = TopicManagerState<M>;
+    type State = TopicManagerState<S>;
 
-    type Msg = ToTopicManager<M::Message>;
+    type Msg = ToTopicManager<S::Operation, S::Event>;
 
     type Arguments = (
         ProtocolId,
         Topic,
-        M::Args,
-        broadcast::Sender<FromSync<M::Event>>,
+        S,
+        broadcast::Sender<FromSync<S::Event>>,
         Endpoint,
     );
 
     async fn pre_start(
         &self,
-        myself: ActorRef<Self::Msg>,
+        _myself: ActorRef<Self::Msg>,
         args: Self::Arguments,
     ) -> Result<Self::State, ActorProcessingErr> {
-        let (protocol_id, topic, config, sender, endpoint) = args;
+        let (protocol_id, topic, session_builder, event_tx, endpoint) = args;
         let pool = ThreadLocalActorSpawner::new();
-
-        let mut manager = M::from_args(config);
-        let event_stream = manager.subscribe();
-
-        // The sync poller actor lives as long as the manager and only terminates due to the
-        // manager actor itself terminating.
-        let (sync_poller_actor, _) =
-            SyncPoller::spawn_linked(None, (event_stream, sender), myself.into(), pool.clone())
-                .await?;
 
         Ok(TopicManagerState {
             topic,
-            manager,
+            session_builder,
             protocol_id,
-            session_topic_map: SessionTopicMap::default(),
-            node_session_map: HashMap::new(),
             active_sync_set: HashSet::new(),
+            sessions: HashMap::new(),
             next_session_id: 0,
-            actor_session_id_map: HashMap::new(),
-            sync_poller_actor,
             endpoint,
             pool,
+            live_sessions: LiveSessions::default(),
+            event_tx,
+            received: Default::default(),
         })
-    }
-
-    async fn post_stop(
-        &self,
-        _myself: ActorRef<Self::Msg>,
-        state: &mut Self::State,
-    ) -> Result<(), ActorProcessingErr> {
-        // Drain the sync poller to ensure that all sync session messages are forwarded before it
-        // is shut down. A timeout is included to ensure that the drain call cannot wait forever.
-        state
-            .sync_poller_actor
-            .drain_and_wait(Some(Duration::from_millis(5000)))
-            .await?;
-
-        Ok(())
     }
 
     async fn handle(
@@ -190,27 +192,13 @@ where
                 );
 
                 state.active_sync_set.insert(node_id);
-                let config = SessionConfig {
-                    topic,
-                    remote: node_id,
-                    live_mode,
-                };
-                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
-                    (state.endpoint.clone(),),
-                    myself.clone().into(),
-                    state.pool.clone(),
-                )
-                .await?;
-                let (session_id, protocol) =
-                    Self::new_session(state, actor_ref.get_id(), node_id, topic, config).await;
+
+                let (actor_ref, live_rx) =
+                    Self::spawn_session(&myself, state, &node_id, live_mode).await?;
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
-                    node_id,
-                    topic,
-                    session_id,
-                    protocol,
                     protocol_id: state.protocol_id.clone(),
+                    live_rx,
                 })?;
             }
             ToTopicManager::Retry { node_id, live_mode } => {
@@ -225,14 +213,8 @@ where
                     return Ok(());
                 };
 
-                let current_sessions = state
-                    .node_session_map
-                    .get(&node_id)
-                    .cloned()
-                    .unwrap_or_default();
-
                 // If there's another session running then we don't need to re-initiate sync.
-                if !current_sessions.is_empty() {
+                if state.sessions.values().any(|info| info.remote == node_id) {
                     debug!(
                         remote = %node_id.fmt_short(),
                         topic = %state.topic.fmt_short(),
@@ -249,29 +231,12 @@ where
                     "re-initiate sync after failed session"
                 );
 
-                let config = SessionConfig {
-                    topic: state.topic,
-                    remote: node_id,
-                    live_mode,
-                };
-                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
-                    (state.endpoint.clone(),),
-                    myself.clone().into(),
-                    state.pool.clone(),
-                )
-                .await?;
-
-                let (session_id, protocol) =
-                    Self::new_session(state, actor_ref.get_id(), node_id, state.topic, config)
-                        .await;
+                let (actor_ref, live_rx) =
+                    Self::spawn_session(&myself, state, &node_id, live_mode).await?;
 
                 actor_ref.send_message(SyncSessionMessage::Initiate {
-                    node_id,
-                    topic: state.topic,
-                    session_id,
-                    protocol,
                     protocol_id: state.protocol_id.clone(),
+                    live_rx,
                 })?;
             }
             ToTopicManager::Accept {
@@ -287,54 +252,41 @@ where
                     "accept sync session"
                 );
 
-                let config = SessionConfig {
-                    topic,
-                    remote: node_id,
-                    live_mode,
-                };
-                let (actor_ref, _) = SyncSession::<M::Protocol>::spawn_linked(
-                    None,
-                    (state.endpoint.clone(),),
-                    myself.clone().into(),
-                    state.pool.clone(),
-                )
-                .await?;
-                let (session_id, protocol) =
-                    Self::new_session(state, actor_ref.get_id(), node_id, topic, config).await;
+                let (actor_ref, live_rx) =
+                    Self::spawn_session(&myself, state, &node_id, live_mode).await?;
 
                 actor_ref.send_message(SyncSessionMessage::Accept {
                     connection,
-                    topic,
-                    session_id,
-                    protocol,
+                    live_rx,
                 })?;
             }
-            ToTopicManager::Publish(data) => {
-                // Get a handle onto any sync sessions running over the subscription topic and
-                // forward on the data.
-                let session_ids = state.session_topic_map.sessions(&state.topic);
+            ToTopicManager::Publish(operation) => {
+                state.live_sessions.send(&operation).await;
+            }
+            ToTopicManager::SessionItem(sync_item) => {
+                if let Some(payload) = sync_item.event.operation() {
+                    state
+                        .live_sessions
+                        .received(sync_item.session_id, payload)
+                        .await;
 
-                for id in session_ids {
-                    let handle = state
-                        .session_topic_map
-                        .sender_mut(id)
-                        .expect("session handle exists");
-                    let _ = handle.send(ToSync::Payload(data.clone())).await;
+                    if !state.received.insert(payload.hash()) {
+                        return Ok(());
+                    }
                 }
+
+                // Fails only when there are no subscribers.
+                let _ = state.event_tx.send(sync_item);
             }
             ToTopicManager::CloseAll(reply) => {
-                // Get a handle onto any sync sessions running over the subscription topic and send
-                // a Close message. The session will send a close message to the remote then
-                // immediately drop the session.
-                let session_ids = state.session_topic_map.sessions(&state.topic);
+                // Send a Close message to all sync sessions running over the subscription topic.
+                // The session will send a close message to the remote then immediately drop the
+                // session.
+                state.live_sessions.close_all().await;
 
-                for id in session_ids {
-                    let handle = state
-                        .session_topic_map
-                        .sender_mut(id)
-                        .expect("session handle exists");
-                    let _ = handle.send(ToSync::Close).await;
-                }
+                myself
+                    .drain_children_and_wait(Some(Duration::from_millis(5000)))
+                    .await;
 
                 for node_id in state.active_sync_set.drain() {
                     debug!(
@@ -357,27 +309,11 @@ where
                     );
                 };
 
-                let node_sessions = state.node_session_map.get(&node_id).cloned();
-
-                if let Some(node_sessions) = node_sessions {
-                    let topic_sessions = state.session_topic_map.sessions(&state.topic);
-
-                    for id in topic_sessions.intersection(&node_sessions) {
-                        let session_topic =
-                            state.session_topic_map.topic(*id).expect("topic to exist");
-
-                        if &state.topic != session_topic {
-                            continue;
-                        }
-
-                        let handle = state
-                            .session_topic_map
-                            .sender_mut(*id)
-                            .expect("session handle exists");
-
-                        let _ = handle.send(ToSync::Close).await;
+                for info in state.sessions.values() {
+                    if info.remote == node_id {
+                        state.live_sessions.close(info.session_id).await;
                     }
-                };
+                }
 
                 let _ = reply.send(());
             }
@@ -386,7 +322,7 @@ where
         Ok(())
     }
 
-    // Handle supervision events from sync session and poller actors.
+    // Handle supervision events from sync session actors.
     async fn handle_supervisor_evt(
         &self,
         myself: ActorRef<Self::Msg>,
@@ -395,86 +331,39 @@ where
     ) -> Result<(), ActorProcessingErr> {
         match message {
             SupervisionEvent::ActorTerminated(actor_cell, _, _) => {
-                match state.actor_session_id_map.remove(&actor_cell.get_id()) {
-                    Some(session_id) => {
-                        debug!(
-                            %session_id,
-                            topic = state.topic.fmt_short(),
-                            "sync session terminated"
-                        );
-
-                        Self::drop_session(state, session_id);
-                    }
-                    None => {
-                        let actor_id = actor_cell.get_id();
-                        debug!(
-                            %actor_id,
-                            topic = state.topic.fmt_short(),
-                            "sync poller terminated"
-                        );
-                    }
+                if let Some(info) = state.sessions.remove(&actor_cell.get_id()) {
+                    debug!(
+                        session_id = info.session_id,
+                        topic = state.topic.fmt_short(),
+                        "sync session terminated"
+                    );
                 }
             }
             SupervisionEvent::ActorFailed(actor_cell, err) => {
-                match state.actor_session_id_map.remove(&actor_cell.get_id()) {
-                    Some(session_id) => {
-                        warn!(
-                            %session_id,
+                if let Some(info) = state.sessions.remove(&actor_cell.get_id()) {
+                    warn!(
+                        session_id = info.session_id,
+                        topic = state.topic.fmt_short(),
+                        "sync session failed: {err}"
+                    );
+
+                    // If this node was removed from the active sync set we skip retrying.
+                    if !state.active_sync_set.contains(&info.remote) {
+                        debug!(
+                            remote = info.remote.fmt_short(),
                             topic = state.topic.fmt_short(),
-                            "sync session failed: {err}"
+                            "skip re-initiate sync: node no longer in active set"
                         );
 
-                        // Retrieve the node id and current sessions from the node session map.
-                        let Some(remote_node_id) =
-                            state
-                                .node_session_map
-                                .iter()
-                                .find_map(|(node_id, sessions)| {
-                                    if sessions.contains(&session_id) {
-                                        Some(*node_id)
-                                    } else {
-                                        None
-                                    }
-                                })
-                        else {
-                            // If it wasn't present then it means we no longer want to sync with
-                            // this node, clear up any session state and return.
-                            Self::drop_session(state, session_id);
-                            return Ok(());
-                        };
+                        return Ok(());
+                    };
 
-                        // Clear up any state from the failed session.
-                        Self::drop_session(state, session_id);
-
-                        // If this node was removed from the active sync set we skip retrying.
-                        if !state.active_sync_set.contains(&remote_node_id) {
-                            debug!(
-                                remote = remote_node_id.fmt_short(),
-                                topic = state.topic.fmt_short(),
-                                "skip re-initiate sync: node no longer in active set"
-                            );
-
-                            return Ok(());
-                        };
-
-                        // Send a retry message to the actor after a 5 second delay.
-                        myself.send_after(RETRY_RATE, move || {
-                            ToTopicManager::Retry {
-                                node_id: remote_node_id,
-                                // TODO: For now we default to live-mode is true but we should
-                                // rather retrieve this state from the failed sync session.
-                                live_mode: true,
-                            }
-                        });
-                    }
-                    None => {
-                        let actor_id = actor_cell.get_id();
-                        warn!(
-                            %actor_id,
-                            topic = state.topic.fmt_short(),
-                            "sync poller failed: {err}"
-                        );
-                    }
+                    // Send a retry message to the actor after a 5 second delay, in the same mode
+                    // as the failed session.
+                    myself.send_after(RETRY_RATE, move || ToTopicManager::Retry {
+                        node_id: info.remote,
+                        live_mode: info.live_mode,
+                    });
                 }
             }
             _ => (),
@@ -484,55 +373,77 @@ where
     }
 }
 
-impl<M> TopicManager<M>
+impl<S> TopicManager<S>
 where
-    M: SyncManagerTrait<Topic> + Send + 'static,
-    <M as SyncManagerTrait<Topic>>::Error: StdError + Send + Sync + 'static,
+    S: SessionBuilder,
 {
-    /// Initiate a session and update related manager state mappings.
-    async fn new_session(
-        state: &mut TopicManagerState<M>,
-        actor_id: ActorId,
-        node_id: NodeId,
-        topic: Topic,
-        config: SessionConfig<Topic>,
-    ) -> (u64, <M as SyncManagerTrait<Topic>>::Protocol) {
-        let session_id: SyncSessionId = state.next_session_id;
+    /// Spawn a new sync session.
+    /// 
+    /// Returns the actor ref and an option live-mode receiver which will be sent to the spawned
+    /// session in an Initiate or Accept message.
+    async fn spawn_session(
+        myself: &ActorRef<ToTopicManager<S::Operation, S::Event>>,
+        state: &mut TopicManagerState<S>,
+        remote: &NodeId,
+        live_mode: bool,
+    ) -> Result<
+        (
+            ActorRef<SyncSessionMessage<S>>,
+            Option<mpsc::Receiver<ToSync<S::Operation>>>,
+        ),
+        ActorProcessingErr,
+    > {
+        // Compute the next session id.
+        let session_id = state.next_session_id;
         state.next_session_id += 1;
 
-        let session = state.manager.session(session_id, &config).await;
+        // If this is a live-mode session we need to construct the live-mode channels and register
+        // them so events can be forwarded between sessions.
+        let live_rx = if live_mode {
+            let (live_tx, live_rx) = mpsc::channel(LIVE_BUFFER);
+            state.live_sessions.register(session_id, live_tx);
+            Some(live_rx)
+        } else {
+            None
+        };
 
-        let session_handle = state
-            .manager
-            .session_handle(session_id)
-            .await
-            .expect("we just created this session");
+        // Spawn the session actor.
+        let session_state = SessionState {
+            endpoint: state.endpoint.clone(),
+            session_builder: state.session_builder.clone(),
+            topic: state.topic,
+            remote: *remote,
+            session_id,
+            parent_ref: myself.clone(),
+        };
 
-        // Register the session on the manager state.
-        //
-        // NOTE: We don't distinguish between "accepting" and "accepted" sync sessions as in both
-        // cases the topic is known thanks to the topic handshake already having been performed.
-        state
-            .session_topic_map
-            .insert_with_topic(session_id, topic, session_handle);
+        let result = SyncSession::<S>::spawn_linked(
+            None,
+            session_state,
+            myself.clone().into(),
+            state.pool.clone(),
+        )
+        .await;
 
-        // Associate the session with the given node id on manager state.
-        state
-            .node_session_map
-            .entry(node_id)
-            .or_default()
-            .insert(session_id);
+        // If spawning failed clean up the registered live-mode session channels.
+        let (actor_ref, _) = match result {
+            Ok(actor_ref) => actor_ref,
+            Err(err) => {
+                state.live_sessions.close(session_id).await;
+                return Err(err.into());
+            }
+        };
 
-        state.actor_session_id_map.insert(actor_id, session_id);
+        // Register this session on the actor.
+        state.sessions.insert(
+            actor_ref.get_id(),
+            SessionInfo {
+                session_id,
+                remote: *remote,
+                live_mode,
+            },
+        );
 
-        (session_id, session)
-    }
-
-    /// Remove a session from all manager state mappings.
-    fn drop_session(state: &mut TopicManagerState<M>, id: SyncSessionId) {
-        state.session_topic_map.drop(id);
-        state.node_session_map.iter_mut().for_each(|(_, sessions)| {
-            sessions.remove(&id);
-        });
+        Ok((actor_ref, live_rx))
     }
 }

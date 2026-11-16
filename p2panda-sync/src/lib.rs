@@ -2,16 +2,14 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-//! Data-type agnostic interfaces for implementing sync protocols and managers which can be used
-//! stand-alone or as part of the local-first stack provided by
-//! [`p2panda-net`].
+//! Data-type agnostic interfaces for implementing sync protocols which can be used stand-alone or
+//! as part of the local-first stack provided by [`p2panda-net`].
 //!
 //! Users can implement two-party sync protocols over a `Sink` / `Stream` pair with the `Protocol`
-//! trait and a system for instantiating and orchestrating concurrent sync sessions with the
-//! `Manager` trait.
+//! trait.
 //!
 //! Concrete implementations for performing sync over p2panda append-only logs associated with a
-//! generic topic can be found in the `manager` and `protocols` modules.
+//! generic topic can be found in the `protocols` module.
 //!
 //! For most high-level users [`p2panda-net`]
 //! will be the entry point into local-first development with p2panda. Interfaces in this crate
@@ -24,7 +22,6 @@ use p2panda_core::VerifyingKey;
 
 pub mod api;
 pub mod dedup;
-pub mod manager;
 pub mod protocols;
 #[doc(hidden)]
 #[cfg(any(test, feature = "test_utils"))]
@@ -40,13 +37,15 @@ pub struct SessionConfig<T> {
 }
 
 /// Message sent to running sync sessions.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ToSync<M> {
     Payload(M),
     Close,
 }
 
-/// Events which are emitted from a manager.
+/// Event emitted by a sync session, tagged with the session and its remote.
+/// 
+/// TODO: This can be refactored to match the shape of EventDeliveryItem.
 #[derive(Clone, PartialEq, Debug)]
 pub struct FromSync<E> {
     pub session_id: u64,

@@ -17,7 +17,6 @@ use tokio::join;
 use tokio::sync::broadcast;
 
 use crate::ToSync;
-use crate::manager::TopicSyncManager;
 use crate::protocols::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
@@ -38,7 +37,6 @@ pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<TestExtensions>;
 pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId, TestExtensions>;
 pub type TestTopicSyncError = TopicLogSyncError;
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
 
 /// Peer abstraction used in tests.
 ///

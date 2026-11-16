@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use std::marker::PhantomData;
-use std::pin::Pin;
 use std::time::Duration;
 
-use futures_channel::mpsc::{self, SendError};
+use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
-use p2panda_core::Topic;
 use p2panda_core::test_utils::setup_logging;
-use p2panda_sync::traits::{Manager as SyncManagerTrait, Protocol};
+use p2panda_core::traits::Digest;
+use p2panda_core::{Hash, Topic};
+use p2panda_sync::traits::Protocol;
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorRef, call};
@@ -16,7 +15,6 @@ use rand::random;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
 
 use crate::NodeId;
 use crate::address_book::AddressBook;
@@ -27,6 +25,7 @@ use crate::sync::actors::{SyncManager, ToSyncManager};
 use crate::sync::authoriser::SyncBlockList;
 use crate::sync::handle::SyncHandle;
 use crate::sync::hooks::SyncHooksList;
+use crate::sync::session::{SessionBuilder, SyncSessionItem};
 use crate::test_utils::{ApplicationArguments, test_args_from_seed};
 
 const TEST_PROTOCOL_ID: [u8; 32] = [101; 32];
@@ -40,7 +39,7 @@ impl FailingNode {
     pub async fn spawn(
         seed: [u8; 32],
         node_infos: Vec<NodeInfo>,
-        sync_args: FailingSyncArgs,
+        session_builder: FailingSessionBuilder,
     ) -> Self {
         let args = test_args_from_seed(seed);
 
@@ -68,20 +67,19 @@ impl FailingNode {
         let mut hooks = SyncHooksList::new();
         hooks.push(SyncBlockList::default());
 
-        let (sync_ref, _) =
-            SyncManager::<DummySyncManager<FailingSyncArgs, FailingSyncProtocol>>::spawn(
-                None,
-                (
-                    TEST_PROTOCOL_ID.to_vec(),
-                    sync_args,
-                    endpoint,
-                    gossip,
-                    hooks,
-                ),
-                thread_pool,
-            )
-            .await
-            .unwrap();
+        let (sync_ref, _) = SyncManager::<FailingSessionBuilder>::spawn(
+            None,
+            (
+                TEST_PROTOCOL_ID.to_vec(),
+                session_builder,
+                endpoint,
+                gossip,
+                hooks,
+            ),
+            thread_pool,
+        )
+        .await
+        .unwrap();
 
         Self { args, sync_ref }
     }
@@ -111,6 +109,7 @@ enum SyncBehaviour {
 #[derive(Debug)]
 struct FailingSyncProtocol {
     behaviour: SyncBehaviour,
+    _events: broadcast::Sender<DummySyncEvent>,
 }
 
 impl Protocol for FailingSyncProtocol {
@@ -139,21 +138,13 @@ impl Protocol for FailingSyncProtocol {
 }
 
 #[derive(Clone, Debug)]
-struct FailingSyncArgs {
-    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
+struct FailingSessionBuilder {
     pub behaviour: SyncBehaviour,
 }
 
-impl FailingSyncArgs {
-    pub fn new(behaviour: SyncBehaviour) -> (Self, broadcast::Receiver<FromSync<DummySyncEvent>>) {
-        let (tx, rx) = broadcast::channel(128);
-        (
-            Self {
-                event_tx: tx,
-                behaviour,
-            },
-            rx,
-        )
+impl FailingSessionBuilder {
+    pub fn new(behaviour: SyncBehaviour) -> Self {
+        Self { behaviour }
     }
 }
 
@@ -172,63 +163,37 @@ enum DummySyncMessage {
     Close,
 }
 
-#[derive(Debug)]
-struct DummySyncManager<C, P> {
-    pub event_tx: broadcast::Sender<FromSync<DummySyncEvent>>,
-    #[allow(unused)]
-    pub event_rx: broadcast::Receiver<FromSync<DummySyncEvent>>,
-    pub args: C,
-    pub _marker: PhantomData<P>,
+impl Digest<Hash> for DummySyncMessage {
+    fn hash(&self) -> Hash {
+        Hash::digest(format!("{self:?}"))
+    }
 }
 
-impl SyncManagerTrait<Topic> for DummySyncManager<FailingSyncArgs, FailingSyncProtocol> {
+impl SessionBuilder for FailingSessionBuilder {
     type Protocol = FailingSyncProtocol;
+    type Operation = DummySyncMessage;
     type Event = DummySyncEvent;
-    type Args = FailingSyncArgs;
-    type Message = DummySyncMessage;
-    type Error = SendError;
 
-    fn from_args(args: Self::Args) -> Self {
-        let event_rx = args.event_tx.subscribe();
-        DummySyncManager {
-            event_tx: args.event_tx.clone(),
-            event_rx,
-            args,
-            _marker: PhantomData,
-        }
-    }
-
-    async fn session(
-        &mut self,
-        session_id: u64,
-        config: &p2panda_sync::SessionConfig<Topic>,
-    ) -> Self::Protocol {
-        self.event_tx
-            .send(FromSync {
-                session_id,
-                remote: config.remote,
-                event: DummySyncEvent::SessionCreated,
-            })
-            .unwrap();
-        FailingSyncProtocol {
-            behaviour: self.args.behaviour.clone(),
-        }
-    }
-
-    async fn session_handle(
+    fn build(
         &self,
-        _session_id: u64,
-    ) -> Option<std::pin::Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>> {
-        // Just a dummy channel to satisfy the API in testing environment.
-        let (tx, _) = mpsc::channel::<ToSync<Self::Message>>(128);
-        let sink = Box::pin(tx) as Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>;
-        Some(sink)
+        _topic: Topic,
+        _live_rx: Option<mpsc::Receiver<ToSync<Self::Operation>>>,
+        events: broadcast::Sender<Self::Event>,
+    ) -> Self::Protocol {
+        events.send(DummySyncEvent::SessionCreated).unwrap();
+        FailingSyncProtocol {
+            behaviour: self.behaviour.clone(),
+            _events: events,
+        }
     }
+}
 
-    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static {
-        let stream = BroadcastStream::new(self.event_tx.subscribe())
-            .filter_map(|event| async { event.ok() });
-        Box::pin(stream)
+impl SyncSessionItem<DummySyncMessage> for DummySyncEvent {
+    fn operation(&self) -> Option<&DummySyncMessage> {
+        match self {
+            DummySyncEvent::Received(message) => Some(message),
+            _ => None,
+        }
     }
 }
 
@@ -246,10 +211,10 @@ async fn failed_sync_session_retry() {
         (SyncBehaviour::Error, SyncBehaviour::Error),
     ] {
         // Spawn nodes.
-        let (bob_sync_config, _bob_rx) = FailingSyncArgs::new(bob_behavior);
+        let bob_sync_config = FailingSessionBuilder::new(bob_behavior);
         let mut bob = FailingNode::spawn(random(), vec![], bob_sync_config).await;
 
-        let (alice_sync_config, _alice_rx) = FailingSyncArgs::new(alice_behavior);
+        let alice_sync_config = FailingSessionBuilder::new(alice_behavior);
         let alice =
             FailingNode::spawn(random(), vec![bob.args.node_info()], alice_sync_config).await;
 

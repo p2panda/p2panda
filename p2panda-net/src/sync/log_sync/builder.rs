@@ -6,13 +6,14 @@ use std::marker::PhantomData;
 use p2panda_core::{AnyOperation, Extensions, Hash, LogId, SeqNum, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
-use p2panda_sync::manager::TopicSyncManager;
+
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::SyncManager;
 use crate::sync::hooks::{SyncHooks, SyncHooksList};
+use crate::sync::log_sync::session::LogSyncSessionBuilder;
 use crate::sync::log_sync::{LOG_SYNC_PROTOCOL_ID, LogSync, LogSyncError};
 
 pub struct Builder<S, L, E>
@@ -70,13 +71,13 @@ where
 
             let args = (
                 LOG_SYNC_PROTOCOL_ID.to_vec(),
-                self.store,
+                LogSyncSessionBuilder::new(self.store),
                 self.endpoint,
                 self.gossip,
                 self.hooks,
             );
 
-            SyncManager::<TopicSyncManager<Topic, S, L, E>>::spawn(None, args, thread_pool).await?
+            SyncManager::spawn(None, args, thread_pool).await?
         };
 
         Ok(LogSync::new(actor_ref))

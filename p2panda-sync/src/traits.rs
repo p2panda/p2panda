@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Interfaces for implementing sync protocols and managers.
+//! Interfaces for implementing sync protocols.
 use std::error::Error as StdError;
 use std::fmt::Debug;
-use std::pin::Pin;
 
 use futures_util::Sink;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
-
-use crate::{FromSync, SessionConfig, ToSync};
 
 /// Generic protocol interface which runs over a sink and stream pair.
 pub trait Protocol {
@@ -22,32 +19,4 @@ pub trait Protocol {
         sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> impl Future<Output = Result<Self::Output, Self::Error>>;
-}
-
-/// Interface for managing sync sessions and consuming events they emit.
-#[allow(clippy::type_complexity)]
-pub trait Manager<T> {
-    type Protocol: Protocol + Send + 'static;
-    type Args: Clone + Send + 'static;
-    type Message: Clone + Send + 'static;
-    type Event: Clone + Debug + Send + 'static;
-    type Error: StdError + Send + Sync + 'static;
-
-    fn from_args(args: Self::Args) -> Self;
-
-    /// Instantiate a new sync session.
-    fn session(
-        &mut self,
-        session_id: u64,
-        config: &SessionConfig<T>,
-    ) -> impl Future<Output = Self::Protocol>;
-
-    /// Retrieve a send handle to an already existing sync session.
-    fn session_handle(
-        &self,
-        session_id: u64,
-    ) -> impl Future<Output = Option<Pin<Box<dyn Sink<ToSync<Self::Message>, Error = Self::Error>>>>>;
-
-    /// Subscribe to the manager event stream.
-    fn subscribe(&mut self) -> impl Stream<Item = FromSync<Self::Event>> + Send + Unpin + 'static;
 }

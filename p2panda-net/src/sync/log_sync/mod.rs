@@ -3,6 +3,7 @@
 //! Eventually consistent, local-first sync protocol based on append-only logs.
 mod api;
 mod builder;
+mod session;
 #[cfg(test)]
 mod tests;
 

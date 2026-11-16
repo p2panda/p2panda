@@ -6,6 +6,8 @@ pub mod authoriser;
 mod handle;
 pub mod hooks;
 mod log_sync;
+mod session;
+mod sessions;
 #[cfg(test)]
 mod tests;
 
