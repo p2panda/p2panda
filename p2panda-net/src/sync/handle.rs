@@ -25,7 +25,7 @@ where
 {
     topic: Topic,
     manager_ref: ActorRef<ToSyncManager<M, E>>,
-    topic_manager_ref: ActorRef<ToTopicManager<M>>,
+    topic_manager_ref: ActorRef<ToTopicManager<M, E>>,
     has_closed: AtomicBool,
 }
 
@@ -37,7 +37,7 @@ where
     pub(crate) fn new(
         topic: Topic,
         manager_ref: ActorRef<ToSyncManager<M, E>>,
-        topic_manager_ref: ActorRef<ToTopicManager<M>>,
+        topic_manager_ref: ActorRef<ToTopicManager<M, E>>,
     ) -> Self {
         Self {
             topic,
@@ -183,7 +183,7 @@ pub enum SyncHandleError<M, E> {
     ActorRpc(#[from] Box<ractor::RactorErr<ToSyncManager<M, E>>>),
 
     #[error(transparent)]
-    Publish(#[from] Box<ractor::MessagingErr<ToTopicManager<M>>>),
+    Publish(#[from] Box<ractor::MessagingErr<ToTopicManager<M, E>>>),
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,
