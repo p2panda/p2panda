@@ -3,12 +3,11 @@
 //! Building the sync sessions the topic manager runs.
 use std::fmt::Debug;
 
-use futures_channel::mpsc;
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic};
 use p2panda_sync::ToSync;
 use p2panda_sync::traits::Protocol;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 /// Interface required for building LogSync sessions.
 /// 
@@ -25,7 +24,7 @@ pub trait SessionBuilder: Clone + Send + 'static {
         &self,
         topic: Topic,
         live_rx: Option<mpsc::Receiver<ToSync<Self::Operation>>>,
-        events: broadcast::Sender<Self::Event>,
+        events: mpsc::Sender<Self::Event>,
     ) -> Self::Protocol;
 }
 

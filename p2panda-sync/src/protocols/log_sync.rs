@@ -14,7 +14,7 @@ use p2panda_store::logs::LogStore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tracing::{Instrument, debug, trace};
 
 use crate::api::{LogEntry, log_heights, log_ranges};
@@ -63,20 +63,20 @@ pub struct LogSync<L, E, S, Evt> {
     state: State<L>,
     logs: Logs<VerifyingKey, L>,
     store: S,
-    event_tx: broadcast::Sender<Evt>,
+    event_tx: mpsc::Sender<Evt>,
     buffer_capacity: usize,
     _marker: PhantomData<E>,
 }
 
 impl<L, E, S, Evt> LogSync<L, E, S, Evt> {
-    pub fn new(store: S, logs: Logs<VerifyingKey, L>, event_tx: broadcast::Sender<Evt>) -> Self {
+    pub fn new(store: S, logs: Logs<VerifyingKey, L>, event_tx: mpsc::Sender<Evt>) -> Self {
         Self::new_with_capacity(store, logs, event_tx, DEFAULT_BUFFER_CAPACITY)
     }
 
     pub fn new_with_capacity(
         store: S,
         logs: Logs<VerifyingKey, L>,
-        event_tx: broadcast::Sender<Evt>,
+        event_tx: mpsc::Sender<Evt>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
@@ -272,6 +272,7 @@ where
                             }
                             .into(),
                         )
+                        .await
                         .inspect_err(|error| {
                             debug!(?error, "Failed to send LogSyncEvent::MetricsExchanged")
                         })
@@ -341,8 +342,8 @@ where
                                                     metrics: metrics.clone()
                                                 }
                                                 .into(),
-                                            )
-                                            .inspect_err(|error| debug!(parent: &span, ?error, "Sending Broadcast OperationReceived failed"))
+                                            ).await
+                                            .inspect_err(|error| debug!(parent: &span, ?error, "Failed to send OperationReceived"))
                                             .map_err(|_| LogSyncError::BroadcastSend)?;
                                     }
                                     LogSyncMessage::Done => {
@@ -631,7 +632,7 @@ mod tests {
         assert_eq!(final_metrics.received_operations, 0);
         assert_eq!(final_metrics.received_bytes, 0);
 
-        let messages = remote_message_rx.collect::<Vec<_>>().await;
+        let messages = remote_message_rx.collect::<Vec<TestLogSyncMessage>>().await;
 
         assert_eq!(messages.len(), 6);
 

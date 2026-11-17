@@ -2,7 +2,6 @@
 
 use std::time::Duration;
 
-use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::test_utils::setup_logging;
 use p2panda_core::traits::Digest;
@@ -14,7 +13,7 @@ use ractor::{ActorRef, call};
 use rand::random;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use crate::NodeId;
 use crate::address_book::AddressBook;
@@ -109,7 +108,7 @@ enum SyncBehaviour {
 #[derive(Debug)]
 struct FailingSyncProtocol {
     behaviour: SyncBehaviour,
-    _events: broadcast::Sender<DummySyncEvent>,
+    _events: mpsc::Sender<DummySyncEvent>,
 }
 
 impl Protocol for FailingSyncProtocol {
@@ -178,9 +177,9 @@ impl SessionBuilder for FailingSessionBuilder {
         &self,
         _topic: Topic,
         _live_rx: Option<mpsc::Receiver<ToSync<Self::Operation>>>,
-        events: broadcast::Sender<Self::Event>,
+        events: mpsc::Sender<Self::Event>,
     ) -> Self::Protocol {
-        events.send(DummySyncEvent::SessionCreated).unwrap();
+        events.try_send(DummySyncEvent::SessionCreated).unwrap();
         FailingSyncProtocol {
             behaviour: self.behaviour.clone(),
             _events: events,

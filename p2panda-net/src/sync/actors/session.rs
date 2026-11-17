@@ -11,7 +11,7 @@ use p2panda_sync::traits::Protocol;
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tracing::{Instrument, warn};
 
 use crate::codec::{into_codec_sink, into_codec_stream};
@@ -32,11 +32,11 @@ where
 {
     Initiate {
         protocol_id: ProtocolId,
-        live_rx: Option<futures_channel::mpsc::Receiver<ToSync<S::Operation>>>,
+        live_rx: Option<mpsc::Receiver<ToSync<S::Operation>>>,
     },
     Accept {
         connection: Connection,
-        live_rx: Option<futures_channel::mpsc::Receiver<ToSync<S::Operation>>>,
+        live_rx: Option<mpsc::Receiver<ToSync<S::Operation>>>,
     },
 }
 
@@ -104,8 +104,7 @@ where
                     // We don't need to observe these events here as the topic is returned as
                     // output when the protocol completes, so these channels are actually only
                     // just to satisfy the API.
-                    let (event_tx, _event_rx) =
-                        futures_channel::mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
+                    let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
                     let topic_handshake = TopicHandshakeInitiator::new(state.topic, event_tx);
                     topic_handshake.run(&mut tx, &mut rx).await?;
                 }
@@ -156,7 +155,7 @@ where
         state: &SessionState<S>,
         tx: SendStream,
         rx: RecvStream,
-        live_rx: Option<futures_channel::mpsc::Receiver<ToSync<S::Operation>>>,
+        live_rx: Option<mpsc::Receiver<ToSync<S::Operation>>>,
     ) -> Result<(), ActorProcessingErr> {
         let SessionState {
             session_builder,
@@ -173,14 +172,15 @@ where
         let mut tx = into_codec_sink(tx);
         let mut rx = into_codec_stream(rx);
 
-        let (event_tx, mut event_rx) = broadcast::channel(EVENT_BUFFER_SIZE);
+        // TODO: This should be a mpsc channel.
+        let (event_tx, mut event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
         let protocol = session_builder.build(*topic, live_rx, event_tx);
 
         // Spawn task for forwarding session events to back to the TopicManager where they will be
         // de-duplicated and forwarded to _other_ sync sessions and subscribers.
         let handle = tokio::task::spawn(async move {
             loop {
-                let Ok(event) = event_rx.recv().await else {
+                let Some(event) = event_rx.recv().await else {
                     // Stream closes when the sync session finishes.
                     break;
                 };

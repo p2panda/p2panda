@@ -16,7 +16,7 @@ use p2panda_sync::protocols::{TopicHandshakeAcceptor, TopicHandshakeEvent, Topic
 use p2panda_sync::traits::Protocol;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};
-use tokio::sync::{RwLock, broadcast, oneshot};
+use tokio::sync::{RwLock, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
@@ -565,8 +565,7 @@ where
         //
         // We don't need to observe these events here as the topic is returned as output when the
         // protocol completes, so these channels exist only to satisfy the API.
-        let (event_tx, _event_rx) =
-            futures_channel::mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
+        let (event_tx, _event_rx) = mpsc::channel::<TopicHandshakeEvent<Topic>>(128);
         let protocol = TopicHandshakeAcceptor::new(event_tx);
         let topic = protocol
             .run(&mut tx, &mut rx)

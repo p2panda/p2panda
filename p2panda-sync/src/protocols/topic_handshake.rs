@@ -4,42 +4,41 @@
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::error::SendError;
 
 use crate::traits::Protocol;
 
 /// Initiator side of the topic handshake protocol.
 ///
 /// After the protocol is complete both peers know the T of the initiator.
-pub struct TopicHandshakeInitiator<T, Evt> {
+pub struct TopicHandshakeInitiator<T> {
     pub topic: T,
-    pub event_tx: mpsc::Sender<Evt>,
+    pub event_tx: mpsc::Sender<TopicHandshakeEvent<T>>,
 }
 
-impl<T, Evt> TopicHandshakeInitiator<T, Evt>
+impl<T> TopicHandshakeInitiator<T>
 where
     T: Clone + for<'de> Deserialize<'de> + Serialize,
-    Evt: From<TopicHandshakeEvent<T>>,
 {
-    pub fn new(topic: T, event_tx: mpsc::Sender<Evt>) -> Self {
+    pub fn new(topic: T, event_tx: mpsc::Sender<TopicHandshakeEvent<T>>) -> Self {
         Self { topic, event_tx }
     }
 }
 
-impl<T, Evt> Protocol for TopicHandshakeInitiator<T, Evt>
+impl<T> Protocol for TopicHandshakeInitiator<T>
 where
     T: Clone + Debug + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
-    Evt: From<TopicHandshakeEvent<T>>,
 {
     type Error = TopicHandshakeError<T>;
     type Output = ();
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(
-        mut self,
+        self,
         sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
@@ -76,7 +75,6 @@ where
         sink.flush()
             .await
             .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
-        self.event_tx.flush().await?;
 
         Ok(())
     }
@@ -85,17 +83,16 @@ where
 /// Acceptor side of the topic handshake protocol.
 ///
 /// After the protocol is complete both peers know the T of the initiator.
-pub struct TopicHandshakeAcceptor<T, Evt> {
-    pub event_tx: mpsc::Sender<Evt>,
+pub struct TopicHandshakeAcceptor<T> {
+    pub event_tx: mpsc::Sender<TopicHandshakeEvent<T>>,
     _phantom: PhantomData<T>,
 }
 
-impl<T, Evt> TopicHandshakeAcceptor<T, Evt>
+impl<T> TopicHandshakeAcceptor<T>
 where
     T: Clone + for<'de> Deserialize<'de> + Serialize,
-    Evt: From<TopicHandshakeEvent<T>>,
 {
-    pub fn new(event_tx: mpsc::Sender<Evt>) -> Self {
+    pub fn new(event_tx: mpsc::Sender<TopicHandshakeEvent<T>>) -> Self {
         Self {
             event_tx,
             _phantom: PhantomData,
@@ -103,17 +100,16 @@ where
     }
 }
 
-impl<T, Evt> Protocol for TopicHandshakeAcceptor<T, Evt>
+impl<T> Protocol for TopicHandshakeAcceptor<T>
 where
     T: Clone + Debug + for<'de> Deserialize<'de> + Serialize + Send + Sync + 'static,
-    Evt: From<TopicHandshakeEvent<T>>,
 {
     type Error = TopicHandshakeError<T>;
     type Output = T;
     type Message = TopicHandshakeMessage<T>;
 
     async fn run(
-        mut self,
+        self,
         sink: &mut (impl Sink<Self::Message, Error = impl Debug> + Unpin),
         stream: &mut (impl Stream<Item = Result<Self::Message, impl Debug>> + Unpin),
     ) -> Result<Self::Output, Self::Error> {
@@ -160,7 +156,6 @@ where
         sink.flush()
             .await
             .map_err(|err| TopicHandshakeError::MessageSink(format!("{err:?}")))?;
-        self.event_tx.flush().await?;
 
         Ok(topic)
     }
@@ -189,7 +184,7 @@ pub enum TopicHandshakeError<T> {
     MessageStream(String),
 
     #[error(transparent)]
-    MpscSend(#[from] mpsc::SendError),
+    MpscSend(#[from] SendError<TopicHandshakeEvent<T>>),
 }
 
 impl<T: std::fmt::Debug> Display for TopicHandshakeError<T> {

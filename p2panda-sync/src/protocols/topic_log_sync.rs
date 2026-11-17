@@ -8,7 +8,6 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use futures_channel::mpsc;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use p2panda_core::{
     AnyOperation, Body, Extensions, Hash, Header, LogId, Operation, RawOperation, SeqNum,
@@ -19,7 +18,7 @@ use p2panda_store::topics::TopicStore;
 use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tracing::{Level, debug, enabled, trace, warn};
 
 use crate::ToSync;
@@ -47,7 +46,7 @@ use crate::traits::Protocol;
 pub struct TopicLogSync<T, S, L, E> {
     pub topic: T,
     pub store: S,
-    pub event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
+    pub event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
     pub live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
     pub buffer_capacity: usize,
     pub _phantom: PhantomData<L>,
@@ -70,7 +69,7 @@ where
         topic: T,
         store: S,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
+        event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
     ) -> Self {
         Self::new_with_capacity(
             topic,
@@ -86,7 +85,7 @@ where
         topic: T,
         store: S,
         live_mode_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        event_tx: broadcast::Sender<TopicLogSyncEvent<E>>,
+        event_tx: mpsc::Sender<TopicLogSyncEvent<E>>,
         buffer_capacity: usize,
     ) -> Self {
         Self {
@@ -165,6 +164,7 @@ where
                         .send(TopicLogSyncEvent::SyncFinished {
                             metrics: metrics.clone().into(),
                         })
+                        .await
                         .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
                     (dedup, metrics)
@@ -174,6 +174,7 @@ where
                         .send(TopicLogSyncEvent::Failed {
                             error: err.to_string(),
                         })
+                        .await
                         .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
                     log_sync_sink
@@ -200,12 +201,13 @@ where
                 let mut close_sent = false;
                 self.event_tx
                     .send(TopicLogSyncEvent::LiveModeStarted)
+                    .await
                     .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
                 loop {
                     tokio::select! {
                         biased;
-                        Some(message) = live_mode_rx.next() => {
+                        Some(message) = live_mode_rx.recv() => {
                             match message {
                                 ToSync::Payload(operation) => {
                                     if !dedup.insert(operation.hash) {
@@ -316,7 +318,7 @@ where
                                                 body,
                                             }),
                                             metrics: metrics.clone(),
-                                        })
+                                        }).await
                                         .map_err(|_| TopicLogSyncChannelError::EventSend)?;
                                 }
                                 Err(err) => {
@@ -358,6 +360,7 @@ where
 
         self.event_tx
             .send(final_event)
+            .await
             .map_err(|_| TopicLogSyncChannelError::EventSend)?;
 
         result
@@ -398,7 +401,7 @@ pub enum TopicLogSyncChannelError {
     #[error("error receiving from message stream: {0}")]
     MessageStream(String),
 
-    #[error("no active receivers for broadcast")]
+    #[error("error sending on event channel")]
     EventSend,
 }
 
@@ -901,7 +904,7 @@ pub mod tests {
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_sent = header_2.payload_size + header_2.size();
 
-        let (protocol, mut events_rx, mut live_mode_tx) =
+        let (protocol, mut events_rx, live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
@@ -1012,7 +1015,7 @@ pub mod tests {
         let (header_2, _) = peer_a.create_operation_no_insert(&body, log_id).await;
         let expected_bytes_sent = header_2.payload_size + header_2.size();
 
-        let (protocol, mut events_rx, mut live_mode_tx) =
+        let (protocol, mut events_rx, live_mode_tx) =
             peer_a.topic_sync_protocol(topic.clone(), true);
 
         live_mode_tx
@@ -1152,7 +1155,7 @@ pub mod tests {
             TopicLogSyncError::Sync(LogSyncError::UnexpectedStreamClosure)
         );
 
-        while let Ok(event) = events_rx.recv().await {
+        while let Some(event) = events_rx.recv().await {
             if let TopicLogSyncEvent::Failed { error } = event {
                 assert_eq!(
                     error,
@@ -1196,7 +1199,7 @@ pub mod tests {
         let err = handle.await.unwrap();
         std::assert_matches!(err, TopicLogSyncError::UnexpectedStreamClosure);
 
-        while let Ok(event) = events_rx.recv().await {
+        while let Some(event) = events_rx.recv().await {
             if let TopicLogSyncEvent::Failed { error } = event {
                 assert_eq!(
                     error,

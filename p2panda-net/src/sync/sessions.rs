@@ -3,14 +3,11 @@
 //! Sync sessions in live mode and the payloads each has seen.
 use std::collections::HashMap;
 
-// TODO: switch to tokio channels as this is what we use in most other places. This requires
-// changes in p2panda-sync where we expect the futures_channel versions.
-use futures_channel::mpsc;
-use futures_util::SinkExt;
 use p2panda_core::Hash;
 use p2panda_core::traits::Digest;
 use p2panda_sync::ToSync;
 use p2panda_sync::dedup::DeduplicationBuffer;
+use tokio::sync::mpsc;
 use tracing::debug;
 
 /// Live-mode enabled sync sessions which are all interested in the same topic.

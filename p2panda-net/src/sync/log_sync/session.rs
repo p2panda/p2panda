@@ -3,13 +3,12 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use futures_channel::mpsc;
 use p2panda_core::{AnyOperation, Extensions, Hash, LogId, Operation, SeqNum, Topic, VerifyingKey};
 use p2panda_store::logs::LogStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_sync::ToSync;
 use p2panda_sync::protocols::{TopicLogSync, TopicLogSyncEvent};
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use crate::sync::session::{SessionBuilder, SyncSessionItem};
 
@@ -55,7 +54,7 @@ where
         &self,
         topic: Topic,
         live_rx: Option<mpsc::Receiver<ToSync<Operation<E>>>>,
-        events: broadcast::Sender<TopicLogSyncEvent<E>>,
+        events: mpsc::Sender<TopicLogSyncEvent<E>>,
     ) -> Self::Protocol {
         TopicLogSync::new(topic, self.store.clone(), live_rx, events)
     }

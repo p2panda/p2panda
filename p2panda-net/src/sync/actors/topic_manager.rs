@@ -12,7 +12,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use futures_channel::mpsc;
 use iroh::endpoint::Connection;
 use p2panda_core::traits::Digest;
 use p2panda_core::{Hash, Topic};
@@ -20,7 +19,7 @@ use p2panda_sync::dedup::DeduplicationBuffer;
 use p2panda_sync::{FromSync, ToSync};
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, SupervisionEvent};
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::time::Duration;
 use tracing::{debug, warn};
 
@@ -378,7 +377,7 @@ where
     S: SessionBuilder,
 {
     /// Spawn a new sync session.
-    /// 
+    ///
     /// Returns the actor ref and an option live-mode receiver which will be sent to the spawned
     /// session in an Initiate or Accept message.
     async fn spawn_session(
