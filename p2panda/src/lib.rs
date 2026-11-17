@@ -320,6 +320,7 @@ mod builder;
 pub mod credentials;
 pub(crate) mod debouncer;
 pub(crate) mod egress;
+pub mod event_delivery;
 mod forge;
 mod hooks;
 pub mod network;
