@@ -1,4 +1,4 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-mod traits;
-mod types;
+pub mod traits;
+pub mod types;
