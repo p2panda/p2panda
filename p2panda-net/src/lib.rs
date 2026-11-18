@@ -249,6 +249,8 @@ pub mod gossip;
 pub mod iroh_endpoint;
 #[cfg(feature = "iroh_mdns")]
 pub mod iroh_mdns;
+#[cfg(feature = "iroh_network")]
+pub mod iroh_network;
 #[cfg(feature = "supervisor")]
 pub mod supervisor;
 #[cfg(feature = "sync")]

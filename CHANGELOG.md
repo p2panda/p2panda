@@ -11,6 +11,7 @@ Highlights are marked with a pancake 🥞
 
 ### Added
 
+- net: Introduce a unified `IrohNetwork` API [#1609](https://github.com/p2panda/p2panda/pull/1609)
 - node: Define `EventDelivery` traits and types [#1608](https://github.com/p2panda/p2panda/pull/1608)
 
 ### Changed
