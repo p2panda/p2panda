@@ -22,6 +22,10 @@ breaking changes to the API of `p2panda-net`:
 
 - node: Define `EventDelivery` traits and types [#1608](https://github.com/p2panda/p2panda/pull/1608)
 
+### Fixed
+
+- net: Don't stop gossip manager when receiving message without subscribers [#1615](https://github.com/p2panda/p2panda/pull/1615)
+
 ## [0.8.1] - 13/11/2026
 
 ### Changed
