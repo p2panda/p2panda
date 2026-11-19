@@ -8,7 +8,6 @@ use p2panda_store::logs::LogStore;
 use p2panda_store::operations::OperationStore;
 use p2panda_store::topics::TopicStore;
 use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
-use p2panda_sync::manager::TopicSyncManager;
 use ractor::thread_local::ThreadLocalActorSpawner;
 use rand::rngs::SysRng;
 use rand::{RngExt, SeedableRng};
@@ -241,8 +240,6 @@ impl TestNode {
 pub type TestExtensions = ();
 
 pub type TestLogId = u64;
-
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
 
 /// Client abstraction used in tests.
 ///
