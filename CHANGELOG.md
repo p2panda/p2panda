@@ -24,6 +24,10 @@ Highlights are marked with a pancake 🥞
 - sync: Memory-leak caused by not cleaned-up sync sessions [#1612](https://github.com/p2panda/p2panda/pull/1612)
 - sync: Dropped operations during sync when channel ran full [#1612](https://github.com/p2panda/p2panda/pull/1612)
 
+### Fixed
+
+- net: Don't stop gossip manager when receiving message without subscribers [#1615](https://github.com/p2panda/p2panda/pull/1615)
+
 ## [0.8.1] - 13/11/2026
 
 ### Changed

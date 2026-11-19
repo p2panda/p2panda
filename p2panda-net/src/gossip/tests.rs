@@ -763,3 +763,87 @@ async fn large_message_error() {
         )))
     );
 }
+
+#[tokio::test]
+async fn receive_message_without_subscribers() {
+    setup_logging();
+
+    // Scenario:
+    //
+    // - Ant joins the gossip topic
+    // - Bat joins the gossip topic using ant as bootstrap node, but does not subscribe yet
+    // - Ant publishes a message, bat receives it from the overlay without having any subscribers
+    //   - This message is not forwarded because there are no active subscribers
+    // - Bat subscribes
+    //
+    // Assert: Bat's gossip is still functional and receives newly-published messages from ant
+
+    let mut ant_args = test_args();
+    let bat_args = test_args();
+
+    let topic: Topic = [8; 32].into();
+
+    // Create address books.
+    let ant_address_book = AddressBook::builder().spawn().await.unwrap();
+    let bat_address_book = AddressBook::builder().spawn().await.unwrap();
+
+    // Create endpoints.
+    let ant_endpoint = Endpoint::builder(ant_address_book.clone())
+        .config(ant_args.iroh_config.clone())
+        .signing_key(ant_args.signing_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+    let bat_endpoint = Endpoint::builder(bat_address_book.clone())
+        .config(bat_args.iroh_config.clone())
+        .signing_key(bat_args.signing_key.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    // Obtain ant's node information including direct addresses.
+    let ant_info = ant_args.node_info().bootstrap();
+
+    // Bat discovers ant through some out-of-band process.
+    bat_address_book
+        .insert_node_info(ant_info.clone())
+        .await
+        .unwrap();
+    bat_address_book
+        .set_topics(ant_info.node_id, [topic])
+        .await
+        .unwrap();
+
+    // Spawn gossip.
+    let ant_gossip = Gossip::builder(ant_address_book.clone(), ant_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+    let bat_gossip = Gossip::builder(bat_address_book.clone(), bat_endpoint.clone())
+        .spawn()
+        .await
+        .unwrap();
+
+    let mut bat_events = bat_gossip.events().await.unwrap();
+
+    let ant_handle = ant_gossip.stream(topic).await.unwrap();
+    let bat_handle = bat_gossip.stream(topic).await.unwrap();
+
+    // Bat has joined the gossip topic but hasn't subscribed yet.
+    std::assert_matches!(bat_events.recv().await, Ok(GossipEvent::Joined { .. }));
+
+    // Send message from ant to bat and give it time to arrive while bat has no subscribers.
+    ant_handle.publish(b"anyone there?").await.unwrap();
+    sleep(Duration::from_millis(500)).await;
+
+    // Bat subscribes and receives newly-published messages from ant.
+    let mut bat_from_gossip_rx = bat_handle.subscribe();
+    ant_handle.publish(b"hi, bat!").await.unwrap();
+
+    let Ok(Some(Ok(msg))) =
+        tokio::time::timeout(Duration::from_secs(1), bat_from_gossip_rx.next()).await
+    else {
+        panic!("expected msg from ant")
+    };
+    assert_eq!(msg, b"hi, bat!".to_vec());
+}
