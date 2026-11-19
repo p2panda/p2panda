@@ -2,8 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use iroh_gossip::net::Gossip as IrohGossip;
-use iroh_gossip::proto::DeliveryScope as IrohDeliveryScope;
+use iroh_gossip::DeliveryScope as IrohDeliveryScope;
+use iroh_gossip::Gossip as IrohGossip;
 use p2panda_core::Topic;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorId, ActorProcessingErr, ActorRef, RpcReplyPort, SupervisionEvent};

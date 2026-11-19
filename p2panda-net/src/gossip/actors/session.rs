@@ -8,7 +8,7 @@
 //! forwards them up the chain to the main gossip orchestration actor.
 use std::time::Duration;
 
-use iroh_gossip::api::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
+use iroh_gossip::{Event as IrohEvent, GossipTopic as IrohGossipTopic};
 use p2panda_core::Topic;
 use ractor::thread_local::{ThreadLocalActor, ThreadLocalActorSpawner};
 use ractor::{ActorProcessingErr, ActorRef, SupervisionEvent};
