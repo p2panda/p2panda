@@ -299,7 +299,10 @@ impl ThreadLocalActor for GossipManager {
             }
             ToGossipManager::ReceivedMessage { bytes, topic, .. } => {
                 if let Some((_, from_gossip_tx)) = state.sessions.gossip_senders.get(&topic) {
-                    let _number_of_subscribers = from_gossip_tx.send(bytes)?;
+                    // Only forward the received message if there are active subscribers.
+                    if from_gossip_tx.receiver_count() > 0 && from_gossip_tx.send(bytes).is_err() {
+                        warn!(topic = %topic.fmt_short(), "failed to forward gossip message to subscribers");
+                    }
                 }
             }
             ToGossipManager::Joined {
