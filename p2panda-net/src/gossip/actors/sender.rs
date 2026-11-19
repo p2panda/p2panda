@@ -6,7 +6,7 @@
 //! The actor first waits for a signal specifying that the gossip topic has been joined. Any
 //! broadcast messages received before the join signal are queued internally (by the actor) and are
 //! then processed after the signal has been received.
-use iroh_gossip::api::GossipSender as IrohGossipSender;
+use iroh_gossip::GossipSender as IrohGossipSender;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 use tokio::sync::oneshot;

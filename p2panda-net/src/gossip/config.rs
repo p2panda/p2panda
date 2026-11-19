@@ -3,17 +3,17 @@
 /// The default maximum size in bytes for a gossip message.
 pub const DEFAULT_MAX_MESSAGE_SIZE: usize = 4096;
 
-pub type HyParViewConfig = iroh_gossip::proto::HyparviewConfig;
+pub type MembershipConfig = iroh_gossip::MembershipConfig;
 
-pub type PlumTreeConfig = iroh_gossip::proto::PlumtreeConfig;
+pub type BroadcastConfig = iroh_gossip::BroadcastConfig;
 
 #[derive(Clone, Debug)]
 pub struct GossipConfig {
     /// Configuration for the swarm membership layer.
-    pub membership: HyParViewConfig,
+    pub membership: MembershipConfig,
 
     /// Configuration for the gossip broadcast layer.
-    pub broadcast: PlumTreeConfig,
+    pub broadcast: BroadcastConfig,
 
     /// Max message size in bytes.
     ///

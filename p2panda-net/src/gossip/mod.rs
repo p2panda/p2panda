@@ -12,5 +12,5 @@ mod tests;
 
 pub use api::{Gossip, GossipError, GossipHandle, GossipPublishError, GossipSubscription};
 pub use builder::Builder;
-pub use config::{DEFAULT_MAX_MESSAGE_SIZE, GossipConfig, HyParViewConfig, PlumTreeConfig};
+pub use config::{BroadcastConfig, DEFAULT_MAX_MESSAGE_SIZE, GossipConfig, MembershipConfig};
 pub use events::GossipEvent;
