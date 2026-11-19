@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Join a set of nodes on a gossip topic.
-use iroh_gossip::api::GossipSender as IrohGossipSender;
+use iroh_gossip::GossipSender as IrohGossipSender;
 use ractor::thread_local::ThreadLocalActor;
 use ractor::{ActorProcessingErr, ActorRef};
 
