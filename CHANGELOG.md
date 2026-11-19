@@ -20,6 +20,7 @@ breaking changes to the API of `p2panda-net`:
 
 ### Added
 
+- net: Introduce a unified `IrohNetwork` API [#1609](https://github.com/p2panda/p2panda/pull/1609)
 - node: Define `EventDelivery` traits and types [#1608](https://github.com/p2panda/p2panda/pull/1608)
 
 ## [0.8.1] - 13/11/2026
