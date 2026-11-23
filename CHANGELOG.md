@@ -9,6 +9,10 @@ Highlights are marked with a pancake 🥞
 
 ## Unreleased
 
+### Added
+
+- node: More convenient methods to construct Credentials [#1618](https://github.com/p2panda/p2panda/pull/1618)
+
 ### Changed
 
 - encryption: Update hpke-rs to v0.8.1 [#1617](https://github.com/p2panda/p2panda/pull/1617)
