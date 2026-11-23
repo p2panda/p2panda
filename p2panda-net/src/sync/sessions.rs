@@ -62,21 +62,20 @@ where
     /// Send a close message to one session and remove it from the session map.
     pub async fn close(&mut self, session_id: u64) {
         if let Some(session) = self.0.remove(&session_id) {
-            Self::close_session(session_id, session).await;
+            Self::close_session(session).await;
         }
     }
 
     /// Send a close message to all sessions and drain the session map.
     pub async fn close_all(&mut self) {
-        for (session_id, session) in self.0.drain() {
-            Self::close_session(session_id, session).await;
+        for (_session_id, session) in self.0.drain() {
+            Self::close_session(session).await;
         }
     }
 
-    async fn close_session(session_id: u64, session: LiveSession<OP>) {
-        if session.live_tx.send(ToSync::Close).await.is_err() {
-            debug!(session_id, "sync session already ended");
-        }
+    async fn close_session(session: LiveSession<OP>) {
+        // When failed the sync session already ended.
+        let _ = session.live_tx.send(ToSync::Close).await;
     }
 
     /// Send an operation to all sessions which have not seen it.
