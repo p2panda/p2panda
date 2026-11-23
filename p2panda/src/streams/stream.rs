@@ -952,13 +952,15 @@ impl<M> ProcessedOperation<M> {
     ///
     /// let (_tx, mut rx) = node.stream::<Vec<u8>>(topic).await?;
     ///
-    /// while let Some(StreamEvent::Processed { operation, .. }) = rx.next().await {
-    ///     // Do things with the message, event sourcing, apply to CRDT, materialise state,
-    ///     // write to database, ..
-    ///     let crdt = operation.message();
+    /// while let Some(event) = rx.next().await {
+    ///     if let StreamEvent::Processed { operation, .. } = event {
+    ///         // Do things with the message, event sourcing, apply to CRDT, materialise state,
+    ///         // write to database, ..
+    ///         let crdt = operation.message();
     ///
-    ///     // Finally, acknowledge it.
-    ///     operation.ack().await?;
+    ///         // Finally, acknowledge it.
+    ///         operation.ack().await?;
+    ///     }
     /// }
     /// #
     /// # Ok(())

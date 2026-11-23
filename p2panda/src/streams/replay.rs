@@ -88,10 +88,6 @@ where
     let total_operations = total_operations(&ranges);
     debug!("replay {total_operations} operations");
 
-    if total_operations == 0 {
-        return Ok(());
-    }
-
     // Stream re-played operations into pipeline to re-process them.
     to_output_tx
         .send(vec![StreamEvent::ReplayStarted { total_operations }.into()])
