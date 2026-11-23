@@ -12,6 +12,7 @@ Highlights are marked with a pancake 🥞
 ### Added
 
 - node: Define `EventDelivery` traits and types [#1608](https://github.com/p2panda/p2panda/pull/1608)
+- node: More convenient methods to construct Credentials [#1618](https://github.com/p2panda/p2panda/pull/1618)
 
 ### Changed
 
