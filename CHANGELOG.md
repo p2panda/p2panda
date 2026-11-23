@@ -15,6 +15,11 @@ Highlights are marked with a pancake 🥞
 - net: Gracefully close all sync actors [#1598](https://github.com/p2panda/p2panda/pull/1598)
 - net: Sync session management re-write [#1612](https://github.com/p2panda/p2panda/pull/1612)
 
+### Fixed
+
+- sync: Memory-leak caused by not cleaned-up sync sessions [#1612](https://github.com/p2panda/p2panda/pull/1612)
+- sync: Dropped operations during sync when channel ran full [#1612](https://github.com/p2panda/p2panda/pull/1612)
+
 ## [0.8.1] - 13/11/2026
 
 ### Changed
