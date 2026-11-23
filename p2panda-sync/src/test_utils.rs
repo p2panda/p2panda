@@ -3,7 +3,6 @@
 //! Test utilities.
 use std::collections::BTreeMap;
 
-use futures_channel::mpsc;
 use futures_util::{FutureExt, SinkExt, Stream, StreamExt};
 use p2panda_core::logs::Logs;
 use p2panda_core::{Body, Hash, Header, Operation, SeqNum, SigningKey, Topic, VerifyingKey};
@@ -14,10 +13,9 @@ use p2panda_store::{SqliteStore, Transaction, tx_unwrap};
 use rand::RngExt;
 use rand::rngs::StdRng;
 use tokio::join;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use crate::ToSync;
-use crate::manager::TopicSyncManager;
 use crate::protocols::{
     LogSync, LogSyncError, LogSyncEvent, LogSyncMessage, TopicLogSync, TopicLogSyncError,
     TopicLogSyncEvent, TopicLogSyncMessage,
@@ -38,7 +36,6 @@ pub type TestTopicSyncMessage = TopicLogSyncMessage<TestLogId>;
 pub type TestTopicSyncEvent = TopicLogSyncEvent<TestExtensions>;
 pub type TestTopicSync = TopicLogSync<Topic, SqliteStore, TestLogId, TestExtensions>;
 pub type TestTopicSyncError = TopicLogSyncError;
-pub type TestTopicSyncManager = TopicSyncManager<Topic, SqliteStore, TestLogId, TestExtensions>;
 
 /// Peer abstraction used in tests.
 ///
@@ -69,10 +66,10 @@ impl Peer {
         live_mode: bool,
     ) -> (
         TestTopicSync,
-        broadcast::Receiver<TestTopicSyncEvent>,
+        mpsc::Receiver<TestTopicSyncEvent>,
         mpsc::Sender<ToSync<Operation<TestExtensions>>>,
     ) {
-        let (event_tx, event_rx) = broadcast::channel(512);
+        let (event_tx, event_rx) = mpsc::channel(512);
         let (live_tx, live_rx) = mpsc::channel(512);
         let live_rx = if live_mode { Some(live_rx) } else { None };
         let session = TopicLogSync::new(topic, self.store.clone(), live_rx, event_tx);
@@ -83,8 +80,8 @@ impl Peer {
     pub fn log_sync_protocol(
         &mut self,
         logs: &Logs<VerifyingKey, TestLogId>,
-    ) -> (TestLogSync, broadcast::Receiver<TestLogSyncEvent>) {
-        let (event_tx, event_rx) = broadcast::channel(512);
+    ) -> (TestLogSync, mpsc::Receiver<TestLogSyncEvent>) {
+        let (event_tx, event_rx) = mpsc::channel(512);
         let session = LogSync::new(self.store.clone(), logs.clone(), event_tx);
         (session, event_rx)
     }
@@ -161,8 +158,8 @@ pub async fn run_protocol<P>(
 where
     P: Protocol + Send + 'static,
 {
-    let (mut local_message_tx, local_message_rx) = mpsc::channel(512);
-    let (mut remote_message_tx, remote_message_rx) = mpsc::channel(512);
+    let (mut local_message_tx, local_message_rx) = futures_channel::mpsc::channel(512);
+    let (mut remote_message_tx, remote_message_rx) = futures_channel::mpsc::channel(512);
     let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
     let mut remote_message_rx = remote_message_rx.map(Ok::<_, ()>);
 
@@ -180,13 +177,13 @@ where
 pub async fn run_protocol_uni<P>(
     protocol: P,
     messages: &[P::Message],
-) -> Result<(P::Output, mpsc::Receiver<P::Message>), P::Error>
+) -> Result<(P::Output, futures_channel::mpsc::Receiver<P::Message>), P::Error>
 where
     P: Protocol,
     P::Message: Clone,
 {
-    let (mut local_message_tx, remote_message_rx) = mpsc::channel(512);
-    let (mut remote_message_tx, local_message_rx) = mpsc::channel(512);
+    let (mut local_message_tx, remote_message_rx) = futures_channel::mpsc::channel(512);
+    let (mut remote_message_tx, local_message_rx) = futures_channel::mpsc::channel(512);
     let mut local_message_rx = local_message_rx.map(Ok::<_, ()>);
 
     for message in messages {
