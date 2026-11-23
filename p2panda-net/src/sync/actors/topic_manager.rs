@@ -331,6 +331,8 @@ where
         match message {
             SupervisionEvent::ActorTerminated(actor_cell, _, _) => {
                 if let Some(info) = state.sessions.remove(&actor_cell.get_id()) {
+                    state.live_sessions.close(info.session_id).await;
+
                     debug!(
                         session_id = info.session_id,
                         topic = state.topic.fmt_short(),
@@ -340,6 +342,8 @@ where
             }
             SupervisionEvent::ActorFailed(actor_cell, err) => {
                 if let Some(info) = state.sessions.remove(&actor_cell.get_id()) {
+                    state.live_sessions.close(info.session_id).await;
+
                     warn!(
                         session_id = info.session_id,
                         topic = state.topic.fmt_short(),
@@ -357,8 +361,8 @@ where
                         return Ok(());
                     };
 
-                    // Send a retry message to the actor after a 5 second delay, in the same mode
-                    // as the failed session.
+                    // Send a retry message to the actor after a 5 second delay, in the same mode as
+                    // the failed session.
                     myself.send_after(RETRY_RATE, move || ToTopicManager::Retry {
                         node_id: info.remote,
                         live_mode: info.live_mode,
