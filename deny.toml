@@ -2,19 +2,7 @@
 all-features = true
 
 [advisories]
-ignore = [
-    # proc-macro-error2 is not maintained anymore, used by hax-lib-macros > .. > hpke-rs.
-    {
-      id = "RUSTSEC-2026-0173",
-      reason = "Advisory is notice / INFO",
-    },
-    
-    # chrono is not maintained anymore, used by wmi > network > iroh > iroh-gossip.
-    {
-      id = "RUSTSEC-2026-0543",
-      reason = "Advisory is notice / INFO",
-    },
-]
+ignore = []
 
 [licenses]
 allow = [
