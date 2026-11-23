@@ -371,6 +371,10 @@ mod event_replays {
         let message_id_2 = processing.hash();
         processing.await.unwrap();
 
+        // Nothing to replay yet.
+        assert_replay_started(&rx.next().await.unwrap(), 0);
+        assert_replay_ended(&rx.next().await.unwrap());
+
         // We except to receive them.
         assert_message_id(&rx.next().await.unwrap(), message_id_1);
         assert_message_id(&rx.next().await.unwrap(), message_id_2);
@@ -388,6 +392,10 @@ mod event_replays {
         let processing = tx.publish("third".into()).await.unwrap();
         let message_id_3 = processing.hash();
         processing.await.unwrap();
+
+        // Everything was acked already, so there's nothing to replay.
+        assert_replay_started(&rx.next().await.unwrap(), 0);
+        assert_replay_ended(&rx.next().await.unwrap());
 
         // We expect to only receive the new, third message and not the previous two ones anymore.
         assert_message_id(&rx.next().await.unwrap(), message_id_3);
@@ -420,6 +428,10 @@ mod event_replays {
             processing.await.unwrap();
             id
         };
+
+        // Nothing to replay yet.
+        assert_replay_started(&rx.next().await.unwrap(), 0);
+        assert_replay_ended(&rx.next().await.unwrap());
 
         // We except to receive them from the subscription stream.
         assert_message_id(&rx.next().await.unwrap(), message_id_1);
@@ -565,6 +577,10 @@ mod event_replays {
             processing.await.unwrap();
             id
         };
+
+        // Nothing to replay yet.
+        assert_replay_started(&rx.next().await.unwrap(), 0);
+        assert_replay_ended(&rx.next().await.unwrap());
 
         assert_message_id(&rx.next().await.unwrap(), message_id_1);
         assert_message_id(&rx.next().await.unwrap(), message_id_2);
