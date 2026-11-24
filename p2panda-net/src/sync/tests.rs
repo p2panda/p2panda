@@ -20,7 +20,7 @@ use crate::address_book::AddressBook;
 use crate::addrs::NodeInfo;
 use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
-use crate::sync::actors::{SyncManager, ToSyncManager};
+use crate::sync::actors::{SyncManager, ToSyncManager, ToTopicManager};
 use crate::sync::authoriser::SyncBlockList;
 use crate::sync::handle::{SyncHandle, SyncHandleError};
 use crate::sync::hooks::SyncHooksList;
@@ -317,6 +317,56 @@ async fn shutdown_handles() {
         SyncHandle::new(topic, node.sync_ref.clone(), manager_ref)
     };
     assert!(handle_3.subscribe().await.is_err());
+
+    node.shutdown();
+}
+
+#[tokio::test]
+async fn subscriptions_start_from_now() {
+    setup_logging();
+
+    let topic = [2; 32].into();
+    let node = FailingNode::spawn(
+        random(),
+        vec![],
+        FailingSessionBuilder::new(SyncBehaviour::Wait),
+    )
+    .await;
+
+    let manager_ref = call!(node.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+    let handle = SyncHandle::new(topic, node.sync_ref.clone(), manager_ref.clone());
+
+    // The first subscription receives events buffered since the topic was created.
+    manager_ref
+        .send_message(ToTopicManager::SessionItem(FromSync {
+            session_id: 1,
+            remote: node.node_id(),
+            event: DummySyncEvent::SyncStarted,
+        }))
+        .unwrap();
+    let mut subscription_1 = handle.subscribe().await.unwrap();
+    assert_eq!(subscription_1.next().await.unwrap().unwrap().session_id, 1);
+
+    manager_ref
+        .send_message(ToTopicManager::SessionItem(FromSync {
+            session_id: 2,
+            remote: node.node_id(),
+            event: DummySyncEvent::SyncStarted,
+        }))
+        .unwrap();
+    assert_eq!(subscription_1.next().await.unwrap().unwrap().session_id, 2);
+
+    // Later subscriptions only receive events from the point they subscribed.
+    let mut subscription_2 = handle.subscribe().await.unwrap();
+    manager_ref
+        .send_message(ToTopicManager::SessionItem(FromSync {
+            session_id: 3,
+            remote: node.node_id(),
+            event: DummySyncEvent::SyncStarted,
+        }))
+        .unwrap();
+    assert_eq!(subscription_1.next().await.unwrap().unwrap().session_id, 3);
+    assert_eq!(subscription_2.next().await.unwrap().unwrap().session_id, 3);
 
     node.shutdown();
 }

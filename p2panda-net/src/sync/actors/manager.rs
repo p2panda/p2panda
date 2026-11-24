@@ -84,8 +84,9 @@ pub enum ToSyncManager<M, E> {
     RegisterProtocol,
 }
 
-/// Mapping of topic to the receiver channel from the associated sync manager.
-type TopicManagerReceivers<E> = HashMap<Topic, broadcast::Receiver<FromSync<E>>>;
+/// Mapping of topic to the receiver channel from the associated sync manager and whether it was
+/// already used once by a subscriber.
+type TopicManagerReceivers<E> = HashMap<Topic, (broadcast::Receiver<FromSync<E>>, bool)>;
 
 /// Mapping of the topic to the regarding manager.
 struct TopicManagers<M, E> {
@@ -113,6 +114,7 @@ impl<M, E> Default for TopicManagers<M, E> {
 
 pub struct SyncManagerState<S>
 where
+    // Builds the protocol of each session, passed on to the topic managers.
     S: SessionBuilder,
 {
     protocol_id: ProtocolId,
@@ -123,7 +125,6 @@ where
     topic_managers: TopicManagers<S::Operation, S::Event>,
     sync_receivers: TopicManagerReceivers<S::Event>,
     gossip_topics: GossipTopicMap,
-    /// Builds the protocol of each session, passed on to the topic managers.
     session_builder: S,
     thread_pool: ThreadLocalActorSpawner,
 }
@@ -366,7 +367,7 @@ where
 
                 // Store the sync receiver so it can later be used to create a subscription
                 // instance by the user.
-                state.sync_receivers.insert(topic, from_sync_rx);
+                state.sync_receivers.insert(topic, (from_sync_rx, false));
 
                 // TODO: Pass the from_sync_tx sender into the sync manager actor.
                 //
@@ -403,18 +404,24 @@ where
                 let _ = reply.send(sync_manager_ref);
             }
             ToSyncManager::Subscribe(actor_id, reply) => {
-                // Remove the current subscription receiver and return this to the user. Replace
-                // it in the manager with a re-subscribed handle. This ensures that the user
-                // receives any buffered messages.
-                if let Some(topic) = state.topic_managers.actor_topic_map.get(&actor_id).copied()
-                    && let Some(from_sync_rx) = state.sync_receivers.remove(&topic)
-                {
-                    let re_subscription = from_sync_rx.resubscribe();
-                    state.sync_receivers.insert(topic, re_subscription);
-                    let _ = reply.send(Some(from_sync_rx));
-                } else {
-                    let _ = reply.send(None);
-                }
+                let from_sync_rx = state
+                    .topic_managers
+                    .actor_topic_map
+                    .get(&actor_id)
+                    .and_then(|topic| state.sync_receivers.get_mut(topic))
+                    .map(|(from_sync_rx, is_already_used)| {
+                        // The first subscriber receives all messages buffered since the topic
+                        // manager was created, later subscribers only the ones from now on.
+                        let re_subscription = from_sync_rx.resubscribe();
+                        if *is_already_used {
+                            re_subscription
+                        } else {
+                            *is_already_used = true;
+                            std::mem::replace(from_sync_rx, re_subscription)
+                        }
+                    });
+
+                let _ = reply.send(from_sync_rx);
             }
             ToSyncManager::Close(topic, reply) => {
                 debug!(topic = topic.fmt_short(), "close sync in manager");
