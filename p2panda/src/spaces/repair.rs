@@ -23,7 +23,7 @@ use tokio::time::sleep_until;
 use tracing::{debug, warn};
 
 use crate::debouncer::Debouncer;
-use crate::egress::{DispatchError, Egress, EgressHandle};
+use crate::egress::{DispatchError, Egress, EgressHandle, StreamType};
 use crate::operation::Operation;
 use crate::spaces::types::{AuthCapabilities, InnerSpaceError, SpacesManager, SpacesStore};
 use crate::spaces::{SpacesManagerError, actor_to_topic, dispatch_spaces_events};
@@ -399,7 +399,7 @@ async fn sync_and_repair(
 ) -> Result<(), RepairError> {
     let egress_handle = egress.handle();
 
-    for topic in egress.group_topics() {
+    for topic in egress.topics(StreamType::Group) {
         let group_id = GroupId::from_bytes(topic.as_bytes())?;
 
         // In most cases we don't introduce a new group when syncing a group with the global state.
@@ -410,7 +410,7 @@ async fn sync_and_repair(
         sync_group(store, &egress_handle, group_id, &[]).await?;
     }
 
-    for topic in egress.space_topics() {
+    for topic in egress.topics(StreamType::Space) {
         // In most cases we don't introduce a new group when repairing space. For example when
         // incorporating changes which occurred since last subscribing to a space or when changes
         // arrive from a remote via a different stream. In this case we don't need to pass in an

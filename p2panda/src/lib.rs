@@ -319,7 +319,7 @@
 mod builder;
 pub mod credentials;
 mod debouncer;
-mod egress;
+pub mod egress;
 pub mod event_delivery;
 mod forge;
 mod hooks;
