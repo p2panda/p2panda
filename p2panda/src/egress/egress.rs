@@ -44,137 +44,47 @@ impl EgressInner {
         self.active.get(topic).cloned()
     }
 
-    pub fn spaces(&self) -> Vec<EgressTopic> {
+    pub fn by_stream_type(&self, stream_type: StreamType) -> impl Iterator<Item = &EgressTopic> {
         self.active
             .values()
-            .filter_map(|active| {
-                if active.stream_type == StreamType::Space {
-                    Some(active.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
+            .filter(move |active| active.stream_type == stream_type)
     }
 
-    fn validate_processing(
+    /// Returns the entry for this topic, inserts an empty one if it doesn't exist yet.
+    fn entry(
         &mut self,
         topic: Topic,
         stream_type: StreamType,
-    ) -> Result<(), EgressError> {
-        if let Some(active) = self.active.get_mut(&topic) {
-            if active.to_processing.is_some() {
-                return Err(EgressError::DuplicateProcessing(topic));
-            }
+    ) -> Result<&mut EgressTopic, EgressError> {
+        let entry = self.active.entry(topic).or_insert_with(|| EgressTopic {
+            topic,
+            stream_type,
+            to_processing: None,
+            to_delivery: None,
+        });
 
-            if active.stream_type != stream_type {
-                return Err(EgressError::StreamTypeMismatch(
-                    active.stream_type,
-                    stream_type,
-                ));
-            }
+        if entry.stream_type != stream_type {
+            return Err(EgressError::StreamTypeMismatch(
+                entry.stream_type,
+                stream_type,
+            ));
         }
 
-        Ok(())
+        Ok(entry)
     }
 
-    fn validate_delivery(
-        &mut self,
-        topic: Topic,
-        stream_type: StreamType,
-    ) -> Result<(), EgressError> {
-        if let Some(active) = self.active.get_mut(&topic) {
-            if active.to_delivery.is_some() {
-                return Err(EgressError::DuplicateDelivery(topic));
-            }
+    fn remove(&mut self, topic: &Topic, kind: &RegistrationKind) {
+        let Some(entry) = self.active.get_mut(topic) else {
+            return;
+        };
 
-            if active.stream_type != stream_type {
-                return Err(EgressError::StreamTypeMismatch(
-                    active.stream_type,
-                    stream_type,
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn register_processing(
-        &mut self,
-        topic: Topic,
-        stream_type: StreamType,
-        tx: ToProcessing,
-    ) -> Result<(), EgressError> {
-        debug_assert!(self.validate_processing(topic, stream_type).is_ok());
-
-        if let Some(active) = self.active.get_mut(&topic) {
-            active.to_processing = Some(tx);
-        } else {
-            self.active.insert(
-                topic,
-                EgressTopic {
-                    topic,
-                    stream_type,
-                    to_processing: Some(tx),
-                    to_delivery: None,
-                },
-            );
-        }
-
-        Ok(())
-    }
-
-    fn register_delivery(
-        &mut self,
-        topic: Topic,
-        stream_type: StreamType,
-        tx: ToDelivery,
-    ) -> Result<(), EgressError> {
-        debug_assert!(self.validate_delivery(topic, stream_type).is_ok());
-
-        if let Some(active) = self.active.get_mut(&topic) {
-            active.to_delivery = Some(tx);
-        } else {
-            self.active.insert(
-                topic,
-                EgressTopic {
-                    topic,
-                    stream_type,
-                    to_processing: None,
-                    to_delivery: Some(tx),
-                },
-            );
-        }
-
-        Ok(())
-    }
-
-    pub fn remove_processing(&mut self, topic: &Topic) {
-        let mut is_active = true;
-
-        if let Some(entry) = self.active.get_mut(topic) {
-            // Remove event processing tx.
-            entry.to_processing = None;
-            is_active = entry.is_active();
+        match kind {
+            RegistrationKind::Processing => entry.to_processing = None,
+            RegistrationKind::Delivery => entry.to_delivery = None,
         }
 
         // Clean up after the last tx got removed as well.
-        if !is_active {
-            self.active.remove(topic);
-        }
-    }
-
-    pub fn remove_delivery(&mut self, topic: &Topic) {
-        let mut is_active = true;
-
-        if let Some(entry) = self.active.get_mut(topic) {
-            // Remove event delivery tx.
-            entry.to_delivery = None;
-            is_active = entry.is_active();
-        }
-
-        // Clean up after the last tx got removed as well.
-        if !is_active {
+        if !entry.is_active() {
             self.active.remove(topic);
         }
     }
@@ -204,18 +114,18 @@ impl Egress {
         stream_type: StreamType,
     ) -> Result<ProcessFromEgress, EgressError> {
         let mut inner = self.inner.write().expect("lock poisoned by other thread");
-        inner.validate_processing(topic, stream_type)?;
+        let entry = inner.entry(topic, stream_type)?;
+        if entry.to_processing.is_some() {
+            return Err(EgressError::DuplicateProcessing(topic));
+        }
 
         let (tx, rx) = ToProcessing::new();
-        inner.register_processing(topic, stream_type, tx)?;
+        entry.to_processing = Some(tx);
 
-        let registration = EgressRegistration {
-            topic,
-            kind: RegistrationKind::Processing,
-            inner: self.inner.clone(),
-        };
-
-        Ok(FromEgress { rx, registration })
+        Ok(FromEgress {
+            rx,
+            registration: self.registration(topic, RegistrationKind::Processing),
+        })
     }
 
     /// Registers an event delivery layer for this topic.
@@ -227,47 +137,34 @@ impl Egress {
         stream_type: StreamType,
     ) -> Result<DeliverFromEgress, EgressError> {
         let mut inner = self.inner.write().expect("lock poisoned by other thread");
-        inner.validate_delivery(topic, stream_type)?;
+        let entry = inner.entry(topic, stream_type)?;
+        if entry.to_delivery.is_some() {
+            return Err(EgressError::DuplicateDelivery(topic));
+        }
 
         let (tx, rx) = ToDelivery::new();
-        inner.register_delivery(topic, stream_type, tx)?;
+        entry.to_delivery = Some(tx);
 
-        let registration = EgressRegistration {
+        Ok(FromEgress {
+            rx,
+            registration: self.registration(topic, RegistrationKind::Delivery),
+        })
+    }
+
+    fn registration(&self, topic: Topic, kind: RegistrationKind) -> EgressRegistration {
+        EgressRegistration {
             topic,
-            kind: RegistrationKind::Delivery,
+            kind,
             inner: self.inner.clone(),
-        };
-
-        Ok(FromEgress { rx, registration })
+        }
     }
 
-    pub fn group_topics(&self) -> HashSet<Topic> {
+    /// Returns all currently registered topics of this stream type.
+    pub fn topics(&self, stream_type: StreamType) -> HashSet<Topic> {
         let inner = self.inner.read().expect("lock poisoned by other thread");
         inner
-            .active
-            .values()
-            .filter_map(|active| {
-                if active.stream_type == StreamType::Group {
-                    Some(active.topic)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn space_topics(&self) -> HashSet<Topic> {
-        let inner = self.inner.read().expect("lock poisoned by other thread");
-        inner
-            .active
-            .values()
-            .filter_map(|active| {
-                if active.stream_type == StreamType::Space {
-                    Some(active.topic)
-                } else {
-                    None
-                }
-            })
+            .by_stream_type(stream_type)
+            .map(|active| active.topic)
             .collect()
     }
 }
@@ -314,10 +211,7 @@ enum RegistrationKind {
 impl Drop for EgressRegistration {
     fn drop(&mut self) {
         if let Ok(mut inner) = self.inner.write() {
-            match self.kind {
-                RegistrationKind::Processing => inner.remove_processing(&self.topic),
-                RegistrationKind::Delivery => inner.remove_delivery(&self.topic),
-            }
+            inner.remove(&self.topic, &self.kind);
         }
     }
 }
@@ -340,7 +234,9 @@ mod tests {
 
     use p2panda_core::Topic;
 
-    use crate::egress::{Egress, EgressError, StreamType};
+    use crate::egress::StreamType;
+
+    use super::{Egress, EgressError};
 
     #[tokio::test]
     async fn duplicate_or_mismatching_streams() {

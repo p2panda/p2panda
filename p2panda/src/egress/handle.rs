@@ -12,7 +12,9 @@ use thiserror::Error;
 use tracing::warn;
 
 use crate::egress::delivery::ToDelivery;
-use crate::egress::{DispatchConfig, EgressInner, EventDeliveryPolicy, EventProcessingPolicy};
+use crate::egress::{
+    DispatchConfig, EgressInner, EventDeliveryPolicy, EventProcessingPolicy, StreamType,
+};
 use crate::operation::Operation;
 use crate::spaces::types::SpacesEvent;
 use crate::streams::{Event, Source};
@@ -62,13 +64,12 @@ impl EgressHandle {
                     .topic(&topic)
                     .map(|tx| Vec::from([tx]))
                     .unwrap_or_default(),
-                EventDeliveryPolicy::OnlySpaces => inner.spaces(),
+                EventDeliveryPolicy::OnlySpaces => {
+                    inner.by_stream_type(StreamType::Space).cloned().collect()
+                }
             }
             .into_iter()
-            .filter_map(|entry| match entry.to_delivery {
-                Some(to_delivery) => Some((entry.topic, to_delivery)),
-                None => None,
-            })
+            .filter_map(|entry| Some((entry.topic, entry.to_delivery?)))
             .collect::<Vec<(Topic, ToDelivery)>>()
         };
 
