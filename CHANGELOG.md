@@ -28,6 +28,7 @@ Highlights are marked with a pancake 🥞
 ### Fixed
 
 - net: Don't stop gossip manager when receiving message without subscribers [#1615](https://github.com/p2panda/p2panda/pull/1615)
+- store: Drop transaction and queue rollback synchronously [#1621](https://github.com/p2panda/p2panda/pull/1621)
 
 ## [0.8.1] - 13/11/2026
 
