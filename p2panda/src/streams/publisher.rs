@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -16,13 +17,12 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::egress::{DispatchError, DispatchFuture, EgressHandle};
 use crate::forge::{Forge, ForgeError, OperationForge};
 use crate::operation::{Extensions, LogId, Operation};
 use crate::streams::Event;
 use crate::streams::drop_guard::StreamDropGuard;
 use crate::streams::external_stream::ExternalStreamFuture;
-
-type PublishTx<M> = mpsc::Sender<(Operation, Option<M>, oneshot::Sender<Event>)>;
 
 type ImportExternalTx = mpsc::Sender<(
     BoxStream<'static, Operation>,
@@ -97,9 +97,10 @@ pub struct StreamPublisher<M> {
     topic: Topic,
     forge: OperationForge,
     sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-    publish_tx: PublishTx<M>,
+    egress_handle: EgressHandle,
     import_external_tx: ImportExternalTx,
     _guard: StreamDropGuard,
+    _marker: PhantomData<M>,
 }
 
 impl<M> StreamPublisher<M>
@@ -111,7 +112,7 @@ where
         topic: Topic,
         forge: OperationForge,
         sync_handle: Arc<SyncHandle<Operation, TopicLogSyncEvent<Extensions>>>,
-        publish_tx: PublishTx<M>,
+        egress_handle: EgressHandle,
         import_external_tx: ImportExternalTx,
         _guard: StreamDropGuard,
     ) -> Self {
@@ -119,9 +120,10 @@ where
             topic,
             forge,
             sync_handle,
-            publish_tx,
+            egress_handle,
             import_external_tx,
             _guard,
+            _marker: PhantomData,
         }
     }
 
@@ -165,15 +167,15 @@ where
             .await?;
         let hash = operation.hash;
 
-        // Start processing operation in pipeline. Keep a oneshot receiver around to allow users to
-        // optionally await & get informed when processing has finished.
-        let (processed_tx, processed_rx) = oneshot::channel();
-        self.publish_tx
-            .send((operation.clone(), message, processed_tx))
-            .await
-            .map_err(|err| PublishError::SendToProcessor(err.to_string()))?;
+        // Deliver and process operation via egress. Users can optionally await the returned future
+        // to get informed when processing has finished.
+        let processed = self.egress_handle.dispatch(operation, self.topic).await;
 
-        Ok(PublishFuture { hash, processed_rx })
+        Ok(PublishFuture {
+            hash,
+            topic: self.topic,
+            processed,
+        })
     }
 
     /// Deletes all our previously published messages in this topic stream.
@@ -237,10 +239,10 @@ pub struct CloseError(String);
 
 /// Future which can be awaited to find out when a locally published operation has finished
 /// processing.
-#[derive(Debug)]
 pub struct PublishFuture {
     hash: Hash,
-    processed_rx: oneshot::Receiver<Event>,
+    topic: Topic,
+    processed: DispatchFuture,
 }
 
 impl PublishFuture {
@@ -251,10 +253,14 @@ impl PublishFuture {
 }
 
 impl Future for PublishFuture {
-    type Output = Result<Event, oneshot::error::RecvError>;
+    type Output = Result<Event, DispatchError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.processed_rx.poll_unpin(cx)
+        // The publisher keeps the stream registered, a missing processing layer means it closed.
+        let topic = self.topic;
+        self.processed
+            .poll_unpin(cx)
+            .map(|result| result.and_then(|event| event.ok_or(DispatchError::Processing(topic))))
     }
 }
 
@@ -269,9 +275,6 @@ pub enum PublishError {
 
     #[error("an error occurred while publishing an operation to the log sync stream: {0}")]
     SyncHandle(String),
-
-    #[error("could not send to processor pipeline: {0}")]
-    SendToProcessor(String),
 }
 
 #[derive(Debug, Error)]

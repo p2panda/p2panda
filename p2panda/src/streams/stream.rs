@@ -24,7 +24,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
-use crate::egress::{DeliverFromEgress, ProcessFromEgress, StreamType};
+use crate::egress::{Egress, StreamType};
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
@@ -47,10 +47,6 @@ use crate::streams::{Event, Pipeline, SystemEvent};
 /// operations. If buffer runs full the processor will pause work and we'll apply backpressure to
 /// the sync backend.
 const BUFFER_SIZE: usize = 128;
-
-/// Number of items which can stay in the buffer before processing kicks in for locally published
-/// items. If buffer runs full, creating new operations will apply backpressure.
-const PUBLISH_BUFFER_SIZE: usize = 128;
 
 /// Number of streams which can stay in the import buffer. If the buffer runs full importing of
 /// new streams will have backpressure applied.
@@ -111,12 +107,21 @@ pub(crate) async fn processed_stream<M>(
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
     custom_cursor_name: Option<String>,
-    egress_processing_rx: ProcessFromEgress,
-    egress_delivery_rx: DeliverFromEgress,
+    egress: &Egress,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
+    // Register this stream as processing and delivery layer in the egress, all locally created
+    // operations for this topic will arrive here.
+    let egress_processing_rx = egress
+        .register_processing(topic, stream_type)
+        .map_err(|err| CreateStreamError(err.to_string()))?;
+
+    let egress_delivery_rx = egress
+        .register_delivery(topic, stream_type)
+        .map_err(|err| CreateStreamError(err.to_string()))?;
+
     let acked = match custom_cursor_name {
         Some(cursor_name) => Acked::from_name(store.clone(), topic, cursor_name),
         None => Acked::new(store.clone(), topic),
@@ -135,13 +140,6 @@ where
 
     // Channel to send processed events to the application-layer.
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
-
-    // Channel to send locally created operations to the processing pipeline. A "oneshot" callback
-    // is attached to allow publishers to await the processing result.
-    //
-    // TODO: Remove this and make it part of egress.
-    let (publish_tx, mut publish_rx) =
-        mpsc::channel::<(Operation, Option<M>, oneshot::Sender<Event>)>(PUBLISH_BUFFER_SIZE);
 
     // Channel for importing external operation streams.
     //
@@ -334,31 +332,6 @@ where
                         }
                     }
 
-                    // Received locally created operation which needs to be processed as well.
-                    //
-                    // If the publishing channel gets closed, for example when the publisher handle
-                    // got dropped, we still continue with this task, as we still might receive
-                    // operations from the log sync stream.
-                    //
-                    // NOTE: Spaces messages do _not_ come through this route; they all come
-                    // through import (even ones published locally).
-                    Some((operation, _message, processed_tx)) = publish_rx.recv() => {
-                        let event = process_operation_in(
-                            operation,
-                            Source::Publish,
-                            topic,
-                            &pipeline,
-                            Some(&sync_handle),
-                            None
-                        ).await;
-
-                        // Inform publisher optionally about result of processor and that we're
-                        // done here.
-                        let _ = processed_tx.send(event.clone());
-
-                        continue;
-                    }
-
                     // Receive imported external source of operations.
                     Some((stream, ready_tx)) = import_external_rx.recv() => {
                         let external_stream_future = external_stream.insert(stream);
@@ -433,7 +406,7 @@ where
         topic,
         forge,
         sync_handle,
-        publish_tx,
+        egress.handle(),
         import_external_tx,
         drop_guard.clone(),
     );
@@ -995,12 +968,9 @@ pub enum Source {
         session_id: u64,
     },
 
-    /// Operation was published locally.
-    Publish,
-
     /// Operation was replayed.
     Replay,
 
-    /// Operation was forged locally and handled in egress.
+    /// Operation was created locally and handled in egress.
     Egress,
 }

@@ -384,7 +384,7 @@ mod tests {
 
             Event::new(
                 operation,
-                Source::Publish,
+                Source::Egress,
                 log_id,
                 self.topic,
                 PruneFlag::new(false),
@@ -438,7 +438,7 @@ mod tests {
 
             let mut event = Event::new(
                 operation,
-                Source::Publish,
+                Source::Egress,
                 log_id,
                 self.topic,
                 PruneFlag::new(false),
@@ -471,7 +471,7 @@ mod tests {
 
             Event::new(
                 operation,
-                Source::Publish,
+                Source::Egress,
                 log_id,
                 self.topic,
                 PruneFlag::new(true), // Prune flag is set.
