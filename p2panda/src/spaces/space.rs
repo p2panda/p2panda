@@ -561,7 +561,9 @@ impl Future for SpaceFuture {
     type Output = Result<(), DispatchError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.processed.poll_unpin(cx)
+        self.processed
+            .poll_unpin(cx)
+            .map(|result| result.map(|_| ()))
     }
 }
 

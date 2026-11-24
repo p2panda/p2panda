@@ -323,8 +323,11 @@ async fn renew_expired_key_bundle(
         processing: EventProcessingPolicy::Disabled,
     };
 
-    // TODO: Handle error?
-    let _ = egress_handle.dispatch_with_config(operation, &config).await;
+    // Delivery-only dispatch never fails, failed deliveries are logged.
+    let _ = egress_handle
+        .dispatch_with_config(operation, &config)
+        .await
+        .await;
 
     Ok(())
 }
