@@ -4,10 +4,12 @@ use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 
-use futures_util::{FutureExt, future, ready};
+use futures_util::FutureExt;
+use futures_util::future::{self, BoxFuture};
 use p2panda_core::Topic;
+use p2panda_net::utils::ShortFormat;
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tracing::warn;
 
 use crate::egress::delivery::ToDelivery;
 use crate::egress::{DispatchConfig, EgressInner, EventDeliveryPolicy, EventProcessingPolicy};
@@ -70,23 +72,21 @@ impl EgressHandle {
             .collect::<Vec<(Topic, ToDelivery)>>()
         };
 
-        let mut delivery_futures = Vec::new();
-        let delivery_count = to_delivery.len();
-
-        for (_, tx) in to_delivery {
+        // Delivery is best-effort, failures are logged but don't fail the dispatch.
+        let mut delivery_rxs = Vec::with_capacity(to_delivery.len());
+        for (topic, tx) in to_delivery {
             match tx.publish(operation.clone()).await {
-                Ok(result_rx) => {
-                    delivery_futures.push(result_rx);
-                }
+                Ok(result_rx) => delivery_rxs.push((topic, result_rx)),
                 Err(_) => {
                     // Receiver dropped, the registration will clean up the entry.
+                    warn!(topic = %topic.fmt_short(), "delivery stream closed before dispatch")
                 }
             }
         }
 
         // Event Processing.
         let to_processing = {
-            let inner = self.inner.read().unwrap();
+            let inner = self.inner.read().expect("lock poisoned by other thread");
 
             match config.processing {
                 EventProcessingPolicy::Disabled => None,
@@ -97,27 +97,48 @@ impl EgressHandle {
             }
         };
 
-        let mut processing_futures = Vec::new();
-        let processing_count = if to_processing.is_some() { 1 } else { 0 };
+        // Processing is strict, if the stream drops during dispatch return an error.
+        let processing_rx = match to_processing {
+            Some((topic, tx)) => {
+                let event = to_event(operation, topic, spaces_events);
+                Some((topic, tx.publish(event).await.ok()))
+            }
+            None => None,
+        };
 
-        if let Some((topic, tx)) = to_processing {
-            let event = to_event(operation.clone(), topic, spaces_events.clone());
+        let delivery_count = delivery_rxs.len();
+        let processing_count = if matches!(processing_rx, Some((_, Some(_)))) {
+            1
+        } else {
+            0
+        };
 
-            match tx.publish(event).await {
-                Ok(result_rx) => {
-                    processing_futures.push(result_rx);
-                }
-                Err(_) => {
+        let fut = async move {
+            let deliveries = delivery_rxs
+                .into_iter()
+                .map(|(topic, rx)| rx.map(move |result| (topic, result)));
+
+            for (topic, result) in future::join_all(deliveries).await {
+                if result.is_err() {
                     // Receiver dropped, the registration will clean up the entry.
+                    warn!(topic = %topic.fmt_short(), "delivery stream closed during dispatch");
                 }
             }
-        }
+
+            match processing_rx {
+                None => Ok(None),
+                Some((topic, None)) => Err(DispatchError::Processing(topic)),
+                Some((topic, Some(rx))) => rx
+                    .await
+                    .map(Some)
+                    .map_err(|_| DispatchError::Processing(topic)),
+            }
+        };
 
         DispatchFuture {
             delivery_count,
-            delivery_fut: future::try_join_all(delivery_futures),
             processing_count,
-            processing_fut: future::try_join_all(processing_futures),
+            fut: fut.boxed(),
         }
     }
 }
@@ -143,30 +164,30 @@ fn to_event(operation: Operation, topic: Topic, spaces_events: Option<Vec<Spaces
     )
 }
 
-#[derive(Debug)]
+/// Resolves when all delivery and processing layers handled the dispatched operation.
+///
+/// Returns the processed event if the operation was sent to a processing layer.
 pub struct DispatchFuture {
+    /// Number of delivery layers the operation was sent to.
     pub delivery_count: usize,
-    delivery_fut: future::TryJoinAll<oneshot::Receiver<()>>,
+
+    /// Number of processing layers the operation was sent to.
     pub processing_count: usize,
-    processing_fut: future::TryJoinAll<oneshot::Receiver<Event>>,
+
+    /// Future executing the dispatch to delivery- or processing layers.
+    fut: BoxFuture<'static, Result<Option<Event>, DispatchError>>,
 }
 
 impl Future for DispatchFuture {
-    type Output = Result<(), DispatchError>;
+    type Output = Result<Option<Event>, DispatchError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match ready!(self.delivery_fut.poll_unpin(cx)) {
-            Ok(_) => match ready!(self.processing_fut.poll_unpin(cx)) {
-                Ok(_) => Poll::Ready(Ok(())),
-                Err(err) => Poll::Ready(Err(err.into())),
-            },
-            Err(err) => Poll::Ready(Err(err.into())),
-        }
+        self.fut.poll_unpin(cx)
     }
 }
 
 #[derive(Debug, Error)]
 pub enum DispatchError {
-    #[error("receiving event-delivery or -processing results failed: {0}")]
-    RecvResult(#[from] oneshot::error::RecvError),
+    #[error("processing stream for topic {0} closed before operation was processed")]
+    Processing(Topic),
 }
