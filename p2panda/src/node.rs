@@ -278,10 +278,9 @@ impl Node {
     /// (see diagram above). Like this applications can ensure every event is at least processed
     /// once, guaranteeing resiliance in the context of application crashes.
     ///
-    /// The topic is used to identify each stream's state. It is not recommended to create more than
-    /// one subscription over the same topic using this high-level method as the acked state will be
-    /// shared across them, leading to potentially surprising behaviour ("work stealing" processing
-    /// behaviour across streams and potentially more duplicate events).
+    /// The topic is used to identify each stream's state, which is why only one stream can be
+    /// active per topic. Creating another one returns [`CreateStreamError::AlreadySubscribed`]
+    /// until the publisher and subscription of the active stream are both dropped.
     ///
     /// Applications _never_ acknowledge events which only concern system-level state (for example
     /// pruning events without a payload, key agreement "control messages" etc.), these are _always_
@@ -364,12 +363,27 @@ impl Node {
         let live_mode = true;
         let topic = topic.into();
 
+        // Register this stream as processing and delivery layer in the egress, all locally created
+        // operations for this topic will arrive here.
+        //
+        // This needs to happen before creating the sync handle, as dropping it on failure would
+        // close the sync session of the already active stream.
+        let egress_processing_rx = self
+            .egress
+            .register_processing(topic, stream_type)
+            .map_err(|_| CreateStreamError::AlreadySubscribed(topic))?;
+
+        let egress_delivery_rx = self
+            .egress
+            .register_delivery(topic, stream_type)
+            .map_err(|_| CreateStreamError::AlreadySubscribed(topic))?;
+
         let sync_handle = self
             .network
             .log_sync
             .stream(topic, live_mode)
             .await
-            .map_err(|err| CreateStreamError(err.to_string()))?;
+            .map_err(|err| CreateStreamError::Internal(err.to_string()))?;
 
         let pipeline = Pipeline::new(
             topic,
@@ -391,10 +405,11 @@ impl Node {
             self.events_tx.clone(),
             from,
             custom_cursor_name,
-            &self.egress,
+            self.egress.handle(),
+            egress_processing_rx,
+            egress_delivery_rx,
         )
-        .await
-        .map_err(|err| CreateStreamError(err.to_string()))?;
+        .await?;
 
         Ok((tx, rx))
     }
@@ -420,7 +435,7 @@ impl Node {
             .gossip
             .stream(topic)
             .await
-            .map_err(|err| CreateStreamError(err.to_string()))?;
+            .map_err(|err| CreateStreamError::Internal(err.to_string()))?;
 
         Ok(ephemeral_stream(topic, self.credentials.clone(), handle))
     }
@@ -443,7 +458,7 @@ impl Node {
             .discovery
             .events()
             .await
-            .map_err(|err| CreateStreamError(err.to_string()))?;
+            .map_err(|err| CreateStreamError::Internal(err.to_string()))?;
 
         let system_events = self.resubscribe_event_stream();
 
@@ -833,13 +848,24 @@ pub enum SpawnError {
     SpacesManager(#[from] SpacesManagerError),
 }
 
-/// Broken / closed communication channel with the internal actor in `p2panda-net` prevented
-/// creation of stream. This can be due to the actor crashing.
-///
-/// Users may re-attempt creating a new stream in case the actor restarted later.
+/// Errors which can occur when creating a stream.
 #[derive(Debug, Error)]
-#[error("error occurred in internal actor: {0}")]
-pub struct CreateStreamError(pub String);
+pub enum CreateStreamError {
+    /// Another stream is still active for this topic.
+    ///
+    /// The topic becomes available again once the publisher and subscription halves of that stream
+    /// are dropped.
+    ///
+    /// It is not recommended to create more than one subscription over the same topic as the acked
+    /// state will be shared across them, leading to potentially surprising behaviour, such as "work
+    /// stealing" processing behaviour across streams and potentially more duplicate events.
+    #[error("another stream is already active for topic {0}")]
+    AlreadySubscribed(Topic),
+
+    /// Internal failure, for example a broken channel or networking setup issue.
+    #[error("error occurred while creating stream: {0}")]
+    Internal(String),
+}
 
 /// Errors which can occur when subscribing to a stream.
 #[derive(Debug, Error)]

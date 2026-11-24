@@ -605,11 +605,33 @@ mod event_replays {
 
 mod shutdown {
     use p2panda::Topic;
+    use p2panda::node::CreateStreamError;
     use p2panda::streams::StreamEvent;
     use p2panda_core::test_utils::setup_logging;
     use tokio_stream::StreamExt;
 
     use crate::spawn_node;
+
+    #[tokio::test]
+    async fn one_active_stream_per_topic() {
+        setup_logging();
+
+        let topic = Topic::random();
+        let panda = spawn_node(Topic::random().into()).await;
+
+        let (tx, rx) = panda.stream::<String>(topic).await.unwrap();
+
+        // Keeping only the publisher still blocks the topic.
+        drop(rx);
+        assert!(matches!(
+            panda.stream::<String>(topic).await,
+            Err(CreateStreamError::AlreadySubscribed(_))
+        ));
+
+        // Close gracefully to avoid racing with the sync cleanup (see #1320).
+        let _ = tx.close().await;
+        assert!(panda.stream::<String>(topic).await.is_ok());
+    }
 
     #[tokio::test]
     async fn sync_is_closed_on_drop() {

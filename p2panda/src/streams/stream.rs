@@ -24,7 +24,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::warn;
 
-use crate::egress::{Egress, StreamType};
+use crate::egress::{DeliverFromEgress, EgressHandle, ProcessFromEgress, StreamType};
 use crate::forge::OperationForge;
 use crate::node::{AckPolicy, CreateStreamError};
 use crate::operation::{Extensions, Header, Operation};
@@ -107,21 +107,13 @@ pub(crate) async fn processed_stream<M>(
     event_tx: broadcast::Sender<SystemEvent>,
     from: StreamFrom,
     custom_cursor_name: Option<String>,
-    egress: &Egress,
+    egress: EgressHandle,
+    egress_processing_rx: ProcessFromEgress,
+    egress_delivery_rx: DeliverFromEgress,
 ) -> Result<(StreamPublisher<M>, StreamSubscription<M>), CreateStreamError>
 where
     M: Serialize + for<'a> Deserialize<'a> + Send + 'static,
 {
-    // Register this stream as processing and delivery layer in the egress, all locally created
-    // operations for this topic will arrive here.
-    let egress_processing_rx = egress
-        .register_processing(topic, stream_type)
-        .map_err(|err| CreateStreamError(err.to_string()))?;
-
-    let egress_delivery_rx = egress
-        .register_delivery(topic, stream_type)
-        .map_err(|err| CreateStreamError(err.to_string()))?;
-
     let acked = match custom_cursor_name {
         Some(cursor_name) => Acked::from_name(store.clone(), topic, cursor_name),
         None => Acked::new(store.clone(), topic),
@@ -136,7 +128,7 @@ where
     let mut sync_stream = sync_handle
         .subscribe()
         .await
-        .map_err(|err| CreateStreamError(err.to_string()))?;
+        .map_err(|err| CreateStreamError::Internal(err.to_string()))?;
 
     // Channel to send processed events to the application-layer.
     let (app_tx, app_rx) = mpsc::channel::<StreamEvent<M>>(BUFFER_SIZE);
@@ -158,7 +150,7 @@ where
     let nacked_log_ranges = acked
         .nacked_log_ranges(from.clone())
         .await
-        .map_err(|err| CreateStreamError(err.to_string()))?;
+        .map_err(|err| CreateStreamError::Internal(err.to_string()))?;
 
     // If any other process wants to bring an stream event forward to the application layer ("output
     // stream"), this channel should be used.
@@ -406,7 +398,7 @@ where
         topic,
         forge,
         sync_handle,
-        egress.handle(),
+        egress,
         import_external_tx,
         drop_guard.clone(),
     );
