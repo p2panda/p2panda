@@ -5,7 +5,7 @@ use p2panda_core::{Body, SigningKey, Topic};
 use tokio_stream::StreamExt;
 
 use crate::egress::{
-    DispatchConfig, Egress, EventDeliveryPolicy, EventProcessingPolicy, StreamType,
+    DispatchConfig, DispatchError, Egress, EventDeliveryPolicy, EventProcessingPolicy, StreamType,
 };
 use crate::operation::{Extensions, Header, Operation};
 
@@ -38,10 +38,40 @@ async fn dispatch_via_egress() {
     let result = handle.dispatch(operation.clone(), topic).await;
     assert_eq!(result.processing_count, 1);
     assert_eq!(result.delivery_count, 0);
-    assert!(result.await.is_ok());
+    let processed = result.await.unwrap().expect("processed event");
+    assert_eq!(processed.operation, operation);
 
     let event = event.await.unwrap();
     assert_eq!(event.operation, operation);
+}
+
+#[tokio::test]
+async fn processing_stream_closed() {
+    let topic = Topic::random();
+    let egress = Egress::new();
+
+    let rx = egress
+        .register_processing(topic, StreamType::Topic)
+        .unwrap();
+
+    let handle = egress.handle();
+
+    let operation = {
+        let signing_key = SigningKey::generate();
+        let body = Body::from_bytes(b"Hello?");
+        let header = Header::builder()
+            .body(&body)
+            .build(&signing_key, Extensions::from_topic(topic));
+        Operation::from_parts(header, Some(body))
+    };
+
+    let result = handle.dispatch(operation, topic).await;
+    assert_eq!(result.processing_count, 1);
+
+    // Stream gets dropped before it processed the operation.
+    drop(rx);
+
+    assert!(matches!(result.await, Err(DispatchError::Processing(_))));
 }
 
 #[tokio::test]
@@ -90,8 +120,13 @@ async fn delivery_fan_out() {
     assert_eq!(rx_1.size_hint(), (0, None));
 
     // Both "space" deliveries received one operation each.
-    let (operation_2, _) = rx_2.next().await.expect("event arrived at processing rx");
-    let (operation_3, _) = rx_3.next().await.expect("event arrived at processing rx");
+    let (operation_2, result_tx_2) = rx_2.next().await.expect("event arrived at delivery rx");
+    let (operation_3, result_tx_3) = rx_3.next().await.expect("event arrived at delivery rx");
     assert_eq!(operation_2, operation);
     assert_eq!(operation_3, operation);
+
+    // A failed delivery doesn't fail the whole dispatch.
+    drop(result_tx_2);
+    result_tx_3.send(()).unwrap();
+    assert!(result.await.unwrap().is_none());
 }
