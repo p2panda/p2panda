@@ -612,8 +612,6 @@ mod event_replays {
 }
 
 mod shutdown {
-    use std::time::Duration;
-
     use p2panda::Topic;
     use p2panda::streams::StreamEvent;
     use p2panda_core::test_utils::setup_logging;
@@ -689,15 +687,6 @@ mod shutdown {
         // Sync session should be terminated once both stream handles have been dropped.
         drop(icebear_tx);
         drop(icebear_rx);
-
-        // TODO: known flaky assertion: https://github.com/p2panda/p2panda/issues/1320
-        //
-        // // Attempting to create a new stream for the same topic will return an error because the
-        // // cleanup initated by dropping the publisher and subscriber has not yet completed.
-        // assert!(icebear.stream::<String>(chat_id).await.is_err());
-
-        // Briefly sleep to await cleanup.
-        tokio::time::sleep(Duration::from_millis(50)).await;
 
         let (icebear_tx, icebear_rx) = icebear.stream::<String>(chat_id).await.unwrap();
 

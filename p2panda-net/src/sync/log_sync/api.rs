@@ -85,6 +85,23 @@ where
         Builder::<S, L, E>::new(store, endpoint, gossip)
     }
 
+    /// Create a sync handle for this topic to publish data or subscribe to any incoming data from
+    /// sync sessions.
+    ///
+    /// ## Reusing topics
+    ///
+    /// When creating a handle for an already used topic, the underlying sync manager is re-used,
+    /// including the given configuration: If the manager was initialised with live mode enabled,
+    /// it'll stay, even when the next handle will have it disabled for the same topic.
+    ///
+    /// Note that data for the new handle is only received from this point on, including from
+    /// already running sync sessions. No new sync sessions will be started just because an existing
+    /// topic was joined.
+    ///
+    /// ## Closing behaviour
+    ///
+    /// The topic is closed once the last handle was dropped or closed. Use [`SyncHandle::close`]
+    /// to await the cleanup.
     // TODO: Extensions should be generic over a stream handle, not over this struct.
     pub async fn stream(
         &self,

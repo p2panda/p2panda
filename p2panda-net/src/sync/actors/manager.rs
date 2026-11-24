@@ -51,9 +51,11 @@ pub enum ToSyncManager<M, E> {
         RpcReplyPort<ActorRef<ToTopicManager<M, E>>>,
     ),
 
-    /// Subscribe to the given topic to receive incoming sync events.
+    /// Subscribe to the given topic manager to receive incoming sync events.
+    ///
+    /// Returns nothing if the topic manager is not active anymore.
     Subscribe(
-        Topic,
+        ActorId,
         RpcReplyPort<Option<broadcast::Receiver<FromSync<E>>>>,
     ),
 
@@ -62,6 +64,12 @@ pub enum ToSyncManager<M, E> {
     /// A response can be awaited on the receiver of the provided oneshot channel to ensure that
     /// state cleanup has been completed for any relevant sync sessions.
     Close(Topic, oneshot::Sender<()>),
+
+    /// Release one stream handle of the given topic manager.
+    ///
+    /// All streams for the topic are closed once the last handle was released. Releases for a topic
+    /// manager which is not active anymore are ignored.
+    ReleaseHandle(ActorId, oneshot::Sender<()>),
 
     /// Initiate sync session.
     InitiateSync(Topic, NodeId),
@@ -83,6 +91,7 @@ type TopicManagerReceivers<E> = HashMap<Topic, broadcast::Receiver<FromSync<E>>>
 struct TopicManagers<M, E> {
     topic_manager_map: HashMap<Topic, (ActorRef<ToTopicManager<M, E>>, IsLiveModeEnabled)>,
     actor_topic_map: HashMap<ActorId, Topic>,
+    handle_counts: HashMap<ActorId, usize>,
 }
 
 /// Mapping of topic to the regarding gossip overlays dealing with the membership handling.
@@ -97,6 +106,7 @@ impl<M, E> Default for TopicManagers<M, E> {
         Self {
             topic_manager_map: Default::default(),
             actor_topic_map: Default::default(),
+            handle_counts: Default::default(),
         }
     }
 }
@@ -133,6 +143,27 @@ where
             // Close task running HyParView membership logic.
             handle.abort();
         }
+    }
+
+    /// Close all sync sessions running over this topic and drop the related topic manager.
+    async fn close_topic(&mut self, topic: &Topic) -> Result<(), ActorProcessingErr> {
+        if let Some((sync_manager, _)) = self.topic_managers.topic_manager_map.remove(topic) {
+            let (reply, reply_rx) = oneshot::channel();
+            sync_manager.send_message(ToTopicManager::CloseAll(reply))?;
+            let _ = reply_rx.await;
+
+            let actor_id = sync_manager.get_id();
+            self.topic_managers.actor_topic_map.remove(&actor_id);
+            self.topic_managers.handle_counts.remove(&actor_id);
+
+            // Finish processing all messages in the queue.
+            sync_manager.drain()?;
+        }
+
+        // Drop all channels and handles associated with the topic.
+        self.drop_topic_state(topic);
+
+        Ok(())
     }
 
     /// Join gossip overlay to use HyParView membership algorithm for peer sampling.
@@ -315,6 +346,11 @@ where
                 if let Some((sync_manager_ref, _)) =
                     state.topic_managers.topic_manager_map.get(&topic)
                 {
+                    *state
+                        .topic_managers
+                        .handle_counts
+                        .entry(sync_manager_ref.get_id())
+                        .or_default() += 1;
                     let _ = reply.send(sync_manager_ref.clone());
                     return Ok(());
                 }
@@ -359,13 +395,20 @@ where
                     .actor_topic_map
                     .insert(sync_manager_ref.get_id(), topic);
 
+                state
+                    .topic_managers
+                    .handle_counts
+                    .insert(sync_manager_ref.get_id(), 1);
+
                 let _ = reply.send(sync_manager_ref);
             }
-            ToSyncManager::Subscribe(topic, reply) => {
+            ToSyncManager::Subscribe(actor_id, reply) => {
                 // Remove the current subscription receiver and return this to the user. Replace
                 // it in the manager with a re-subscribed handle. This ensures that the user
                 // receives any buffered messages.
-                if let Some(from_sync_rx) = state.sync_receivers.remove(&topic) {
+                if let Some(topic) = state.topic_managers.actor_topic_map.get(&actor_id).copied()
+                    && let Some(from_sync_rx) = state.sync_receivers.remove(&topic)
+                {
                     let re_subscription = from_sync_rx.resubscribe();
                     state.sync_receivers.insert(topic, re_subscription);
                     let _ = reply.send(Some(from_sync_rx));
@@ -375,33 +418,29 @@ where
             }
             ToSyncManager::Close(topic, reply) => {
                 debug!(topic = topic.fmt_short(), "close sync in manager");
+                state.close_topic(&topic).await?;
+                let _ = reply.send(());
+            }
+            ToSyncManager::ReleaseHandle(actor_id, reply) => {
+                // Ignore releases for topic managers which have already been closed.
+                let Some(count) = state.topic_managers.handle_counts.get_mut(&actor_id) else {
+                    let _ = reply.send(());
+                    return Ok(());
+                };
 
-                // Close all sync sessions running over this topic.
-                if let Some((actor, _)) = state.topic_managers.topic_manager_map.get(&topic) {
-                    let (reply, reply_rx) = oneshot::channel();
-                    actor.send_message(ToTopicManager::CloseAll(reply))?;
-                    let _ = reply_rx.await;
-                }
+                *count = count.saturating_sub(1);
 
-                // Drop the sync manager state for this topic.
-                if let Some((sync_manager, _)) =
-                    state.topic_managers.topic_manager_map.remove(&topic)
+                if *count == 0
+                    && let Some(topic) =
+                        state.topic_managers.actor_topic_map.get(&actor_id).copied()
                 {
-                    state
-                        .topic_managers
-                        .actor_topic_map
-                        .remove(&sync_manager.get_id());
-
-                    // Finish processing all messages in the manager's queue and then kill it.
-                    sync_manager.drain()?;
+                    debug!(
+                        topic = topic.fmt_short(),
+                        "last handle released, close sync"
+                    );
+                    state.close_topic(&topic).await?;
                 }
 
-                // Drop all channels and handles associated with the topic. The removed gossip
-                // overlay will automatically remove the entry from the address book.
-                state.drop_topic_state(&topic);
-
-                // Inform the caller that termination is complete for sync sessions over this
-                // topic.
                 let _ = reply.send(());
             }
             ToSyncManager::InitiateSync(topic, remote_node_id) => {
@@ -485,6 +524,7 @@ where
             }
             SupervisionEvent::ActorTerminated(actor, _last_state, reason) => {
                 let actor_id = actor.get_id();
+                state.topic_managers.handle_counts.remove(&actor_id);
                 if let Some(topic) = state.topic_managers.actor_topic_map.remove(&actor_id) {
                     debug!(
                         %actor_id,
