@@ -47,8 +47,17 @@ where
         }
     }
 
+    fn ensure_open(&self) -> Result<(), SyncHandleError<M, E>> {
+        if self.has_closed.load(Ordering::Relaxed) {
+            return Err(SyncHandleError::Closed);
+        }
+        Ok(())
+    }
+
     /// Publishes a message to the stream.
     pub fn publish(&self, data: M) -> Result<(), SyncHandleError<M, E>> {
+        self.ensure_open()?;
+
         // This would likely be a critical failure for this stream handle, since we are unable to
         // send messages to the sync manager.
         self.topic_manager_ref
@@ -62,8 +71,14 @@ where
     /// The returned `SyncSubscription` provides a means of receiving messages from
     /// the stream.
     pub async fn subscribe(&self) -> Result<SyncSubscription<E>, SyncHandleError<M, E>> {
-        if let Some(stream) =
-            call!(self.manager_ref, ToSyncManager::Subscribe, self.topic).map_err(Box::new)?
+        self.ensure_open()?;
+
+        if let Some(stream) = call!(
+            self.manager_ref,
+            ToSyncManager::Subscribe,
+            self.topic_manager_ref.get_id()
+        )
+        .map_err(Box::new)?
         {
             Ok(SyncSubscription::<E>::new(self.topic, stream))
         } else {
@@ -88,19 +103,27 @@ where
             .unwrap();
     }
 
-    /// Close the associated sync session gracefully.
+    /// Release this handle and gracefully close all sync sessions for this topic if it was the
+    /// last one.
     ///
-    /// This method can be awaited to ensure that all sync-related state has been cleaned up.
+    /// This is the same as dropping the handle, except that it can be awaited to ensure that all
+    /// sync-related state has been cleaned up.
     pub async fn close(&self) -> Result<(), SyncHandleError<M, E>> {
+        if self.has_closed.swap(true, Ordering::Relaxed) {
+            return Ok(());
+        }
+
         let (reply, reply_rx) = oneshot::channel();
 
         self.manager_ref
-            .send_message(ToSyncManager::Close(self.topic, reply))
+            .send_message(ToSyncManager::ReleaseHandle(
+                self.topic_manager_ref.get_id(),
+                reply,
+            ))
             .map_err(Box::new)?;
 
         // Await the termination completion signal.
         let _ = reply_rx.await;
-        self.has_closed.store(true, Ordering::Relaxed);
 
         Ok(())
     }
@@ -112,26 +135,14 @@ where
     E: Clone + Send + 'static,
 {
     fn drop(&mut self) {
-        let (reply, _reply_rx) = oneshot::channel();
+        if !self.has_closed.swap(true, Ordering::Relaxed) {
+            let (reply, _reply_rx) = oneshot::channel();
 
-        // Sending `ToSyncManager::Close` twice for the same topic in quick succession can cause
-        // an error in the `TopicManager` actor; this occurs if a new topic stream is created
-        // immediately after sending the `Close` instruction.
-        //
-        // The error case is clearer if we consider this example of the TopicManager queue:
-        //
-        // Close     -> cleans up all state for the topic
-        // Create    -> sets up state for the topic
-        // Close     -> cleans up all state for the topic
-        // Subscribe -> returns an error because the expected state doesn't exist
-        //
-        // Only send the message here if a graceful closure has not been initiated from a higher
-        // level.
-        if !self.has_closed.load(Ordering::Relaxed) {
             // Ignore error here as the actor might already be dropped.
-            let _ = self
-                .manager_ref
-                .send_message(ToSyncManager::Close(self.topic, reply));
+            let _ = self.manager_ref.send_message(ToSyncManager::ReleaseHandle(
+                self.topic_manager_ref.get_id(),
+                reply,
+            ));
         }
     }
 }
@@ -187,6 +198,9 @@ pub enum SyncHandleError<M, E> {
 
     #[error("no stream exists for the given topic")]
     StreamNotFound,
+
+    #[error("sync handle was closed")]
+    Closed,
 
     #[error(transparent)]
     Close(#[from] Box<ractor::MessagingErr<ToSyncManager<M, E>>>),

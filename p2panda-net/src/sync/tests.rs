@@ -22,7 +22,7 @@ use crate::gossip::Gossip;
 use crate::iroh_endpoint::Endpoint;
 use crate::sync::actors::{SyncManager, ToSyncManager};
 use crate::sync::authoriser::SyncBlockList;
-use crate::sync::handle::SyncHandle;
+use crate::sync::handle::{SyncHandle, SyncHandleError};
 use crate::sync::hooks::SyncHooksList;
 use crate::sync::session::{SessionBuilder, SyncSessionItem};
 use crate::test_utils::{ApplicationArguments, test_args_from_seed};
@@ -263,4 +263,60 @@ async fn failed_sync_session_retry() {
         alice.shutdown();
         bob.shutdown();
     }
+}
+
+#[tokio::test]
+async fn shutdown_handles() {
+    setup_logging();
+
+    let topic = [1; 32].into();
+    let node = FailingNode::spawn(
+        random(),
+        vec![],
+        FailingSessionBuilder::new(SyncBehaviour::Wait),
+    )
+    .await;
+
+    let handle_1 = {
+        let manager_ref = call!(node.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+        SyncHandle::new(topic, node.sync_ref.clone(), manager_ref)
+    };
+    let handle_2 = {
+        let manager_ref = call!(node.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+        SyncHandle::new(topic, node.sync_ref.clone(), manager_ref)
+    };
+
+    drop(handle_1);
+    assert!(handle_2.subscribe().await.is_ok());
+
+    // Closing one handle doesn't affect the others.
+    let handle_3 = {
+        let manager_ref = call!(node.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+        SyncHandle::new(topic, node.sync_ref.clone(), manager_ref)
+    };
+    handle_2.close().await.unwrap();
+    assert!(handle_3.subscribe().await.is_ok());
+
+    // Closed handles can't be used anymore.
+    assert!(matches!(
+        handle_2.subscribe().await,
+        Err(SyncHandleError::Closed)
+    ));
+    assert!(matches!(
+        handle_2.publish(DummySyncMessage::Data),
+        Err(SyncHandleError::Closed)
+    ));
+
+    // Closing the last handle closes the topic.
+    handle_3.close().await.unwrap();
+    assert!(handle_3.subscribe().await.is_err());
+
+    // Stale handles don't attach to a new topic manager for the same topic.
+    let _handle_4 = {
+        let manager_ref = call!(node.sync_ref, ToSyncManager::Create, topic, true).unwrap();
+        SyncHandle::new(topic, node.sync_ref.clone(), manager_ref)
+    };
+    assert!(handle_3.subscribe().await.is_err());
+
+    node.shutdown();
 }

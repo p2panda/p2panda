@@ -222,13 +222,11 @@ where
             .map_err(|err| ImportError::ReceiveFromProcessor(err.to_string()))
     }
 
-    /// Close the associated sync session gracefully.
+    /// Release this stream and gracefully close all sync sessions for this topic if it was the last
+    /// one.
     ///
     /// This method can be awaited to ensure that all sync-related state has been cleaned up
     /// internally.
-    ///
-    /// Call `close()` if you wish to drop a `StreamPublisher` and then immediately create a new
-    /// stream for the same topic.
     pub async fn close(&self) -> Result<(), CloseError> {
         self.sync_handle
             .close()
