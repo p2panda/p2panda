@@ -458,18 +458,32 @@ impl Drop for TransactionPermit {
     fn drop(&mut self) {
         // If the permit was never used (due to an early return / error / etc.) we automatically
         // roll-back the transaction.
-        if !self.committed {
-            let permit = self.permit.clone();
-            let tx = self.tx.clone();
-
-            tokio::spawn(async move {
-                if let Some(tx) = tx.lock().await.take() {
-                    let _ = tx.rollback().await;
-                }
-
-                drop(permit); // Semaphore released only after rollback completes.
-            });
+        if self.committed {
+            return;
         }
+
+        // Dropping the transaction and triggering a rollback needs to happen synchronously as a
+        // spawned task might never run (for example when the runtime shuts down).
+        //
+        // In case we can't do that (because the lock is held), we're keeping an extra clone to try
+        // it later asynchronously.
+        let slot = self.tx.clone();
+        let tx = self.tx.try_lock().ok().and_then(|mut slot| slot.take());
+        let permit = self.permit.clone();
+
+        tokio::spawn(async move {
+            // Lock was held elsewhere, take the transaction once it's free again.
+            let tx = match tx {
+                Some(tx) => Some(tx),
+                None => slot.lock().await.take(),
+            };
+
+            if let Some(tx) = tx {
+                let _ = tx.rollback().await;
+            }
+
+            drop(permit); // Semaphore released only after rollback completes.
+        });
     }
 }
 
@@ -590,6 +604,60 @@ mod tests {
 
         // It is okay to start another permit.
         assert!(pool.begin().await.is_ok());
+
+        // The data was not written as the transaction got rolled back.
+        let count: i64 = pool
+            .execute(async |pool| {
+                query_scalar("SELECT COUNT(*) FROM test")
+                    .fetch_one(pool)
+                    .await
+                    .map_err(SqliteError::Sqlite)
+            })
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn permit_drop_during_runtime_shutdown() {
+        let pool = SqliteStore::temporary().await;
+
+        pool.execute(async |pool| {
+            pool.execute("CREATE TABLE test(x INTEGER)").await?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        // Run a transaction on a separate runtime which shuts down right after the permit got
+        // dropped, without committing.
+        let pool_clone = pool.clone();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async move {
+                let permit = pool_clone.begin().await.unwrap();
+                pool_clone
+                    .tx(async |tx| {
+                        query("INSERT INTO test (x) VALUES (10)")
+                            .execute(&mut **tx)
+                            .await?;
+                        Ok(())
+                    })
+                    .await
+                    .unwrap();
+                drop(permit);
+            });
+        })
+        .join()
+        .unwrap();
+
+        // It is okay to start another transaction.
+        let permit = pool.begin().await.unwrap();
+        pool.rollback(permit).await.unwrap();
 
         // The data was not written as the transaction got rolled back.
         let count: i64 = pool
