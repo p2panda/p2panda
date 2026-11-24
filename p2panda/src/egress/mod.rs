@@ -11,9 +11,13 @@ mod stream_type;
 mod tests;
 
 pub use config::{DispatchConfig, EventDeliveryPolicy, EventProcessingPolicy};
-pub(super) use delivery::DeliverFromEgress;
-pub(super) use egress::EgressInner;
-pub use egress::{Egress, EgressError, EgressRegistration, FromEgress};
+pub(crate) use delivery::DeliverFromEgress;
+pub(crate) use egress::EgressInner;
+pub use egress::{Egress, EgressRegistration, FromEgress};
 pub use handle::{DispatchError, DispatchFuture, EgressHandle};
-pub(super) use processing::ProcessFromEgress;
+pub(crate) use processing::ProcessFromEgress;
 pub use stream_type::StreamType;
+
+/// Number of operations which can be queued per processing or delivery layer before dispatching
+/// applies backpressure.
+const BUFFER_SIZE: usize = 128;

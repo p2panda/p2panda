@@ -3,7 +3,7 @@
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::egress::FromEgress;
+use crate::egress::{BUFFER_SIZE, FromEgress};
 use crate::operation::Operation;
 
 pub type ToDeliveryItem = (Operation, oneshot::Sender<()>);
@@ -19,7 +19,7 @@ pub struct ToDelivery {
 
 impl ToDelivery {
     pub fn new() -> (Self, ReceiverStream<ToDeliveryItem>) {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(BUFFER_SIZE);
         (Self { tx }, ReceiverStream::new(rx))
     }
 

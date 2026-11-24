@@ -380,16 +380,6 @@ impl Node {
             post_pipeline_hooks,
         );
 
-        let egress_processing_rx = self
-            .egress
-            .register_processing(topic, stream_type)
-            .map_err(|err| CreateStreamError(err.to_string()))?;
-
-        let egress_delivery_rx = self
-            .egress
-            .register_delivery(topic, stream_type)
-            .map_err(|err| CreateStreamError(err.to_string()))?;
-
         let (tx, rx) = processed_stream(
             topic,
             stream_type,
@@ -401,8 +391,7 @@ impl Node {
             self.events_tx.clone(),
             from,
             custom_cursor_name,
-            egress_processing_rx,
-            egress_delivery_rx,
+            &self.egress,
         )
         .await
         .map_err(|err| CreateStreamError(err.to_string()))?;
