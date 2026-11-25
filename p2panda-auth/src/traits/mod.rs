@@ -8,7 +8,7 @@ mod operation;
 mod resolver;
 
 pub use dgm::{GroupMembership, Groups};
-pub use operation::Operation;
+pub use operation::{AuthorizationActor, Operation};
 pub use resolver::Resolver;
 
 /// Conditions associated with an actors access level.

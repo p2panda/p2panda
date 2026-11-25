@@ -287,6 +287,7 @@ where
                 operation.group_id(),
                 operation.id(),
                 operation.author(),
+                operation.permission_actor(),
                 &operation.action(),
                 &y.ignore,
             )
@@ -372,9 +373,10 @@ mod tests {
     use crate::Access;
     use crate::group::GroupMember;
     use crate::test_utils::{
-        MemberId, TestGroupState, add_member, assert_members, create_group, demote_member,
-        remove_member, sync,
+        MemberId, TestGroup, TestGroupState, add_member, assert_members, create_group,
+        demote_member, remove_member, sync,
     };
+    use crate::traits::AuthorizationActor;
 
     use super::*;
 
@@ -428,6 +430,130 @@ mod tests {
 
         assert_eq!(y_i.inner.ignore.len(), 2);
         assert_eq!(y_i.inner.mutual_removes.len(), 2);
+    }
+
+    #[test]
+    fn delegated_authorization_keeps_signer_identity_for_strong_remove() {
+        // The access principal authorizes Eve's add, but Eve remains the operation author.
+        // Alice's concurrent removal of Eve must therefore filter Eve's add.
+        let y = TestGroupState::new();
+        let create = create_group(
+            ALICE,
+            0,
+            G1,
+            vec![
+                (GroupMember::Individual(ALICE), Access::manage()),
+                (GroupMember::Individual(EVE), Access::read()),
+            ],
+            vec![],
+        );
+        let mut delegated_add = add_member(
+            EVE,
+            1,
+            G1,
+            GroupMember::Individual(FRANK),
+            Access::read(),
+            vec![create.id()],
+        );
+        delegated_add.authorization_actor = Some(AuthorizationActor::Member(ALICE));
+
+        // This proves the add is admitted under Alice's authority.
+        let created = TestGroup::process(y.clone(), &create).unwrap();
+        let added = TestGroup::process(created, &delegated_add).unwrap();
+        assert_members(
+            &added,
+            G1,
+            &[
+                (ALICE, Access::manage()),
+                (EVE, Access::read()),
+                (FRANK, Access::read()),
+            ],
+        );
+
+        let mut delegated_remove = remove_member(
+            EVE,
+            2,
+            G1,
+            GroupMember::Individual(FRANK),
+            vec![delegated_add.id()],
+        );
+        delegated_remove.authorization_actor = Some(AuthorizationActor::Member(ALICE));
+        let removed = TestGroup::process(added.clone(), &delegated_remove).unwrap();
+        assert_members(
+            &removed,
+            G1,
+            &[(ALICE, Access::manage()), (EVE, Access::read())],
+        );
+
+        // An explicit basis cannot turn a member's leave into a manager removal.
+        let mut delegated_leave =
+            remove_member(EVE, 3, G1, GroupMember::Individual(EVE), vec![create.id()]);
+        delegated_leave.authorization_actor = Some(AuthorizationActor::Member(ALICE));
+        let left = TestGroup::process(
+            TestGroup::process(y.clone(), &create).unwrap(),
+            &delegated_leave,
+        )
+        .unwrap();
+        assert_members(&left, G1, &[(ALICE, Access::manage())]);
+
+        let mut invalid_basis = add_member(
+            EVE,
+            5,
+            G1,
+            GroupMember::Individual(FRANK),
+            Access::read(),
+            vec![create.id()],
+        );
+        invalid_basis.authorization_actor = Some(AuthorizationActor::Member(EVE));
+        let created = TestGroup::process(y.clone(), &create).unwrap();
+        assert!(TestGroup::process(created, &invalid_basis).is_err());
+
+        let mut group_root_add = add_member(
+            EVE,
+            6,
+            G1,
+            GroupMember::Individual(FRANK),
+            Access::read(),
+            vec![create.id()],
+        );
+        group_root_add.authorization_actor = Some(AuthorizationActor::Verified);
+        let created = TestGroup::process(y.clone(), &create).unwrap();
+        let added = TestGroup::process(created, &group_root_add).unwrap();
+        assert_members(
+            &added,
+            G1,
+            &[
+                (ALICE, Access::manage()),
+                (EVE, Access::read()),
+                (FRANK, Access::read()),
+            ],
+        );
+
+        let mut group_root_remove = remove_member(
+            EVE,
+            8,
+            G1,
+            GroupMember::Individual(FRANK),
+            vec![group_root_add.id()],
+        );
+        group_root_remove.authorization_actor = Some(AuthorizationActor::Verified);
+        let removed = TestGroup::process(added.clone(), &group_root_remove).unwrap();
+        assert_members(
+            &removed,
+            G1,
+            &[(ALICE, Access::manage()), (EVE, Access::read())],
+        );
+
+        // Strong remove must still attribute the externally authorized add to Eve.
+        let remove_eve = remove_member(
+            ALICE,
+            7,
+            G1,
+            GroupMember::Individual(EVE),
+            vec![create.id()],
+        );
+        let resolved = sync(y, &[create, group_root_add, remove_eve]);
+        assert_members(&resolved, G1, &[(ALICE, Access::manage())]);
     }
 
     #[test]

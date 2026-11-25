@@ -203,6 +203,19 @@ pub fn add<ID: Clone + Eq + Hash, C: Conditions>(
         return Err(GroupMembershipError::InsufficientAccess(adder));
     }
 
+    add_verified(state, added, access)
+}
+
+/// Add a member after the caller has verified the operation's authorization externally.
+///
+/// The target must still be a valid membership change. Re-adding a previously removed member is
+/// supported. Only use this when the caller has authenticated the operation author and checked
+/// its authority outside the membership levels in this state.
+pub fn add_verified<ID: Clone + Eq + Hash, C: Conditions>(
+    state: GroupMembersState<ID, C>,
+    added: ID,
+    access: Access<C>,
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Ensure that "added" is not already an active member of the group.
     if let Some(added_state) = state.members.get(&added)
         && added_state.is_member()
@@ -255,6 +268,18 @@ pub fn remove<ID: Eq + Hash, C: Conditions>(
         return Err(GroupMembershipError::InsufficientAccess(remover));
     }
 
+    remove_verified(state, removed)
+}
+
+/// Remove a member after the caller has verified the operation's authorization externally.
+///
+/// The target must still be an active member of the group. Only use this when the caller has
+/// authenticated the operation author and checked its authority outside the membership levels in
+/// this state.
+pub fn remove_verified<ID: Eq + Hash, C: Conditions>(
+    state: GroupMembersState<ID, C>,
+    removed: ID,
+) -> Result<GroupMembersState<ID, C>, GroupMembershipError<ID>> {
     // Ensure that "removed" is known to the group.
     if !state.members.contains_key(&removed) {
         return Err(GroupMembershipError::UnrecognisedMember(removed));
