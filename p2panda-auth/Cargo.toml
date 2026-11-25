@@ -1,6 +1,6 @@
 [package]
 name = "p2panda-auth"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 authors = [
   "adz <x12@adz.garden>",
@@ -24,7 +24,6 @@ workspace = true
 [features]
 default = []
 test_utils = [
-  "dep:tracing-subscriber",
   "serde",
   "p2panda-core/test_utils"
 ]
@@ -40,8 +39,6 @@ p2panda-core = { workspace = true, default-features = true }
 petgraph = { version = "0.8.3", features = ["serde-1"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 thiserror = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 p2panda-auth = { path = ".", features = ["test_utils"] }
