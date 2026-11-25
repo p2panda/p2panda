@@ -467,7 +467,7 @@ Highlights are marked with a pancake 🥞
 Version `v0.1.0` represents the first release of the new p2panda stack! You can find out more details by reading our [blog](https://p2panda.org/2024/12/06/p2panda-release.html).
 
 [unreleased]: https://github.com/p2panda/p2panda/compare/v0.8.2...HEAD
-[0.8.1]: https://github.com/p2panda/p2panda/compare/v0.8.1...v0.8.2
+[0.8.2]: https://github.com/p2panda/p2panda/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/p2panda/p2panda/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/p2panda/p2panda/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/p2panda/p2panda/compare/v0.7.0...v0.7.1
@@ -481,4 +481,4 @@ Version `v0.1.0` represents the first release of the new p2panda stack! You can 
 [0.3.1]: https://github.com/p2panda/p2panda/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/p2panda/p2panda/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/p2panda/p2panda/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/p2panda/p2panda/commits/tag/v0.1.0
+[0.1.0]: https://github.com/p2panda/p2panda/releases/tag/v0.1.0
