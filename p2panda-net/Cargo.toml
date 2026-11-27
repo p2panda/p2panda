@@ -26,6 +26,7 @@ default = [
   "address_book",
   "iroh_endpoint",
   "iroh_mdns",
+  "iroh_network",
   "discovery",
   "gossip",
   "sync",
@@ -41,6 +42,14 @@ iroh_endpoint = [
 iroh_mdns = [
   "iroh_endpoint",
   "dep:iroh-mdns-address-lookup",
+]
+iroh_network = [
+  "address_book",
+  "iroh_endpoint",
+  "iroh_mdns",
+  "discovery",
+  "gossip",
+  "sync",
 ]
 discovery = [
   "address_book",
